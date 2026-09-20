@@ -2,6 +2,7 @@
 set -euo pipefail
 
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
+RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
 TOOL_NAME="isolated-dotnet-sdk.sh"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
@@ -88,34 +89,375 @@ validate_version() {
         fail "Invalid SDK version: $VERSION"
 }
 
-get_version_if_needed() {
-    if [[ -z "$VERSION" ]]; then
-        read -r -p "isolated-dotnet-sdk: .NET SDK version: " VERSION || true
-        [[ -n "$VERSION" ]] || fail "An SDK version is required."
-    fi
-
-    validate_version
+contains_line() {
+    local lines="$1"
+    local expected="$2"
+    printf "%s\n" "$lines" | grep -Fxq "$expected"
 }
 
-list_isolated_sdks() {
-    local found="false"
-    local path
+get_system_sdk_versions() {
+    if command -v dotnet >/dev/null 2>&1; then
+        dotnet --list-sdks | awk '{print $1}'
+    fi
+}
 
-    info "Isolated SDKs under $SDK_ROOT:"
+get_isolated_sdk_versions() {
+    local path
 
     for path in "$SDK_ROOT"/*; do
         [[ -d "$path" && -x "$path/dotnet" ]] || continue
-        printf "  %s\n" "$(basename "$path")"
-        found="true"
+        basename "$path"
     done
+}
 
-    if [[ "$found" == "false" ]]; then
-        printf "  %s\n" "None"
+format_phase() {
+    case "$1" in
+        preview) printf '%s' 'Preview' ;;
+        go-live) printf '%s' 'Go Live' ;;
+        active) printf '%s' 'Active' ;;
+        maintenance) printf '%s' 'Maintenance' ;;
+        eol) printf '%s' 'EOL' ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+parse_release_index() {
+    awk '
+        /"channel-version"[[:space:]]*:/ {
+            channel=$0
+            sub(/^[^:]*:[[:space:]]*"/, "", channel)
+            sub(/".*$/, "", channel)
+        }
+        /"latest-sdk"[[:space:]]*:/ {
+            latest=$0
+            sub(/^[^:]*:[[:space:]]*"/, "", latest)
+            sub(/".*$/, "", latest)
+        }
+        /"support-phase"[[:space:]]*:/ {
+            phase=$0
+            sub(/^[^:]*:[[:space:]]*"/, "", phase)
+            sub(/".*$/, "", phase)
+        }
+        /"release-type"[[:space:]]*:/ {
+            type=$0
+            sub(/^[^:]*:[[:space:]]*"/, "", type)
+            sub(/".*$/, "", type)
+        }
+        /"releases.json"[[:space:]]*:/ {
+            url=$0
+            sub(/^[^:]*:[[:space:]]*"/, "", url)
+            sub(/".*$/, "", url)
+            if (channel != "" && latest != "" && phase != "" && type != "") {
+                print channel "|" latest "|" phase "|" type "|" url
+            }
+            channel=latest=phase=type=url=""
+        }
+    '
+}
+
+extract_sdk_versions() {
+    grep -oE '/dotnet/Sdk/[^/"[:space:]]+' |
+        sed 's#^.*/Sdk/##' |
+        awk '!seen[$0]++'
+}
+
+select_action() {
+    local selection=""
+
+    while true; do
+        info "What would you like to do?"
+        echo
+        echo "  1. Install an SDK"
+        echo "  2. Remove an isolated SDK"
+        echo "  3. List isolated SDKs"
+        echo "  4. Exit"
+        echo
+        read -r -p "Selection: " selection || true
+
+        case "$selection" in
+            1) ACTION="install"; return 0 ;;
+            2) ACTION="remove"; return 0 ;;
+            3) ACTION="list"; return 0 ;;
+            4|q|Q) info "Exiting."; return 1 ;;
+            *) warn "Please choose 1, 2, 3, or 4." ;;
+        esac
+    done
+}
+
+select_install_version() {
+    local index_json
+    local channel_data
+    local show_archived="false"
+    local selection=""
+    local channel=""
+    local latest_sdk=""
+    local phase=""
+    local release_type=""
+    local releases_url=""
+    local metadata_file=""
+    local versions=""
+    local system_versions=""
+    local isolated_versions=""
+    local line=""
+    local i=0
+
+    info "Loading available .NET SDK releases from Microsoft..."
+    index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
+        fail "Unable to load .NET release metadata from Microsoft."
+    channel_data="$(printf "%s\n" "$index_json" | parse_release_index)"
+
+    while true; do
+        echo
+        if [[ "$show_archived" == "true" ]]; then
+            info "Select an end-of-life .NET channel:"
+        else
+            info "Select a supported or development .NET channel:"
+        fi
+        echo
+
+        local channels=()
+        local latest_sdks=()
+        local phases=()
+        local release_types=()
+        local release_urls=()
+
+        while IFS='|' read -r channel latest_sdk phase release_type releases_url; do
+            [[ -n "$channel" ]] || continue
+
+            if [[ "$show_archived" == "true" ]]; then
+                [[ "$phase" == "eol" ]] || continue
+            else
+                [[ "$phase" != "eol" ]] || continue
+            fi
+
+            channels+=("$channel")
+            latest_sdks+=("$latest_sdk")
+            phases+=("$phase")
+            release_types+=("$release_type")
+            release_urls+=("$releases_url")
+        done <<< "$channel_data"
+
+        for ((i=0; i<${#channels[@]}; i++)); do
+            printf "  %d. .NET %s  %s  %s  latest SDK %s\n" \
+                "$((i + 1))" \
+                "${channels[$i]}" \
+                "$(printf '%s' "${release_types[$i]}" | tr '[:lower:]' '[:upper:]')" \
+                "$(format_phase "${phases[$i]}")" \
+                "${latest_sdks[$i]}"
+        done
+
+        echo
+        if [[ "$show_archived" == "true" ]]; then
+            echo "  S. Show supported/development channels"
+        else
+            echo "  A. Show end-of-life channels"
+        fi
+        echo "  M. Enter an exact SDK version manually"
+        echo "  Q. Cancel"
+        echo
+        read -r -p "Selection: " selection || true
+
+        case "$selection" in
+            [mM])
+                read -r -p "isolated-dotnet-sdk: .NET SDK version: " VERSION || true
+                [[ -n "$VERSION" ]] || fail "An SDK version is required."
+                validate_version
+                return 0
+                ;;
+            [qQ])
+                return 1
+                ;;
+            [aA])
+                if [[ "$show_archived" == "false" ]]; then
+                    show_archived="true"
+                    continue
+                fi
+                ;;
+            [sS])
+                if [[ "$show_archived" == "true" ]]; then
+                    show_archived="false"
+                    continue
+                fi
+                ;;
+        esac
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && \
+           (( selection >= 1 && selection <= ${#channels[@]} )); then
+            i=$((selection - 1))
+            channel="${channels[$i]}"
+            latest_sdk="${latest_sdks[$i]}"
+            releases_url="${release_urls[$i]}"
+        else
+            warn "Invalid selection."
+            continue
+        fi
+
+        metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
+        if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
+            rm -f "$metadata_file"
+            fail "Unable to load release metadata for .NET $channel."
+        fi
+
+        versions="$(extract_sdk_versions < "$metadata_file")"
+        rm -f "$metadata_file"
+
+        [[ -n "$versions" ]] || fail "No SDK versions were found for .NET $channel."
+
+        system_versions="$(get_system_sdk_versions)"
+        isolated_versions="$(get_isolated_sdk_versions)"
+
+        while true; do
+            echo
+            info "Available .NET $channel SDKs:"
+            echo
+
+            local sdk_versions=()
+            while IFS= read -r line; do
+                [[ -n "$line" ]] || continue
+                sdk_versions+=("$line")
+            done <<< "$versions"
+
+            for ((i=0; i<${#sdk_versions[@]}; i++)); do
+                local markers=""
+                line="${sdk_versions[$i]}"
+
+                if [[ "$line" == "$latest_sdk" ]]; then
+                    markers="latest"
+                fi
+                if contains_line "$system_versions" "$line"; then
+                    markers="${markers:+$markers, }system"
+                fi
+                if contains_line "$isolated_versions" "$line"; then
+                    markers="${markers:+$markers, }isolated"
+                fi
+
+                if [[ -n "$markers" ]]; then
+                    printf "  %d. %s (%s)\n" "$((i + 1))" "$line" "$markers"
+                else
+                    printf "  %d. %s\n" "$((i + 1))" "$line"
+                fi
+            done
+
+            echo
+            echo "  B. Back to .NET channels"
+            echo "  M. Enter an exact SDK version manually"
+            echo "  Q. Cancel"
+            echo
+            read -r -p "Selection: " selection || true
+
+            case "$selection" in
+                [bB]) break ;;
+                [mM])
+                    read -r -p "isolated-dotnet-sdk: .NET SDK version: " VERSION || true
+                    [[ -n "$VERSION" ]] || fail "An SDK version is required."
+                    validate_version
+                    return 0
+                    ;;
+                [qQ]) return 1 ;;
+            esac
+
+            if [[ "$selection" =~ ^[0-9]+$ ]] && \
+               (( selection >= 1 && selection <= ${#sdk_versions[@]} )); then
+                VERSION="${sdk_versions[$((selection - 1))]}"
+                validate_version
+                return 0
+            fi
+
+            warn "Invalid selection."
+        done
+    done
+}
+
+select_remove_version() {
+    local versions
+    local selection=""
+    local line=""
+    local i=0
+    local sdk_versions=()
+
+    versions="$(get_isolated_sdk_versions)"
+
+    if [[ -z "$versions" ]]; then
+        info "No isolated SDKs are installed under $SDK_ROOT."
+        return 1
+    fi
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        sdk_versions+=("$line")
+    done <<< "$versions"
+
+    while true; do
+        info "Select an isolated SDK to remove:"
+        echo
+
+        for ((i=0; i<${#sdk_versions[@]}; i++)); do
+            printf "  %d. %s\n" "$((i + 1))" "${sdk_versions[$i]}"
+        done
+
+        echo
+        echo "  Q. Cancel"
+        echo
+        read -r -p "Selection: " selection || true
+
+        case "$selection" in
+            [qQ]) return 1 ;;
+        esac
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && \
+           (( selection >= 1 && selection <= ${#sdk_versions[@]} )); then
+            VERSION="${sdk_versions[$((selection - 1))]}"
+            validate_version
+            return 0
+        fi
+
+        warn "Invalid selection."
+    done
+}
+
+resolve_install_version() {
+    if [[ -n "$VERSION" ]]; then
+        validate_version
+        return 0
+    fi
+
+    if ! select_install_version; then
+        info "Installation cancelled."
+        return 1
     fi
 }
 
+resolve_remove_version() {
+    if [[ -n "$VERSION" ]]; then
+        validate_version
+        return 0
+    fi
+
+    if ! select_remove_version; then
+        info "Removal cancelled."
+        return 1
+    fi
+}
+
+list_isolated_sdks() {
+    local versions
+    local line
+    versions="$(get_isolated_sdk_versions)"
+
+    info "Isolated SDKs under $SDK_ROOT:"
+
+    if [[ -z "$versions" ]]; then
+        printf "  %s\n" "None"
+        return
+    fi
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && printf "  %s\n" "$line"
+    done <<< "$versions"
+}
+
 install_sdk() {
-    get_version_if_needed
+    resolve_install_version || return 0
 
     local install_dir="$SDK_ROOT/$VERSION"
     local isolated_dotnet="$install_dir/dotnet"
@@ -188,7 +530,7 @@ install_sdk() {
 }
 
 remove_sdk() {
-    get_version_if_needed
+    resolve_remove_version || return 0
 
     local install_dir="$SDK_ROOT/$VERSION"
     local isolated_dotnet="$install_dir/dotnet"
@@ -218,15 +560,17 @@ remove_sdk() {
 usage() {
     cat <<'USAGE'
 Usage:
-  isolated-dotnet-sdk.sh [install] [version] [--yes]
+  isolated-dotnet-sdk.sh
+  isolated-dotnet-sdk.sh install [version] [--yes]
   isolated-dotnet-sdk.sh remove [version] [--yes]
   isolated-dotnet-sdk.sh list
+  isolated-dotnet-sdk.sh [version] [--yes]
 
-Examples:
-  isolated-dotnet-sdk.sh 11.0.100-rc.1.26425.128
-  isolated-dotnet-sdk.sh install 11.0.100-rc.1.26425.128
-  isolated-dotnet-sdk.sh remove 11.0.100-rc.1.26425.128
-  isolated-dotnet-sdk.sh list
+Behavior:
+  No command                    Show the interactive action menu.
+  install without a version     Show the interactive SDK picker.
+  remove without a version      Show installed isolated SDKs to choose from.
+  Explicit command and version  Run directly without the picker.
 USAGE
 }
 
@@ -235,7 +579,7 @@ bootstrap_if_needed "$@"
 mkdir -p "$SDK_ROOT"
 cd "$SDK_ROOT"
 
-ACTION="install"
+ACTION=""
 VERSION=""
 YES="false"
 
@@ -249,16 +593,14 @@ if [[ $# -gt 0 ]]; then
             usage
             exit 0
             ;;
+        --yes|-y)
+            ;;
         *)
+            ACTION="install"
             VERSION="$1"
             shift
             ;;
     esac
-fi
-
-if [[ "$ACTION" != "list" && -z "$VERSION" && $# -gt 0 && "$1" != "--yes" ]]; then
-    VERSION="$1"
-    shift
 fi
 
 while [[ $# -gt 0 ]]; do
@@ -271,11 +613,21 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            fail "Unknown argument: $1"
+            if [[ "$ACTION" != "list" && -z "$VERSION" ]]; then
+                VERSION="$1"
+            else
+                fail "Unknown argument: $1"
+            fi
             ;;
     esac
     shift
 done
+
+if [[ -z "$ACTION" ]]; then
+    if ! select_action; then
+        exit 0
+    fi
+fi
 
 case "$ACTION" in
     install)
