@@ -1,6 +1,6 @@
 param(
     [ValidateSet('Install', 'Remove', 'List')]
-    [string]$Action = 'Install',
+    [string]$Action,
 
     [string]$Version,
 
@@ -10,10 +10,14 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
+$ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
 $ToolName = 'isolated-dotnet-sdk.ps1'
 $SdkRoot = Join-Path $HOME 'dotnet-sdks'
 $ToolPath = Join-Path $SdkRoot $ToolName
 $InstallScript = Join-Path $SdkRoot 'dotnet-install.ps1'
+$script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
+$script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
+$script:Bootstrapped = $false
 
 function Write-Info {
     param([string]$Message)
@@ -49,18 +53,6 @@ function Assert-ValidVersion {
     }
 }
 
-function Get-VersionIfNeeded {
-    if ([string]::IsNullOrWhiteSpace($script:Version)) {
-        $script:Version = Read-Host 'isolated-dotnet-sdk: .NET SDK version'
-
-        if ([string]::IsNullOrWhiteSpace($script:Version)) {
-            throw 'An SDK version is required.'
-        }
-    }
-
-    Assert-ValidVersion
-}
-
 function Confirm-Action {
     param([string]$Prompt)
 
@@ -71,8 +63,6 @@ function Confirm-Action {
     $Response = Read-Host "isolated-dotnet-sdk: $Prompt [y/N]"
     return $Response -match '^[Yy]$'
 }
-
-$script:Bootstrapped = $false
 
 function Install-ToolIfNeeded {
     New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
@@ -100,11 +90,13 @@ function Install-ToolIfNeeded {
 
     Write-Success 'Tool installed.'
 
-    $Arguments = @{
-        Action = $Action
+    $Arguments = @{}
+
+    if ($script:ActionWasSpecified) {
+        $Arguments.Action = $Action
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($Version)) {
+    if ($script:VersionWasSpecified -and -not [string]::IsNullOrWhiteSpace($Version)) {
         $Arguments.Version = $Version
     }
 
@@ -123,9 +115,17 @@ function Get-IsolatedDotNetPath {
     return Join-Path $InstallDir 'dotnet.exe'
 }
 
-function Show-IsolatedSdks {
-    Write-Info "Isolated SDKs under ${SdkRoot}:"
+function Get-SystemSdkVersions {
+    $DotNetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
 
+    if (-not $DotNetCommand) {
+        return @()
+    }
+
+    return @(dotnet --list-sdks | ForEach-Object { ($_ -split '\s+')[0] })
+}
+
+function Get-IsolatedSdkVersions {
     $SdkDirectories = Get-ChildItem `
         -Path $SdkRoot `
         -Directory `
@@ -135,18 +135,338 @@ function Show-IsolatedSdks {
         } |
         Sort-Object Name
 
-    if (-not $SdkDirectories) {
+    return @($SdkDirectories | ForEach-Object { $_.Name })
+}
+
+function Show-IsolatedSdks {
+    Write-Info "Isolated SDKs under ${SdkRoot}:"
+
+    $Versions = Get-IsolatedSdkVersions
+
+    if (-not $Versions) {
         Write-Host '  None'
         return
     }
 
-    foreach ($Directory in $SdkDirectories) {
-        Write-Host "  $($Directory.Name)"
+    foreach ($SdkVersion in $Versions) {
+        Write-Host "  $SdkVersion"
     }
 }
 
+function Format-SupportPhase {
+    param([string]$Phase)
+
+    switch ($Phase) {
+        'preview' { return 'Preview' }
+        'go-live' { return 'Go Live' }
+        'active' { return 'Active' }
+        'maintenance' { return 'Maintenance' }
+        'eol' { return 'EOL' }
+        default { return $Phase }
+    }
+}
+
+function Select-Action {
+    if (-not [string]::IsNullOrWhiteSpace($script:Action)) {
+        return $true
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($script:Version)) {
+        $script:Action = 'Install'
+        return $true
+    }
+
+    while ($true) {
+        Write-Info 'What would you like to do?'
+        Write-Host
+        Write-Host '  1. Install an SDK'
+        Write-Host '  2. Remove an isolated SDK'
+        Write-Host '  3. List isolated SDKs'
+        Write-Host '  4. Exit'
+        Write-Host
+
+        $Selection = Read-Host 'Selection'
+
+        switch ($Selection) {
+            '1' { $script:Action = 'Install'; return $true }
+            '2' { $script:Action = 'Remove'; return $true }
+            '3' { $script:Action = 'List'; return $true }
+            '4' { Write-Info 'Exiting.'; return $false }
+            'q' { Write-Info 'Exiting.'; return $false }
+            'Q' { Write-Info 'Exiting.'; return $false }
+            default { Write-WarningMessage 'Please choose 1, 2, 3, or 4.' }
+        }
+    }
+}
+
+function Get-ReleaseIndex {
+    Write-Info 'Loading available .NET SDK releases from Microsoft...'
+    return Invoke-RestMethod -Uri $ReleaseIndexUrl
+}
+
+function Get-ChannelReleasesUrl {
+    param($Channel)
+
+    $Url = $Channel.'patch-releases-info-uri'
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        $Url = $Channel.'releases.json'
+    }
+
+    return $Url
+}
+
+function Get-ChannelSdkVersions {
+    param($ChannelMetadata)
+
+    $Versions = [System.Collections.Generic.List[string]]::new()
+    $Seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($Release in @($ChannelMetadata.releases)) {
+        if ($Release.sdk -and -not [string]::IsNullOrWhiteSpace($Release.sdk.version)) {
+            $SdkVersion = [string]$Release.sdk.version
+            if ($Seen.Add($SdkVersion)) {
+                $Versions.Add($SdkVersion)
+            }
+        }
+
+        foreach ($Sdk in @($Release.sdks)) {
+            if ($Sdk -and -not [string]::IsNullOrWhiteSpace($Sdk.version)) {
+                $SdkVersion = [string]$Sdk.version
+                if ($Seen.Add($SdkVersion)) {
+                    $Versions.Add($SdkVersion)
+                }
+            }
+        }
+    }
+
+    return @($Versions | ForEach-Object { $_ })
+}
+
+function Select-InstallVersion {
+    $ReleaseIndex = Get-ReleaseIndex
+    $AllChannels = @($ReleaseIndex.'releases-index')
+    $ShowArchived = $false
+
+    while ($true) {
+        Write-Host
+
+        if ($ShowArchived) {
+            Write-Info 'Select an end-of-life .NET channel:'
+            $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
+        }
+        else {
+            Write-Info 'Select a supported or development .NET channel:'
+            $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
+        }
+
+        Write-Host
+
+        for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
+            $Channel = $Channels[$Index]
+            $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
+            $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
+
+            Write-Host ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
+                ($Index + 1), `
+                $Channel.'channel-version', `
+                $ReleaseType, `
+                $SupportPhase, `
+                $Channel.'latest-sdk')
+        }
+
+        Write-Host
+        if ($ShowArchived) {
+            Write-Host '  S. Show supported/development channels'
+        }
+        else {
+            Write-Host '  A. Show end-of-life channels'
+        }
+        Write-Host '  M. Enter an exact SDK version manually'
+        Write-Host '  Q. Cancel'
+        Write-Host
+
+        $Selection = Read-Host 'Selection'
+
+        if ($Selection -match '^[Mm]$') {
+            $script:Version = Read-Host 'isolated-dotnet-sdk: .NET SDK version'
+            if ([string]::IsNullOrWhiteSpace($script:Version)) {
+                throw 'An SDK version is required.'
+            }
+            Assert-ValidVersion
+            return $true
+        }
+
+        if ($Selection -match '^[Qq]$') {
+            return $false
+        }
+
+        if ($Selection -match '^[Aa]$' -and -not $ShowArchived) {
+            $ShowArchived = $true
+            continue
+        }
+
+        if ($Selection -match '^[Ss]$' -and $ShowArchived) {
+            $ShowArchived = $false
+            continue
+        }
+
+        $Number = 0
+        if (-not [int]::TryParse($Selection, [ref]$Number) -or
+            $Number -lt 1 -or
+            $Number -gt $Channels.Count) {
+            Write-WarningMessage 'Invalid selection.'
+            continue
+        }
+
+        $SelectedChannel = $Channels[$Number - 1]
+        $ReleasesUrl = Get-ChannelReleasesUrl $SelectedChannel
+        $ChannelMetadata = Invoke-RestMethod -Uri $ReleasesUrl
+        $SdkVersions = Get-ChannelSdkVersions $ChannelMetadata
+
+        if (-not $SdkVersions) {
+            throw "No SDK versions were found for .NET $($SelectedChannel.'channel-version')."
+        }
+
+        $SystemVersions = Get-SystemSdkVersions
+        $IsolatedVersions = Get-IsolatedSdkVersions
+
+        while ($true) {
+            Write-Host
+            Write-Info "Available .NET $($SelectedChannel.'channel-version') SDKs:"
+            Write-Host
+
+            for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
+                $SdkVersion = $SdkVersions[$Index]
+                $Markers = [System.Collections.Generic.List[string]]::new()
+
+                if ($SdkVersion -eq $SelectedChannel.'latest-sdk') {
+                    $Markers.Add('latest')
+                }
+                if ($SystemVersions -contains $SdkVersion) {
+                    $Markers.Add('system')
+                }
+                if ($IsolatedVersions -contains $SdkVersion) {
+                    $Markers.Add('isolated')
+                }
+
+                if ($Markers.Count -gt 0) {
+                    Write-Host ("  {0}. {1} ({2})" -f ($Index + 1), $SdkVersion, ($Markers -join ', '))
+                }
+                else {
+                    Write-Host ("  {0}. {1}" -f ($Index + 1), $SdkVersion)
+                }
+            }
+
+            Write-Host
+            Write-Host '  B. Back to .NET channels'
+            Write-Host '  M. Enter an exact SDK version manually'
+            Write-Host '  Q. Cancel'
+            Write-Host
+
+            $Selection = Read-Host 'Selection'
+
+            if ($Selection -match '^[Bb]$') {
+                break
+            }
+
+            if ($Selection -match '^[Mm]$') {
+                $script:Version = Read-Host 'isolated-dotnet-sdk: .NET SDK version'
+                if ([string]::IsNullOrWhiteSpace($script:Version)) {
+                    throw 'An SDK version is required.'
+                }
+                Assert-ValidVersion
+                return $true
+            }
+
+            if ($Selection -match '^[Qq]$') {
+                return $false
+            }
+
+            $Number = 0
+            if ([int]::TryParse($Selection, [ref]$Number) -and
+                $Number -ge 1 -and
+                $Number -le $SdkVersions.Count) {
+                $script:Version = $SdkVersions[$Number - 1]
+                Assert-ValidVersion
+                return $true
+            }
+
+            Write-WarningMessage 'Invalid selection.'
+        }
+    }
+}
+
+function Select-RemoveVersion {
+    $SdkVersions = Get-IsolatedSdkVersions
+
+    if (-not $SdkVersions) {
+        Write-Info "No isolated SDKs are installed under $SdkRoot."
+        return $false
+    }
+
+    while ($true) {
+        Write-Info 'Select an isolated SDK to remove:'
+        Write-Host
+
+        for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
+            Write-Host ("  {0}. {1}" -f ($Index + 1), $SdkVersions[$Index])
+        }
+
+        Write-Host
+        Write-Host '  Q. Cancel'
+        Write-Host
+
+        $Selection = Read-Host 'Selection'
+
+        if ($Selection -match '^[Qq]$') {
+            return $false
+        }
+
+        $Number = 0
+        if ([int]::TryParse($Selection, [ref]$Number) -and
+            $Number -ge 1 -and
+            $Number -le $SdkVersions.Count) {
+            $script:Version = $SdkVersions[$Number - 1]
+            Assert-ValidVersion
+            return $true
+        }
+
+        Write-WarningMessage 'Invalid selection.'
+    }
+}
+
+function Resolve-InstallVersion {
+    if (-not [string]::IsNullOrWhiteSpace($script:Version)) {
+        Assert-ValidVersion
+        return $true
+    }
+
+    if (-not (Select-InstallVersion)) {
+        Write-Info 'Installation cancelled.'
+        return $false
+    }
+
+    return $true
+}
+
+function Resolve-RemoveVersion {
+    if (-not [string]::IsNullOrWhiteSpace($script:Version)) {
+        Assert-ValidVersion
+        return $true
+    }
+
+    if (-not (Select-RemoveVersion)) {
+        Write-Info 'Removal cancelled.'
+        return $false
+    }
+
+    return $true
+}
+
 function Install-IsolatedSdk {
-    Get-VersionIfNeeded
+    if (-not (Resolve-InstallVersion)) {
+        return
+    }
 
     $InstallDir = Join-Path $SdkRoot $Version
     $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
@@ -240,7 +560,9 @@ function Install-IsolatedSdk {
 }
 
 function Remove-IsolatedSdk {
-    Get-VersionIfNeeded
+    if (-not (Resolve-RemoveVersion)) {
+        return
+    }
 
     $InstallDir = Join-Path $SdkRoot $Version
     $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
@@ -280,6 +602,10 @@ New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
 Push-Location $SdkRoot
 try {
     try {
+        if (-not (Select-Action)) {
+            return
+        }
+
         switch ($Action) {
             'Install' {
                 Install-IsolatedSdk
