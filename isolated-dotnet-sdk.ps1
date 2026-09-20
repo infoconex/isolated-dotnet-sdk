@@ -141,7 +141,7 @@ function Get-IsolatedSdkVersions {
 function Show-IsolatedSdks {
     Write-Info "Isolated SDKs under ${SdkRoot}:"
 
-    $Versions = Get-IsolatedSdkVersions
+    $Versions = @(Get-IsolatedSdkVersions)
 
     if (-not $Versions) {
         Write-Host '  None'
@@ -321,14 +321,14 @@ function Select-InstallVersion {
         $SelectedChannel = $Channels[$Number - 1]
         $ReleasesUrl = Get-ChannelReleasesUrl $SelectedChannel
         $ChannelMetadata = Invoke-RestMethod -Uri $ReleasesUrl
-        $SdkVersions = Get-ChannelSdkVersions $ChannelMetadata
+        $SdkVersions = @(Get-ChannelSdkVersions $ChannelMetadata)
 
         if (-not $SdkVersions) {
             throw "No SDK versions were found for .NET $($SelectedChannel.'channel-version')."
         }
 
-        $SystemVersions = Get-SystemSdkVersions
-        $IsolatedVersions = Get-IsolatedSdkVersions
+        $SystemVersions = @(Get-SystemSdkVersions)
+        $IsolatedVersions = @(Get-IsolatedSdkVersions)
 
         while ($true) {
             Write-Host
@@ -397,7 +397,7 @@ function Select-InstallVersion {
 }
 
 function Select-RemoveVersion {
-    $SdkVersions = Get-IsolatedSdkVersions
+    $SdkVersions = @(Get-IsolatedSdkVersions)
 
     if (-not $SdkVersions) {
         Write-Info "No isolated SDKs are installed under $SdkRoot."
