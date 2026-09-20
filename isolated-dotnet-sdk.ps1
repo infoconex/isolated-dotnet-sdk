@@ -1,9 +1,6 @@
 param(
-    [ValidateSet('Install', 'Remove', 'List')]
     [string]$Action,
-
     [string]$Version,
-
     [switch]$Yes
 )
 
@@ -21,28 +18,24 @@ $script:Bootstrapped = $false
 
 function Write-Info {
     param([string]$Message)
-
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Cyan -NoNewline
     Write-Host " $Message"
 }
 
 function Write-WarningMessage {
     param([string]$Message)
-
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Yellow -NoNewline
     Write-Host " $Message"
 }
 
 function Write-Success {
     param([string]$Message)
-
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Green -NoNewline
     Write-Host " $Message"
 }
 
 function Write-ErrorMessage {
     param([string]$Message)
-
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Red -NoNewline
     Write-Host " $Message"
 }
@@ -73,7 +66,6 @@ function Install-ToolIfNeeded {
     }
 
     $ExpectedPath = [System.IO.Path]::GetFullPath($ToolPath)
-
     if ($CurrentPath -eq $ExpectedPath) {
         return
     }
@@ -110,15 +102,11 @@ function Install-ToolIfNeeded {
 
 function Get-IsolatedDotNetPath {
     param([string]$SdkVersion)
-
-    $InstallDir = Join-Path $SdkRoot $SdkVersion
-    return Join-Path $InstallDir 'dotnet.exe'
+    return Join-Path (Join-Path $SdkRoot $SdkVersion) 'dotnet.exe'
 }
 
 function Get-SystemSdkVersions {
-    $DotNetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
-
-    if (-not $DotNetCommand) {
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         return @()
     }
 
@@ -130,9 +118,7 @@ function Get-IsolatedSdkVersions {
         -Path $SdkRoot `
         -Directory `
         -ErrorAction SilentlyContinue |
-        Where-Object {
-            Test-Path (Join-Path $_.FullName 'dotnet.exe')
-        } |
+        Where-Object { Test-Path (Join-Path $_.FullName 'dotnet.exe') } |
         Sort-Object Name
 
     return @($SdkDirectories | ForEach-Object { $_.Name })
@@ -140,7 +126,6 @@ function Get-IsolatedSdkVersions {
 
 function Show-IsolatedSdks {
     Write-Info "Isolated SDKs under ${SdkRoot}:"
-
     $Versions = @(Get-IsolatedSdkVersions)
 
     if (-not $Versions) {
@@ -153,21 +138,22 @@ function Show-IsolatedSdks {
     }
 }
 
-function Format-SupportPhase {
-    param([string]$Phase)
+function Normalize-Action {
+    if ([string]::IsNullOrWhiteSpace($script:Action)) {
+        return
+    }
 
-    switch ($Phase) {
-        'preview' { return 'Preview' }
-        'go-live' { return 'Go Live' }
-        'active' { return 'Active' }
-        'maintenance' { return 'Maintenance' }
-        'eol' { return 'EOL' }
-        default { return $Phase }
+    switch ($script:Action.ToLowerInvariant()) {
+        'install' { $script:Action = 'Install' }
+        'remove'  { $script:Action = 'Remove' }
+        'list'    { $script:Action = 'List' }
+        default   { throw "Unknown action: $script:Action" }
     }
 }
 
 function Select-Action {
     if (-not [string]::IsNullOrWhiteSpace($script:Action)) {
+        Normalize-Action
         return $true
     }
 
@@ -199,20 +185,17 @@ function Select-Action {
     }
 }
 
-function Get-ReleaseIndex {
-    Write-Info 'Loading available .NET SDK releases from Microsoft...'
-    return Invoke-RestMethod -Uri $ReleaseIndexUrl
-}
+function Format-SupportPhase {
+    param([string]$Phase)
 
-function Get-ChannelReleasesUrl {
-    param($Channel)
-
-    $Url = $Channel.'patch-releases-info-uri'
-    if ([string]::IsNullOrWhiteSpace($Url)) {
-        $Url = $Channel.'releases.json'
+    switch ($Phase) {
+        'preview'     { return 'Preview' }
+        'go-live'     { return 'Go Live' }
+        'active'      { return 'Active' }
+        'maintenance' { return 'Maintenance' }
+        'eol'         { return 'EOL' }
+        default       { return $Phase }
     }
-
-    return $Url
 }
 
 function Get-ChannelSdkVersions {
@@ -239,11 +222,12 @@ function Get-ChannelSdkVersions {
         }
     }
 
-    return @($Versions | ForEach-Object { $_ })
+    return @($Versions)
 }
 
 function Select-InstallVersion {
-    $ReleaseIndex = Get-ReleaseIndex
+    Write-Info 'Loading available .NET SDK releases from Microsoft...'
+    $ReleaseIndex = Invoke-RestMethod -Uri $ReleaseIndexUrl
     $AllChannels = @($ReleaseIndex.'releases-index')
     $ShowArchived = $false
 
@@ -319,8 +303,7 @@ function Select-InstallVersion {
         }
 
         $SelectedChannel = $Channels[$Number - 1]
-        $ReleasesUrl = Get-ChannelReleasesUrl $SelectedChannel
-        $ChannelMetadata = Invoke-RestMethod -Uri $ReleasesUrl
+        $ChannelMetadata = Invoke-RestMethod -Uri $SelectedChannel.'releases.json'
         $SdkVersions = @(Get-ChannelSdkVersions $ChannelMetadata)
 
         if (-not $SdkVersions) {
@@ -477,16 +460,12 @@ function Install-IsolatedSdk {
 
     Write-Info 'Checking SDKs installed through the normal dotnet host...'
 
-    $DotNetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
     $InstalledVersions = @()
-
-    if ($DotNetCommand) {
+    if (Get-Command dotnet -ErrorAction SilentlyContinue) {
         $InstalledSdks = dotnet --list-sdks
         $InstalledSdks
         Write-Host
-
-        $InstalledVersions = $InstalledSdks |
-            ForEach-Object { ($_ -split '\s+')[0] }
+        $InstalledVersions = $InstalledSdks | ForEach-Object { ($_ -split '\s+')[0] }
     }
     else {
         Write-WarningMessage 'No system dotnet installation was found.'
@@ -547,9 +526,7 @@ function Install-IsolatedSdk {
     $IsolatedSdks = & $IsolatedDotNet --list-sdks
     $IsolatedSdks
 
-    $IsolatedVersions = $IsolatedSdks |
-        ForEach-Object { ($_ -split '\s+')[0] }
-
+    $IsolatedVersions = $IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] }
     if ($IsolatedVersions -notcontains $Version) {
         throw "SDK $Version was not found after installation."
     }
@@ -607,15 +584,9 @@ try {
         }
 
         switch ($Action) {
-            'Install' {
-                Install-IsolatedSdk
-            }
-            'Remove' {
-                Remove-IsolatedSdk
-            }
-            'List' {
-                Show-IsolatedSdks
-            }
+            'Install' { Install-IsolatedSdk }
+            'Remove'  { Remove-IsolatedSdk }
+            'List'    { Show-IsolatedSdks }
         }
     }
     catch {
