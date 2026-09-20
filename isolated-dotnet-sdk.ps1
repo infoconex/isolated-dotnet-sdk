@@ -36,6 +36,13 @@ function Write-Success {
     Write-Host " $Message"
 }
 
+function Write-ErrorMessage {
+    param([string]$Message)
+
+    Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Red -NoNewline
+    Write-Host " $Message"
+}
+
 function Assert-ValidVersion {
     if ($script:Version -notmatch '^[0-9A-Za-z][0-9A-Za-z.+-]*$') {
         throw "Invalid SDK version: $script:Version"
@@ -272,16 +279,21 @@ New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
 
 Push-Location $SdkRoot
 try {
-    switch ($Action) {
-        'Install' {
-            Install-IsolatedSdk
+    try {
+        switch ($Action) {
+            'Install' {
+                Install-IsolatedSdk
+            }
+            'Remove' {
+                Remove-IsolatedSdk
+            }
+            'List' {
+                Show-IsolatedSdks
+            }
         }
-        'Remove' {
-            Remove-IsolatedSdk
-        }
-        'List' {
-            Show-IsolatedSdks
-        }
+    }
+    catch {
+        Write-ErrorMessage $_.Exception.Message
     }
 }
 finally {
