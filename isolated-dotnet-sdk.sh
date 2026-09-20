@@ -64,7 +64,7 @@ bootstrap_if_needed() {
 
     success "Tool installed."
 
-    if [[ -t 1 ]]; then
+    if tty -s </dev/tty 2>/dev/null; then
         exec "$TOOL_PATH" "$@" </dev/tty
     fi
 
