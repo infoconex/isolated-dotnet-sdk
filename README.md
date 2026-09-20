@@ -26,10 +26,8 @@ The scripts also run from `dotnet-sdks` rather than from the repository where yo
 Run:
 
 ```powershell
-$d = Join-Path $HOME 'dotnet-sdks'; New-Item -ItemType Directory -Path $d -Force | Out-Null; Invoke-WebRequest 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1' -OutFile (Join-Path $d 'isolated-dotnet-sdk.ps1'); & (Join-Path $d 'isolated-dotnet-sdk.ps1')
+irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1 | iex
 ```
-
-The PowerShell quick-start downloads the script to its permanent location first, then runs that file normally. It intentionally avoids `Invoke-Expression`, so the tool does not add or modify parameter variables in the caller's PowerShell scope.
 
 ### Linux / macOS
 
