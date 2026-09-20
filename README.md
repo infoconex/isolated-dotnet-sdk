@@ -29,15 +29,6 @@ Run:
 irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1 | iex
 ```
 
-The first run:
-
-1. Creates `$HOME\dotnet-sdks` if needed.
-2. Saves `isolated-dotnet-sdk.ps1` there for future use.
-3. Prompts for the .NET SDK version to install.
-4. Downloads Microsoft's `dotnet-install.ps1` script.
-5. Installs the exact SDK version without adding it to `PATH`.
-6. Verifies the isolated installation.
-
 ### Linux / macOS
 
 Run:
@@ -46,19 +37,93 @@ Run:
 curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.sh | bash
 ```
 
-The first run:
+The first run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then opens the interactive menu.
 
-1. Creates `~/dotnet-sdks` if needed.
-2. Saves `isolated-dotnet-sdk.sh` there for future use.
-3. Makes the saved script executable.
-4. Prompts for the .NET SDK version to install.
-5. Downloads Microsoft's `dotnet-install.sh` script.
-6. Installs the exact SDK version without adding it to `PATH`.
-7. Verifies the isolated installation.
+```text
+isolated-dotnet-sdk: What would you like to do?
 
-## Install an SDK
+  1. Install an SDK
+  2. Remove an isolated SDK
+  3. List isolated SDKs
+  4. Exit
 
-After the tool is installed, you can run it directly.
+Selection:
+```
+
+Rerunning either quick-start command refreshes the saved copy of the tool from this repository before running it.
+
+## Interactive Install
+
+Choosing **Install an SDK**, or explicitly running the `install` action without a version, loads Microsoft's official .NET release metadata and shows the currently supported or development channels.
+
+A channel menu looks similar to:
+
+```text
+isolated-dotnet-sdk: Select a supported or development .NET channel:
+
+  1. .NET 11.0  STS  Go Live      latest SDK 11.0.100-rc.1.26425.128
+  2. .NET 10.0  LTS  Active       latest SDK 10.0.401
+  3. .NET 9.0   STS  Maintenance  latest SDK 9.0.318
+  4. .NET 8.0   LTS  Maintenance  latest SDK 8.0.425
+
+  A. Show end-of-life channels
+  M. Enter an exact SDK version manually
+  Q. Cancel
+```
+
+After selecting a channel, the tool lists the SDK versions published for that channel. Versions already present on the machine are marked so you can see where they are installed.
+
+```text
+  1. 11.0.100-rc.1.26425.128 (latest, isolated)
+  2. 11.0.100-preview.7.26381.103
+  3. 11.0.100-preview.6.26359.118
+```
+
+The possible markers are:
+
+- `latest` - the latest SDK identified by Microsoft's release metadata;
+- `system` - already installed through the normal system `dotnet` host;
+- `isolated` - already installed under `~/dotnet-sdks`.
+
+If you select an SDK that is already installed normally, the existing confirmation still applies before creating an isolated copy.
+
+You can also choose manual entry at either picker when you already know the exact SDK version you want.
+
+### Start the install picker directly
+
+PowerShell:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Action Install
+```
+
+Bash:
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install
+```
+
+## Install a Specific SDK
+
+Supplying an exact SDK version bypasses the picker and goes directly to installation.
+
+PowerShell:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
+    -Action Install `
+    -Version '11.0.100-rc.1.26425.128'
+```
+
+Bash:
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" \
+    install \
+    11.0.100-rc.1.26425.128
+```
+
+For convenience, both tools also treat a version supplied without an action as an install request.
 
 PowerShell:
 
@@ -92,7 +157,21 @@ Bash:
 
 ## Remove an Isolated SDK
 
-Removal first asks the isolated SDK to shut down its MSBuild and compiler build servers, then removes only that version directory.
+Running `remove` without a version opens a picker containing only SDKs installed under `~/dotnet-sdks`.
+
+PowerShell:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Action Remove
+```
+
+Bash:
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" remove
+```
+
+You can still remove a specific version directly.
 
 PowerShell:
 
@@ -110,7 +189,9 @@ Bash:
     11.0.100-rc.1.26425.128
 ```
 
-Removal defaults to no at the confirmation prompt. For automation, both implementations support a yes option.
+Removal first asks the isolated SDK to shut down its MSBuild and compiler build servers, then removes only that version directory. Removal defaults to no at the confirmation prompt.
+
+For automation, both implementations support a yes option.
 
 PowerShell:
 
@@ -153,12 +234,23 @@ This tool provides a repeatable way to install an exact SDK version in a separat
 
 It is isolation of the SDK installation, not a full sandbox. The .NET CLI can still create normal per-user state during first-time use, such as development certificates or telemetry configuration.
 
+## Microsoft Release Metadata
+
+The interactive install picker reads Microsoft's published .NET release metadata from:
+
+```text
+https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json
+```
+
+The release index identifies each .NET channel and links to the detailed release metadata used to enumerate exact SDK versions. Explicit-version installs do not require the picker and bypass this metadata lookup.
+
 ## Microsoft References
 
 - [.NET install scripts](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script)
 - [Test prerelease .NET SDKs locally](https://learn.microsoft.com/en-us/dotnet/core/tools/test-prerelease-sdk-locally)
 - [`dotnet build-server`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-build-server)
 - [`global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
+- [.NET release metadata](https://github.com/dotnet/core/tree/main/release-notes)
 
 ## Security Note
 
