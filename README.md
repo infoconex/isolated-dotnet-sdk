@@ -141,6 +141,26 @@ Bash:
 
 If the exact SDK is already installed through the normal system `dotnet` host, the tool asks before creating a second isolated copy.
 
+To intentionally create the isolated copy without a confirmation prompt, use the yes option.
+
+PowerShell:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
+    -Action Install `
+    -Version '10.0.401' `
+    -Yes
+```
+
+Bash:
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" \
+    install \
+    10.0.401 \
+    --yes
+```
+
 ## List Isolated SDKs
 
 PowerShell:
@@ -210,6 +230,12 @@ Bash:
     11.0.100-rc.1.26425.128 \
     --yes
 ```
+
+## Automation
+
+For scripts and CI jobs, provide the action and version explicitly rather than using the interactive picker. Use `-Yes` or `--yes` only when you intentionally want to bypass a confirmation prompt.
+
+Operational failures return a nonzero exit status. Choosing to cancel an interactive install or removal is treated as a normal user action rather than an error.
 
 ## Directory Layout
 
