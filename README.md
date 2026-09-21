@@ -1,5 +1,11 @@
 # Isolated .NET SDK
 
+This repository grew out of the article [How to Test a New .NET SDK Without Installing It System-Wide](https://coding.infoconex.com/post/2026/09/20/how-to-test-a-new-dotnet-sdk-without-installing-it-system-wide).
+
+While working through how to evaluate a newer .NET SDK without changing the normal development environment, I wanted the process to be repeatable on Windows, Linux, and macOS. What started as a few install commands turned into a small reusable tool for installing, inspecting, and removing exact SDK versions in isolation.
+
+If you want the reasoning behind the tool, the problems we ran into while testing it, and the role `global.json` plays, start with the article.
+
 Install and manage exact .NET SDK versions outside the normal system-wide .NET installation.
 
 The tool keeps isolated SDKs under:
