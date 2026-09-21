@@ -13,6 +13,8 @@ $SdkRoot = Join-Path $HOME 'dotnet-sdks'
 $ToolPath = Join-Path $SdkRoot $ToolName
 $InstallScript = Join-Path $SdkRoot 'dotnet-install.ps1'
 $script:Bootstrapped = $false
+$script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
+$script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
 
 function Write-Info {
     param([string]$Message)
@@ -91,7 +93,18 @@ function Install-ToolIfNeeded {
 
     Write-Success 'Tool installed.'
 
-    & $ToolPath
+    $Arguments = @{}
+    if ($script:ActionWasSpecified) {
+        $Arguments.Action = $Action
+    }
+    if ($script:VersionWasSpecified) {
+        $Arguments.Version = $Version
+    }
+    if ($Yes) {
+        $Arguments.Yes = $true
+    }
+
+    & $ToolPath @Arguments
     $script:Bootstrapped = $true
 }
 
@@ -575,6 +588,7 @@ try {
     }
     catch {
         Write-ErrorMessage $_.Exception.Message
+        exit 1
     }
 }
 finally {
