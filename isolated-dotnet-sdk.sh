@@ -20,19 +20,19 @@ else
     RESET=''
 fi
 
-info() {
+tool_info() {
     printf "%b%s%b %s\n" "$CYAN" "isolated-dotnet-sdk:" "$RESET" "$1"
 }
 
-warn() {
+tool_warn() {
     printf "%b%s%b %s\n" "$YELLOW" "isolated-dotnet-sdk:" "$RESET" "$1"
 }
 
-success() {
+tool_success() {
     printf "%b%s%b %s\n" "$GREEN" "isolated-dotnet-sdk:" "$RESET" "$1"
 }
 
-fail() {
+tool_fail() {
     printf "%s %s\n" "isolated-dotnet-sdk:" "$1" >&2
     exit 1
 }
@@ -40,6 +40,8 @@ fail() {
 bootstrap_if_needed() {
     mkdir -p "$SDK_ROOT"
 
+    # File-based invocation preserves the exact executing script. If no source file
+    # exists (for example, piped execution), bootstrap falls back to the main source.
     local current_source="${BASH_SOURCE[0]:-}"
     local current_path=""
     local expected_path
@@ -54,7 +56,7 @@ bootstrap_if_needed() {
         return
     fi
 
-    info "Installing tool to $TOOL_PATH"
+    tool_info "Installing tool to $TOOL_PATH"
 
     if [[ -n "$current_path" && -f "$current_path" ]]; then
         cp "$current_path" "$TOOL_PATH.tmp"
@@ -64,10 +66,12 @@ bootstrap_if_needed() {
             -o "$TOOL_PATH.tmp"
     fi
 
+    # Replace the installed helper only after the new source is complete, then
+    # re-execute from the stable installed path with the original arguments.
     chmod +x "$TOOL_PATH.tmp"
     mv "$TOOL_PATH.tmp" "$TOOL_PATH"
 
-    success "Tool installed."
+    tool_success "Tool installed."
 
     if tty -s </dev/tty 2>/dev/null; then
         exec "$TOOL_PATH" "$@" </dev/tty
@@ -90,7 +94,7 @@ confirm() {
 
 validate_version() {
     [[ "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]] || \
-        fail "Invalid SDK version: $VERSION"
+        tool_fail "Invalid SDK version: $VERSION"
 }
 
 contains_line() {
@@ -125,6 +129,8 @@ format_phase() {
     esac
 }
 
+# Extract only the release-index fields needed by the interactive picker and emit
+# them in a simple pipe-delimited form without adding a JSON-parser dependency.
 parse_release_index() {
     awk '
         /"channel-version"[[:space:]]*:/ {
@@ -169,7 +175,7 @@ select_action() {
     local selection=""
 
     while true; do
-        info "What would you like to do?"
+        tool_info "What would you like to do?"
         echo
         echo "  1. Install an SDK"
         echo "  2. Remove an isolated SDK"
@@ -182,8 +188,8 @@ select_action() {
             1) ACTION="install"; return 0 ;;
             2) ACTION="remove"; return 0 ;;
             3) ACTION="list"; return 0 ;;
-            4|q|Q) info "Exiting."; return 1 ;;
-            *) warn "Please choose 1, 2, 3, or 4." ;;
+            4|q|Q) tool_info "Exiting."; return 1 ;;
+            *) tool_warn "Please choose 1, 2, 3, or 4." ;;
         esac
     done
 }
@@ -205,17 +211,17 @@ select_install_version() {
     local line=""
     local i=0
 
-    info "Loading available .NET SDK releases from Microsoft..."
+    tool_info "Loading available .NET SDK releases from Microsoft..."
     index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
-        fail "Unable to load .NET release metadata from Microsoft."
+        tool_fail "Unable to load .NET release metadata from Microsoft."
     channel_data="$(printf "%s\n" "$index_json" | parse_release_index)"
 
     while true; do
         echo
         if [[ "$show_archived" == "true" ]]; then
-            info "Select an end-of-life .NET channel:"
+            tool_info "Select an end-of-life .NET channel:"
         else
-            info "Select a supported or development .NET channel:"
+            tool_info "Select a supported or development .NET channel:"
         fi
         echo
 
@@ -264,7 +270,7 @@ select_install_version() {
         case "$selection" in
             [mM])
                 read -r -p "isolated-dotnet-sdk: .NET SDK version: " VERSION || true
-                [[ -n "$VERSION" ]] || fail "An SDK version is required."
+                [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                 validate_version
                 return 0
                 ;;
@@ -292,27 +298,29 @@ select_install_version() {
             latest_sdk="${latest_sdks[$i]}"
             releases_url="${release_urls[$i]}"
         else
-            warn "Invalid selection."
+            tool_warn "Invalid selection."
             continue
         fi
 
         metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
         if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
             rm -f "$metadata_file"
-            fail "Unable to load release metadata for .NET $channel."
+            tool_fail "Unable to load release metadata for .NET $channel."
         fi
 
+        # The channel-specific metadata supplies the exact SDK versions presented
+        # to the user; latest-sdk from the index is only used as a display marker.
         versions="$(extract_sdk_versions < "$metadata_file")"
         rm -f "$metadata_file"
 
-        [[ -n "$versions" ]] || fail "No SDK versions were found for .NET $channel."
+        [[ -n "$versions" ]] || tool_fail "No SDK versions were found for .NET $channel."
 
         system_versions="$(get_system_sdk_versions)"
         isolated_versions="$(get_isolated_sdk_versions)"
 
         while true; do
             echo
-            info "Available .NET $channel SDKs:"
+            tool_info "Available .NET $channel SDKs:"
             echo
 
             local sdk_versions=()
@@ -353,7 +361,7 @@ select_install_version() {
                 [bB]) break ;;
                 [mM])
                     read -r -p "isolated-dotnet-sdk: .NET SDK version: " VERSION || true
-                    [[ -n "$VERSION" ]] || fail "An SDK version is required."
+                    [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                     validate_version
                     return 0
                     ;;
@@ -367,7 +375,7 @@ select_install_version() {
                 return 0
             fi
 
-            warn "Invalid selection."
+            tool_warn "Invalid selection."
         done
     done
 }
@@ -382,7 +390,7 @@ select_remove_version() {
     versions="$(get_isolated_sdk_versions)"
 
     if [[ -z "$versions" ]]; then
-        info "No isolated SDKs are installed under $SDK_ROOT."
+        tool_info "No isolated SDKs are installed under $SDK_ROOT."
         return 1
     fi
 
@@ -392,7 +400,7 @@ select_remove_version() {
     done <<< "$versions"
 
     while true; do
-        info "Select an isolated SDK to remove:"
+        tool_info "Select an isolated SDK to remove:"
         echo
 
         for ((i=0; i<${#sdk_versions[@]}; i++)); do
@@ -415,7 +423,7 @@ select_remove_version() {
             return 0
         fi
 
-        warn "Invalid selection."
+        tool_warn "Invalid selection."
     done
 }
 
@@ -426,7 +434,7 @@ resolve_install_version() {
     fi
 
     if ! select_install_version; then
-        info "Installation cancelled."
+        tool_info "Installation cancelled."
         return 1
     fi
 }
@@ -438,7 +446,7 @@ resolve_remove_version() {
     fi
 
     if ! select_remove_version; then
-        info "Removal cancelled."
+        tool_info "Removal cancelled."
         return 1
     fi
 }
@@ -448,7 +456,7 @@ list_isolated_sdks() {
     local line
     versions="$(get_isolated_sdk_versions)"
 
-    info "Isolated SDKs under $SDK_ROOT:"
+    tool_info "Isolated SDKs under $SDK_ROOT:"
 
     if [[ -z "$versions" ]]; then
         printf "  %s\n" "None"
@@ -468,11 +476,11 @@ install_sdk() {
     local installed_sdks=""
     local installed_versions=""
 
-    info "Target SDK: $VERSION"
-    info "Isolated install directory: $install_dir"
+    tool_info "Target SDK: $VERSION"
+    tool_info "Isolated install directory: $install_dir"
     echo
 
-    info "Checking SDKs installed through the normal dotnet host..."
+    tool_info "Checking SDKs installed through the normal dotnet host..."
 
     if command -v dotnet >/dev/null 2>&1; then
         installed_sdks="$(dotnet --list-sdks)"
@@ -481,106 +489,126 @@ install_sdk() {
 
         installed_versions="$(printf "%s\n" "$installed_sdks" | awk '{print $1}')"
     else
-        warn "No system dotnet installation was found."
+        tool_warn "No system dotnet installation was found."
         echo
     fi
 
-    info "Checking for an existing isolated SDK..."
+    tool_info "Checking for an existing isolated SDK..."
 
     if [[ -x "$isolated_dotnet" ]] && \
        "$isolated_dotnet" --list-sdks | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        success "Isolated SDK $VERSION is already installed."
-        info "Location: $install_dir"
+        tool_success "Isolated SDK $VERSION is already installed."
+        tool_info "Location: $install_dir"
         return
     fi
 
-    info "No existing isolated copy was found."
+    tool_info "No existing isolated copy was found."
     echo
 
     if printf "%s\n" "$installed_versions" | grep -Fxq "$VERSION"; then
-        warn ".NET SDK $VERSION is already installed normally."
+        tool_warn ".NET SDK $VERSION is already installed normally."
 
         if ! confirm "Install an isolated copy too?"; then
-            info "Installation cancelled."
+            tool_info "Installation cancelled."
             return
         fi
 
         echo
     fi
 
-    info "Downloading Microsoft's dotnet-install.sh script..."
+    tool_info "Downloading Microsoft's dotnet-install.sh script..."
     curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$INSTALL_SCRIPT"
 
-    info "Installing .NET SDK $VERSION..."
+    tool_info "Installing .NET SDK $VERSION..."
     bash "$INSTALL_SCRIPT" \
         --version "$VERSION" \
         --install-dir "$install_dir" \
         --no-path
 
     echo
-    info "Verifying the isolated SDK..."
+    tool_info "Verifying the isolated SDK..."
 
+    # Verify through the isolated host so a matching system-wide SDK cannot satisfy
+    # the post-install check for the requested version.
     local isolated_sdks
     isolated_sdks="$("$isolated_dotnet" --list-sdks)"
     printf "%s\n" "$isolated_sdks"
 
     if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        fail "SDK $VERSION was not found after installation."
+        tool_fail "SDK $VERSION was not found after installation."
     fi
 
     echo
-    success "Isolated SDK installation completed successfully."
-    info "Location: $install_dir"
+    tool_success "Isolated SDK installation completed successfully."
+    tool_info "Location: $install_dir"
 }
 
 remove_sdk() {
     resolve_remove_version || return 0
 
+    # Removal is intentionally scoped to the selected version directory under SDK_ROOT.
     local install_dir="$SDK_ROOT/$VERSION"
     local isolated_dotnet="$install_dir/dotnet"
 
     if [[ ! -x "$isolated_dotnet" ]]; then
-        fail "Isolated SDK $VERSION was not found at $install_dir"
+        tool_fail "Isolated SDK $VERSION was not found at $install_dir"
     fi
 
-    warn "Isolated SDK $VERSION will be removed from $install_dir"
+    tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
 
     if ! confirm "Continue?"; then
-        info "Removal cancelled."
+        tool_info "Removal cancelled."
         return
     fi
 
-    info "Shutting down build servers for SDK $VERSION..."
+    tool_info "Shutting down build servers for SDK $VERSION..."
     "$isolated_dotnet" build-server shutdown
 
-    info "Removing $install_dir..."
+    tool_info "Removing $install_dir..."
     rm -rf "$install_dir"
 
-    [[ ! -d "$install_dir" ]] || fail "SDK directory still exists after removal."
+    [[ ! -d "$install_dir" ]] || tool_fail "SDK directory still exists after removal."
 
-    success "Isolated SDK $VERSION was removed."
+    tool_success "Isolated SDK $VERSION was removed."
 }
 
 usage() {
     cat <<'USAGE'
+Isolated .NET SDK
+
+Install and manage exact .NET SDK versions under ~/dotnet-sdks without modifying the system-wide .NET installation or PATH.
+
 Usage:
   isolated-dotnet-sdk.sh
-  isolated-dotnet-sdk.sh install [version] [--yes]
-  isolated-dotnet-sdk.sh remove [version] [--yes]
+  isolated-dotnet-sdk.sh install [version] [--yes|-y]
+  isolated-dotnet-sdk.sh remove [version] [--yes|-y]
   isolated-dotnet-sdk.sh list
-  isolated-dotnet-sdk.sh [version] [--yes]
+  isolated-dotnet-sdk.sh [version] [--yes|-y]
+  isolated-dotnet-sdk.sh --help|-h
+
+Commands:
+  install [version]  Install an isolated SDK. Without a version, show the SDK picker.
+  remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
+  list               List isolated SDKs under ~/dotnet-sdks.
+
+Options:
+  --yes, -y          Skip confirmation prompts that support automatic confirmation.
+  --help, -h         Show this help text.
 
 Behavior:
-  No command                    Show the interactive action menu.
-  install without a version     Show the interactive SDK picker.
-  remove without a version      Show installed isolated SDKs to choose from.
-  Explicit command and version  Run directly without the picker.
+  No command         Show the interactive action menu.
+  Bare version       Treat the version as an install request.
+
+Project:
+  https://github.com/infoconex/isolated-dotnet-sdk
 USAGE
 }
 
 bootstrap_if_needed "$@"
 
 mkdir -p "$SDK_ROOT"
+# Run from SDK_ROOT so caller-directory state such as a repository global.json does
+# not influence SDK resolution during the tool's work.
 cd "$SDK_ROOT"
 
 ACTION=""
@@ -620,7 +648,7 @@ while [[ $# -gt 0 ]]; do
             if [[ "$ACTION" != "list" && -z "$VERSION" ]]; then
                 VERSION="$1"
             else
-                fail "Unknown argument: $1"
+                tool_fail "Unknown argument: $1"
             fi
             ;;
     esac
@@ -644,6 +672,6 @@ case "$ACTION" in
         list_isolated_sdks
         ;;
     *)
-        fail "Unknown action: $ACTION"
+        tool_fail "Unknown action: $ACTION"
         ;;
 esac
