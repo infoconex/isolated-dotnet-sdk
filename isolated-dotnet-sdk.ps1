@@ -38,12 +38,6 @@ Starts the interactive workflow.
 https://github.com/infoconex/isolated-dotnet-sdk
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
-    'PSAvoidUsingWriteHost',
-    '',
-    Scope = 'Function',
-    Target = '*',
-    Justification = 'This interactive CLI intentionally writes user-facing status, menus, and colored output to the host.')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
     'PSUseShouldProcessForStateChangingFunctions',
     '',
     Scope = 'Function',
@@ -67,28 +61,23 @@ $script:Bootstrapped = $false
 $script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
 $script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
 
+function Write-ToolDisplay {
+    param(
+        [AllowEmptyString()]
+        [string]$Message = ''
+    )
+
+    Write-Information -MessageData $Message -InformationAction Continue
+}
+
 function Write-ToolInfo {
     param([string]$Message)
-    Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Cyan -NoNewline
-    Write-Host " $Message"
+    Write-ToolDisplay "isolated-dotnet-sdk: $Message"
 }
 
 function Write-ToolWarning {
     param([string]$Message)
-    Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Yellow -NoNewline
-    Write-Host " $Message"
-}
-
-function Write-ToolSuccess {
-    param([string]$Message)
-    Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Green -NoNewline
-    Write-Host " $Message"
-}
-
-function Write-ToolError {
-    param([string]$Message)
-    Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Red -NoNewline
-    Write-Host " $Message"
+    Write-Warning "isolated-dotnet-sdk: $Message"
 }
 
 function Assert-ValidAction {
@@ -149,7 +138,7 @@ function Install-ToolIfNeeded {
         Unblock-File -Path $ToolPath
     }
 
-    Write-ToolSuccess 'Tool installed.'
+    Write-ToolInfo 'Tool installed.'
 
     $Arguments = @{}
     if ($script:ActionWasSpecified) {
@@ -195,12 +184,12 @@ function Show-IsolatedSdk {
     $Versions = @(Get-IsolatedSdkVersion)
 
     if (-not $Versions) {
-        Write-Host '  None'
+        Write-ToolDisplay '  None'
         return
     }
 
     foreach ($SdkVersion in $Versions) {
-        Write-Host "  $SdkVersion"
+        Write-ToolDisplay "  $SdkVersion"
     }
 }
 
@@ -231,12 +220,12 @@ function Select-Action {
 
     while ($true) {
         Write-ToolInfo 'What would you like to do?'
-        Write-Host
-        Write-Host '  1. Install an SDK'
-        Write-Host '  2. Remove an isolated SDK'
-        Write-Host '  3. List isolated SDKs'
-        Write-Host '  4. Exit'
-        Write-Host
+        Write-ToolDisplay
+        Write-ToolDisplay '  1. Install an SDK'
+        Write-ToolDisplay '  2. Remove an isolated SDK'
+        Write-ToolDisplay '  3. List isolated SDKs'
+        Write-ToolDisplay '  4. Exit'
+        Write-ToolDisplay
 
         $Selection = Read-Host 'Selection'
 
@@ -303,7 +292,7 @@ function Select-InstallVersion {
     $ShowArchived = $false
 
     while ($true) {
-        Write-Host
+        Write-ToolDisplay
 
         if ($ShowArchived) {
             Write-ToolInfo 'Select an end-of-life .NET channel:'
@@ -314,14 +303,14 @@ function Select-InstallVersion {
             $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
         }
 
-        Write-Host
+        Write-ToolDisplay
 
         for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
             $Channel = $Channels[$Index]
             $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
             $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
 
-            Write-Host ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
+            Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
                 ($Index + 1), `
                 $Channel.'channel-version', `
                 $ReleaseType, `
@@ -329,16 +318,16 @@ function Select-InstallVersion {
                 $Channel.'latest-sdk')
         }
 
-        Write-Host
+        Write-ToolDisplay
         if ($ShowArchived) {
-            Write-Host '  S. Show supported/development channels'
+            Write-ToolDisplay '  S. Show supported/development channels'
         }
         else {
-            Write-Host '  A. Show end-of-life channels'
+            Write-ToolDisplay '  A. Show end-of-life channels'
         }
-        Write-Host '  M. Enter an exact SDK version manually'
-        Write-Host '  Q. Cancel'
-        Write-Host
+        Write-ToolDisplay '  M. Enter an exact SDK version manually'
+        Write-ToolDisplay '  Q. Cancel'
+        Write-ToolDisplay
 
         $Selection = Read-Host 'Selection'
 
@@ -381,9 +370,9 @@ function Select-InstallVersion {
         $IsolatedVersions = @(Get-IsolatedSdkVersion)
 
         while ($true) {
-            Write-Host
+            Write-ToolDisplay
             Write-ToolInfo "Available .NET $($SelectedChannel.'channel-version') SDKs:"
-            Write-Host
+            Write-ToolDisplay
 
             for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
                 $SdkVersion = $SdkVersions[$Index]
@@ -400,18 +389,18 @@ function Select-InstallVersion {
                 }
 
                 if ($Markers.Count -gt 0) {
-                    Write-Host ("  {0}. {1} ({2})" -f ($Index + 1), $SdkVersion, ($Markers -join ', '))
+                    Write-ToolDisplay ("  {0}. {1} ({2})" -f ($Index + 1), $SdkVersion, ($Markers -join ', '))
                 }
                 else {
-                    Write-Host ("  {0}. {1}" -f ($Index + 1), $SdkVersion)
+                    Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersion)
                 }
             }
 
-            Write-Host
-            Write-Host '  B. Back to .NET channels'
-            Write-Host '  M. Enter an exact SDK version manually'
-            Write-Host '  Q. Cancel'
-            Write-Host
+            Write-ToolDisplay
+            Write-ToolDisplay '  B. Back to .NET channels'
+            Write-ToolDisplay '  M. Enter an exact SDK version manually'
+            Write-ToolDisplay '  Q. Cancel'
+            Write-ToolDisplay
 
             $Selection = Read-Host 'Selection'
 
@@ -452,15 +441,15 @@ function Select-RemoveVersion {
 
     while ($true) {
         Write-ToolInfo 'Select an isolated SDK to remove:'
-        Write-Host
+        Write-ToolDisplay
 
         for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
-            Write-Host ("  {0}. {1}" -f ($Index + 1), $SdkVersions[$Index])
+            Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersions[$Index])
         }
 
-        Write-Host
-        Write-Host '  Q. Cancel'
-        Write-Host
+        Write-ToolDisplay
+        Write-ToolDisplay '  Q. Cancel'
+        Write-ToolDisplay
 
         $Selection = Read-Host 'Selection'
 
@@ -521,20 +510,22 @@ function Install-IsolatedSdk {
 
     Write-ToolInfo "Target SDK: $Version"
     Write-ToolInfo "Isolated install directory: $InstallDir"
-    Write-Host
+    Write-ToolDisplay
 
     Write-ToolInfo 'Checking SDKs installed through the normal dotnet host...'
 
     $InstalledVersions = @()
     if (Get-Command dotnet -ErrorAction SilentlyContinue) {
         $InstalledSdks = dotnet --list-sdks
-        $InstalledSdks
-        Write-Host
+        foreach ($InstalledSdk in $InstalledSdks) {
+            Write-ToolDisplay $InstalledSdk
+        }
+        Write-ToolDisplay
         $InstalledVersions = @($InstalledSdks | ForEach-Object { ($_ -split '\s+')[0] })
     }
     else {
         Write-ToolWarning 'No system dotnet installation was found.'
-        Write-Host
+        Write-ToolDisplay
     }
 
     Write-ToolInfo 'Checking for an existing isolated SDK...'
@@ -543,14 +534,14 @@ function Install-IsolatedSdk {
         $IsolatedVersions = @(& $IsolatedDotNet --list-sdks | ForEach-Object { ($_ -split '\s+')[0] })
 
         if ($IsolatedVersions -contains $Version) {
-            Write-ToolSuccess "Isolated SDK $Version is already installed."
+            Write-ToolInfo "Isolated SDK $Version is already installed."
             Write-ToolInfo "Location: $InstallDir"
             return
         }
     }
 
     Write-ToolInfo 'No existing isolated copy was found.'
-    Write-Host
+    Write-ToolDisplay
 
     if ($InstalledVersions -contains $Version) {
         Write-ToolWarning ".NET SDK $Version is already installed normally."
@@ -560,7 +551,7 @@ function Install-IsolatedSdk {
             return
         }
 
-        Write-Host
+        Write-ToolDisplay
     }
 
     Write-ToolInfo "Downloading Microsoft's dotnet-install.ps1 script..."
@@ -577,7 +568,7 @@ function Install-IsolatedSdk {
         -InstallDir $InstallDir `
         -NoPath
 
-    Write-Host
+    Write-ToolDisplay
     Write-ToolInfo 'Verifying the isolated SDK...'
 
     if (-not (Test-Path $IsolatedDotNet)) {
@@ -585,15 +576,17 @@ function Install-IsolatedSdk {
     }
 
     $IsolatedSdks = & $IsolatedDotNet --list-sdks
-    $IsolatedSdks
+    foreach ($IsolatedSdk in $IsolatedSdks) {
+        Write-ToolDisplay $IsolatedSdk
+    }
 
     $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
     if ($IsolatedVersions -notcontains $Version) {
         throw "SDK $Version was not found after installation."
     }
 
-    Write-Host
-    Write-ToolSuccess 'Isolated SDK installation completed successfully.'
+    Write-ToolDisplay
+    Write-ToolInfo 'Isolated SDK installation completed successfully.'
     Write-ToolInfo "Location: $InstallDir"
 }
 
@@ -627,7 +620,7 @@ function Remove-IsolatedSdk {
         throw "SDK directory still exists after removal: $InstallDir"
     }
 
-    Write-ToolSuccess "Isolated SDK $Version was removed."
+    Write-ToolInfo "Isolated SDK $Version was removed."
 }
 
 Install-ToolIfNeeded
@@ -654,7 +647,7 @@ try {
         }
     }
     catch {
-        Write-ToolError $_.Exception.Message
+        Write-Error -Message "isolated-dotnet-sdk: $($_.Exception.Message)" -ErrorAction Continue
         exit 1
     }
 }
