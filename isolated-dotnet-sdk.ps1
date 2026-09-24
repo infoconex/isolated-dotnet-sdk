@@ -106,6 +106,8 @@ function Confirm-Action {
     return $Response -match '^[Yy]$'
 }
 
+# Bootstrap to the per-user tool path. File-based execution preserves the exact source;
+# piped execution downloads the current main-branch source before re-executing.
 function Install-ToolIfNeeded {
     New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
 
@@ -243,6 +245,8 @@ function Get-ReleaseIndex {
     return Invoke-RestMethod -Uri $ReleaseIndexUrl
 }
 
+# Microsoft release metadata can expose SDK versions through both `sdk` and `sdks`.
+# Preserve first-seen order while removing duplicates from those sources.
 function Get-ChannelSdkVersions {
     param($ChannelMetadata)
 
@@ -279,6 +283,8 @@ function Read-ManualVersion {
     Assert-ValidVersion
 }
 
+# Select from Microsoft's release index first, then load the selected channel's detailed
+# release metadata to choose an exact SDK version.
 function Select-InstallVersion {
     $ReleaseIndex = Get-ReleaseIndex
     $AllChannels = @($ReleaseIndex.'releases-index')
@@ -491,6 +497,8 @@ function Resolve-RemoveVersion {
     return $true
 }
 
+# Install with Microsoft's dotnet-install script using -NoPath, then verify that the
+# requested version is discoverable through the isolated dotnet host.
 function Install-IsolatedSdk {
     if (-not (Resolve-InstallVersion)) {
         return
@@ -577,6 +585,7 @@ function Install-IsolatedSdk {
     Write-ToolInfo "Location: $InstallDir"
 }
 
+# Removal is intentionally scoped to the selected version directory after confirmation.
 function Remove-IsolatedSdk {
     if (-not (Resolve-RemoveVersion)) {
         return
@@ -617,6 +626,8 @@ if ($script:Bootstrapped) {
 
 New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
 
+# Keep execution outside the caller's repository so a repository-level global.json cannot
+# influence SDK resolution during tool operations.
 Push-Location $SdkRoot
 try {
     try {
