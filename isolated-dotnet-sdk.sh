@@ -56,9 +56,13 @@ bootstrap_if_needed() {
 
     info "Installing tool to $TOOL_PATH"
 
-    curl -fsSL \
-        "$REPOSITORY_RAW_BASE/$TOOL_NAME" \
-        -o "$TOOL_PATH.tmp"
+    if [[ -n "$current_path" && -f "$current_path" ]]; then
+        cp "$current_path" "$TOOL_PATH.tmp"
+    else
+        curl -fsSL \
+            "$REPOSITORY_RAW_BASE/$TOOL_NAME" \
+            -o "$TOOL_PATH.tmp"
+    fi
 
     chmod +x "$TOOL_PATH.tmp"
     mv "$TOOL_PATH.tmp" "$TOOL_PATH"
