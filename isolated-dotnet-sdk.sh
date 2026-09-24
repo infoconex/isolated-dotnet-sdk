@@ -563,18 +563,33 @@ remove_sdk() {
 
 usage() {
     cat <<'USAGE'
+Isolated .NET SDK
+
+Install and manage exact .NET SDK versions under ~/dotnet-sdks without modifying the system-wide .NET installation or PATH.
+
 Usage:
   isolated-dotnet-sdk.sh
-  isolated-dotnet-sdk.sh install [version] [--yes]
-  isolated-dotnet-sdk.sh remove [version] [--yes]
+  isolated-dotnet-sdk.sh install [version] [--yes|-y]
+  isolated-dotnet-sdk.sh remove [version] [--yes|-y]
   isolated-dotnet-sdk.sh list
-  isolated-dotnet-sdk.sh [version] [--yes]
+  isolated-dotnet-sdk.sh [version] [--yes|-y]
+  isolated-dotnet-sdk.sh --help|-h
+
+Commands:
+  install [version]  Install an isolated SDK. Without a version, show the SDK picker.
+  remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
+  list               List isolated SDKs under ~/dotnet-sdks.
+
+Options:
+  --yes, -y          Skip confirmation prompts that support automatic confirmation.
+  --help, -h         Show this help text.
 
 Behavior:
-  No command                    Show the interactive action menu.
-  install without a version     Show the interactive SDK picker.
-  remove without a version      Show installed isolated SDKs to choose from.
-  Explicit command and version  Run directly without the picker.
+  No command         Show the interactive action menu.
+  Bare version       Treat the version as an install request.
+
+Project:
+  https://github.com/infoconex/isolated-dotnet-sdk
 USAGE
 }
 
