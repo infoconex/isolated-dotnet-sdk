@@ -30,6 +30,27 @@ jobs:
         shell: bash
         run: bash -n isolated-dotnet-sdk.sh
 
+      - name: Install ShellCheck 0.11.0
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='0.11.0'
+          archive="$RUNNER_TEMP/shellcheck-v${version}.linux.x86_64.tar.xz"
+          url="https://github.com/koalaman/shellcheck/releases/download/v${version}/shellcheck-v${version}.linux.x86_64.tar.xz"
+
+          curl -fsSL "$url" -o "$archive"
+          printf '%s  %s\n' \
+            '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198' \
+            "$archive" | sha256sum -c -
+          tar -xJf "$archive" -C "$RUNNER_TEMP"
+          sudo install "$RUNNER_TEMP/shellcheck-v${version}/shellcheck" /usr/local/bin/shellcheck
+
+      - name: Run ShellCheck
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: bash scripts/run-shellcheck.sh
+
       - name: Run Bash behavioral tests
         shell: bash
         run: bash tests/bash/run-tests.sh
@@ -55,6 +76,25 @@ jobs:
           if ($errors.Count -gt 0) {
               $errors | ForEach-Object { Write-Error $_.Message }
               exit 1
+          }
+
+      - name: Install PSScriptAnalyzer 1.25.0
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module `
+              -Name PSScriptAnalyzer `
+              -RequiredVersion 1.25.0 `
+              -Scope CurrentUser `
+              -Repository PSGallery `
+              -Force
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSScriptAnalyzer.ps1
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
           }
 
       - name: Run PowerShell behavioral tests
