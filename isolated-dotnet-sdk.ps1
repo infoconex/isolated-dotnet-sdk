@@ -1,3 +1,42 @@
+<#
+.SYNOPSIS
+Installs and manages isolated .NET SDK versions.
+
+.DESCRIPTION
+Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. The script can install, remove, and list isolated SDKs and provides an interactive workflow when an action or version is not supplied.
+
+.PARAMETER Action
+Specifies the operation to perform: Install, Remove, or List. When omitted, the script prompts for an action unless Version is supplied, in which case Install is selected.
+
+.PARAMETER Version
+Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow.
+
+.PARAMETER Yes
+Skips confirmation prompts that support automatic confirmation.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action List
+
+Lists SDKs installed in the isolated SDK directory.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action Install -Version 10.0.100
+
+Installs .NET SDK 10.0.100 in an isolated directory.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action Remove -Version 10.0.100 -Yes
+
+Removes the isolated .NET SDK 10.0.100 without prompting for confirmation.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1
+
+Starts the interactive workflow.
+
+.LINK
+https://github.com/infoconex/isolated-dotnet-sdk
+#>
 param(
     [string]$Action,
     [string]$Version,
