@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate Bash syntax
         shell: bash
@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate PowerShell syntax
         shell: pwsh
@@ -92,8 +92,11 @@ jobs:
         run: |
           $toolPath = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
           & pwsh -NoProfile -File $toolPath -Action Install -Version 'invalid/version' -Yes
+          $exitCode = $LASTEXITCODE
 
-          if ($LASTEXITCODE -eq 0) {
+          if ($exitCode -eq 0) {
               Write-Error 'Expected invalid SDK version to fail.'
               exit 1
           }
+
+          exit 0
