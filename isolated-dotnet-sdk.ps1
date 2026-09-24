@@ -37,6 +37,18 @@ Starts the interactive workflow.
 .LINK
 https://github.com/infoconex/isolated-dotnet-sdk
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSAvoidUsingWriteHost',
+    '',
+    Scope = 'Function',
+    Target = '*',
+    Justification = 'This interactive CLI intentionally writes user-facing status, menus, and colored output to the host.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSUseShouldProcessForStateChangingFunctions',
+    '',
+    Scope = 'Function',
+    Target = 'Remove-IsolatedSdk',
+    Justification = 'Removal uses the existing confirmation and -Yes contract; ShouldProcess semantics are tracked separately in issue #11.')]
 param(
     [string]$Action,
     [string]$Version,
@@ -159,7 +171,7 @@ function Get-IsolatedDotNetPath {
     return Join-Path (Join-Path $SdkRoot $SdkVersion) 'dotnet.exe'
 }
 
-function Get-SystemSdkVersions {
+function Get-SystemSdkVersion {
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         return @()
     }
@@ -167,7 +179,7 @@ function Get-SystemSdkVersions {
     return @(dotnet --list-sdks | ForEach-Object { ($_ -split '\s+')[0] })
 }
 
-function Get-IsolatedSdkVersions {
+function Get-IsolatedSdkVersion {
     $SdkDirectories = Get-ChildItem `
         -Path $SdkRoot `
         -Directory `
@@ -178,9 +190,9 @@ function Get-IsolatedSdkVersions {
     return @($SdkDirectories | ForEach-Object { $_.Name })
 }
 
-function Show-IsolatedSdks {
+function Show-IsolatedSdk {
     Write-ToolInfo "Isolated SDKs under ${SdkRoot}:"
-    $Versions = @(Get-IsolatedSdkVersions)
+    $Versions = @(Get-IsolatedSdkVersion)
 
     if (-not $Versions) {
         Write-Host '  None'
@@ -247,7 +259,7 @@ function Get-ReleaseIndex {
 
 # Microsoft release metadata can expose SDK versions through both `sdk` and `sdks`.
 # Preserve first-seen order while removing duplicates from those sources.
-function Get-ChannelSdkVersions {
+function Get-ChannelSdkVersion {
     param($ChannelMetadata)
 
     $Versions = [System.Collections.Generic.List[string]]::new()
@@ -359,14 +371,14 @@ function Select-InstallVersion {
 
         $SelectedChannel = $Channels[$Number - 1]
         $ChannelMetadata = Invoke-RestMethod -Uri $SelectedChannel.'releases.json'
-        $SdkVersions = @(Get-ChannelSdkVersions $ChannelMetadata)
+        $SdkVersions = @(Get-ChannelSdkVersion $ChannelMetadata)
 
         if (-not $SdkVersions) {
             throw "No SDK versions were found for .NET $($SelectedChannel.'channel-version')."
         }
 
-        $SystemVersions = @(Get-SystemSdkVersions)
-        $IsolatedVersions = @(Get-IsolatedSdkVersions)
+        $SystemVersions = @(Get-SystemSdkVersion)
+        $IsolatedVersions = @(Get-IsolatedSdkVersion)
 
         while ($true) {
             Write-Host
@@ -431,7 +443,7 @@ function Select-InstallVersion {
 }
 
 function Select-RemoveVersion {
-    $SdkVersions = @(Get-IsolatedSdkVersions)
+    $SdkVersions = @(Get-IsolatedSdkVersion)
 
     if (-not $SdkVersions) {
         Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
@@ -638,7 +650,7 @@ try {
         switch ($Action) {
             'Install' { Install-IsolatedSdk }
             'Remove' { Remove-IsolatedSdk }
-            'List' { Show-IsolatedSdks }
+            'List' { Show-IsolatedSdk }
         }
     }
     catch {
