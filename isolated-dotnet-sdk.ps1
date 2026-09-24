@@ -1,3 +1,42 @@
+<#
+.SYNOPSIS
+Installs and manages isolated .NET SDK versions.
+
+.DESCRIPTION
+Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. The script can install, remove, and list isolated SDKs and provides an interactive workflow when an action or version is not supplied.
+
+.PARAMETER Action
+Specifies the operation to perform: Install, Remove, or List. When omitted, the script prompts for an action unless Version is supplied, in which case Install is selected.
+
+.PARAMETER Version
+Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow.
+
+.PARAMETER Yes
+Skips confirmation prompts that support automatic confirmation.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action List
+
+Lists SDKs installed in the isolated SDK directory.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action Install -Version 10.0.100
+
+Installs .NET SDK 10.0.100 in an isolated directory.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action Remove -Version 10.0.100 -Yes
+
+Removes the isolated .NET SDK 10.0.100 without prompting for confirmation.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1
+
+Starts the interactive workflow.
+
+.LINK
+https://github.com/infoconex/isolated-dotnet-sdk
+#>
 param(
     [string]$Action,
     [string]$Version,
@@ -16,25 +55,25 @@ $script:Bootstrapped = $false
 $script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
 $script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
 
-function Write-Info {
+function Write-ToolInfo {
     param([string]$Message)
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Cyan -NoNewline
     Write-Host " $Message"
 }
 
-function Write-WarningMessage {
+function Write-ToolWarning {
     param([string]$Message)
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Yellow -NoNewline
     Write-Host " $Message"
 }
 
-function Write-Success {
+function Write-ToolSuccess {
     param([string]$Message)
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Green -NoNewline
     Write-Host " $Message"
 }
 
-function Write-ErrorMessage {
+function Write-ToolError {
     param([string]$Message)
     Write-Host 'isolated-dotnet-sdk:' -ForegroundColor Red -NoNewline
     Write-Host " $Message"
@@ -67,6 +106,8 @@ function Confirm-Action {
     return $Response -match '^[Yy]$'
 }
 
+# Bootstrap to the per-user tool path. File-based execution preserves the exact source;
+# piped execution downloads the current main-branch source before re-executing.
 function Install-ToolIfNeeded {
     New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
 
@@ -81,7 +122,7 @@ function Install-ToolIfNeeded {
         return
     }
 
-    Write-Info "Installing tool to $ToolPath"
+    Write-ToolInfo "Installing tool to $ToolPath"
 
     if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath)) {
         Copy-Item -LiteralPath $CurrentPath -Destination $ToolPath -Force
@@ -96,7 +137,7 @@ function Install-ToolIfNeeded {
         Unblock-File -Path $ToolPath
     }
 
-    Write-Success 'Tool installed.'
+    Write-ToolSuccess 'Tool installed.'
 
     $Arguments = @{}
     if ($script:ActionWasSpecified) {
@@ -138,7 +179,7 @@ function Get-IsolatedSdkVersions {
 }
 
 function Show-IsolatedSdks {
-    Write-Info "Isolated SDKs under ${SdkRoot}:"
+    Write-ToolInfo "Isolated SDKs under ${SdkRoot}:"
     $Versions = @(Get-IsolatedSdkVersions)
 
     if (-not $Versions) {
@@ -177,7 +218,7 @@ function Select-Action {
     }
 
     while ($true) {
-        Write-Info 'What would you like to do?'
+        Write-ToolInfo 'What would you like to do?'
         Write-Host
         Write-Host '  1. Install an SDK'
         Write-Host '  2. Remove an isolated SDK'
@@ -191,19 +232,21 @@ function Select-Action {
             '1' { $script:Action = 'Install'; return $true }
             '2' { $script:Action = 'Remove'; return $true }
             '3' { $script:Action = 'List'; return $true }
-            '4' { Write-Info 'Exiting.'; return $false }
-            'q' { Write-Info 'Exiting.'; return $false }
-            'Q' { Write-Info 'Exiting.'; return $false }
-            default { Write-WarningMessage 'Please choose 1, 2, 3, or 4.' }
+            '4' { Write-ToolInfo 'Exiting.'; return $false }
+            'q' { Write-ToolInfo 'Exiting.'; return $false }
+            'Q' { Write-ToolInfo 'Exiting.'; return $false }
+            default { Write-ToolWarning 'Please choose 1, 2, 3, or 4.' }
         }
     }
 }
 
 function Get-ReleaseIndex {
-    Write-Info 'Loading available .NET SDK releases from Microsoft...'
+    Write-ToolInfo 'Loading available .NET SDK releases from Microsoft...'
     return Invoke-RestMethod -Uri $ReleaseIndexUrl
 }
 
+# Microsoft release metadata can expose SDK versions through both `sdk` and `sdks`.
+# Preserve first-seen order while removing duplicates from those sources.
 function Get-ChannelSdkVersions {
     param($ChannelMetadata)
 
@@ -240,6 +283,8 @@ function Read-ManualVersion {
     Assert-ValidVersion
 }
 
+# Select from Microsoft's release index first, then load the selected channel's detailed
+# release metadata to choose an exact SDK version.
 function Select-InstallVersion {
     $ReleaseIndex = Get-ReleaseIndex
     $AllChannels = @($ReleaseIndex.'releases-index')
@@ -249,11 +294,11 @@ function Select-InstallVersion {
         Write-Host
 
         if ($ShowArchived) {
-            Write-Info 'Select an end-of-life .NET channel:'
+            Write-ToolInfo 'Select an end-of-life .NET channel:'
             $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
         }
         else {
-            Write-Info 'Select a supported or development .NET channel:'
+            Write-ToolInfo 'Select a supported or development .NET channel:'
             $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
         }
 
@@ -308,7 +353,7 @@ function Select-InstallVersion {
         if (-not [int]::TryParse($Selection, [ref]$Number) -or
             $Number -lt 1 -or
             $Number -gt $Channels.Count) {
-            Write-WarningMessage 'Invalid selection.'
+            Write-ToolWarning 'Invalid selection.'
             continue
         }
 
@@ -325,7 +370,7 @@ function Select-InstallVersion {
 
         while ($true) {
             Write-Host
-            Write-Info "Available .NET $($SelectedChannel.'channel-version') SDKs:"
+            Write-ToolInfo "Available .NET $($SelectedChannel.'channel-version') SDKs:"
             Write-Host
 
             for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
@@ -380,7 +425,7 @@ function Select-InstallVersion {
                 return $true
             }
 
-            Write-WarningMessage 'Invalid selection.'
+            Write-ToolWarning 'Invalid selection.'
         }
     }
 }
@@ -389,12 +434,12 @@ function Select-RemoveVersion {
     $SdkVersions = @(Get-IsolatedSdkVersions)
 
     if (-not $SdkVersions) {
-        Write-Info "No isolated SDKs are installed under $SdkRoot."
+        Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
         return $false
     }
 
     while ($true) {
-        Write-Info 'Select an isolated SDK to remove:'
+        Write-ToolInfo 'Select an isolated SDK to remove:'
         Write-Host
 
         for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
@@ -420,7 +465,7 @@ function Select-RemoveVersion {
             return $true
         }
 
-        Write-WarningMessage 'Invalid selection.'
+        Write-ToolWarning 'Invalid selection.'
     }
 }
 
@@ -431,7 +476,7 @@ function Resolve-InstallVersion {
     }
 
     if (-not (Select-InstallVersion)) {
-        Write-Info 'Installation cancelled.'
+        Write-ToolInfo 'Installation cancelled.'
         return $false
     }
 
@@ -445,13 +490,15 @@ function Resolve-RemoveVersion {
     }
 
     if (-not (Select-RemoveVersion)) {
-        Write-Info 'Removal cancelled.'
+        Write-ToolInfo 'Removal cancelled.'
         return $false
     }
 
     return $true
 }
 
+# Install with Microsoft's dotnet-install script using -NoPath, then verify that the
+# requested version is discoverable through the isolated dotnet host.
 function Install-IsolatedSdk {
     if (-not (Resolve-InstallVersion)) {
         return
@@ -460,11 +507,11 @@ function Install-IsolatedSdk {
     $InstallDir = Join-Path $SdkRoot $Version
     $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
 
-    Write-Info "Target SDK: $Version"
-    Write-Info "Isolated install directory: $InstallDir"
+    Write-ToolInfo "Target SDK: $Version"
+    Write-ToolInfo "Isolated install directory: $InstallDir"
     Write-Host
 
-    Write-Info 'Checking SDKs installed through the normal dotnet host...'
+    Write-ToolInfo 'Checking SDKs installed through the normal dotnet host...'
 
     $InstalledVersions = @()
     if (Get-Command dotnet -ErrorAction SilentlyContinue) {
@@ -474,44 +521,44 @@ function Install-IsolatedSdk {
         $InstalledVersions = @($InstalledSdks | ForEach-Object { ($_ -split '\s+')[0] })
     }
     else {
-        Write-WarningMessage 'No system dotnet installation was found.'
+        Write-ToolWarning 'No system dotnet installation was found.'
         Write-Host
     }
 
-    Write-Info 'Checking for an existing isolated SDK...'
+    Write-ToolInfo 'Checking for an existing isolated SDK...'
 
     if (Test-Path $IsolatedDotNet) {
         $IsolatedVersions = @(& $IsolatedDotNet --list-sdks | ForEach-Object { ($_ -split '\s+')[0] })
 
         if ($IsolatedVersions -contains $Version) {
-            Write-Success "Isolated SDK $Version is already installed."
-            Write-Info "Location: $InstallDir"
+            Write-ToolSuccess "Isolated SDK $Version is already installed."
+            Write-ToolInfo "Location: $InstallDir"
             return
         }
     }
 
-    Write-Info 'No existing isolated copy was found.'
+    Write-ToolInfo 'No existing isolated copy was found.'
     Write-Host
 
     if ($InstalledVersions -contains $Version) {
-        Write-WarningMessage ".NET SDK $Version is already installed normally."
+        Write-ToolWarning ".NET SDK $Version is already installed normally."
 
         if (-not (Confirm-Action -Prompt 'Install an isolated copy too?')) {
-            Write-Info 'Installation cancelled.'
+            Write-ToolInfo 'Installation cancelled.'
             return
         }
 
         Write-Host
     }
 
-    Write-Info "Downloading Microsoft's dotnet-install.ps1 script..."
+    Write-ToolInfo "Downloading Microsoft's dotnet-install.ps1 script..."
     Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $InstallScript
 
     if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
         Unblock-File -Path $InstallScript
     }
 
-    Write-Info "Installing .NET SDK $Version..."
+    Write-ToolInfo "Installing .NET SDK $Version..."
 
     & $InstallScript `
         -Version $Version `
@@ -519,7 +566,7 @@ function Install-IsolatedSdk {
         -NoPath
 
     Write-Host
-    Write-Info 'Verifying the isolated SDK...'
+    Write-ToolInfo 'Verifying the isolated SDK...'
 
     if (-not (Test-Path $IsolatedDotNet)) {
         throw "The isolated dotnet executable was not found at $IsolatedDotNet"
@@ -534,10 +581,11 @@ function Install-IsolatedSdk {
     }
 
     Write-Host
-    Write-Success 'Isolated SDK installation completed successfully.'
-    Write-Info "Location: $InstallDir"
+    Write-ToolSuccess 'Isolated SDK installation completed successfully.'
+    Write-ToolInfo "Location: $InstallDir"
 }
 
+# Removal is intentionally scoped to the selected version directory after confirmation.
 function Remove-IsolatedSdk {
     if (-not (Resolve-RemoveVersion)) {
         return
@@ -550,24 +598,24 @@ function Remove-IsolatedSdk {
         throw "Isolated SDK $Version was not found at $InstallDir"
     }
 
-    Write-WarningMessage "Isolated SDK $Version will be removed from $InstallDir"
+    Write-ToolWarning "Isolated SDK $Version will be removed from $InstallDir"
 
     if (-not (Confirm-Action -Prompt 'Continue?')) {
-        Write-Info 'Removal cancelled.'
+        Write-ToolInfo 'Removal cancelled.'
         return
     }
 
-    Write-Info "Shutting down build servers for SDK $Version..."
+    Write-ToolInfo "Shutting down build servers for SDK $Version..."
     & $IsolatedDotNet build-server shutdown
 
-    Write-Info "Removing $InstallDir..."
+    Write-ToolInfo "Removing $InstallDir..."
     Remove-Item -Path $InstallDir -Recurse -Force
 
     if (Test-Path $InstallDir) {
         throw "SDK directory still exists after removal: $InstallDir"
     }
 
-    Write-Success "Isolated SDK $Version was removed."
+    Write-ToolSuccess "Isolated SDK $Version was removed."
 }
 
 Install-ToolIfNeeded
@@ -578,6 +626,8 @@ if ($script:Bootstrapped) {
 
 New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
 
+# Keep execution outside the caller's repository so a repository-level global.json cannot
+# influence SDK resolution during tool operations.
 Push-Location $SdkRoot
 try {
     try {
@@ -592,7 +642,7 @@ try {
         }
     }
     catch {
-        Write-ErrorMessage $_.Exception.Message
+        Write-ToolError $_.Exception.Message
         exit 1
     }
 }
