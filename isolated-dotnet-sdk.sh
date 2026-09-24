@@ -40,6 +40,8 @@ tool_fail() {
 bootstrap_if_needed() {
     mkdir -p "$SDK_ROOT"
 
+    # File-based invocation preserves the exact executing script. If no source file
+    # exists (for example, piped execution), bootstrap falls back to the main source.
     local current_source="${BASH_SOURCE[0]:-}"
     local current_path=""
     local expected_path
@@ -64,6 +66,8 @@ bootstrap_if_needed() {
             -o "$TOOL_PATH.tmp"
     fi
 
+    # Replace the installed helper only after the new source is complete, then
+    # re-execute from the stable installed path with the original arguments.
     chmod +x "$TOOL_PATH.tmp"
     mv "$TOOL_PATH.tmp" "$TOOL_PATH"
 
@@ -125,6 +129,8 @@ format_phase() {
     esac
 }
 
+# Extract only the release-index fields needed by the interactive picker and emit
+# them in a simple pipe-delimited form without adding a JSON-parser dependency.
 parse_release_index() {
     awk '
         /"channel-version"[[:space:]]*:/ {
@@ -302,6 +308,8 @@ select_install_version() {
             tool_fail "Unable to load release metadata for .NET $channel."
         fi
 
+        # The channel-specific metadata supplies the exact SDK versions presented
+        # to the user; latest-sdk from the index is only used as a display marker.
         versions="$(extract_sdk_versions < "$metadata_file")"
         rm -f "$metadata_file"
 
@@ -520,6 +528,8 @@ install_sdk() {
     echo
     tool_info "Verifying the isolated SDK..."
 
+    # Verify through the isolated host so a matching system-wide SDK cannot satisfy
+    # the post-install check for the requested version.
     local isolated_sdks
     isolated_sdks="$("$isolated_dotnet" --list-sdks)"
     printf "%s\n" "$isolated_sdks"
@@ -536,6 +546,7 @@ install_sdk() {
 remove_sdk() {
     resolve_remove_version || return 0
 
+    # Removal is intentionally scoped to the selected version directory under SDK_ROOT.
     local install_dir="$SDK_ROOT/$VERSION"
     local isolated_dotnet="$install_dir/dotnet"
 
@@ -596,6 +607,8 @@ USAGE
 bootstrap_if_needed "$@"
 
 mkdir -p "$SDK_ROOT"
+# Run from SDK_ROOT so caller-directory state such as a repository global.json does
+# not influence SDK resolution during the tool's work.
 cd "$SDK_ROOT"
 
 ACTION=""
