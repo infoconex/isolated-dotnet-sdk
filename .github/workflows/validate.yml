@@ -30,14 +30,25 @@ jobs:
         shell: bash
         run: bash -n isolated-dotnet-sdk.sh
 
-      - name: Smoke test list command
+      - name: Preserve file-based bootstrap source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$HOME/dotnet-sdks"
-          cp isolated-dotnet-sdk.sh "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
-          chmod +x "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+          rm -f "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 
+          source_copy="$RUNNER_TEMP/isolated-dotnet-sdk-source.sh"
+          cp isolated-dotnet-sdk.sh "$source_copy"
+          printf '\n# bootstrap-source-marker\n' >> "$source_copy"
+          chmod +x "$source_copy"
+
+          "$source_copy" list
+          grep -F '# bootstrap-source-marker' "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+
+      - name: Smoke test list command
+        shell: bash
+        run: |
+          set -euo pipefail
           output="$("$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list)"
           printf '%s\n' "$output"
           grep -F "Isolated SDKs under" <<< "$output"
@@ -74,14 +85,32 @@ jobs:
               exit 1
           }
 
-      - name: Smoke test list command
+      - name: Preserve file-based bootstrap source
         shell: pwsh
         run: |
           $toolRoot = Join-Path $HOME 'dotnet-sdks'
           $toolPath = Join-Path $toolRoot 'isolated-dotnet-sdk.ps1'
           New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
-          Copy-Item './isolated-dotnet-sdk.ps1' $toolPath -Force
+          Remove-Item $toolPath -Force -ErrorAction SilentlyContinue
 
+          $sourceCopy = Join-Path $env:RUNNER_TEMP 'isolated-dotnet-sdk-source.ps1'
+          Copy-Item './isolated-dotnet-sdk.ps1' $sourceCopy -Force
+          Add-Content -Path $sourceCopy -Value "`n# bootstrap-source-marker"
+
+          & pwsh -NoProfile -File $sourceCopy -Action List
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+          if (-not (Select-String -Path $toolPath -Pattern '# bootstrap-source-marker' -SimpleMatch -Quiet)) {
+              Write-Error 'Installed helper did not preserve the file-based bootstrap source.'
+              exit 1
+          }
+
+      - name: Smoke test list command
+        shell: pwsh
+        run: |
+          $toolPath = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
           & pwsh -NoProfile -File $toolPath -Action List
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
