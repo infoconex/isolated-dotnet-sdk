@@ -83,9 +83,14 @@ function Install-ToolIfNeeded {
 
     Write-Info "Installing tool to $ToolPath"
 
-    Invoke-WebRequest `
-        "$RepositoryRawBase/$ToolName" `
-        -OutFile $ToolPath
+    if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath)) {
+        Copy-Item -LiteralPath $CurrentPath -Destination $ToolPath -Force
+    }
+    else {
+        Invoke-WebRequest `
+            "$RepositoryRawBase/$ToolName" `
+            -OutFile $ToolPath
+    }
 
     if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
         Unblock-File -Path $ToolPath
