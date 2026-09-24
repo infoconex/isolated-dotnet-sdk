@@ -1,0 +1,99 @@
+name: Validate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bash:
+    name: Bash (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Bash syntax
+        shell: bash
+        run: bash -n isolated-dotnet-sdk.sh
+
+      - name: Smoke test list command
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/dotnet-sdks"
+          cp isolated-dotnet-sdk.sh "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+          chmod +x "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+
+          output="$("$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list)"
+          printf '%s\n' "$output"
+          grep -F "Isolated SDKs under" <<< "$output"
+
+      - name: Reject invalid SDK version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install 'invalid/version' --yes; then
+            echo 'Expected invalid SDK version to fail.' >&2
+            exit 1
+          fi
+
+  powershell:
+    name: PowerShell (windows-latest)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path './isolated-dotnet-sdk.ps1'),
+              [ref]$tokens,
+              [ref]$errors) | Out-Null
+
+          if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+          }
+
+      - name: Smoke test list command
+        shell: pwsh
+        run: |
+          $toolRoot = Join-Path $HOME 'dotnet-sdks'
+          $toolPath = Join-Path $toolRoot 'isolated-dotnet-sdk.ps1'
+          New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+          Copy-Item './isolated-dotnet-sdk.ps1' $toolPath -Force
+
+          & pwsh -NoProfile -File $toolPath -Action List
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Reject invalid SDK version
+        shell: pwsh
+        run: |
+          $toolPath = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
+          & pwsh -NoProfile -File $toolPath -Action Install -Version 'invalid/version' -Yes
+
+          if ($LASTEXITCODE -eq 0) {
+              Write-Error 'Expected invalid SDK version to fail.'
+              exit 1
+          }
