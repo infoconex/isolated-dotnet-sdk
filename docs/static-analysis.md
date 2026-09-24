@@ -33,9 +33,13 @@ The repository-owned runner must propagate ShellCheck's nonzero exit code when f
 
 ## Rules and suppressions
 
-Start with each analyzer's default rules. Do not add repository-wide exclusions or suppressions without an observed, concrete need.
+Start with each analyzer's default rules and remediate findings when a standards-compliant implementation is practical. Do not add repository-wide exclusions or suppressions merely to make analysis pass.
 
-Any suppression must be as narrow as practical and documented with its rationale. If an analyzer finding could require a behavior change, preserve the current behavior and track the remediation separately rather than changing semantics as part of static-analysis setup.
+A suppression is acceptable only when the rule genuinely does not apply or when remediation would change an explicit behavioral contract that must be specified and tested separately. Suppressions must be as narrow as practical, remain visible near the affected code, and include a concrete rationale. Temporary suppressions must reference the issue that tracks their removal or behavioral resolution.
+
+The PowerShell CLI does not suppress `PSAvoidUsingWriteHost`. User-facing display and status messages use the information stream, warnings use the warning stream, and failures use the error stream so presentation does not become success-pipeline data.
+
+`PSUseShouldProcessForStateChangingFunctions` remains narrowly suppressed only for `Remove-IsolatedSdk` while issue #11 defines and tests the intended `ShouldProcess`, `-Confirm`, `-WhatIf`, and existing `-Yes` semantics.
 
 ## CI execution
 
