@@ -61,7 +61,7 @@ try {
     New-Item -ItemType Directory -Path $PublicInstallDirectory -Force | Out-Null
     New-Item -ItemType File -Path (Join-Path $PublicInstallDirectory 'dotnet.exe') -Force | Out-Null
 
-    $WhatIfOutput = @(& pwsh -NoProfile -File $ToolScript -Action Remove -Version $RemovalVersion -WhatIf 2>&1)
+    $WhatIfOutput = @(& pwsh -NoProfile -File $ToolScript -Action Remove -Version $RemovalVersion -WhatIf *>&1)
     if ($LASTEXITCODE -ne 0) {
         throw "public -WhatIf removal failed with exit code $LASTEXITCODE"
     }
