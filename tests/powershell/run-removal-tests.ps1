@@ -40,7 +40,7 @@ function Import-ToolFunctionDefinition {
     }
 }
 
-function Reset-RemovalTarget {
+function Initialize-TestRemovalTarget {
     $InstallDirectory = Join-Path $script:SdkRoot $script:Version
     if (Test-Path -LiteralPath $InstallDirectory) {
         Microsoft.PowerShell.Management\Remove-Item -LiteralPath $InstallDirectory -Recurse -Force
@@ -85,8 +85,9 @@ try {
     Write-Pass 'risk-mitigation parameters reject unsupported actions'
 
     # Ordinary removal remains fail-safe in a non-interactive host.
-    $NonInteractiveOutput = @(& pwsh -NoProfile -NonInteractive -File $InstalledToolPath -Action Remove -Version $RemovalVersion 2>&1)
-    if ($LASTEXITCODE -eq 0) {
+    & pwsh -NoProfile -NonInteractive -File $InstalledToolPath -Action Remove -Version $RemovalVersion *> $null
+    $NonInteractiveExitCode = $LASTEXITCODE
+    if ($NonInteractiveExitCode -eq 0) {
         throw 'non-interactive removal without approval unexpectedly succeeded'
     }
     if (-not (Test-Path -LiteralPath $PublicInstallDirectory)) {
@@ -110,16 +111,19 @@ try {
     Write-Pass 'Remove-IsolatedSdk exposes native risk-mitigation parameters'
 
     # Default cancellation keeps the SDK and performs no shutdown.
-    $InstallDirectory = Reset-RemovalTarget
+    $InstallDirectory = Initialize-TestRemovalTarget
     $script:ConfirmationCallCount = 0
     $script:ShutdownCallCount = 0
-    function Confirm-Action {
+    Set-Item -Path Function:Confirm-Action -Value {
         param([string]$Prompt)
+        $null = $Prompt
         $script:ConfirmationCallCount++
         return $false
     }
-    function Stop-IsolatedSdkBuildServer {
+    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
+        $null = $DotNetPath
+        $null = $SdkVersion
         $script:ShutdownCallCount++
         throw 'shutdown must not run after cancellation'
     }
@@ -134,16 +138,19 @@ try {
     Write-Pass 'default cancellation contract'
 
     # Default approval shuts down first and then removes the selected directory.
-    $InstallDirectory = Reset-RemovalTarget
+    $InstallDirectory = Initialize-TestRemovalTarget
     $script:ConfirmationCallCount = 0
     $script:ShutdownCallCount = 0
-    function Confirm-Action {
+    Set-Item -Path Function:Confirm-Action -Value {
         param([string]$Prompt)
+        $null = $Prompt
         $script:ConfirmationCallCount++
         return $true
     }
-    function Stop-IsolatedSdkBuildServer {
+    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
+        $null = $DotNetPath
+        $null = $SdkVersion
         $script:ShutdownCallCount++
     }
 
@@ -157,14 +164,17 @@ try {
     Write-Pass 'default approval contract'
 
     # Explicit -Confirm:$false is an automation path and must not invoke the tool prompt.
-    $InstallDirectory = Reset-RemovalTarget
+    $InstallDirectory = Initialize-TestRemovalTarget
     $script:ShutdownCallCount = 0
-    function Confirm-Action {
+    Set-Item -Path Function:Confirm-Action -Value {
         param([string]$Prompt)
+        $null = $Prompt
         throw 'tool-owned confirmation must not run for explicit -Confirm:$false'
     }
-    function Stop-IsolatedSdkBuildServer {
+    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
+        $null = $DotNetPath
+        $null = $SdkVersion
         $script:ShutdownCallCount++
     }
 
@@ -175,14 +185,17 @@ try {
     Write-Pass 'explicit confirmation suppression contract'
 
     # -Yes remains supported but cannot override -WhatIf.
-    $InstallDirectory = Reset-RemovalTarget
+    $InstallDirectory = Initialize-TestRemovalTarget
     $script:ShutdownCallCount = 0
-    function Confirm-Action {
+    Set-Item -Path Function:Confirm-Action -Value {
         param([string]$Prompt)
+        $null = $Prompt
         throw 'tool-owned confirmation must not run for -Yes'
     }
-    function Stop-IsolatedSdkBuildServer {
+    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
+        $null = $DotNetPath
+        $null = $SdkVersion
         $script:ShutdownCallCount++
     }
 
@@ -192,10 +205,12 @@ try {
     }
     Write-Pass '-Yes removal contract'
 
-    $InstallDirectory = Reset-RemovalTarget
+    $InstallDirectory = Initialize-TestRemovalTarget
     $script:ShutdownCallCount = 0
-    function Stop-IsolatedSdkBuildServer {
+    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
+        $null = $DotNetPath
+        $null = $SdkVersion
         $script:ShutdownCallCount++
         throw 'shutdown must not run under -WhatIf'
     }
@@ -210,13 +225,16 @@ try {
     Write-Pass '-WhatIf precedence over -Yes'
 
     # A shutdown failure is terminal and must leave the SDK directory intact.
-    $InstallDirectory = Reset-RemovalTarget
-    function Confirm-Action {
+    $InstallDirectory = Initialize-TestRemovalTarget
+    Set-Item -Path Function:Confirm-Action -Value {
         param([string]$Prompt)
+        $null = $Prompt
         return $true
     }
-    function Stop-IsolatedSdkBuildServer {
+    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
+        $null = $DotNetPath
+        $null = $SdkVersion
         throw 'simulated shutdown failure'
     }
 
@@ -236,12 +254,15 @@ try {
     Write-Pass 'shutdown failure blocks deletion'
 
     # A deletion failure propagates and must not emit the success result.
-    $InstallDirectory = Reset-RemovalTarget
-    function Stop-IsolatedSdkBuildServer {
+    $InstallDirectory = Initialize-TestRemovalTarget
+    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
+        $null = $DotNetPath
+        $null = $SdkVersion
     }
-    function Remove-IsolatedSdkDirectory {
+    Set-Item -Path Function:Remove-IsolatedSdkDirectory -Value {
         param([string]$InstallDirectory)
+        $null = $InstallDirectory
         throw 'simulated deletion failure'
     }
 
