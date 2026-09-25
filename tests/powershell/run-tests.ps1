@@ -89,7 +89,7 @@ try {
     }
     Write-Pass 'list output stream contract'
 
-    & pwsh -NoProfile -Command '$PSStyle.OutputRendering = "Ansi"; $output = @(& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 6>&1); $text = $output -join [Environment]::NewLine; $expectedPrefix = "$($PSStyle.Foreground.Cyan)isolated-dotnet-sdk:$($PSStyle.Reset)"; if ($text -notlike "*$expectedPrefix*") { [Console]::Error.WriteLine("ANSI rendering did not use the expected cyan informational prefix."); exit 1 }'
+    & pwsh -NoProfile -Command '$PSStyle.OutputRendering = "Ansi"; $output = @(& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 6>&1); $text = $output -join [Environment]::NewLine; $expectedPrefix = "$($PSStyle.Foreground.Cyan)isolated-dotnet-sdk:$($PSStyle.Reset)"; if (-not $text.Contains($expectedPrefix)) { [Console]::Error.WriteLine("ANSI rendering did not use the expected cyan informational prefix."); exit 1 }'
     if ($LASTEXITCODE -ne 0) {
         throw 'ANSI presentation contract failed'
     }
