@@ -1,7 +1,19 @@
 $ErrorActionPreference = 'Stop'
 
-$RequiredVersion = [version]'1.25.0'
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$VersionConfigPath = Join-Path $RepositoryRoot '.config/static-analysis.json'
+
+try {
+    $VersionConfig = Get-Content -LiteralPath $VersionConfigPath -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+    $RequiredVersion = [version]$VersionConfig.psScriptAnalyzerVersion
+}
+catch {
+    [Console]::Error.WriteLine(
+        "Unable to read the pinned PSScriptAnalyzer version from $VersionConfigPath. $($_.Exception.Message)")
+    exit 2
+}
+
 $AnalysisPaths = @(
     (Join-Path $RepositoryRoot 'isolated-dotnet-sdk.ps1'),
     (Join-Path $RepositoryRoot 'tests/powershell/run-tests.ps1'),
