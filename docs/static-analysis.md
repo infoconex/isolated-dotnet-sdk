@@ -4,12 +4,15 @@ The repository uses static analysis as an automated quality signal for the Power
 
 ## Analyzer versions
 
-The initial analyzer contract is pinned for deterministic local and CI execution:
+`.config/static-analysis.json` is the authoritative source for pinned static-analysis tool versions and version-coupled installation metadata.
 
-- PSScriptAnalyzer `1.25.0`
-- ShellCheck `0.11.0`
+The PowerShell runner, Bash runner, and CI installation steps must consume that file rather than independently declaring analyzer versions. Version changes should be intentional repository changes so new analyzer behavior and findings are reviewed explicitly.
 
-Version changes should be intentional repository changes so new analyzer behavior and findings are reviewed explicitly.
+The config currently owns:
+
+- the required PSScriptAnalyzer version;
+- the required ShellCheck version;
+- the checksum for the pinned Linux x64 ShellCheck release archive used by CI.
 
 ## PowerShell analysis scope
 
