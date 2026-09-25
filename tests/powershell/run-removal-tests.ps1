@@ -120,7 +120,7 @@ try {
         $script:ConfirmationCallCount++
         return $false
     }
-    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkBuildServerShutdown -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
         $null = $DotNetPath
         $null = $SdkVersion
@@ -147,7 +147,7 @@ try {
         $script:ConfirmationCallCount++
         return $true
     }
-    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkBuildServerShutdown -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
         $null = $DotNetPath
         $null = $SdkVersion
@@ -171,7 +171,7 @@ try {
         $null = $Prompt
         throw 'tool-owned confirmation must not run for explicit -Confirm:$false'
     }
-    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkBuildServerShutdown -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
         $null = $DotNetPath
         $null = $SdkVersion
@@ -192,7 +192,7 @@ try {
         $null = $Prompt
         throw 'tool-owned confirmation must not run for -Yes'
     }
-    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkBuildServerShutdown -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
         $null = $DotNetPath
         $null = $SdkVersion
@@ -207,7 +207,7 @@ try {
 
     $InstallDirectory = Initialize-TestRemovalTarget
     $script:ShutdownCallCount = 0
-    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkBuildServerShutdown -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
         $null = $DotNetPath
         $null = $SdkVersion
@@ -231,7 +231,7 @@ try {
         $null = $Prompt
         return $true
     }
-    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkBuildServerShutdown -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
         $null = $DotNetPath
         $null = $SdkVersion
@@ -255,12 +255,12 @@ try {
 
     # A deletion failure propagates and must not emit the success result.
     $InstallDirectory = Initialize-TestRemovalTarget
-    Set-Item -Path Function:Stop-IsolatedSdkBuildServer -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkBuildServerShutdown -Value {
         param([string]$DotNetPath, [string]$SdkVersion)
         $null = $DotNetPath
         $null = $SdkVersion
     }
-    Set-Item -Path Function:Remove-IsolatedSdkDirectory -Value {
+    Set-Item -Path Function:Invoke-IsolatedSdkDirectoryRemoval -Value {
         param([string]$InstallDirectory)
         $null = $InstallDirectory
         throw 'simulated deletion failure'
