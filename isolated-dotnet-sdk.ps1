@@ -70,9 +70,43 @@ function Write-ToolDisplay {
     Write-Information -MessageData $Message -InformationAction Continue
 }
 
+function Format-ToolPrefix {
+    param(
+        [ValidateSet('Info', 'Success')]
+        [string]$Kind
+    )
+
+    $Prefix = 'isolated-dotnet-sdk:'
+    if ($null -eq $PSStyle) {
+        return $Prefix
+    }
+
+    $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
+    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi' -or
+        ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
+
+    if (-not $UseAnsi) {
+        return $Prefix
+    }
+
+    $Foreground = if ($Kind -eq 'Success') {
+        $PSStyle.Foreground.Green
+    }
+    else {
+        $PSStyle.Foreground.Cyan
+    }
+
+    return "$Foreground$Prefix$($PSStyle.Reset)"
+}
+
 function Write-ToolInfo {
     param([string]$Message)
-    Write-ToolDisplay "isolated-dotnet-sdk: $Message"
+    Write-ToolDisplay "$(Format-ToolPrefix -Kind Info) $Message"
+}
+
+function Write-ToolSuccess {
+    param([string]$Message)
+    Write-ToolDisplay "$(Format-ToolPrefix -Kind Success) $Message"
 }
 
 function Write-ToolWarning {
@@ -138,7 +172,7 @@ function Install-ToolIfNeeded {
         Unblock-File -Path $ToolPath
     }
 
-    Write-ToolInfo 'Tool installed.'
+    Write-ToolSuccess 'Tool installed.'
 
     $Arguments = @{}
     if ($script:ActionWasSpecified) {
@@ -534,7 +568,7 @@ function Install-IsolatedSdk {
         $IsolatedVersions = @(& $IsolatedDotNet --list-sdks | ForEach-Object { ($_ -split '\s+')[0] })
 
         if ($IsolatedVersions -contains $Version) {
-            Write-ToolInfo "Isolated SDK $Version is already installed."
+            Write-ToolSuccess "Isolated SDK $Version is already installed."
             Write-ToolInfo "Location: $InstallDir"
             return
         }
@@ -586,7 +620,7 @@ function Install-IsolatedSdk {
     }
 
     Write-ToolDisplay
-    Write-ToolInfo 'Isolated SDK installation completed successfully.'
+    Write-ToolSuccess 'Isolated SDK installation completed successfully.'
     Write-ToolInfo "Location: $InstallDir"
 }
 
@@ -620,7 +654,7 @@ function Remove-IsolatedSdk {
         throw "SDK directory still exists after removal: $InstallDir"
     }
 
-    Write-ToolInfo "Isolated SDK $Version was removed."
+    Write-ToolSuccess "Isolated SDK $Version was removed."
 }
 
 Install-ToolIfNeeded
