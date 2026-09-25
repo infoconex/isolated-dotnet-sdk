@@ -30,19 +30,19 @@ jobs:
         shell: bash
         run: bash -n isolated-dotnet-sdk.sh
 
-      - name: Install ShellCheck 0.11.0
+      - name: Install pinned ShellCheck
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           set -euo pipefail
-          version='0.11.0'
+          config='.config/static-analysis.json'
+          version="$(jq -er '.shellCheckVersion | select(type == "string" and length > 0)' "$config")"
+          checksum="$(jq -er '.shellCheckLinuxX64Sha256 | select(type == "string" and length > 0)' "$config")"
           archive="$RUNNER_TEMP/shellcheck-v${version}.linux.x86_64.tar.xz"
           url="https://github.com/koalaman/shellcheck/releases/download/v${version}/shellcheck-v${version}.linux.x86_64.tar.xz"
 
           curl -fsSL "$url" -o "$archive"
-          printf '%s  %s\n' \
-            '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198' \
-            "$archive" | sha256sum -c -
+          printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
           tar -xJf "$archive" -C "$RUNNER_TEMP"
           sudo install "$RUNNER_TEMP/shellcheck-v${version}/shellcheck" /usr/local/bin/shellcheck
 
@@ -86,13 +86,20 @@ jobs:
               exit 1
           }
 
-      - name: Install PSScriptAnalyzer 1.25.0
+      - name: Install pinned PSScriptAnalyzer
         shell: pwsh
         run: |
+          $config = Get-Content -LiteralPath './.config/static-analysis.json' -Raw |
+              ConvertFrom-Json
+          $version = [string]$config.psScriptAnalyzerVersion
+          if ([string]::IsNullOrWhiteSpace($version)) {
+              throw 'psScriptAnalyzerVersion is required in .config/static-analysis.json.'
+          }
+
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module `
               -Name PSScriptAnalyzer `
-              -RequiredVersion 1.25.0 `
+              -RequiredVersion $version `
               -Scope CurrentUser `
               -Repository PSGallery `
               -Force
