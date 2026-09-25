@@ -36,7 +36,11 @@ function Import-ToolFunctionDefinition {
         $true)
 
     foreach ($FunctionDefinition in $FunctionDefinitions) {
-        . ([scriptblock]::Create($FunctionDefinition.Extent.Text))
+        $BodyText = $FunctionDefinition.Body.Extent.Text
+        $BodyText = $BodyText.Substring(1, $BodyText.Length - 2)
+        Set-Item `
+            -Path "Function:script:$($FunctionDefinition.Name)" `
+            -Value ([scriptblock]::Create($BodyText))
     }
 }
 
