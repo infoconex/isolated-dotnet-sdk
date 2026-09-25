@@ -6,7 +6,11 @@ $VersionConfigPath = Join-Path $RepositoryRoot '.config/static-analysis.json'
 try {
     $VersionConfig = Get-Content -LiteralPath $VersionConfigPath -Raw -ErrorAction Stop |
         ConvertFrom-Json -ErrorAction Stop
-    $RequiredVersion = [version]$VersionConfig.psScriptAnalyzerVersion
+    $RequiredVersionValue = [string]$VersionConfig.psScriptAnalyzerVersion
+    if ([string]::IsNullOrWhiteSpace($RequiredVersionValue)) {
+        throw 'psScriptAnalyzerVersion must be a non-empty string.'
+    }
+    $RequiredVersion = [version]$RequiredVersionValue
 }
 catch {
     [Console]::Error.WriteLine(
