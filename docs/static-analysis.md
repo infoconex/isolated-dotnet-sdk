@@ -31,6 +31,8 @@ ShellCheck analyzes:
 
 The repository-owned runner must propagate ShellCheck's nonzero exit code when findings are reported.
 
+To keep local and CI analysis deterministic, the runner ignores the caller's `SHELLCHECK_OPTS` and user-level `.shellcheckrc` configuration. Repository-owned source directives remain effective and must follow the suppression policy below.
+
 ## Rules and suppressions
 
 Start with each analyzer's default rules and remediate findings when a standards-compliant implementation is practical. Do not add repository-wide exclusions or suppressions merely to make analysis pass.
