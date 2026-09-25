@@ -49,7 +49,15 @@ jobs:
       - name: Run ShellCheck
         if: matrix.os == 'ubuntu-latest'
         shell: bash
-        run: bash scripts/run-shellcheck.sh
+        run: |
+          set -euo pipefail
+          shellcheck_home="$RUNNER_TEMP/shellcheck-home"
+          mkdir -p "$shellcheck_home"
+          printf 'shell=sh\n' > "$shellcheck_home/.shellcheckrc"
+
+          HOME="$shellcheck_home" \
+          SHELLCHECK_OPTS='--shell=sh' \
+          bash scripts/run-shellcheck.sh
 
       - name: Run Bash behavioral tests
         shell: bash
