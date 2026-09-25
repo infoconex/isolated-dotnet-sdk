@@ -119,3 +119,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+
+      - name: Run PowerShell removal behavioral tests
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./tests/powershell/run-removal-tests.ps1
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
