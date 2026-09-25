@@ -53,6 +53,7 @@ try {
     Write-Pass 'list command'
 
     $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $toolPath
+    $env:ISOLATED_DOTNET_SDK_SOURCE_COPY = $sourceCopy
     $env:ISOLATED_DOTNET_SDK_LIST_SUCCESS = $listSuccessOutputPath
     $env:ISOLATED_DOTNET_SDK_LIST_INFORMATION = $listInformationOutputPath
 
@@ -89,11 +90,11 @@ try {
     }
     Write-Pass 'list output stream contract'
 
-    & pwsh -NoProfile -Command '$PSStyle.OutputRendering = "Ansi"; $output = @(& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 6>&1); $text = $output -join [Environment]::NewLine; $expectedPrefix = "$($PSStyle.Foreground.Cyan)isolated-dotnet-sdk:$($PSStyle.Reset)"; if (-not $text.Contains($expectedPrefix)) { [Console]::Error.WriteLine("ANSI rendering did not use the expected cyan informational prefix."); exit 1 }'
+    & pwsh -NoProfile -Command '$PSStyle.OutputRendering = "Ansi"; $output = @(& $env:ISOLATED_DOTNET_SDK_SOURCE_COPY -Action List 6>&1); $text = $output -join [Environment]::NewLine; $expectedInfoPrefix = "$($PSStyle.Foreground.Cyan)isolated-dotnet-sdk:$($PSStyle.Reset)"; $expectedSuccessPrefix = "$($PSStyle.Foreground.Green)isolated-dotnet-sdk:$($PSStyle.Reset)"; if (-not $text.Contains($expectedInfoPrefix)) { [Console]::Error.WriteLine("ANSI rendering did not use the expected cyan informational prefix."); exit 1 }; if (-not $text.Contains("$expectedSuccessPrefix Tool installed.")) { [Console]::Error.WriteLine("ANSI rendering did not use the expected green success prefix."); exit 1 }'
     if ($LASTEXITCODE -ne 0) {
         throw 'ANSI presentation contract failed'
     }
-    Write-Pass 'ANSI informational color contract'
+    Write-Pass 'ANSI informational and success color contract'
 
     $originalNoColor = [Environment]::GetEnvironmentVariable('NO_COLOR', 'Process')
     try {
@@ -121,6 +122,7 @@ finally {
     [Environment]::SetEnvironmentVariable($homeVariableName, $originalHomeValue, 'Process')
     Remove-Item Env:ISOLATED_DOTNET_SDK_EXPECTED_HOME -ErrorAction SilentlyContinue
     Remove-Item Env:ISOLATED_DOTNET_SDK_TOOL_PATH -ErrorAction SilentlyContinue
+    Remove-Item Env:ISOLATED_DOTNET_SDK_SOURCE_COPY -ErrorAction SilentlyContinue
     Remove-Item Env:ISOLATED_DOTNET_SDK_LIST_SUCCESS -ErrorAction SilentlyContinue
     Remove-Item Env:ISOLATED_DOTNET_SDK_LIST_INFORMATION -ErrorAction SilentlyContinue
     Remove-Item -Path $testRoot -Recurse -Force -ErrorAction SilentlyContinue
