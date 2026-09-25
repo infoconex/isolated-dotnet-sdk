@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-required_version="0.11.0"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+version_config="$repo_root/.config/static-analysis.json"
+
+if ! command -v jq >/dev/null 2>&1; then
+    printf 'jq is required to read %s.\n' "$version_config" >&2
+    exit 2
+fi
+
+if [[ ! -r "$version_config" ]]; then
+    printf 'Static-analysis version config was not found: %s\n' "$version_config" >&2
+    exit 2
+fi
+
+if ! required_version="$(jq -er '.shellCheckVersion | select(type == "string" and length > 0)' "$version_config")"; then
+    printf 'Unable to read shellCheckVersion from %s.\n' "$version_config" >&2
+    exit 2
+fi
 
 # Keep the repository-owned analysis contract deterministic. User-level ShellCheck
 # options and rc files must not change which rules this runner applies.
