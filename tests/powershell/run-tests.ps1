@@ -83,7 +83,30 @@ try {
         $listInformationOutput -notmatch 'None') {
         throw 'list presentation did not write the expected content to the information stream'
     }
+
+    if ($listInformationOutput.Contains([char]27)) {
+        throw 'default redirected information output contained ANSI escape sequences'
+    }
     Write-Pass 'list output stream contract'
+
+    & pwsh -NoProfile -Command '$PSStyle.OutputRendering = "Ansi"; $output = @(& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 6>&1); $text = $output -join [Environment]::NewLine; $expectedPrefix = "$($PSStyle.Foreground.Cyan)isolated-dotnet-sdk:$($PSStyle.Reset)"; if ($text -notlike "*$expectedPrefix*") { [Console]::Error.WriteLine("ANSI rendering did not use the expected cyan informational prefix."); exit 1 }'
+    if ($LASTEXITCODE -ne 0) {
+        throw 'ANSI presentation contract failed'
+    }
+    Write-Pass 'ANSI informational color contract'
+
+    $originalNoColor = [Environment]::GetEnvironmentVariable('NO_COLOR', 'Process')
+    try {
+        [Environment]::SetEnvironmentVariable('NO_COLOR', '1', 'Process')
+        & pwsh -NoProfile -Command '$output = @(& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 6>&1); $text = $output -join [Environment]::NewLine; if ($PSStyle.OutputRendering -ne "PlainText") { [Console]::Error.WriteLine("NO_COLOR did not select PlainText rendering."); exit 1 }; if ($text.Contains([char]27)) { [Console]::Error.WriteLine("NO_COLOR output contained ANSI escape sequences."); exit 1 }'
+        if ($LASTEXITCODE -ne 0) {
+            throw 'NO_COLOR presentation contract failed'
+        }
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable('NO_COLOR', $originalNoColor, 'Process')
+    }
+    Write-Pass 'NO_COLOR presentation contract'
 
     & pwsh -NoProfile -File $toolPath -Action Install -Version 'invalid/version' -Yes *> $null
     if ($LASTEXITCODE -eq 0) {
