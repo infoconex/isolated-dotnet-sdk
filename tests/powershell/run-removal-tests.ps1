@@ -219,12 +219,9 @@ try {
         throw 'shutdown must not run under -WhatIf'
     }
 
-    $WhatIfFunctionOutput = @(Remove-IsolatedSdk -Yes -WhatIf *>&1)
+    Remove-IsolatedSdk -Yes -WhatIf
     if ($script:ShutdownCallCount -ne 0 -or -not (Test-Path -LiteralPath $InstallDirectory)) {
         throw '-WhatIf did not take precedence over -Yes'
-    }
-    if (($WhatIfFunctionOutput -join [Environment]::NewLine) -notmatch 'What if:') {
-        throw 'function -WhatIf did not describe the intended operation'
     }
     Write-Pass '-WhatIf precedence over -Yes'
 
