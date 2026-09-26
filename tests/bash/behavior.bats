@@ -15,10 +15,14 @@ teardown() {
   rm -rf "$test_root"
 }
 
-bootstrap_tool() {
+prepare_source() {
   cp "$repo_root/isolated-dotnet-sdk.sh" "$source_copy"
   printf '\n# bootstrap-source-marker\n' >> "$source_copy"
   chmod +x "$source_copy"
+}
+
+bootstrap_tool() {
+  prepare_source
 
   run env HOME="$test_home" "$source_copy" list
   [ "$status" -eq 0 ]
@@ -52,4 +56,16 @@ bootstrap_tool() {
   run env HOME="$test_home" "$tool_path" install 'invalid/version' --yes
 
   [ "$status" -ne 0 ]
+}
+
+@test "bootstrap path conflict fails without mutating the conflicting destination" {
+  prepare_source
+  mkdir -p "$tool_path"
+
+  run env HOME="$test_home" "$source_copy" list
+
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"Tool installed."* ]]
+  [ -d "$tool_path" ]
+  [ -z "$(find "$tool_path" -mindepth 1 -maxdepth 1 -print -quit)" ]
 }
