@@ -112,4 +112,15 @@ Describe 'PowerShell process-level behavior' {
 
         $LASTEXITCODE | Should -Not -Be 0
     }
+
+    It 'reports release-index network failure with deterministic metadata context' {
+        Install-TestTool
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+
+        $metadataOutput = @(& pwsh -NoProfile -Command 'function Invoke-RestMethod { throw "transport-specific detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($metadataOutput -join [Environment]::NewLine) | Should -Match 'Unable to load .NET release metadata from Microsoft\.'
+        ($metadataOutput -join [Environment]::NewLine) | Should -Not -Match 'transport-specific detail'
+    }
 }

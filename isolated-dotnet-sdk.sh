@@ -158,6 +158,11 @@ format_phase() {
     esac
 }
 
+looks_like_json_object() {
+    local value="$1"
+    [[ "$value" =~ ^[[:space:]]*\{ ]] && [[ "$value" =~ \}[[:space:]]*$ ]]
+}
+
 # Extract only the release-index fields needed by the interactive picker and emit
 # them in a simple pipe-delimited form without adding a JSON-parser dependency.
 parse_release_index() {
@@ -186,7 +191,7 @@ parse_release_index() {
             url=$0
             sub(/^[^:]*:[[:space:]]*"/, "", url)
             sub(/".*$/, "", url)
-            if (channel != "" && latest != "" && phase != "" && type != "") {
+            if (channel != "" && phase != "" && url != "") {
                 print channel "|" latest "|" phase "|" type "|" url
             }
             channel=latest=phase=type=url=""
@@ -234,6 +239,7 @@ select_install_version() {
     local release_type=""
     local releases_url=""
     local metadata_file=""
+    local metadata_json=""
     local versions=""
     local system_versions=""
     local isolated_versions=""
@@ -243,7 +249,15 @@ select_install_version() {
     tool_info "Loading available .NET SDK releases from Microsoft..."
     index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
         tool_fail "Unable to load .NET release metadata from Microsoft."
+
+    if ! looks_like_json_object "$index_json" || \
+       [[ "$index_json" != *'"releases-index"'* ]]; then
+        tool_fail "Invalid .NET release metadata from Microsoft."
+    fi
+
     channel_data="$(printf "%s\n" "$index_json" | parse_release_index)"
+    [[ -n "$channel_data" ]] || \
+        tool_fail "No selectable .NET channels were found in Microsoft release metadata."
 
     while true; do
         echo
@@ -343,9 +357,17 @@ select_install_version() {
             tool_fail "Unable to load release metadata for .NET $channel."
         fi
 
+        metadata_json="$(cat "$metadata_file")"
+        if ! looks_like_json_object "$metadata_json" || \
+           [[ "$metadata_json" != *'"releases"'* ]]; then
+            trap - EXIT TERM INT HUP
+            rm -f "$metadata_file" || true
+            tool_fail "Invalid release metadata for .NET $channel."
+        fi
+
         # The channel-specific metadata supplies the exact SDK versions presented
         # to the user; latest-sdk from the index is only used as a display marker.
-        versions="$(extract_sdk_versions < "$metadata_file")"
+        versions="$(extract_sdk_versions < "$metadata_file" || true)"
         trap - EXIT TERM INT HUP
         rm -f "$metadata_file" || true
         metadata_file=""
