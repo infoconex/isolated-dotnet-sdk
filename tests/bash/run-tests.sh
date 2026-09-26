@@ -18,4 +18,5 @@ fi
 
 exec bats \
   "$repo_root/tests/bash/behavior.bats" \
-  "$repo_root/tests/bash/metadata.bats"
+  "$repo_root/tests/bash/metadata.bats" \
+  "$repo_root/tests/bash/native-failures.bats"
