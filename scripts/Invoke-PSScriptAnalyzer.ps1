@@ -21,7 +21,8 @@ catch {
 $AnalysisPaths = @(
     (Join-Path $RepositoryRoot 'isolated-dotnet-sdk.ps1'),
     (Join-Path $RepositoryRoot 'tests/powershell/run-tests.ps1'),
-    (Join-Path $RepositoryRoot 'tests/powershell/run-removal-tests.ps1'),
+    (Join-Path $RepositoryRoot 'tests/powershell/behavior.Tests.ps1'),
+    (Join-Path $RepositoryRoot 'tests/powershell/removal.Tests.ps1'),
     $PSCommandPath
 )
 

@@ -1,10 +1,55 @@
 # Testing
 
-The repository keeps its behavioral assertions in repository-owned test scripts so the same checks can run locally and in GitHub Actions.
+The repository uses established test frameworks for behavioral coverage:
+
+- **Pester** for PowerShell tests;
+- **Bats-core** for Bash tests.
+
+Exact framework versions are repository-owned in [`.config/test-frameworks.json`](../.config/test-frameworks.json). Bats is additionally pinned to the upstream commit behind the selected release tag. Local and CI runs must use those exact pins so diagnostics and behavior stay reproducible.
+
+## Test taxonomy
+
+Use the smallest level that verifies the observable contract without forcing production code into a test-specific architecture.
+
+### Process-level behavioral tests
+
+Process-level tests invoke the public script entry point in a child process with isolated temporary user/home state. Use them for bootstrap behavior, CLI/action parsing, output/stream contracts, environment handling, and behavior whose public contract depends on a real process boundary.
+
+### Focused function/component tests
+
+Focused tests load only the production functions needed for the behavior under test and replace external or destructive seams when appropriate. Use them when a process-level test would require a real SDK installation, network dependency, destructive filesystem operation, or interactive host behavior.
+
+PowerShell focused tests use Pester setup/teardown and mocks or controlled function seams where justified. Bash tests remain process-oriented until a focused seam provides a concrete advantage; do not grow a custom shell test framework alongside Bats.
+
+## Framework versions
+
+From the repository root, inspect the configured pins with:
+
+```bash
+jq . .config/test-frameworks.json
+```
+
+The current pins are Pester `6.2.0` and Bats-core `1.14.0`, with Bats fixed to commit `eb7f42f8d608ac693d7a4b67474f6714ea68cfc5`. Update the configuration, local instructions, and CI installation together when either framework is intentionally upgraded.
 
 ## Bash behavioral tests
 
-From the repository root, run:
+Bats-core, Git, and `jq` are required. Install the exact configured Bats source commit into a user-owned prefix:
+
+```bash
+bats_version="$(jq -er '.batsVersion' .config/test-frameworks.json)"
+bats_commit="$(jq -er '.batsCommit' .config/test-frameworks.json)"
+prefix="$HOME/.local"
+workdir="$(mktemp -d)"
+git -C "$workdir" init
+git -C "$workdir" remote add origin https://github.com/bats-core/bats-core.git
+git -C "$workdir" fetch --depth=1 origin "$bats_commit"
+git -C "$workdir" checkout --detach FETCH_HEAD
+"$workdir/install.sh" "$prefix"
+rm -rf "$workdir"
+"$prefix/bin/bats" --version | grep -Fx "Bats $bats_version"
+```
+
+Ensure the selected prefix's `bin` directory is on `PATH`, then run from the repository root:
 
 ```bash
 bash tests/bash/run-tests.sh
@@ -19,13 +64,25 @@ The Bash suite covers:
 
 ## PowerShell behavioral tests
 
-PowerShell 7 (`pwsh`) is required. From the repository root, run:
+PowerShell 7.4 or newer is required by the pinned Pester major version. Install the exact configured Pester version for the current user:
+
+```powershell
+$config = Get-Content -LiteralPath './.config/test-frameworks.json' -Raw | ConvertFrom-Json
+Install-Module Pester `
+    -RequiredVersion $config.pesterVersion `
+    -Scope CurrentUser `
+    -Repository PSGallery `
+    -Force `
+    -SkipPublisherCheck
+```
+
+Then run from the repository root:
 
 ```powershell
 pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
 ```
 
-The general PowerShell suite covers:
+The PowerShell behavioral coverage includes:
 
 - isolated temporary home/profile handling;
 - file-based bootstrap source preservation;
@@ -33,16 +90,7 @@ The general PowerShell suite covers:
 - information-stream versus success-stream separation;
 - ANSI informational and success presentation colors;
 - ANSI-free redirected output and `NO_COLOR` behavior;
-- rejection of an invalid SDK version.
-
-Removal behavior has a dedicated suite:
-
-```powershell
-pwsh -NoProfile -File ./tests/powershell/run-removal-tests.ps1
-```
-
-The removal suite covers:
-
+- rejection of an invalid SDK version;
 - source bootstrap forwarding for `-WhatIf`;
 - rejection of removal-only risk-mitigation parameters on unsupported actions;
 - fail-safe non-interactive removal without explicit approval;
@@ -54,7 +102,7 @@ The removal suite covers:
 - shutdown failure blocking deletion;
 - deletion failure blocking success reporting.
 
-The authoritative behavior specification is [`powershell-removal.md`](powershell-removal.md).
+The authoritative removal behavior specification is [`powershell-removal.md`](powershell-removal.md).
 
 ## Static analysis
 
@@ -96,19 +144,17 @@ The runner rejects missing or mismatched ShellCheck versions and ignores caller/
 
 ## Isolation
 
-Both PowerShell suites and the Bash suite create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
+The behavioral suites create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
 
 The current behavioral checks do not install an SDK or require release-metadata downloads.
 
 ## CI
 
-`.github/workflows/validate.yml` runs:
+`.github/workflows/validate.yml` installs the exact framework pins from `.config/test-frameworks.json` and runs:
 
-- Bash syntax validation and the Bash behavioral suite on Ubuntu and macOS;
+- Bash syntax validation and the Bats behavioral suite on Ubuntu and macOS;
 - ShellCheck once on Ubuntu;
-- PowerShell parser validation, the general PowerShell behavioral suite, and the dedicated removal behavioral suite on Windows;
+- PowerShell parser validation and the Pester suite on Windows;
 - PSScriptAnalyzer once on Windows.
 
-CI reads analyzer versions and the ShellCheck release checksum from `.config/static-analysis.json` before installation.
-
-Syntax/parser checks, static analysis, and behavioral tests remain separate validation layers.
+Syntax/parser checks, static analysis, and behavioral tests remain separate validation layers. Framework failure output is emitted directly by Bats/Pester so CI retains test names, assertion context, and framework diagnostics.
