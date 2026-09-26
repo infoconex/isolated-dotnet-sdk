@@ -24,6 +24,8 @@ PowerShell removal supports native `ShouldProcess` semantics while preserving th
 
 `Remove-IsolatedSdk` uses `SupportsShouldProcess` with medium confirmation impact. The script exposes the corresponding PowerShell risk-mitigation common parameters.
 
+The destructive operation represented by `ShouldProcess` is removal of the selected isolated SDK directory. Build-server shutdown is part of that operation and occurs only after approval.
+
 ### Default interactive removal
 
 When neither `-Yes` nor an explicit `-Confirm` value is supplied, ordinary interactive removal retains the tool-owned `Continue? [y/N]` confirmation when PowerShell confirmation preferences have not already required native confirmation.
@@ -42,11 +44,21 @@ An explicit `-Confirm` uses PowerShell's native confirmation behavior for the SD
 
 An explicit `-Confirm:$false` suppresses confirmation and permits intentional automation.
 
+The dedicated automated suite proves native `-Confirm` parameter exposure and proves that `-Confirm:$false` bypasses the tool-owned prompt. Positive interactive `-Confirm` prompting is owned by the PowerShell host; duplicate-prompt prevention is enforced by the implementation condition that the tool-owned prompt runs only when `Confirm` was not explicitly bound.
+
 ### `-Yes`
 
 `-Yes` remains supported for compatibility and automation. It bypasses the tool-owned confirmation but does not bypass `-WhatIf`.
 
 If `-Yes` and an explicit `-Confirm` value are both supplied, the explicit PowerShell confirmation choice is authoritative.
+
+### Unsupported actions
+
+`-WhatIf` and explicit `-Confirm` are currently specified only for the PowerShell `Remove` action.
+
+If either parameter is explicitly supplied and the resolved action is `Install` or `List`, execution fails before that product action runs. The tool does not silently imply risk-mitigation semantics for actions that do not yet have a defined `ShouldProcess` contract.
+
+The self-bootstrap step may create or refresh the saved tool copy before product-action dispatch. Those bootstrap file mutations are not the selected SDK removal operation, so they explicitly suppress inherited `WhatIf` / `Confirm` preferences while preserving the user's explicitly supplied risk parameters for the re-executed removal action.
 
 ## Non-interactive execution
 
@@ -100,6 +112,14 @@ Given an installed isolated SDK, when removal is invoked with `-Yes`, the tool-o
 
 Given an installed isolated SDK, when removal is invoked with both `-Yes` and `-WhatIf`, shutdown and deletion do not occur.
 
+### Unsupported action
+
+Given an explicit `-WhatIf` or `-Confirm`, when the resolved action is `Install` or `List`, the command fails before that action executes.
+
+### Non-interactive fail-safe
+
+Given an installed isolated SDK, when removal is invoked in a non-interactive host without `-Yes` or explicit `-Confirm:$false`, shutdown is not invoked, the directory remains, and the command does not silently approve removal.
+
 ### Shutdown failure
 
 Given approved removal, when build-server shutdown exits nonzero, removal fails and directory deletion is not attempted.
@@ -107,3 +127,10 @@ Given approved removal, when build-server shutdown exits nonzero, removal fails 
 ### Deletion failure
 
 Given approved removal and successful shutdown, when directory deletion fails or the directory remains, removal fails and success is not reported.
+
+## Traceability
+
+- GitHub issue: #11
+- TDD RED evidence: Validate run #56 on test-only head `332844d`
+- implementation GREEN evidence: Validate run #61 on head `e61749b`
+- automated suite: `tests/powershell/run-removal-tests.ps1`
