@@ -205,3 +205,21 @@ EOF
   [ "$(cat "$sibling_dir/sentinel.txt")" = 'sibling sentinel' ]
   [ "$(cat "$rm_log")" = "-rf $install_dir" ]
 }
+
+@test "release-index network failure is reported with deterministic metadata context" {
+  bootstrap_tool
+
+  fake_bin="$test_root/release-index-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 7
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" install
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
+  [[ "$output" != *"successfully"* ]]
+}
