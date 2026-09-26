@@ -56,6 +56,17 @@ Describe 'PowerShell bootstrap filesystem behavior' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    It 'fails an SDK-root path conflict without reporting bootstrap success' {
+        Set-Content -LiteralPath $script:ToolRoot -Value 'root sentinel'
+
+        $output = @(& pwsh -NoProfile -File $script:SourceCopy -Action List 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($output -join [Environment]::NewLine) | Should -Not -Match 'Tool installed\.'
+        Test-Path -LiteralPath $script:ToolRoot -PathType Leaf | Should -BeTrue
+        (Get-Content -LiteralPath $script:ToolRoot -Raw).Trim() | Should -Be 'root sentinel'
+    }
+
     It 'fails a tool-path directory conflict without mutating the conflicting destination' {
         New-Item -ItemType Directory -Path $script:ToolPath -Force | Out-Null
 
