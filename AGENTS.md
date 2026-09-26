@@ -17,4 +17,4 @@ Repository documentation and the current issue define the working contract. Reso
 - Do not merge without explicit user approval.
 - After fully closing out an issue, stop and let the user decide when to begin the next one.
 
-All detailed requirements for requirements review, issue comments, Tasks, SDD/TDD, commits, validation, review, merge, and post-merge verification are defined in `docs/issue-workflow.md` and should not be duplicated here.
+Follow all detailed process requirements in `docs/issue-workflow.md`; they are intentionally not duplicated here.
