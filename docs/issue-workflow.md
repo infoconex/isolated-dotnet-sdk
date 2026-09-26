@@ -74,22 +74,32 @@ Do not merge without explicit user approval.
 
 Before making implementation changes, including production, test, CI, configuration, or documentation changes, add an issue comment stating what will be implemented next.
 
-The comment should identify the planned Tasks or capability-level scope and the validation approach. Avoid generic status comments such as "starting work" without meaningful scope.
+The comment should identify the planned Tasks or capability-level scope and the validation approach. For behavioral work, include the initial test-list behaviors or scenarios that will drive the first TDD cycles. Avoid generic status comments such as "starting work" without meaningful scope.
 
 ## 5. Specification-driven and test-driven implementation
 
 ### Behavioral changes
 
-For behavior changes, use this sequence:
+Use the repository specification to drive a disciplined TDD cycle. A Task may contain multiple behaviors; the Task is not itself the TDD unit. Take one smallest meaningful behavior at a time through **RED → GREEN → REFACTOR**.
 
-1. write or identify the repository specification;
-2. add or update automated tests before production behavior changes;
-3. establish a meaningful failing result (**RED**) that reaches the intended behavior under test;
-4. implement the smallest correct production change;
-5. reach **GREEN**;
-6. refactor only while preserving the tests and contract.
+Use this sequence:
 
-A failing parser, analyzer, dependency install, or broken test harness is not meaningful RED evidence for the product behavior. Fix the harness first and establish a failure that demonstrates the missing behavior.
+1. **Identify the specification and observable outcome.** Confirm the requirement/scenario and the behavior that must be externally observable.
+2. **Create or update the test list.** Derive a working list of behaviors and cases that need automated evidence. Include relevant happy-path, boundary, invalid-input, unavailable-dependency, failure, recovery, and cross-platform cases. Keep the list intentionally lightweight and allow it to evolve as implementation reveals new information.
+3. **Select the next smallest behavior.** Choose one test-list item that can be implemented and validated independently. Do not implement the entire Task and backfill tests afterward.
+4. **RED — write the smallest test that expresses that behavior.** Run it and confirm it fails for the expected reason because the behavior is missing or incorrect.
+5. **GREEN — implement the smallest correct production change.** Make only the change needed to satisfy the selected behavior; avoid speculative implementation for later test-list items.
+6. **Run the relevant broader tests.** Confirm the new behavior did not regress existing contracts or adjacent behavior.
+7. **REFACTOR — improve the design while remaining green.** Refactor production and/or test code to remove duplication, improve names/structure, and simplify the design without changing behavior. Re-run the relevant tests after refactoring.
+8. **Update the test list.** Mark the completed behavior, add newly discovered cases when they materially affect the contract, and select the next smallest behavior.
+9. **Repeat RED → GREEN → REFACTOR** until the Task's specified behavior and relevant test-list items are complete.
+10. **Run final repository validation and review against the specification.** Confirm the completed Task satisfies the issue contract, not merely that the tests happen to pass.
+
+A failing parser, analyzer, dependency install, broken test harness, or unrelated existing failure is not meaningful RED evidence for the product behavior. Fix the harness/environment first and establish a failure that demonstrates the missing behavior.
+
+Do not treat the test list as a fixed up-front implementation specification. It is a working design aid that should evolve as TDD exposes additional behavior, boundaries, and design pressure.
+
+Refactoring is part of TDD, not optional cleanup. Tests are repository assets too; refactor test code when doing so improves clarity or maintainability without hiding the behavioral contract behind unnecessary abstraction.
 
 BDD-style Given/When/Then scenarios are useful for externally observable behavior where they improve clarity. Do not force BDD syntax onto low-level tests.
 
@@ -139,6 +149,7 @@ A useful completion comment includes items such as:
 
 - Task/capability completed;
 - important contract decisions;
+- test-list/TDD evidence for behavioral work;
 - tests/static analysis run;
 - relevant commit or CI evidence;
 - newly discovered follow-up issues.
@@ -198,7 +209,7 @@ Do not recommend merge until there are no known blocking findings.
 Before the PR is considered complete, ensure the issue/PR contains concise durable evidence, including as applicable:
 
 - requirements/specification links;
-- TDD RED evidence for behavioral changes;
+- test-list coverage and meaningful RED → GREEN → REFACTOR evidence for behavioral changes;
 - implementation summary;
 - GREEN/final CI evidence on the exact reviewed head;
 - manual validation evidence, if any;
@@ -292,8 +303,8 @@ Exceptional comments may use the same grammar with a precise qualifier, as Issue
 Use comments sparingly and intentionally. The expected content sequence is:
 
 1. **Requirements review / kickoff** — understanding, assumptions, ambiguities, and confirmed scope.
-2. **Implementation plan** — planned Tasks, likely commit boundaries, scope, and validation approach.
-3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, validation, and follow-up findings where useful.
+2. **Implementation plan** — planned Tasks, likely commit boundaries, scope, validation approach, and initial test-list behaviors for behavioral work.
+3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, test-list/TDD evidence where applicable, validation, and follow-up findings.
 4. **Supplemental/remediation evidence** — only when new findings materially change or extend a Task's completion record.
 5. **Manual evidence** — only when manual validation is genuinely required.
 6. **Full/final review evidence** — exact reviewed head, CI evidence, scope/review result, and intentional follow-ups.
@@ -307,7 +318,7 @@ A useful PR description normally includes:
 
 - summary and linked issue;
 - behavioral/technical contract being implemented;
-- TDD RED evidence when applicable;
+- test-list and RED → GREEN → REFACTOR evidence when applicable;
 - implementation summary;
 - validation evidence;
 - manual validation evidence when applicable;
