@@ -46,7 +46,6 @@ bootstrap_if_needed() {
     local current_path=""
     local expected_path
     local staged_path=""
-    local status=0
 
     expected_path="$(cd "$SDK_ROOT" && pwd)/$TOOL_NAME"
 
@@ -66,30 +65,38 @@ bootstrap_if_needed() {
     staged_path="$(mktemp "$SDK_ROOT/.${TOOL_NAME}.XXXXXX.tmp")"
 
     if [[ -n "$current_path" && -f "$current_path" ]]; then
-        if ! cp "$current_path" "$staged_path"; then
-            status=$?
-            rm -f "$staged_path"
+        if cp "$current_path" "$staged_path"; then
+            :
+        else
+            local status=$?
+            rm -f "$staged_path" || true
             return "$status"
         fi
     else
-        if ! curl -fsSL \
+        if curl -fsSL \
             "$REPOSITORY_RAW_BASE/$TOOL_NAME" \
             -o "$staged_path"; then
-            status=$?
-            rm -f "$staged_path"
+            :
+        else
+            local status=$?
+            rm -f "$staged_path" || true
             return "$status"
         fi
     fi
 
-    if ! chmod +x "$staged_path"; then
-        status=$?
-        rm -f "$staged_path"
+    if chmod +x "$staged_path"; then
+        :
+    else
+        local status=$?
+        rm -f "$staged_path" || true
         return "$status"
     fi
 
-    if ! mv "$staged_path" "$TOOL_PATH"; then
-        status=$?
-        rm -f "$staged_path"
+    if mv "$staged_path" "$TOOL_PATH"; then
+        :
+    else
+        local status=$?
+        rm -f "$staged_path" || true
         return "$status"
     fi
 
