@@ -13,7 +13,8 @@ The goal is repeatable, evidence-driven delivery with clear traceability. Do not
 - Prefer automation and deterministic evidence over manual checks.
 - Green CI is necessary evidence, not proof by itself that a change is correct.
 - Do not include unrelated cleanup. Capture material unrelated work as a follow-up issue.
-- Use **workstream** for a capability-level unit of progress inside an issue. Do not call these milestones.
+- Use **Task** for a meaningful implementation deliverable inside an issue. Tasks are the units we plan, implement, validate, commit, and report independently where practical.
+- Reserve GitHub **Milestones** for release/planning groupings such as `v0.2.0 - Quality & Hardening`.
 - Use the term **defect** rather than bug in repository discussions.
 
 ## 1. Select and verify the issue
@@ -73,7 +74,7 @@ Do not merge without explicit user approval.
 
 Before making implementation changes, including production, test, CI, configuration, or documentation changes, add an issue comment stating what will be implemented next.
 
-The comment should identify the planned workstreams or capability-level scope and the validation approach. Avoid generic status comments such as "starting work" without meaningful scope.
+The comment should identify the planned Tasks or capability-level scope and the validation approach. Avoid generic status comments such as "starting work" without meaningful scope.
 
 ## 5. Specification-driven and test-driven implementation
 
@@ -122,25 +123,27 @@ Do not bundle incidental cleanup into a commit because a nearby file was already
 
 If unrelated work is worth doing, create a follow-up issue and leave the current branch focused.
 
-## 7. Workstream completion
+## 7. Task completion
 
-When an issue contains multiple capability-level workstreams:
+When an issue contains multiple meaningful implementation Tasks:
 
-1. complete one workstream;
+1. complete one Task;
 2. run the relevant validation;
 3. commit the scoped change;
 4. add a focused issue comment describing what was completed and the evidence;
-5. then move to the next workstream.
+5. then move to the next Task.
 
-Workstream comments should be useful traceability, not a running activity log.
+Task comments should be useful traceability, not a running activity log.
 
 A useful completion comment includes items such as:
 
-- capability completed;
+- Task/capability completed;
 - important contract decisions;
 - tests/static analysis run;
 - relevant commit or CI evidence;
 - newly discovered follow-up issues.
+
+This is the pattern established in recent completed issues: Tasks represent meaningful implementation deliverables within an issue, while GitHub Milestones remain release/planning groupings.
 
 ## 8. Validation expectations
 
@@ -252,8 +255,8 @@ Do not automatically begin the next roadmap item. Report the completed state and
 Use comments sparingly and intentionally. The expected pattern is:
 
 1. **Requirements review / kickoff** — understanding, assumptions, ambiguities.
-2. **Pre-implementation scope** — workstreams and validation approach.
-3. **Workstream completion** — one comment for each meaningful capability completed, when the issue has multiple workstreams.
+2. **Pre-implementation scope** — planned Tasks and validation approach.
+3. **Task completion** — one comment for each meaningful Task completed, when the issue has multiple Tasks.
 4. **Manual evidence** — only when manual validation is genuinely required.
 5. **Final review/evidence** — exact reviewed head, CI evidence, review result, and follow-ups.
 
