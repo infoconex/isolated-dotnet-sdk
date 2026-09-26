@@ -191,7 +191,7 @@ parse_release_index() {
             url=$0
             sub(/^[^:]*:[[:space:]]*"/, "", url)
             sub(/".*$/, "", url)
-            if (channel != "" && latest != "" && phase != "" && type != "" && url != "") {
+            if (channel != "" && phase != "" && url != "") {
                 print channel "|" latest "|" phase "|" type "|" url
             }
             channel=latest=phase=type=url=""
