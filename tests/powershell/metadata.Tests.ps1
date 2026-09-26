@@ -40,9 +40,9 @@ Describe 'PowerShell release-metadata behavior' {
 
     It 'reports a selected-channel network failure with channel context' {
         $metadataOutput = @(& pwsh -NoProfile -Command '
-            $script:responses = [System.Collections.Generic.Queue[string]]::new()
-            $script:responses.Enqueue("1")
-            function Read-Host { param([string]$Prompt) $script:responses.Dequeue() }
+            $global:metadataResponses = [System.Collections.Generic.Queue[string]]::new()
+            $global:metadataResponses.Enqueue("1")
+            function Read-Host { param([string]$Prompt) $global:metadataResponses.Dequeue() }
             function Invoke-RestMethod {
                 param([string]$Uri)
                 if ($Uri -like "*releases-index.json") {
@@ -71,10 +71,10 @@ Describe 'PowerShell release-metadata behavior' {
 
     It 'normalizes sdk and sdks entries and removes duplicates in first-seen order' {
         $metadataOutput = @(& pwsh -NoProfile -Command '
-            $script:responses = [System.Collections.Generic.Queue[string]]::new()
-            $script:responses.Enqueue("1")
-            $script:responses.Enqueue("q")
-            function Read-Host { param([string]$Prompt) $script:responses.Dequeue() }
+            $global:metadataResponses = [System.Collections.Generic.Queue[string]]::new()
+            $global:metadataResponses.Enqueue("1")
+            $global:metadataResponses.Enqueue("q")
+            function Read-Host { param([string]$Prompt) $global:metadataResponses.Dequeue() }
             function Invoke-RestMethod {
                 param([string]$Uri)
                 if ($Uri -like "*releases-index.json") {
