@@ -242,3 +242,27 @@ EOF
   [[ "$output" == *"Invalid .NET release metadata from Microsoft."* ]]
   [[ "$output" != *"Select a supported or development .NET channel:"* ]]
 }
+
+@test "system SDK inventory failure stops installation with context" {
+  bootstrap_tool
+
+  fake_bin="$test_root/system-dotnet-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 71
+EOF
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'continued-to-download' >&2
+exit 88
+EOF
+  chmod +x "$fake_bin/dotnet" "$fake_bin/curl"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" install 99.0.100 --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to list SDKs through the system dotnet host with exit code 71."* ]]
+  [[ "$output" != *"continued-to-download"* ]]
+  [[ "$output" != *"installation completed successfully"* ]]
+}
