@@ -10,6 +10,7 @@ The goal is repeatable, evidence-driven delivery with clear traceability. Issue,
 - Treat the GitHub issue as the traceability and evidence hub.
 - Keep requirements, implementation, tests, documentation, and evidence aligned.
 - Prefer automation and deterministic evidence over manual checks.
+- Establish mechanically verifiable facts with automation/tooling rather than asking the user to re-verify them manually.
 - Green CI is necessary evidence, not proof by itself that a change is correct.
 - Do not include unrelated cleanup. Capture material unrelated work as a follow-up issue.
 
@@ -140,7 +141,7 @@ Use repository-owned validation whenever possible. Evidence may include:
 - deterministic version/checksum verification;
 - targeted manual validation only when automation cannot establish the behavior reliably.
 
-Do not ask the user to perform mechanical validation that can reasonably be automated. When manual validation is required, record exactly what was verified and the observed result.
+Do not ask the user to perform mechanical validation that can reasonably be automated. Establish and report that evidence directly with available tooling. Manual validation is appropriate only when automation cannot reliably establish the behavior or when the remaining question is inherently subjective, such as product intent, UX judgment, architecture/tradeoffs, policy, or risk acceptance. When manual validation is required, record exactly what was verified and the observed result.
 
 ## 9. Perform the full review
 
@@ -185,6 +186,13 @@ Before the PR is considered complete, record concise durable evidence, including
 - intentionally deferred follow-up issues.
 
 Use `## Final review — completion evidence` for the final exact-head summary. Avoid duplicating long specifications when the issue or repository document is already authoritative.
+
+The completion handoff to the user must clearly separate:
+
+- **Programmatically verified evidence** — facts already established by repository inspection, tests, static analysis, CI, API/tool queries, or exact diff/head review. Report these as completed evidence; do not present them as work the user needs to repeat.
+- **User judgment or approval still required** — decisions that genuinely require the user's authority or subjective judgment, including the explicit Ready for Review and merge gates, policy/product choices, architecture/tradeoffs, UX judgment, risk acceptance, or validation that cannot reasonably be automated.
+
+If no user judgment remains other than an explicit lifecycle approval gate, say so directly.
 
 ## 11. Ready for review
 
