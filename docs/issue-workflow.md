@@ -8,6 +8,7 @@ The goal is repeatable, evidence-driven delivery with clear traceability. Do not
 
 - Work one implementation issue at a time unless an issue explicitly permits independent parallel work.
 - Treat the GitHub issue as the traceability and evidence hub.
+- GitHub issues in this repository use **open/closed** state only. Do not invent or simulate an "in progress" issue state; active work is represented by the branch, Draft PR, and focused issue comments.
 - Keep requirements, implementation, tests, documentation, and evidence aligned.
 - Prefer automation and deterministic evidence over manual checks.
 - Green CI is necessary evidence, not proof by itself that a change is correct.
@@ -29,7 +30,7 @@ Do not implement stale assumptions from an earlier chat or summary when the repo
 
 ## 2. Review requirements before implementation
 
-Before creating production changes, review the issue as a specification.
+Before creating repository changes, review the issue as a specification.
 
 Confirm that it defines, as appropriate:
 
@@ -70,7 +71,7 @@ Do not merge without explicit user approval.
 
 ## 4. Comment before implementation
 
-Before changing production behavior, add an issue comment stating what will be implemented next.
+Before making implementation changes, including production, test, CI, configuration, or documentation changes, add an issue comment stating what will be implemented next.
 
 The comment should identify the planned workstreams or capability-level scope and the validation approach. Avoid generic status comments such as "starting work" without meaningful scope.
 
