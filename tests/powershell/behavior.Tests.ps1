@@ -34,6 +34,7 @@ Describe 'PowerShell process-level behavior' {
         Remove-Item Env:ISOLATED_DOTNET_SDK_SOURCE_COPY -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_LIST_SUCCESS -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_LIST_INFORMATION -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_BIN -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -58,6 +59,22 @@ Describe 'PowerShell process-level behavior' {
         & pwsh -NoProfile -File $script:SourceCopy -Action Install -Version 'invalid/version' -Yes *> $null
 
         $LASTEXITCODE | Should -Not -Be 0
+    }
+
+    It 'fails with context when system SDK inventory exits nonzero' {
+        Install-TestTool
+        $fakeBin = Join-Path $script:TestRoot 'system-dotnet-fake-bin'
+        New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') -Value "@echo off`r`nexit /b 71`r`n"
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+        $env:ISOLATED_DOTNET_SDK_FAKE_BIN = $fakeBin
+
+        $failureOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_FAKE_BIN;$env:PATH"; function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to list SDKs through the system dotnet host with exit code 71\.'
+        ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'continued-to-download'
+        ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
     }
 
     It 'lists the isolated SDK root' {
