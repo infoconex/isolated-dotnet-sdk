@@ -280,3 +280,37 @@ dotnet-sdks/
 ```
 
 Only the files appropriate to the current platform will normally be present.
+
+## Why This Exists
+
+Installing a preview or release-candidate SDK system-wide is not always necessary when evaluating a .NET upgrade.
+
+This tool provides a repeatable way to install an exact SDK version in a separate directory, invoke it explicitly, and remove it later without changing the SDKs exposed by the normal system `dotnet` installation.
+
+It is isolation of the SDK installation, not a full sandbox. The .NET CLI can still create normal per-user state during first-time use, such as development certificates or telemetry configuration.
+
+## Microsoft Release Metadata
+
+The interactive install picker reads Microsoft's published .NET release metadata from:
+
+```text
+https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json
+```
+
+The release index identifies each .NET channel and links to the detailed release metadata used to enumerate exact SDK versions. Explicit-version installs do not require the picker and bypass this metadata lookup.
+
+## Microsoft References
+
+- [.NET install scripts](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script)
+- [Test prerelease .NET SDKs locally](https://learn.microsoft.com/en-us/dotnet/core/tools/test-prerelease-sdk-locally)
+- [`dotnet build-server`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-build-server)
+- [`global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
+- [.NET release metadata](https://github.com/dotnet/core/tree/main/release-notes)
+
+## Security Note
+
+The quick-start commands download and execute the current script from this repository's `main` branch. Review the script first if you prefer not to execute remote code directly.
+
+## License
+
+MIT
