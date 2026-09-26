@@ -332,15 +332,23 @@ select_install_version() {
         fi
 
         metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
+        trap 'rm -f "$metadata_file" || true' EXIT
+        trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$$"' TERM
+        trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$$"' INT
+        trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$$"' HUP
+
         if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
-            rm -f "$metadata_file"
+            trap - EXIT TERM INT HUP
+            rm -f "$metadata_file" || true
             tool_fail "Unable to load release metadata for .NET $channel."
         fi
 
         # The channel-specific metadata supplies the exact SDK versions presented
         # to the user; latest-sdk from the index is only used as a display marker.
         versions="$(extract_sdk_versions < "$metadata_file")"
-        rm -f "$metadata_file"
+        trap - EXIT TERM INT HUP
+        rm -f "$metadata_file" || true
+        metadata_file=""
 
         [[ -n "$versions" ]] || tool_fail "No SDK versions were found for .NET $channel."
 
