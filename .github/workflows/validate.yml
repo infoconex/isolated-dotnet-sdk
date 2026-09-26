@@ -30,6 +30,14 @@ jobs:
         shell: bash
         run: bash -n isolated-dotnet-sdk.sh
 
+      - name: Install pinned Bats-core
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(jq -er '.batsVersion | select(type == "string" and length > 0)' .config/test-frameworks.json)"
+          npm install --global "bats@${version}"
+          test "$(bats --version | awk '{print $2}')" = "$version"
+
       - name: Install pinned ShellCheck
         if: matrix.os == 'ubuntu-latest'
         shell: bash
@@ -86,20 +94,34 @@ jobs:
               exit 1
           }
 
-      - name: Install pinned PSScriptAnalyzer
+      - name: Install pinned PowerShell test and analysis modules
         shell: pwsh
         run: |
-          $config = Get-Content -LiteralPath './.config/static-analysis.json' -Raw |
+          $testConfig = Get-Content -LiteralPath './.config/test-frameworks.json' -Raw |
               ConvertFrom-Json
-          $version = [string]$config.psScriptAnalyzerVersion
-          if ([string]::IsNullOrWhiteSpace($version)) {
+          $analysisConfig = Get-Content -LiteralPath './.config/static-analysis.json' -Raw |
+              ConvertFrom-Json
+          $pesterVersion = [string]$testConfig.pesterVersion
+          $analyzerVersion = [string]$analysisConfig.psScriptAnalyzerVersion
+
+          if ([string]::IsNullOrWhiteSpace($pesterVersion)) {
+              throw 'pesterVersion is required in .config/test-frameworks.json.'
+          }
+          if ([string]::IsNullOrWhiteSpace($analyzerVersion)) {
               throw 'psScriptAnalyzerVersion is required in .config/static-analysis.json.'
           }
 
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module `
+              -Name Pester `
+              -RequiredVersion $pesterVersion `
+              -Scope CurrentUser `
+              -Repository PSGallery `
+              -Force `
+              -SkipPublisherCheck
+          Install-Module `
               -Name PSScriptAnalyzer `
-              -RequiredVersion $version `
+              -RequiredVersion $analyzerVersion `
               -Scope CurrentUser `
               -Repository PSGallery `
               -Force
@@ -116,14 +138,6 @@ jobs:
         shell: pwsh
         run: |
           & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
-          }
-
-      - name: Run PowerShell removal behavioral tests
-        shell: pwsh
-        run: |
-          & pwsh -NoProfile -File ./tests/powershell/run-removal-tests.ps1
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
