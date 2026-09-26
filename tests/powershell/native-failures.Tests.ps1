@@ -36,7 +36,7 @@ Describe 'PowerShell native install command failures' {
         $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to inspect existing isolated SDK 99\.0\.100 with exit code [1-9][0-9]*\.'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to inspect existing isolated SDK 99\.0\.100 with exit code -?[1-9][0-9]*\.'
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'continued-to-download'
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
     }
@@ -74,7 +74,7 @@ exit 0
         $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code [1-9][0-9]*\.'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code -?[1-9][0-9]*\.'
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'SDK 99\.0\.100 was not found after installation\.'
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
     }
