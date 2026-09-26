@@ -52,6 +52,14 @@ Describe 'PowerShell process-level behavior' {
             Should -BeTrue
     }
 
+    It 'propagates a failing saved child tool through file-based bootstrap' {
+        Copy-Item $script:ToolScript $script:SourceCopy -Force
+
+        & pwsh -NoProfile -File $script:SourceCopy -Action Install -Version 'invalid/version' -Yes *> $null
+
+        $LASTEXITCODE | Should -Not -Be 0
+    }
+
     It 'lists the isolated SDK root' {
         Install-TestTool
 
