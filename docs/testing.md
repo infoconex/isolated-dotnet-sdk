@@ -25,7 +25,7 @@ PowerShell 7 (`pwsh`) is required. From the repository root, run:
 pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
 ```
 
-The PowerShell suite covers:
+The general PowerShell suite covers:
 
 - isolated temporary home/profile handling;
 - file-based bootstrap source preservation;
@@ -34,6 +34,27 @@ The PowerShell suite covers:
 - ANSI informational and success presentation colors;
 - ANSI-free redirected output and `NO_COLOR` behavior;
 - rejection of an invalid SDK version.
+
+Removal behavior has a dedicated suite:
+
+```powershell
+pwsh -NoProfile -File ./tests/powershell/run-removal-tests.ps1
+```
+
+The removal suite covers:
+
+- source bootstrap forwarding for `-WhatIf`;
+- rejection of removal-only risk-mitigation parameters on unsupported actions;
+- fail-safe non-interactive removal without explicit approval;
+- native `WhatIf` / `Confirm` parameter exposure;
+- ordinary default-no cancellation and approval behavior;
+- `-Confirm:$false` automation;
+- `-Yes` automation and `-WhatIf` precedence;
+- shutdown-before-delete ordering;
+- shutdown failure blocking deletion;
+- deletion failure blocking success reporting.
+
+The authoritative behavior specification is [`powershell-removal.md`](powershell-removal.md).
 
 ## Static analysis
 
@@ -75,7 +96,7 @@ The runner rejects missing or mismatched ShellCheck versions and ignores caller/
 
 ## Isolation
 
-Both behavioral suites create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
+Both PowerShell suites and the Bash suite create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
 
 The current behavioral checks do not install an SDK or require release-metadata downloads.
 
@@ -85,7 +106,7 @@ The current behavioral checks do not install an SDK or require release-metadata 
 
 - Bash syntax validation and the Bash behavioral suite on Ubuntu and macOS;
 - ShellCheck once on Ubuntu;
-- PowerShell parser validation and the PowerShell behavioral suite on Windows;
+- PowerShell parser validation, the general PowerShell behavioral suite, and the dedicated removal behavioral suite on Windows;
 - PSScriptAnalyzer once on Windows.
 
 CI reads analyzer versions and the ShellCheck release checksum from `.config/static-analysis.json` before installation.
