@@ -1,8 +1,8 @@
 # Issue execution workflow
 
-This document is the authoritative repository process for taking an implementation issue from selection through post-merge verification.
+This document is the authoritative lifecycle for taking an implementation issue from selection through post-merge verification.
 
-The goal is repeatable, evidence-driven delivery with clear traceability.
+The goal is repeatable, evidence-driven delivery with clear traceability. Issue, comment, Task, and pull request formatting conventions are defined in [`issue-conventions.md`](issue-conventions.md).
 
 ## Core rules
 
@@ -12,25 +12,22 @@ The goal is repeatable, evidence-driven delivery with clear traceability.
 - Prefer automation and deterministic evidence over manual checks.
 - Green CI is necessary evidence, not proof by itself that a change is correct.
 - Do not include unrelated cleanup. Capture material unrelated work as a follow-up issue.
-- Use **Task** for a meaningful implementation deliverable inside an issue. Tasks are the units we plan, implement, validate, commit, and report independently where practical.
-- Reserve GitHub **Milestones** for release/planning groupings such as `v0.2.0 - Quality & Hardening`.
-- Use the term **defect** rather than bug in repository discussions.
 
 ## 1. Select and verify the issue
 
 Before making changes:
 
-1. Read `AGENTS.md` and this document.
-2. Review the current roadmap/tracker and verify the selected issue's dependencies are complete or intentionally revised.
+1. Read `AGENTS.md`, this document, and [`issue-conventions.md`](issue-conventions.md).
+2. Review the current roadmap/tracker when one applies and verify the selected issue's dependencies are complete or intentionally revised.
 3. Inspect current `main` and confirm the latest repository validation state.
-4. Fetch and read the exact current issue body, comments, acceptance criteria, dependencies, and non-goals.
-5. Inspect the relevant source, tests, specifications, and documentation on current `main`.
+4. Read the exact current issue body, comments, acceptance criteria, dependencies, and non-goals.
+5. Inspect relevant source, tests, specifications, and documentation on current `main`.
 
-Repository documentation and the current issue define the working contract. Resolve any contradiction between current repository artifacts before implementation.
+Repository documentation and the current issue define the working contract. Resolve contradictions between current repository artifacts before implementation.
 
-## 2. Review requirements before implementation
+## 2. Review requirements
 
-Before creating repository changes, review the issue as a specification.
+Review the issue as a specification before implementation.
 
 Confirm that it defines, as appropriate:
 
@@ -44,17 +41,15 @@ Confirm that it defines, as appropriate:
 - acceptance criteria;
 - expected automated evidence.
 
-Add a focused kickoff comment to the issue summarizing the requirements review and your understanding of the intended work.
+Add a `## Kickoff — requirements review` comment summarizing the review and intended scope.
 
 If a material requirement is unclear, contradictory, or missing and the choice could change the public contract, safety, scope, or architecture:
 
 1. comment on the issue with the specific ambiguity;
 2. stop implementation;
-3. wait for user feedback before proceeding.
+3. wait for user feedback.
 
-Do not stop for trivial implementation choices that can be resolved safely from established repository conventions.
-
-If requirements need refinement, update the issue before implementation so the issue remains authoritative.
+Do not stop for routine implementation choices that can be resolved from established repository conventions. Update the issue before implementation when requirements need refinement so it remains authoritative.
 
 ## 3. Create the working branch and Draft PR
 
@@ -69,115 +64,87 @@ The user decides when the Draft PR becomes ready for review. Do not mark it read
 
 Do not merge without explicit user approval.
 
-## 4. Comment before implementation
+## 4. Record the implementation plan
 
-Before making implementation changes, including production, test, CI, configuration, or documentation changes, add an issue comment stating what will be implemented next.
+Before making implementation changes, add `## Implementation plan — planned tasks` to the issue.
 
-The comment should identify the planned Tasks or capability-level scope and the validation approach. For behavioral work, include the initial test-list behaviors or scenarios that will drive the first TDD cycles. Avoid generic status comments such as "starting work" without meaningful scope.
+Identify the planned Tasks, likely commit boundaries, scope, and validation approach. For behavioral work, include the initial test-list behaviors or scenarios that will drive the first TDD cycles.
 
-## 5. Specification-driven and test-driven implementation
+Avoid generic status comments without meaningful scope.
+
+## 5. Implement with specification-driven TDD
 
 ### Behavioral changes
 
-Use the repository specification to drive a disciplined TDD cycle. A Task may contain multiple behaviors; the Task is not itself the TDD unit. Take one smallest meaningful behavior at a time through **RED → GREEN → REFACTOR**.
+A Task may contain multiple behaviors; the Task is not itself the TDD unit. Take one smallest meaningful behavior at a time through **RED → GREEN → REFACTOR**.
 
-Use this sequence:
+For each behavior:
 
-1. **Identify the specification and observable outcome.** Confirm the requirement/scenario and the behavior that must be externally observable.
-2. **Create or update the test list.** Derive a working list of behaviors and cases that need automated evidence. Include relevant happy-path, boundary, invalid-input, unavailable-dependency, failure, recovery, and cross-platform cases. Keep the list intentionally lightweight and allow it to evolve as implementation reveals new information.
-3. **Select the next smallest behavior.** Choose one test-list item that can be implemented and validated independently. Do not implement the entire Task and backfill tests afterward.
-4. **RED — write the smallest test that expresses that behavior.** Run it and confirm it fails for the expected reason because the behavior is missing or incorrect.
-5. **GREEN — implement the smallest correct production change.** Make only the change needed to satisfy the selected behavior; avoid speculative implementation for later test-list items.
-6. **Run the relevant broader tests.** Confirm the new behavior did not regress existing contracts or adjacent behavior.
-7. **REFACTOR — improve the design while remaining green.** Refactor production and/or test code to remove duplication, improve names/structure, and simplify the design without changing behavior. Re-run the relevant tests after refactoring.
-8. **Update the test list.** Mark the completed behavior, add newly discovered cases when they materially affect the contract, and select the next smallest behavior.
-9. **Repeat RED → GREEN → REFACTOR** until the Task's specified behavior and relevant test-list items are complete.
-10. **Run final repository validation and review against the specification.** Confirm the completed Task satisfies the issue contract, not merely that the tests happen to pass.
+1. **Identify the specification and observable outcome.**
+2. **Create or update the test list.** Include relevant happy-path, boundary, invalid-input, unavailable-dependency, failure, recovery, and cross-platform cases. Keep the list lightweight and allow it to evolve.
+3. **Select the next smallest behavior.** Do not implement an entire Task and backfill tests afterward.
+4. **RED — write the smallest test that expresses the behavior.** Run it and confirm it fails for the expected behavioral reason.
+5. **GREEN — implement the smallest correct production change** needed to satisfy that behavior.
+6. **Run relevant broader tests** to detect regressions in existing contracts or adjacent behavior.
+7. **REFACTOR while green.** Improve production and/or test code without changing behavior, then rerun relevant tests.
+8. **Update the test list** and select the next behavior.
+9. Repeat until the Task's specified behavior and relevant test-list items are complete.
 
-A failing parser, analyzer, dependency install, broken test harness, or unrelated existing failure is not meaningful RED evidence for the product behavior. Fix the harness/environment first and establish a failure that demonstrates the missing behavior.
+Then run final repository validation and review the completed Task against the specification, not merely against passing tests.
 
-Do not treat the test list as a fixed up-front implementation specification. It is a working design aid that should evolve as TDD exposes additional behavior, boundaries, and design pressure.
+A parser, analyzer, dependency-install, broken-harness, or unrelated existing failure is not meaningful RED evidence. Fix the environment/harness first and establish a failure caused by the missing or incorrect behavior.
 
-Refactoring is part of TDD, not optional cleanup. Tests are repository assets too; refactor test code when doing so improves clarity or maintainability without hiding the behavioral contract behind unnecessary abstraction.
+The test list is a working design aid, not a fixed up-front test specification. Refactoring is part of TDD, including refactoring test code when it improves clarity without hiding the behavioral contract behind unnecessary abstraction.
 
 BDD-style Given/When/Then scenarios are useful for externally observable behavior where they improve clarity. Do not force BDD syntax onto low-level tests.
 
 ### Mechanical or documentation-only changes
 
-Do not manufacture a failing test for work where RED provides no meaningful behavioral evidence, such as:
+Do not manufacture RED evidence when it provides no meaningful behavioral evidence, such as for:
 
 - documentation-only changes;
 - dependency pin changes that preserve behavior;
 - purely mechanical formatting;
 - narrowly scoped non-behavioral refactors.
 
-For these changes, state the TDD exception explicitly in the issue/PR and rely on appropriate static checks, existing tests, diff review, and CI evidence.
+State the TDD exception explicitly in the issue/PR and rely on appropriate static checks, existing tests, diff review, and CI evidence.
 
 ## 6. Commit discipline
 
-Use small, scoped commits containing only related changes.
+Use small, scoped Conventional Commits containing only related changes. Follow <https://www.conventionalcommits.org/en/v1.0.0/>.
 
-Use Conventional Commits as defined by https://www.conventionalcommits.org/en/v1.0.0/.
+Do not bundle incidental cleanup into the active issue. Create a follow-up issue for unrelated work.
 
-Examples:
+## 7. Complete each Task
 
-- `feat(powershell): ...`
-- `fix(bash): ...`
-- `test(powershell): ...`
-- `docs: ...`
-- `ci: ...`
-- `chore: ...`
+Follow the Task definition and comment conventions in [`issue-conventions.md`](issue-conventions.md).
 
-Do not bundle incidental cleanup into a commit because a nearby file was already being edited.
+For each Task:
 
-If unrelated work is worth doing, create a follow-up issue and leave the current branch focused.
-
-## 7. Task completion
-
-When an issue contains multiple meaningful implementation Tasks:
-
-1. complete one Task;
-2. run the relevant validation;
+1. complete the scoped implementation;
+2. run relevant validation;
 3. commit the scoped change;
-4. add a focused issue comment describing what was completed and the evidence;
+4. add `## Task N complete — <concise task/capability>` with durable evidence;
 5. then move to the next Task.
 
-Task comments should be useful traceability, not a running activity log.
+Task evidence should include material contract decisions, TDD evidence for behavioral work, validation performed, relevant commit/CI evidence, and follow-up findings when applicable. Use supplemental or remediation comments only when new evidence materially changes or extends the Task record.
 
-A useful completion comment includes items such as:
+## 8. Validate
 
-- Task/capability completed;
-- important contract decisions;
-- test-list/TDD evidence for behavioral work;
-- tests/static analysis run;
-- relevant commit or CI evidence;
-- newly discovered follow-up issues.
-
-Tasks represent meaningful implementation deliverables within an issue, while GitHub Milestones remain release/planning groupings.
-
-## 8. Validation expectations
-
-Use repository-owned validation whenever possible.
-
-Evidence may include:
+Use repository-owned validation whenever possible. Evidence may include:
 
 - parser/syntax validation;
 - static analysis;
-- unit/component tests;
-- process-level behavioral tests;
+- automated behavioral tests;
 - cross-platform CI jobs;
 - deterministic version/checksum verification;
-- targeted manual validation only when automation cannot establish the behavior.
+- targeted manual validation only when automation cannot establish the behavior reliably.
 
-Do not ask the user to perform mechanical validation that can reasonably be automated.
+Do not ask the user to perform mechanical validation that can reasonably be automated. When manual validation is required, record exactly what was verified and the observed result.
 
-Manual validation is appropriate when the behavior is genuinely host/UI/interactive dependent and CI cannot reproduce it reliably. Record exactly what was manually verified and the observed result.
+## 9. Perform the full review
 
-## 9. Full review before completion
-
-After implementation and validation are green, perform a full review of the actual diff.
-
-Review for:
+After implementation and validation are green, review the actual diff for:
 
 - correctness against the issue/specification;
 - failure and boundary behavior;
@@ -196,34 +163,34 @@ CI being green does not replace this review.
 
 If the review finds gaps:
 
-1. fix them on the same focused branch when they belong to the issue;
-2. create a follow-up issue when they are unrelated;
+1. fix in-scope findings on the same branch;
+2. create follow-up issues for unrelated findings;
 3. rerun validation;
 4. repeat the full review.
 
-Do not recommend merge until there are no known blocking findings.
+Do not recommend merge while blocking findings remain.
 
-## 10. Final issue and PR evidence
+## 10. Record final evidence
 
-Before the PR is considered complete, ensure the issue/PR contains concise durable evidence, including as applicable:
+Before the PR is considered complete, record concise durable evidence, including as applicable:
 
-- requirements/specification links;
-- test-list coverage and meaningful RED → GREEN → REFACTOR evidence for behavioral changes;
+- requirements/specification references;
+- test-list and RED → GREEN → REFACTOR evidence for behavioral changes;
 - implementation summary;
-- GREEN/final CI evidence on the exact reviewed head;
-- manual validation evidence, if any;
+- final CI evidence on the exact reviewed head;
+- manual validation evidence;
 - final review result;
-- follow-up issues intentionally deferred.
+- intentionally deferred follow-up issues.
 
-Avoid duplicating long specifications in comments when a repository document or issue body is already authoritative; link/reference it instead.
+Use `## Final review — completion evidence` for the final exact-head summary. Avoid duplicating long specifications when the issue or repository document is already authoritative.
 
-## 11. Ready-for-review decision
+## 11. Ready for review
 
 Keep the PR Draft until implementation, validation, and review confidence are sufficient.
 
-Do **not** mark the PR ready for review on the user's behalf unless the user explicitly asks you to do so.
+Do not mark the PR ready unless the user explicitly directs it.
 
-When the user marks it ready, verify again that:
+When the user marks it ready, verify:
 
 - the PR is non-draft;
 - the head SHA is the expected reviewed commit;
@@ -234,94 +201,24 @@ When the user marks it ready, verify again that:
 
 Do not merge until the user explicitly approves the merge.
 
-Prefer **squash merge** unless the issue/repository explicitly requires another strategy.
-
-When merging, protect against head movement by verifying/using the exact expected reviewed head where tooling supports it.
+Prefer **squash merge** unless the repository or issue requires another strategy. Protect against head movement by verifying/using the exact expected reviewed head where tooling supports it.
 
 ## 13. Post-merge verification
 
-After merge, do not assume completion from the merge response alone.
-
-Verify:
+After merge, verify:
 
 1. the PR is merged;
 2. the related issue is closed/completed as expected;
 3. the short-lived branch is deleted;
 4. `main` points to the expected merge result;
 5. post-merge `main` validation completes successfully;
-6. the roadmap/tracker is updated to reflect the completed issue;
-7. any acceptance criterion that depends specifically on merge is now satisfied.
+6. the roadmap/tracker is updated when applicable;
+7. acceptance criteria that depend on merge are satisfied.
 
-If post-merge validation fails, treat that as unfinished work and investigate before moving on.
+Record the result under `## Post-merge verification`.
+
+If post-merge validation fails, treat the issue as unfinished and investigate before moving on.
 
 ## 14. Stop at the issue boundary
 
-After an issue is fully closed out, stop.
-
-Do not automatically begin the next roadmap item. Report the completed state and let the user decide when to start the next issue.
-
-## Issue structure reference pattern
-
-Use this default shape for implementation issues, adapting sections when they genuinely do not apply:
-
-1. **Summary** — concise statement of the change and important scope boundary.
-2. **Problem** — why the current state is insufficient and why the work matters.
-3. **Desired changes** — the intended technical/behavioral contract, grouped by capability where useful.
-4. **Tasks** — numbered meaningful implementation deliverables (`Task 1`, `Task 2`, ...), each with focused sub-items.
-5. **Acceptance criteria** — observable completion requirements, including validation and merge-through-PR criteria where applicable.
-6. **Non-goals** — explicit boundaries that prevent incidental cleanup or adjacent behavior from entering scope.
-7. **Development guidance** — implementation principles or constraints that help preserve the intended contract without over-prescribing the solution.
-
-Add sections such as baseline behavior, behavioral scenarios, sequencing/dependencies, repository specification, or traceability when they materially improve the issue.
-
-Issue #9 is a useful example of this structure.
-
-## Issue comment title pattern
-
-Use Markdown level-2 headings (`##`) as the first line of substantive issue comments so the issue history is easy to scan.
-
-Use these default title patterns:
-
-1. `## Kickoff — requirements review`
-2. `## Implementation plan — planned tasks`
-3. `## Task N complete — <concise task/capability>`
-4. `## Task N supplemental — <finding>` when new evidence belongs to an existing Task without replacing its original completion record.
-5. `## Task N remediation complete — <finding>` when a Task required correction after new evidence.
-6. `## Full pre-PR review` for the comprehensive branch/diff review before readiness evidence is finalized.
-7. `## Draft PR opened` when recording the PR link/head and Draft status is useful traceability.
-8. `## Manual validation — <behavior>` only when manual validation is genuinely required.
-9. `## Final review — completion evidence` for the final exact-head CI/review/follow-up summary before the user decides readiness/merge.
-10. `## Post-merge verification` for the final closure evidence after merge.
-
-Keep the text after the em dash concise and specific. Do not invent a unique heading style for routine comments when one of these patterns applies.
-
-Exceptional comments may use the same grammar with a precise qualifier. The title should tell a future reader **what lifecycle event occurred** and, for Task comments, **which Task it belongs to**.
-
-## Issue comment content pattern
-
-Use comments sparingly and intentionally. The expected content sequence is:
-
-1. **Requirements review / kickoff** — understanding, assumptions, ambiguities, and confirmed scope.
-2. **Implementation plan** — planned Tasks, likely commit boundaries, scope, validation approach, and initial test-list behaviors for behavioral work.
-3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, test-list/TDD evidence where applicable, validation, and follow-up findings.
-4. **Supplemental/remediation evidence** — only when new findings materially change or extend a Task's completion record.
-5. **Manual evidence** — only when manual validation is genuinely required.
-6. **Full/final review evidence** — exact reviewed head, CI evidence, scope/review result, and intentional follow-ups.
-7. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, and roadmap status.
-
-Do not add generic comments for every tool call, commit, or routine status change.
-
-## Pull request expectations
-
-A useful PR description normally includes:
-
-- summary and linked issue;
-- behavioral/technical contract being implemented;
-- test-list and RED → GREEN → REFACTOR evidence when applicable;
-- implementation summary;
-- validation evidence;
-- manual validation evidence when applicable;
-- final review status;
-- focused review areas.
-
-The PR should remain understandable to a future maintainer from the repository artifacts alone.
+After the issue is fully closed out, stop. Report the completed state and let the user decide when to begin the next issue.
