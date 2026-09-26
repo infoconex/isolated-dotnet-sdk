@@ -250,15 +250,54 @@ After an issue is fully closed out, stop.
 
 Do not automatically begin the next roadmap item. Report the completed state and let the user decide when to start the next issue.
 
-## Issue comment pattern
+## Issue structure reference pattern
 
-Use comments sparingly and intentionally. The expected pattern is:
+Issue #9 established a useful repository pattern for a well-specified implementation issue. Use it as the default shape, adapting sections when they genuinely do not apply:
 
-1. **Requirements review / kickoff** — understanding, assumptions, ambiguities.
-2. **Pre-implementation scope** — planned Tasks and validation approach.
-3. **Task completion** — one comment for each meaningful Task completed, when the issue has multiple Tasks.
-4. **Manual evidence** — only when manual validation is genuinely required.
-5. **Final review/evidence** — exact reviewed head, CI evidence, review result, and follow-ups.
+1. **Summary** — concise statement of the change and important scope boundary.
+2. **Problem** — why the current state is insufficient and why the work matters.
+3. **Desired changes** — the intended technical/behavioral contract, grouped by capability where useful.
+4. **Tasks** — numbered meaningful implementation deliverables (`Task 1`, `Task 2`, ...), each with focused sub-items.
+5. **Acceptance criteria** — observable completion requirements, including validation and merge-through-PR criteria where applicable.
+6. **Non-goals** — explicit boundaries that prevent incidental cleanup or adjacent behavior from entering scope.
+7. **Development guidance** — implementation principles or constraints that help preserve the intended contract without over-prescribing the solution.
+
+Add other sections such as baseline behavior, behavioral scenarios, sequencing/dependencies, repository specification, or traceability when the issue needs them.
+
+Issue #9 is a reference pattern, not a frozen template. Newer repository process rules override historical details when they conflict—for example, the current process opens a Draft PR as soon as there is a useful diff rather than waiting until every Task is complete.
+
+## Issue comment title pattern
+
+Use Markdown level-2 headings (`##`) as the first line of substantive issue comments so the issue history is easy to scan.
+
+Use these default title patterns, modeled on Issue #9:
+
+1. `## Kickoff — requirements review`
+2. `## Implementation plan — planned tasks`
+3. `## Task N complete — <concise task/capability>`
+4. `## Task N supplemental — <finding>` when new evidence belongs to an existing Task without replacing its original completion record.
+5. `## Task N remediation complete — <finding>` when a Task required correction after new evidence.
+6. `## Full pre-PR review` for the comprehensive branch/diff review before readiness evidence is finalized. Under the current process the Draft PR may already exist; the title remains useful even though Issue #9 originally performed this before opening its Draft PR.
+7. `## Draft PR opened` when recording the PR link/head and Draft status is useful traceability.
+8. `## Manual validation — <behavior>` only when manual validation is genuinely required.
+9. `## Final review — completion evidence` for the final exact-head CI/review/follow-up summary before the user decides readiness/merge.
+10. `## Post-merge verification` for the final closure evidence after merge.
+
+Keep the text after the em dash concise and specific. Do not invent a unique heading style for routine comments when one of these patterns applies.
+
+Exceptional comments may use the same grammar with a precise qualifier, as Issue #9 did for supplemental findings and remediation. The title should tell a future reader **what lifecycle event occurred** and, for Task comments, **which Task it belongs to**.
+
+## Issue comment content pattern
+
+Use comments sparingly and intentionally. The expected content sequence is:
+
+1. **Requirements review / kickoff** — understanding, assumptions, ambiguities, and confirmed scope.
+2. **Implementation plan** — planned Tasks, likely commit boundaries, scope, and validation approach.
+3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, validation, and follow-up findings where useful.
+4. **Supplemental/remediation evidence** — only when new findings materially change or extend a Task's completion record.
+5. **Manual evidence** — only when manual validation is genuinely required.
+6. **Full/final review evidence** — exact reviewed head, CI evidence, scope/review result, and intentional follow-ups.
+7. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, and roadmap status.
 
 Do not add generic comments for every tool call, commit, or routine status change.
 
