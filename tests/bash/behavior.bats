@@ -92,3 +92,67 @@ EOF
   [ "$(cat "$tool_path")" = '# existing saved tool' ]
   [ -z "$(find "$tool_root" -maxdepth 1 -type f -name '.isolated-dotnet-sdk.sh.*.tmp' -print -quit)" ]
 }
+
+@test "metadata processing failure cleans only the operation-owned temporary file" {
+  bootstrap_tool
+
+  fake_bin="$test_root/metadata-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+url=""
+out_file=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o)
+      out_file="$2"
+      shift 2
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+case "$url" in
+  *releases-index.json)
+    cat <<'JSON'
+{
+  "releases-index": [
+    {
+      "channel-version": "99.0",
+      "latest-sdk": "99.0.100",
+      "support-phase": "active",
+      "release-type": "sts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
+JSON
+    ;;
+  https://example.invalid/releases.json)
+    printf '%s\n' '{"releases":[]}' > "$out_file"
+    ;;
+  *)
+    exit 88
+    ;;
+esac
+EOF
+  chmod +x "$fake_bin/curl"
+
+  printf '%s\n' 'unowned sentinel' > "$tool_root/.release-metadata.keep"
+
+  run bash -c 'printf "1\n" | env HOME="$1" PATH="$2:$PATH" "$3" install' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -ne 0 ]
+  [ -f "$tool_root/.release-metadata.keep" ]
+  [ "$(cat "$tool_root/.release-metadata.keep")" = 'unowned sentinel' ]
+  [ -z "$(find "$tool_root" -maxdepth 1 -type f -name '.release-metadata.*' ! -name '.release-metadata.keep' -print -quit)" ]
+}
