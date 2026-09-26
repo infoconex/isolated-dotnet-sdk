@@ -243,10 +243,11 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 url=""
-for argument in "$@"; do
-  case "$argument" in
-    -*) ;;
-    *) url="$argument" ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) shift 2 ;;
+    -*) shift ;;
+    *) url="$1"; shift ;;
   esac
 done
 printf '%s\n' "$url" >> "$CURL_LOG"
