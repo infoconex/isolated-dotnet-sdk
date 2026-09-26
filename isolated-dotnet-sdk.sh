@@ -45,6 +45,8 @@ bootstrap_if_needed() {
     local current_source="${BASH_SOURCE[0]:-}"
     local current_path=""
     local expected_path
+    local staged_path=""
+    local status=0
 
     expected_path="$(cd "$SDK_ROOT" && pwd)/$TOOL_NAME"
 
@@ -56,20 +58,40 @@ bootstrap_if_needed() {
         return
     fi
 
-    tool_info "Installing tool to $TOOL_PATH"
-
-    if [[ -n "$current_path" && -f "$current_path" ]]; then
-        cp "$current_path" "$TOOL_PATH.tmp"
-    else
-        curl -fsSL \
-            "$REPOSITORY_RAW_BASE/$TOOL_NAME" \
-            -o "$TOOL_PATH.tmp"
+    if [[ -d "$TOOL_PATH" ]]; then
+        tool_fail "Tool path is a directory: $TOOL_PATH"
     fi
 
-    # Replace the installed helper only after the new source is complete, then
-    # re-execute from the stable installed path with the original arguments.
-    chmod +x "$TOOL_PATH.tmp"
-    mv "$TOOL_PATH.tmp" "$TOOL_PATH"
+    tool_info "Installing tool to $TOOL_PATH"
+    staged_path="$(mktemp "$SDK_ROOT/.${TOOL_NAME}.XXXXXX.tmp")"
+
+    if [[ -n "$current_path" && -f "$current_path" ]]; then
+        if ! cp "$current_path" "$staged_path"; then
+            status=$?
+            rm -f "$staged_path"
+            return "$status"
+        fi
+    else
+        if ! curl -fsSL \
+            "$REPOSITORY_RAW_BASE/$TOOL_NAME" \
+            -o "$staged_path"; then
+            status=$?
+            rm -f "$staged_path"
+            return "$status"
+        fi
+    fi
+
+    if ! chmod +x "$staged_path"; then
+        status=$?
+        rm -f "$staged_path"
+        return "$status"
+    fi
+
+    if ! mv "$staged_path" "$TOOL_PATH"; then
+        status=$?
+        rm -f "$staged_path"
+        return "$status"
+    fi
 
     tool_success "Tool installed."
 
