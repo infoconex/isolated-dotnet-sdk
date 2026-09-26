@@ -23,7 +23,7 @@ Do not rely on chat history when repository artifacts provide the current contra
 - Do not manufacture RED evidence for documentation/mechanical-only work.
 - Use small scoped Conventional Commits.
 - Do not mix unrelated cleanup into the active issue; create a follow-up issue instead.
-- Use the term **workstream** for capability-level progress within an issue.
+- Use **Task** for a meaningful implementation deliverable within an issue. Complete, validate, commit, and record focused evidence for each Task independently where practical. Reserve GitHub **Milestones** for release/planning groupings.
 - Treat green CI as evidence, not a substitute for final diff review.
 - Prefer automated validation; require manual validation only when automation cannot establish the behavior reliably.
 - Do not mark a Draft PR ready for review unless the user explicitly directs it.
