@@ -93,7 +93,7 @@ EOF
   [ -z "$(find "$tool_root" -maxdepth 1 -type f -name '.isolated-dotnet-sdk.sh.*.tmp' -print -quit)" ]
 }
 
-@test "metadata processing failure cleans only the operation-owned temporary file" {
+@test "interrupted metadata processing cleans only the operation-owned temporary file" {
   bootstrap_tool
 
   fake_bin="$test_root/metadata-fake-bin"
@@ -138,6 +138,7 @@ JSON
     ;;
   https://example.invalid/releases.json)
     printf '%s\n' '{"releases":[]}' > "$out_file"
+    kill -TERM "$PPID"
     ;;
   *)
     exit 88
