@@ -5,7 +5,7 @@ The repository uses established test frameworks for behavioral coverage:
 - **Pester** for PowerShell tests;
 - **Bats-core** for Bash tests.
 
-Exact framework versions are repository-owned in [`.config/test-frameworks.json`](../.config/test-frameworks.json). Local and CI runs must use those exact versions so diagnostics and behavior stay reproducible.
+Exact framework versions are repository-owned in [`.config/test-frameworks.json`](../.config/test-frameworks.json). Bats is additionally pinned to the upstream commit behind the selected release tag. Local and CI runs must use those exact pins so diagnostics and behavior stay reproducible.
 
 ## Test taxonomy
 
@@ -23,24 +23,33 @@ PowerShell focused tests use Pester setup/teardown and mocks or controlled funct
 
 ## Framework versions
 
-From the repository root, inspect the configured versions with:
+From the repository root, inspect the configured pins with:
 
 ```bash
 jq . .config/test-frameworks.json
 ```
 
-The current pins are Pester `6.2.0` and Bats-core `1.14.0`. Update the configuration, local instructions, and CI installation together when either framework is intentionally upgraded.
+The current pins are Pester `6.2.0` and Bats-core `1.14.0`, with Bats fixed to commit `eb7f42f8d608ac693d7a4b67474f6714ea68cfc5`. Update the configuration, local instructions, and CI installation together when either framework is intentionally upgraded.
 
 ## Bash behavioral tests
 
-Bats-core and `jq` are required. Install the exact configured Bats version, for example with npm:
+Bats-core, Git, and `jq` are required. Install the exact configured Bats source commit into a user-owned prefix:
 
 ```bash
 bats_version="$(jq -er '.batsVersion' .config/test-frameworks.json)"
-npm install --global "bats@${bats_version}"
+bats_commit="$(jq -er '.batsCommit' .config/test-frameworks.json)"
+prefix="$HOME/.local"
+workdir="$(mktemp -d)"
+git -C "$workdir" init
+git -C "$workdir" remote add origin https://github.com/bats-core/bats-core.git
+git -C "$workdir" fetch --depth=1 origin "$bats_commit"
+git -C "$workdir" checkout --detach FETCH_HEAD
+"$workdir/install.sh" "$prefix"
+rm -rf "$workdir"
+"$prefix/bin/bats" --version | grep -Fx "Bats $bats_version"
 ```
 
-Then run from the repository root:
+Ensure the selected prefix's `bin` directory is on `PATH`, then run from the repository root:
 
 ```bash
 bash tests/bash/run-tests.sh
@@ -141,7 +150,7 @@ The current behavioral checks do not install an SDK or require release-metadata 
 
 ## CI
 
-`.github/workflows/validate.yml` installs the exact framework versions from `.config/test-frameworks.json` and runs:
+`.github/workflows/validate.yml` installs the exact framework pins from `.config/test-frameworks.json` and runs:
 
 - Bash syntax validation and the Bats behavioral suite on Ubuntu and macOS;
 - ShellCheck once on Ubuntu;
