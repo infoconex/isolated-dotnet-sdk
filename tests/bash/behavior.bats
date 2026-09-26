@@ -157,3 +157,51 @@ EOF
   [ "$(cat "$tool_root/.release-metadata.keep")" = 'unowned sentinel' ]
   [ -z "$(find "$tool_root" -maxdepth 1 -type f -name '.release-metadata.*' ! -name '.release-metadata.keep' -print -quit)" ]
 }
+
+@test "SDK root path conflict fails without reporting bootstrap success" {
+  prepare_source
+  printf '%s\n' 'root sentinel' > "$tool_root"
+
+  run env HOME="$test_home" "$source_copy" list
+
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"Tool installed."* ]]
+  [ -f "$tool_root" ]
+  [ "$(cat "$tool_root")" = 'root sentinel' ]
+}
+
+@test "removal failure targets only the selected SDK and reports no success" {
+  bootstrap_tool
+
+  version='99.0.100'
+  install_dir="$tool_root/$version"
+  sibling_dir="$tool_root/98.0.100"
+  mkdir -p "$install_dir" "$sibling_dir"
+  printf '%s\n' 'sibling sentinel' > "$sibling_dir/sentinel.txt"
+
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+
+  fake_bin="$test_root/removal-fake-bin"
+  rm_log="$test_root/rm.log"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$RM_LOG"
+exit 74
+EOF
+  chmod +x "$fake_bin/rm"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" RM_LOG="$rm_log" \
+    "$tool_path" remove "$version" --yes
+
+  [ "$status" -eq 74 ]
+  [[ "$output" != *"Isolated SDK $version was removed."* ]]
+  [ -d "$install_dir" ]
+  [ -f "$sibling_dir/sentinel.txt" ]
+  [ "$(cat "$sibling_dir/sentinel.txt")" = 'sibling sentinel' ]
+  [ "$(cat "$rm_log")" = "-rf $install_dir" ]
+}
