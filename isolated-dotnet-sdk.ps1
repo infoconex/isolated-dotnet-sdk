@@ -319,7 +319,20 @@ function Assert-RemovalRiskParameterUsage {
 
 function Get-ReleaseIndex {
     Write-ToolInfo 'Loading available .NET SDK releases from Microsoft...'
-    return Invoke-RestMethod -Uri $ReleaseIndexUrl
+
+    try {
+        $ReleaseIndex = Invoke-RestMethod -Uri $ReleaseIndexUrl
+    }
+    catch {
+        throw 'Unable to load .NET release metadata from Microsoft.'
+    }
+
+    if ($null -eq $ReleaseIndex -or
+        $null -eq $ReleaseIndex.'releases-index') {
+        throw 'Invalid .NET release metadata from Microsoft.'
+    }
+
+    return $ReleaseIndex
 }
 
 # Microsoft release metadata can expose SDK versions through both `sdk` and `sdks`.
@@ -364,7 +377,19 @@ function Read-ManualVersion {
 # release metadata to choose an exact SDK version.
 function Select-InstallVersion {
     $ReleaseIndex = Get-ReleaseIndex
-    $AllChannels = @($ReleaseIndex.'releases-index')
+    $AllChannels = @(
+        $ReleaseIndex.'releases-index' |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace([string]$_.'channel-version') -and
+                -not [string]::IsNullOrWhiteSpace([string]$_.'support-phase') -and
+                -not [string]::IsNullOrWhiteSpace([string]$_.'releases.json')
+            }
+    )
+
+    if (-not $AllChannels) {
+        throw 'No selectable .NET channels were found in Microsoft release metadata.'
+    }
+
     $ShowArchived = $false
 
     while ($true) {
@@ -435,11 +460,25 @@ function Select-InstallVersion {
         }
 
         $SelectedChannel = $Channels[$Number - 1]
-        $ChannelMetadata = Invoke-RestMethod -Uri $SelectedChannel.'releases.json'
+        $ChannelVersion = [string]$SelectedChannel.'channel-version'
+        $ChannelMetadataUrl = [string]$SelectedChannel.'releases.json'
+
+        try {
+            $ChannelMetadata = Invoke-RestMethod -Uri $ChannelMetadataUrl
+        }
+        catch {
+            throw "Unable to load release metadata for .NET $ChannelVersion."
+        }
+
+        if ($null -eq $ChannelMetadata -or
+            $null -eq $ChannelMetadata.releases) {
+            throw "Invalid release metadata for .NET $ChannelVersion."
+        }
+
         $SdkVersions = @(Get-ChannelSdkVersion $ChannelMetadata)
 
         if (-not $SdkVersions) {
-            throw "No SDK versions were found for .NET $($SelectedChannel.'channel-version')."
+            throw "No SDK versions were found for .NET $ChannelVersion."
         }
 
         $SystemVersions = @(Get-SystemSdkVersion)
@@ -447,7 +486,7 @@ function Select-InstallVersion {
 
         while ($true) {
             Write-ToolDisplay
-            Write-ToolInfo "Available .NET $($SelectedChannel.'channel-version') SDKs:"
+            Write-ToolInfo "Available .NET $ChannelVersion SDKs:"
             Write-ToolDisplay
 
             for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
