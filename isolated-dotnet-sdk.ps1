@@ -156,24 +156,46 @@ function Install-ToolIfNeeded {
         return
     }
 
+    if (Test-Path -LiteralPath $ToolPath -PathType Container) {
+        throw "Tool path is a directory: $ToolPath"
+    }
+
     Write-ToolInfo "Installing tool to $ToolPath"
 
-    if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath)) {
-        Copy-Item `
-            -LiteralPath $CurrentPath `
-            -Destination $ToolPath `
-            -Force `
-            -WhatIf:$false `
-            -Confirm:$false
-    }
-    else {
-        Invoke-WebRequest `
-            "$RepositoryRawBase/$ToolName" `
-            -OutFile $ToolPath
-    }
+    $StagedToolPath = Join-Path `
+        $SdkRoot `
+        ('.{0}.{1}.tmp' -f $ToolName, [guid]::NewGuid().ToString('N'))
 
-    if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
-        Unblock-File -Path $ToolPath -WhatIf:$false -Confirm:$false
+    try {
+        if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath)) {
+            Copy-Item `
+                -LiteralPath $CurrentPath `
+                -Destination $StagedToolPath `
+                -Force `
+                -WhatIf:$false `
+                -Confirm:$false
+        }
+        else {
+            Invoke-WebRequest `
+                "$RepositoryRawBase/$ToolName" `
+                -OutFile $StagedToolPath
+        }
+
+        if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
+            Unblock-File -Path $StagedToolPath -WhatIf:$false -Confirm:$false
+        }
+
+        [System.IO.File]::Move($StagedToolPath, $ToolPath, $true)
+    }
+    finally {
+        if (Test-Path -LiteralPath $StagedToolPath -PathType Leaf) {
+            Remove-Item `
+                -LiteralPath $StagedToolPath `
+                -Force `
+                -ErrorAction SilentlyContinue `
+                -WhatIf:$false `
+                -Confirm:$false
+        }
     }
 
     Write-ToolSuccess 'Tool installed.'

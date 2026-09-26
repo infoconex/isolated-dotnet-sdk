@@ -45,6 +45,7 @@ bootstrap_if_needed() {
     local current_source="${BASH_SOURCE[0]:-}"
     local current_path=""
     local expected_path
+    local staged_path=""
 
     expected_path="$(cd "$SDK_ROOT" && pwd)/$TOOL_NAME"
 
@@ -56,20 +57,48 @@ bootstrap_if_needed() {
         return
     fi
 
-    tool_info "Installing tool to $TOOL_PATH"
-
-    if [[ -n "$current_path" && -f "$current_path" ]]; then
-        cp "$current_path" "$TOOL_PATH.tmp"
-    else
-        curl -fsSL \
-            "$REPOSITORY_RAW_BASE/$TOOL_NAME" \
-            -o "$TOOL_PATH.tmp"
+    if [[ -d "$TOOL_PATH" ]]; then
+        tool_fail "Tool path is a directory: $TOOL_PATH"
     fi
 
-    # Replace the installed helper only after the new source is complete, then
-    # re-execute from the stable installed path with the original arguments.
-    chmod +x "$TOOL_PATH.tmp"
-    mv "$TOOL_PATH.tmp" "$TOOL_PATH"
+    tool_info "Installing tool to $TOOL_PATH"
+    staged_path="$(mktemp "$SDK_ROOT/.${TOOL_NAME}.XXXXXX.tmp")"
+
+    if [[ -n "$current_path" && -f "$current_path" ]]; then
+        if cp "$current_path" "$staged_path"; then
+            :
+        else
+            local status=$?
+            rm -f "$staged_path" || true
+            return "$status"
+        fi
+    else
+        if curl -fsSL \
+            "$REPOSITORY_RAW_BASE/$TOOL_NAME" \
+            -o "$staged_path"; then
+            :
+        else
+            local status=$?
+            rm -f "$staged_path" || true
+            return "$status"
+        fi
+    fi
+
+    if chmod +x "$staged_path"; then
+        :
+    else
+        local status=$?
+        rm -f "$staged_path" || true
+        return "$status"
+    fi
+
+    if mv "$staged_path" "$TOOL_PATH"; then
+        :
+    else
+        local status=$?
+        rm -f "$staged_path" || true
+        return "$status"
+    fi
 
     tool_success "Tool installed."
 
@@ -303,15 +332,23 @@ select_install_version() {
         fi
 
         metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
+        trap 'rm -f "$metadata_file" || true' EXIT
+        trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$$"' TERM
+        trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$$"' INT
+        trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$$"' HUP
+
         if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
-            rm -f "$metadata_file"
+            trap - EXIT TERM INT HUP
+            rm -f "$metadata_file" || true
             tool_fail "Unable to load release metadata for .NET $channel."
         fi
 
         # The channel-specific metadata supplies the exact SDK versions presented
         # to the user; latest-sdk from the index is only used as a display marker.
         versions="$(extract_sdk_versions < "$metadata_file")"
-        rm -f "$metadata_file"
+        trap - EXIT TERM INT HUP
+        rm -f "$metadata_file" || true
+        metadata_file=""
 
         [[ -n "$versions" ]] || tool_fail "No SDK versions were found for .NET $channel."
 
