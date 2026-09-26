@@ -19,7 +19,7 @@ Do not rely on chat history when repository artifacts provide the current contra
 - Review and clarify requirements before implementation.
 - Add the required focused issue comments described in `docs/issue-workflow.md`; avoid generic operational chatter.
 - Use a focused short-lived branch and Draft PR.
-- Use specification-driven development and meaningful TDD for behavioral changes.
+- Use specification-driven development and disciplined TDD for behavioral changes: maintain a test list, take one smallest behavior at a time through RED → GREEN → REFACTOR, and update the list as new cases are discovered.
 - Do not manufacture RED evidence for documentation/mechanical-only work.
 - Use small scoped Conventional Commits.
 - Do not mix unrelated cleanup into the active issue; create a follow-up issue instead.
