@@ -16,4 +16,6 @@ if [[ "$actual_version" != "$expected_version" ]]; then
   exit 1
 fi
 
-exec bats "$repo_root/tests/bash/behavior.bats"
+exec bats \
+  "$repo_root/tests/bash/behavior.bats" \
+  "$repo_root/tests/bash/metadata.bats"
