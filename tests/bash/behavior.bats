@@ -39,6 +39,7 @@ bootstrap_tool() {
   bootstrap_tool
 
   grep -Fq '# bootstrap-source-marker' "$tool_path"
+  [ -z "$(find "$tool_root" -maxdepth 1 -type f -name '.isolated-dotnet-sdk.sh.*.tmp' -print -quit)" ]
 }
 
 @test "list command reports the isolated SDK root" {
@@ -68,4 +69,26 @@ bootstrap_tool() {
   [[ "$output" != *"Tool installed."* ]]
   [ -d "$tool_path" ]
   [ -z "$(find "$tool_path" -mindepth 1 -maxdepth 1 -print -quit)" ]
+}
+
+@test "bootstrap staging failure preserves the saved tool and cleans its candidate" {
+  prepare_source
+  mkdir -p "$tool_root"
+  printf '%s\n' '# existing saved tool' > "$tool_path"
+
+  fake_bin="$test_root/fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/cp" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'partial candidate' > "$2"
+exit 73
+EOF
+  chmod +x "$fake_bin/cp"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$source_copy" list
+
+  [ "$status" -eq 73 ]
+  [[ "$output" != *"Tool installed."* ]]
+  [ "$(cat "$tool_path")" = '# existing saved tool' ]
+  [ -z "$(find "$tool_root" -maxdepth 1 -type f -name '.isolated-dotnet-sdk.sh.*.tmp' -print -quit)" ]
 }
