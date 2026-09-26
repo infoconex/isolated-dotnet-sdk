@@ -218,6 +218,10 @@ function Install-ToolIfNeeded {
     }
 
     & $ToolPath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
     $script:Bootstrapped = $true
 }
 
@@ -231,7 +235,13 @@ function Get-SystemSdkVersion {
         return @()
     }
 
-    return @(dotnet --list-sdks | ForEach-Object { ($_ -split '\s+')[0] })
+    $InstalledSdks = dotnet --list-sdks
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -ne 0) {
+        throw "Unable to list SDKs through the system dotnet host with exit code $ExitCode."
+    }
+
+    return @($InstalledSdks | ForEach-Object { ($_ -split '\s+')[0] })
 }
 
 function Get-IsolatedSdkVersion {
@@ -373,8 +383,7 @@ function Read-ManualVersion {
     Assert-ValidVersion
 }
 
-# Select from Microsoft's release index first, then load the selected channel's detailed
-# release metadata to choose an exact SDK version.
+# Select from Microsoft's release index when no exact SDK version was supplied.
 function Select-InstallVersion {
     $ReleaseIndex = Get-ReleaseIndex
     $AllChannels = @(
@@ -613,8 +622,7 @@ function Resolve-RemoveVersion {
     return $true
 }
 
-# Install with Microsoft's dotnet-install script using -NoPath, then verify that the
-# requested version is discoverable through the isolated dotnet host.
+# Install with Microsoft's dotnet-install script under the exact-version directory.
 function Install-IsolatedSdk {
     if (-not (Resolve-InstallVersion)) {
         return
@@ -632,6 +640,11 @@ function Install-IsolatedSdk {
     $InstalledVersions = @()
     if (Get-Command dotnet -ErrorAction SilentlyContinue) {
         $InstalledSdks = dotnet --list-sdks
+        $ExitCode = $LASTEXITCODE
+        if ($ExitCode -ne 0) {
+            throw "Unable to list SDKs through the system dotnet host with exit code $ExitCode."
+        }
+
         foreach ($InstalledSdk in $InstalledSdks) {
             Write-ToolDisplay $InstalledSdk
         }
@@ -646,8 +659,13 @@ function Install-IsolatedSdk {
     Write-ToolInfo 'Checking for an existing isolated SDK...'
 
     if (Test-Path $IsolatedDotNet) {
-        $IsolatedVersions = @(& $IsolatedDotNet --list-sdks | ForEach-Object { ($_ -split '\s+')[0] })
+        $IsolatedSdks = & $IsolatedDotNet --list-sdks
+        $ExitCode = $LASTEXITCODE
+        if ($ExitCode -ne 0) {
+            throw "Unable to inspect existing isolated SDK $Version with exit code $ExitCode."
+        }
 
+        $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
         if ($IsolatedVersions -contains $Version) {
             Write-ToolSuccess "Isolated SDK $Version is already installed."
             Write-ToolInfo "Location: $InstallDir"
@@ -682,6 +700,10 @@ function Install-IsolatedSdk {
         -Version $Version `
         -InstallDir $InstallDir `
         -NoPath
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -ne 0) {
+        throw "dotnet-install failed for SDK $Version with exit code $ExitCode."
+    }
 
     Write-ToolDisplay
     Write-ToolInfo 'Verifying the isolated SDK...'
@@ -691,6 +713,11 @@ function Install-IsolatedSdk {
     }
 
     $IsolatedSdks = & $IsolatedDotNet --list-sdks
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -ne 0) {
+        throw "Unable to verify isolated SDK $Version with exit code $ExitCode."
+    }
+
     foreach ($IsolatedSdk in $IsolatedSdks) {
         Write-ToolDisplay $IsolatedSdk
     }
@@ -732,7 +759,7 @@ function Invoke-IsolatedSdkDirectoryRemoval {
     }
 }
 
-# Removal is intentionally scoped to the selected version directory after approval.
+# Removal is intentionally scoped to the selected version directory under SDK_ROOT.
 function Remove-IsolatedSdk {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param([switch]$Yes)
@@ -790,8 +817,8 @@ New-Item `
     -WhatIf:$false `
     -Confirm:$false | Out-Null
 
-# Keep execution outside the caller's repository so a repository-level global.json cannot
-# influence SDK resolution during tool operations.
+# Keep execution outside the caller's repository so a local global.json cannot
+# influence SDK resolution during the tool's work.
 Push-Location $SdkRoot
 try {
     try {

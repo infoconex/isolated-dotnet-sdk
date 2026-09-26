@@ -134,7 +134,13 @@ contains_line() {
 
 get_system_sdk_versions() {
     if command -v dotnet >/dev/null 2>&1; then
-        dotnet --list-sdks | awk '{print $1}'
+        local sdk_output=""
+        if sdk_output="$(dotnet --list-sdks)"; then
+            printf "%s\n" "$sdk_output" | awk '{print $1}'
+        else
+            local status=$?
+            tool_fail "Unable to list SDKs through the system dotnet host with exit code $status."
+        fi
     fi
 }
 
@@ -534,6 +540,8 @@ install_sdk() {
     local isolated_dotnet="$install_dir/dotnet"
     local installed_sdks=""
     local installed_versions=""
+    local isolated_sdks=""
+    local status=0
 
     tool_info "Target SDK: $VERSION"
     tool_info "Isolated install directory: $install_dir"
@@ -542,7 +550,12 @@ install_sdk() {
     tool_info "Checking SDKs installed through the normal dotnet host..."
 
     if command -v dotnet >/dev/null 2>&1; then
-        installed_sdks="$(dotnet --list-sdks)"
+        if installed_sdks="$(dotnet --list-sdks)"; then
+            :
+        else
+            status=$?
+            tool_fail "Unable to list SDKs through the system dotnet host with exit code $status."
+        fi
         printf "%s\n" "$installed_sdks"
         echo
 
@@ -554,11 +567,19 @@ install_sdk() {
 
     tool_info "Checking for an existing isolated SDK..."
 
-    if [[ -x "$isolated_dotnet" ]] && \
-       "$isolated_dotnet" --list-sdks | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        tool_success "Isolated SDK $VERSION is already installed."
-        tool_info "Location: $install_dir"
-        return
+    if [[ -x "$isolated_dotnet" ]]; then
+        if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+            :
+        else
+            status=$?
+            tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
+        fi
+
+        if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+            tool_success "Isolated SDK $VERSION is already installed."
+            tool_info "Location: $install_dir"
+            return
+        fi
     fi
 
     tool_info "No existing isolated copy was found."
@@ -579,18 +600,27 @@ install_sdk() {
     curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$INSTALL_SCRIPT"
 
     tool_info "Installing .NET SDK $VERSION..."
-    bash "$INSTALL_SCRIPT" \
+    if bash "$INSTALL_SCRIPT" \
         --version "$VERSION" \
         --install-dir "$install_dir" \
-        --no-path
+        --no-path; then
+        :
+    else
+        status=$?
+        tool_fail "dotnet-install failed for SDK $VERSION with exit code $status."
+    fi
 
     echo
     tool_info "Verifying the isolated SDK..."
 
     # Verify through the isolated host so a matching system-wide SDK cannot satisfy
     # the post-install check for the requested version.
-    local isolated_sdks
-    isolated_sdks="$("$isolated_dotnet" --list-sdks)"
+    if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+        :
+    else
+        status=$?
+        tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
+    fi
     printf "%s\n" "$isolated_sdks"
 
     if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
