@@ -215,20 +215,43 @@ Bash:
     11.0.100-rc.1.26425.128
 ```
 
-Removal first asks the isolated SDK to shut down its MSBuild and compiler build servers, then removes only that version directory. Removal defaults to no at the confirmation prompt.
+PowerShell removal supports native `ShouldProcess` controls. Ordinary removal keeps the tool's existing default-no `[y/N]` confirmation. Use `-WhatIf` to preview the removal without shutting down build servers or deleting the SDK directory:
 
-For automation, both implementations support a yes option.
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
+    -Action Remove `
+    -Version '11.0.100-rc.1.26425.128' `
+    -WhatIf
+```
 
-PowerShell:
+Use `-Confirm` when you want PowerShell's native confirmation prompt to be authoritative. The tool does not add its own duplicate confirmation in that case.
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
+    -Action Remove `
+    -Version '11.0.100-rc.1.26425.128' `
+    -Confirm
+```
+
+For intentional automation, PowerShell accepts either the existing `-Yes` switch or explicit native confirmation suppression with `-Confirm:$false`:
 
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
     -Action Remove `
     -Version '11.0.100-rc.1.26425.128' `
     -Yes
+
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
+    -Action Remove `
+    -Version '11.0.100-rc.1.26425.128' `
+    -Confirm:$false
 ```
 
-Bash:
+`-WhatIf` always takes precedence over `-Yes`. Explicit `-WhatIf` and `-Confirm` are currently supported only for the PowerShell `Remove` action; using them with `Install` or `List` fails rather than implying unsupported risk-mitigation semantics.
+
+After removal is approved, the PowerShell tool asks the selected isolated SDK to shut down its build servers. A nonzero shutdown result stops the operation before directory deletion. Success is reported only after the selected version directory has been removed and verified absent.
+
+The Bash implementation keeps its existing default-no confirmation and `--yes` automation behavior.
 
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" \
@@ -239,7 +262,7 @@ Bash:
 
 ## Automation
 
-For scripts and CI jobs, provide the action and version explicitly rather than using the interactive picker. Use `-Yes` or `--yes` only when you intentionally want to bypass a confirmation prompt.
+For scripts and CI jobs, provide the action and version explicitly rather than using the interactive picker. For PowerShell removal, use `-Yes` or `-Confirm:$false` only when you intentionally approve deletion; use `-WhatIf` for a no-change preview. For Bash, use `--yes` when you intentionally want to bypass the confirmation prompt.
 
 Operational failures return a nonzero exit status. Choosing to cancel an interactive install or removal is treated as a normal user action rather than an error.
 
@@ -257,37 +280,3 @@ dotnet-sdks/
 ```
 
 Only the files appropriate to the current platform will normally be present.
-
-## Why This Exists
-
-Installing a preview or release-candidate SDK system-wide is not always necessary when evaluating a .NET upgrade.
-
-This tool provides a repeatable way to install an exact SDK version in a separate directory, invoke it explicitly, and remove it later without changing the SDKs exposed by the normal system `dotnet` installation.
-
-It is isolation of the SDK installation, not a full sandbox. The .NET CLI can still create normal per-user state during first-time use, such as development certificates or telemetry configuration.
-
-## Microsoft Release Metadata
-
-The interactive install picker reads Microsoft's published .NET release metadata from:
-
-```text
-https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json
-```
-
-The release index identifies each .NET channel and links to the detailed release metadata used to enumerate exact SDK versions. Explicit-version installs do not require the picker and bypass this metadata lookup.
-
-## Microsoft References
-
-- [.NET install scripts](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script)
-- [Test prerelease .NET SDKs locally](https://learn.microsoft.com/en-us/dotnet/core/tools/test-prerelease-sdk-locally)
-- [`dotnet build-server`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-build-server)
-- [`global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
-- [.NET release metadata](https://github.com/dotnet/core/tree/main/release-notes)
-
-## Security Note
-
-The quick-start commands download and execute the current script from this repository's `main` branch. Review the script first if you prefer not to execute remote code directly.
-
-## License
-
-MIT
