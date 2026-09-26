@@ -170,6 +170,8 @@ If the review finds gaps:
 
 Do not recommend merge while blocking findings remain.
 
+Record the completed comprehensive review under `## Full review — implementation complete`.
+
 ## 10. Record final evidence
 
 Before the PR is considered complete, record concise durable evidence, including as applicable:
