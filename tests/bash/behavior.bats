@@ -223,3 +223,22 @@ EOF
   [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
   [[ "$output" != *"successfully"* ]]
 }
+
+@test "malformed release index fails instead of presenting an empty channel picker" {
+  bootstrap_tool
+
+  fake_bin="$test_root/malformed-index-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'not-json'
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run bash -c 'printf "q\n" | env HOME="$1" PATH="$2:$PATH" "$3" install' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid .NET release metadata from Microsoft."* ]]
+  [[ "$output" != *"Select a supported or development .NET channel:"* ]]
+}
