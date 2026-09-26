@@ -2,13 +2,12 @@
 
 This document is the authoritative repository process for taking an implementation issue from selection through post-merge verification.
 
-The goal is repeatable, evidence-driven delivery with clear traceability. Do not rely on chat history to reconstruct this process.
+The goal is repeatable, evidence-driven delivery with clear traceability.
 
 ## Core rules
 
 - Work one implementation issue at a time unless an issue explicitly permits independent parallel work.
 - Treat the GitHub issue as the traceability and evidence hub.
-- GitHub issues in this repository use **open/closed** state only. Do not invent or simulate an "in progress" issue state; active work is represented by the branch, Draft PR, and focused issue comments.
 - Keep requirements, implementation, tests, documentation, and evidence aligned.
 - Prefer automation and deterministic evidence over manual checks.
 - Green CI is necessary evidence, not proof by itself that a change is correct.
@@ -27,7 +26,7 @@ Before making changes:
 4. Fetch and read the exact current issue body, comments, acceptance criteria, dependencies, and non-goals.
 5. Inspect the relevant source, tests, specifications, and documentation on current `main`.
 
-Do not implement stale assumptions from an earlier chat or summary when the repository or issue now says something different.
+Repository documentation and the current issue define the working contract. Resolve any contradiction between current repository artifacts before implementation.
 
 ## 2. Review requirements before implementation
 
@@ -154,7 +153,7 @@ A useful completion comment includes items such as:
 - relevant commit or CI evidence;
 - newly discovered follow-up issues.
 
-This is the pattern established in recent completed issues: Tasks represent meaningful implementation deliverables within an issue, while GitHub Milestones remain release/planning groupings.
+Tasks represent meaningful implementation deliverables within an issue, while GitHub Milestones remain release/planning groupings.
 
 ## 8. Validation expectations
 
@@ -263,7 +262,7 @@ Do not automatically begin the next roadmap item. Report the completed state and
 
 ## Issue structure reference pattern
 
-Issue #9 established a useful repository pattern for a well-specified implementation issue. Use it as the default shape, adapting sections when they genuinely do not apply:
+Use this default shape for implementation issues, adapting sections when they genuinely do not apply:
 
 1. **Summary** — concise statement of the change and important scope boundary.
 2. **Problem** — why the current state is insufficient and why the work matters.
@@ -273,22 +272,22 @@ Issue #9 established a useful repository pattern for a well-specified implementa
 6. **Non-goals** — explicit boundaries that prevent incidental cleanup or adjacent behavior from entering scope.
 7. **Development guidance** — implementation principles or constraints that help preserve the intended contract without over-prescribing the solution.
 
-Add other sections such as baseline behavior, behavioral scenarios, sequencing/dependencies, repository specification, or traceability when the issue needs them.
+Add sections such as baseline behavior, behavioral scenarios, sequencing/dependencies, repository specification, or traceability when they materially improve the issue.
 
-Issue #9 is a reference pattern, not a frozen template. Newer repository process rules override historical details when they conflict—for example, the current process opens a Draft PR as soon as there is a useful diff rather than waiting until every Task is complete.
+Issue #9 is a useful example of this structure.
 
 ## Issue comment title pattern
 
 Use Markdown level-2 headings (`##`) as the first line of substantive issue comments so the issue history is easy to scan.
 
-Use these default title patterns, modeled on Issue #9:
+Use these default title patterns:
 
 1. `## Kickoff — requirements review`
 2. `## Implementation plan — planned tasks`
 3. `## Task N complete — <concise task/capability>`
 4. `## Task N supplemental — <finding>` when new evidence belongs to an existing Task without replacing its original completion record.
 5. `## Task N remediation complete — <finding>` when a Task required correction after new evidence.
-6. `## Full pre-PR review` for the comprehensive branch/diff review before readiness evidence is finalized. Under the current process the Draft PR may already exist; the title remains useful even though Issue #9 originally performed this before opening its Draft PR.
+6. `## Full pre-PR review` for the comprehensive branch/diff review before readiness evidence is finalized.
 7. `## Draft PR opened` when recording the PR link/head and Draft status is useful traceability.
 8. `## Manual validation — <behavior>` only when manual validation is genuinely required.
 9. `## Final review — completion evidence` for the final exact-head CI/review/follow-up summary before the user decides readiness/merge.
@@ -296,7 +295,7 @@ Use these default title patterns, modeled on Issue #9:
 
 Keep the text after the em dash concise and specific. Do not invent a unique heading style for routine comments when one of these patterns applies.
 
-Exceptional comments may use the same grammar with a precise qualifier, as Issue #9 did for supplemental findings and remediation. The title should tell a future reader **what lifecycle event occurred** and, for Task comments, **which Task it belongs to**.
+Exceptional comments may use the same grammar with a precise qualifier. The title should tell a future reader **what lifecycle event occurred** and, for Task comments, **which Task it belongs to**.
 
 ## Issue comment content pattern
 
@@ -325,4 +324,4 @@ A useful PR description normally includes:
 - final review status;
 - focused review areas.
 
-The PR should remain understandable to a future maintainer without requiring the original chat transcript.
+The PR should remain understandable to a future maintainer from the repository artifacts alone.
