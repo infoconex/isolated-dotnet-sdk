@@ -35,8 +35,18 @@ jobs:
         run: |
           set -euo pipefail
           version="$(jq -er '.batsVersion | select(type == "string" and length > 0)' .config/test-frameworks.json)"
-          npm install --global "bats@${version}"
-          test "$(bats --version | awk '{print $2}')" = "$version"
+          commit="$(jq -er '.batsCommit | select(type == "string" and test("^[0-9a-f]{40}$"))' .config/test-frameworks.json)"
+          source_dir="$RUNNER_TEMP/bats-core"
+          prefix="$RUNNER_TEMP/bats"
+
+          git -C "$RUNNER_TEMP" init bats-core
+          git -C "$source_dir" remote add origin https://github.com/bats-core/bats-core.git
+          git -C "$source_dir" fetch --depth=1 origin "$commit"
+          git -C "$source_dir" checkout --detach FETCH_HEAD
+          "$source_dir/install.sh" "$prefix"
+
+          test "$($prefix/bin/bats --version | awk '{print $2}')" = "$version"
+          printf '%s\n' "$prefix/bin" >> "$GITHUB_PATH"
 
       - name: Install pinned ShellCheck
         if: matrix.os == 'ubuntu-latest'
