@@ -11,7 +11,7 @@ Before starting issue work:
 3. Review the current roadmap/tracker when one applies. For the current v0.2.0 hardening cycle, see GitHub issue #29.
 4. Inspect current `main`, relevant source/tests/docs, and latest repository validation before making changes.
 
-Do not rely on chat history when repository artifacts provide the current contract.
+Repository documentation and the current issue define the working contract.
 
 ## Required working behavior
 
@@ -38,4 +38,4 @@ Favor simple, deterministic, cross-platform behavior; explicit contracts; reposi
 
 Do not introduce speculative abstractions, unnecessary services/configuration layers, or standards suppressions merely to make validation green.
 
-When repository documentation, issue requirements, and chat context disagree, verify current repository state and resolve the discrepancy before implementation.
+Resolve contradictions between current repository artifacts before implementation.
