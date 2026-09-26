@@ -224,7 +224,7 @@ PowerShell removal supports native `ShouldProcess` controls. Ordinary removal ke
     -WhatIf
 ```
 
-Use `-Confirm` when you want PowerShell's native confirmation prompt to be authoritative. The tool does not add its own duplicate confirmation in that case.
+Use `-Confirm` when you want PowerShell's native confirmation prompt to be authoritative. Once PowerShell approves or declines the operation, the tool does not add its own duplicate `[y/N]` prompt.
 
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
