@@ -114,7 +114,17 @@ done
 case "$url" in
   *releases-index.json)
     cat <<'JSON'
-{"releases-index":[{"channel-version":"99.0","latest-sdk":"99.0.100","support-phase":"active","release-type":"sts","releases.json":"https://example.invalid/releases.json"}]}
+{
+  "releases-index": [
+    {
+      "channel-version": "99.0",
+      "latest-sdk": "99.0.100",
+      "support-phase": "active",
+      "release-type": "sts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
 JSON
     ;;
   https://example.invalid/releases.json)
@@ -150,7 +160,17 @@ done
 case "$url" in
   *releases-index.json)
     cat <<'JSON'
-{"releases-index":[{"channel-version":"99.0","latest-sdk":"99.0.100","support-phase":"active","release-type":"sts","releases.json":"https://example.invalid/releases.json"}]}
+{
+  "releases-index": [
+    {
+      "channel-version": "99.0",
+      "latest-sdk": "99.0.100",
+      "support-phase": "active",
+      "release-type": "sts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
 JSON
     ;;
   https://example.invalid/releases.json)
@@ -186,7 +206,17 @@ done
 case "$url" in
   *releases-index.json)
     cat <<'JSON'
-{"releases-index":[{"channel-version":"99.0","latest-sdk":"99.0.100","support-phase":"active","release-type":"sts","releases.json":"https://example.invalid/releases.json"}]}
+{
+  "releases-index": [
+    {
+      "channel-version": "99.0",
+      "latest-sdk": "99.0.100",
+      "support-phase": "active",
+      "release-type": "sts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
 JSON
     ;;
   https://example.invalid/releases.json)
