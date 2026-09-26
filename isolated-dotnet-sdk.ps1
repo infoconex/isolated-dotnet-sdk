@@ -37,12 +37,7 @@ Starts the interactive workflow.
 .LINK
 https://github.com/infoconex/isolated-dotnet-sdk
 #>
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
-    'PSUseShouldProcessForStateChangingFunctions',
-    '',
-    Scope = 'Function',
-    Target = 'Remove-IsolatedSdk',
-    Justification = 'Removal uses the existing confirmation and -Yes contract; ShouldProcess semantics are tracked separately in issue #11.')]
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
 param(
     [string]$Action,
     [string]$Version,
@@ -60,6 +55,10 @@ $InstallScript = Join-Path $SdkRoot 'dotnet-install.ps1'
 $script:Bootstrapped = $false
 $script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
 $script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
+$script:ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
+$script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParameters['Confirm'] } else { $false }
+$script:WhatIfWasSpecified = $PSBoundParameters.ContainsKey('WhatIf')
+$script:WhatIfValue = if ($script:WhatIfWasSpecified) { [bool]$PSBoundParameters['WhatIf'] } else { $false }
 
 function Write-ToolDisplay {
     param(
@@ -144,7 +143,7 @@ function Confirm-Action {
 # Bootstrap to the per-user tool path. File-based execution preserves the exact source;
 # piped execution downloads the current main-branch source before re-executing.
 function Install-ToolIfNeeded {
-    New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path $SdkRoot -Force -WhatIf:$false -Confirm:$false | Out-Null
 
     $CurrentPath = $null
     if ($PSCommandPath) {
@@ -160,7 +159,12 @@ function Install-ToolIfNeeded {
     Write-ToolInfo "Installing tool to $ToolPath"
 
     if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath)) {
-        Copy-Item -LiteralPath $CurrentPath -Destination $ToolPath -Force
+        Copy-Item `
+            -LiteralPath $CurrentPath `
+            -Destination $ToolPath `
+            -Force `
+            -WhatIf:$false `
+            -Confirm:$false
     }
     else {
         Invoke-WebRequest `
@@ -169,7 +173,7 @@ function Install-ToolIfNeeded {
     }
 
     if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
-        Unblock-File -Path $ToolPath
+        Unblock-File -Path $ToolPath -WhatIf:$false -Confirm:$false
     }
 
     Write-ToolSuccess 'Tool installed.'
@@ -183,6 +187,12 @@ function Install-ToolIfNeeded {
     }
     if ($Yes) {
         $Arguments.Yes = $true
+    }
+    if ($script:ConfirmWasSpecified) {
+        $Arguments.Confirm = $script:ConfirmValue
+    }
+    if ($script:WhatIfWasSpecified) {
+        $Arguments.WhatIf = $script:WhatIfValue
     }
 
     & $ToolPath @Arguments
@@ -272,6 +282,16 @@ function Select-Action {
             'Q' { Write-ToolInfo 'Exiting.'; return $false }
             default { Write-ToolWarning 'Please choose 1, 2, 3, or 4.' }
         }
+    }
+}
+
+function Assert-RemovalRiskParameterUsage {
+    if ($script:Action -eq 'Remove') {
+        return
+    }
+
+    if ($script:WhatIfWasSpecified -or $script:ConfirmWasSpecified) {
+        throw '-WhatIf and -Confirm are supported only with -Action Remove.'
     }
 }
 
@@ -624,8 +644,38 @@ function Install-IsolatedSdk {
     Write-ToolInfo "Location: $InstallDir"
 }
 
-# Removal is intentionally scoped to the selected version directory after confirmation.
+function Invoke-IsolatedSdkBuildServerShutdown {
+    param(
+        [string]$DotNetPath,
+        [string]$SdkVersion
+    )
+
+    & $DotNetPath build-server shutdown
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build-server shutdown failed for SDK $SdkVersion with exit code $LASTEXITCODE."
+    }
+}
+
+function Invoke-IsolatedSdkDirectoryRemoval {
+    param([string]$InstallDirectory)
+
+    Remove-Item `
+        -LiteralPath $InstallDirectory `
+        -Recurse `
+        -Force `
+        -WhatIf:$false `
+        -Confirm:$false
+
+    if (Test-Path -LiteralPath $InstallDirectory) {
+        throw "SDK directory still exists after removal: $InstallDirectory"
+    }
+}
+
+# Removal is intentionally scoped to the selected version directory after approval.
 function Remove-IsolatedSdk {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+    param([switch]$Yes)
+
     if (-not (Resolve-RemoveVersion)) {
         return
     }
@@ -639,20 +689,29 @@ function Remove-IsolatedSdk {
 
     Write-ToolWarning "Isolated SDK $Version will be removed from $InstallDir"
 
-    if (-not (Confirm-Action -Prompt 'Continue?')) {
+    $ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
+    if (-not $PSCmdlet.ShouldProcess($InstallDir, "Remove isolated .NET SDK $Version")) {
+        return
+    }
+
+    $UseToolConfirmation = -not $Yes -and
+        -not $ConfirmWasSpecified -and
+        $ConfirmPreference -in @(
+            [System.Management.Automation.ConfirmImpact]::High,
+            [System.Management.Automation.ConfirmImpact]::None)
+
+    if ($UseToolConfirmation -and -not (Confirm-Action -Prompt 'Continue?')) {
         Write-ToolInfo 'Removal cancelled.'
         return
     }
 
     Write-ToolInfo "Shutting down build servers for SDK $Version..."
-    & $IsolatedDotNet build-server shutdown
+    Invoke-IsolatedSdkBuildServerShutdown `
+        -DotNetPath $IsolatedDotNet `
+        -SdkVersion $Version
 
     Write-ToolInfo "Removing $InstallDir..."
-    Remove-Item -Path $InstallDir -Recurse -Force
-
-    if (Test-Path $InstallDir) {
-        throw "SDK directory still exists after removal: $InstallDir"
-    }
+    Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $InstallDir
 
     Write-ToolSuccess "Isolated SDK $Version was removed."
 }
@@ -663,7 +722,12 @@ if ($script:Bootstrapped) {
     return
 }
 
-New-Item -ItemType Directory -Path $SdkRoot -Force | Out-Null
+New-Item `
+    -ItemType Directory `
+    -Path $SdkRoot `
+    -Force `
+    -WhatIf:$false `
+    -Confirm:$false | Out-Null
 
 # Keep execution outside the caller's repository so a repository-level global.json cannot
 # influence SDK resolution during tool operations.
@@ -674,9 +738,24 @@ try {
             return
         }
 
+        Assert-RemovalRiskParameterUsage
+
         switch ($Action) {
             'Install' { Install-IsolatedSdk }
-            'Remove' { Remove-IsolatedSdk }
+            'Remove' {
+                $RemoveArguments = @{}
+                if ($Yes) {
+                    $RemoveArguments.Yes = $true
+                }
+                if ($script:ConfirmWasSpecified) {
+                    $RemoveArguments.Confirm = $script:ConfirmValue
+                }
+                if ($script:WhatIfWasSpecified) {
+                    $RemoveArguments.WhatIf = $script:WhatIfValue
+                }
+
+                Remove-IsolatedSdk @RemoveArguments
+            }
             'List' { Show-IsolatedSdk }
         }
     }

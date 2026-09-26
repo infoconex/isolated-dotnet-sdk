@@ -20,6 +20,7 @@ PSScriptAnalyzer analyzes:
 
 - `isolated-dotnet-sdk.ps1`
 - `tests/powershell/run-tests.ps1`
+- `tests/powershell/run-removal-tests.ps1`
 - `scripts/Invoke-PSScriptAnalyzer.ps1`
 
 The repository-owned runner must fail with a nonzero exit code when PSScriptAnalyzer reports findings.
@@ -46,7 +47,7 @@ The PowerShell CLI does not suppress `PSAvoidUsingWriteHost`. User-facing displa
 
 PowerShell presentation color is applied only at the presentation boundary using `$PSStyle`. Informational prefixes use cyan and success prefixes use green when ANSI rendering is appropriate. Warning and error colors remain owned by their semantic PowerShell streams. `PlainText`/`NO_COLOR` execution is not decorated, and default redirected information output must not contain ANSI escape sequences.
 
-`PSUseShouldProcessForStateChangingFunctions` remains narrowly suppressed only for `Remove-IsolatedSdk` while issue #11 defines and tests the intended `ShouldProcess`, `-Confirm`, `-WhatIf`, and existing `-Yes` semantics.
+`Remove-IsolatedSdk` now implements native `ShouldProcess` semantics and no longer suppresses `PSUseShouldProcessForStateChangingFunctions`. Its `-WhatIf`, `-Confirm`, default confirmation, and `-Yes` behavior is specified in [`powershell-removal.md`](powershell-removal.md) and protected by the dedicated removal behavioral suite.
 
 ## CI execution
 
