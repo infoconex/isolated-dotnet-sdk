@@ -73,7 +73,7 @@ Describe 'PowerShell release-metadata behavior' {
         $metadataOutput = @(& pwsh -NoProfile -Command '
             $global:metadataResponses = [System.Collections.Generic.Queue[string]]::new()
             $global:metadataResponses.Enqueue("1")
-            $global:metadataResponses.Enqueue("q")
+            $global:metadataResponses.Enqueue("2")
             function Read-Host { param([string]$Prompt) $global:metadataResponses.Dequeue() }
             function Invoke-RestMethod {
                 param([string]$Uri)
@@ -82,7 +82,7 @@ Describe 'PowerShell release-metadata behavior' {
                         "releases-index" = @(
                             [pscustomobject]@{
                                 "channel-version" = "99.0"
-                                "latest-sdk" = "99.0.100"
+                                "latest-sdk" = "99.0.999"
                                 "support-phase" = "active"
                                 "release-type" = "sts"
                                 "releases.json" = "https://example.invalid/releases.json"
@@ -102,14 +102,14 @@ Describe 'PowerShell release-metadata behavior' {
                     )
                 }
             }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install
-        ' 6>&1)
+            function Invoke-WebRequest { throw "installer-download-boundary" }
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Yes
+        ' 6>&1 2>&1)
 
-        $LASTEXITCODE | Should -Be 0
+        $LASTEXITCODE | Should -Not -Be 0
         $text = $metadataOutput -join [Environment]::NewLine
-        ([regex]::Matches($text, '(?m)^\s+\d+\. 99\.0\.100(?: \(|$)').Count) | Should -Be 1
-        ([regex]::Matches($text, '(?m)^\s+\d+\. 99\.0\.101(?: \(|$)').Count) | Should -Be 1
-        $text.IndexOf('99.0.100') | Should -BeLessThan $text.IndexOf('99.0.101')
+        $text | Should -Match 'Target SDK: 99\.0\.101'
+        $text | Should -Match 'installer-download-boundary'
     }
 
     It 'bypasses release metadata discovery when an exact version is supplied' {
