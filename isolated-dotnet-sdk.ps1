@@ -218,6 +218,10 @@ function Install-ToolIfNeeded {
     }
 
     & $ToolPath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
     $script:Bootstrapped = $true
 }
 
@@ -373,8 +377,6 @@ function Read-ManualVersion {
     Assert-ValidVersion
 }
 
-# Select from Microsoft's release index first, then load the selected channel's detailed
-# release metadata to choose an exact SDK version.
 function Select-InstallVersion {
     $ReleaseIndex = Get-ReleaseIndex
     $AllChannels = @(
@@ -613,8 +615,6 @@ function Resolve-RemoveVersion {
     return $true
 }
 
-# Install with Microsoft's dotnet-install script using -NoPath, then verify that the
-# requested version is discoverable through the isolated dotnet host.
 function Install-IsolatedSdk {
     if (-not (Resolve-InstallVersion)) {
         return
@@ -732,7 +732,6 @@ function Invoke-IsolatedSdkDirectoryRemoval {
     }
 }
 
-# Removal is intentionally scoped to the selected version directory after approval.
 function Remove-IsolatedSdk {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param([switch]$Yes)
@@ -790,8 +789,6 @@ New-Item `
     -WhatIf:$false `
     -Confirm:$false | Out-Null
 
-# Keep execution outside the caller's repository so a repository-level global.json cannot
-# influence SDK resolution during tool operations.
 Push-Location $SdkRoot
 try {
     try {
