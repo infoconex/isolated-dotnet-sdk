@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - 'release/**'
+      - fix/18-transactional-install
   pull_request:
 
 permissions:
