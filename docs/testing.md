@@ -58,14 +58,15 @@ bash tests/bash/run-tests.sh
 The Bash suites cover, among other focused reliability cases:
 
 - isolated temporary `HOME` handling;
-- file-based bootstrap source preservation and bootstrap filesystem failures;
-- `list` behavior, including rejection of an explicit list-version argument;
+- file-based bootstrap source preservation, child-status propagation, and bootstrap filesystem/final-replacement failures;
+- `list` behavior and non-SDK artifact filtering, including rejection of an explicit list-version argument;
+- bare-version install resolution, removal picker cancellation/no-installed behavior, and unavailable required picker input;
 - rejection of an invalid SDK version;
-- release-metadata transport/shape failures and exact-version metadata independence;
+- release-metadata transport/shape failures, required selection fields, no-SDK channel data, first-seen duplicate ordering, and exact-version metadata independence;
 - system and isolated-host native-command failures;
 - unavailable interactive input versus explicit default-no cancellation;
 - build-server shutdown failure context and deletion blocking;
-- transactional installation staging, verification, promotion, conflict preservation, cleanup, and retry behavior.
+- transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
 
 ## PowerShell behavioral tests
 
@@ -91,12 +92,13 @@ The PowerShell behavioral coverage includes:
 
 - isolated temporary home/profile handling;
 - file-based bootstrap source preservation and bootstrap filesystem failures;
-- the `List` action, including rejection of explicit List plus Version;
+- the `List` action and non-SDK artifact filtering, including rejection of explicit List plus Version;
+- Version-without-Action install resolution, removal picker cancellation/no-installed behavior, and unavailable required picker input;
 - information-stream versus success-stream separation;
 - ANSI informational and success presentation colors;
 - ANSI-free redirected output and `NO_COLOR` behavior;
 - rejection of an invalid SDK version;
-- release-metadata transport/shape behavior and exact-version metadata independence;
+- release-metadata transport/shape behavior, required selection fields, no-SDK channel data, duplicate normalization, and exact-version metadata independence;
 - repository-owned unavailable-interactive-input context;
 - repository-owned install-helper download context;
 - source bootstrap forwarding for `-WhatIf`;
@@ -109,7 +111,7 @@ The PowerShell behavioral coverage includes:
 - shutdown-before-delete ordering;
 - shutdown failure blocking deletion;
 - deletion failure blocking success reporting;
-- transactional installation staging, verification, promotion, conflict preservation, cleanup, and retry behavior.
+- transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
 
 The cross-shell product contract is documented in [`behavioral-parity.md`](behavioral-parity.md). The authoritative PowerShell-specific removal behavior specification is [`powershell-removal.md`](powershell-removal.md).
 
