@@ -149,6 +149,17 @@ Describe 'PowerShell process-level behavior' {
         ($metadataOutput -join [Environment]::NewLine) | Should -Not -Match 'transport-specific detail'
     }
 
+    It '-Yes does not bypass unresolved install selection' {
+        Install-TestTool
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+
+        $failureOutput = @(& pwsh -NoProfile -NonInteractive -Command '$releaseIndex = [pscustomobject]@{ "releases-index" = @([pscustomobject]@{ "channel-version" = "99.0"; "latest-sdk" = "99.0.100"; "support-phase" = "active"; "release-type" = "sts"; "releases.json" = "https://example.invalid/releases.json" }) }; function Invoke-RestMethod { return $releaseIndex }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Yes' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Interactive input is unavailable\.'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Select a supported or development .NET channel:'
+    }
+
     It 'reports unavailable interactive input with repository-owned context' {
         Install-TestTool
         $version = '99.0.100-input-test'
