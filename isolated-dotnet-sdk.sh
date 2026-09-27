@@ -121,7 +121,7 @@ bootstrap_if_needed() {
     exec "$TOOL_PATH" "$@"
 }
 
-confirm() {
+confirm_action() {
     local prompt="$1"
     local response=""
 
@@ -166,7 +166,7 @@ get_isolated_sdk_versions() {
     done
 }
 
-format_phase() {
+format_support_phase() {
     case "$1" in
         preview) printf '%s' 'Preview' ;;
         go-live) printf '%s' 'Go Live' ;;
@@ -315,7 +315,7 @@ select_install_version() {
                 "$((i + 1))" \
                 "${channels[$i]}" \
                 "$(printf '%s' "${release_types[$i]}" | tr '[:lower:]' '[:upper:]')" \
-                "$(format_phase "${phases[$i]}")" \
+                "$(format_support_phase "${phases[$i]}")" \
                 "${latest_sdks[$i]}"
         done
 
@@ -590,7 +590,7 @@ calculate_sha256() {
     return 1
 }
 
-install_sdk() {
+install_isolated_sdk() {
     resolve_install_version || return 0
 
     local install_dir="$SDK_ROOT/$VERSION"
@@ -653,7 +653,7 @@ install_sdk() {
     if printf "%s\n" "$installed_versions" | grep -Fxq "$VERSION"; then
         tool_warn ".NET SDK $VERSION is already installed normally."
 
-        if ! confirm "Install an isolated copy too?"; then
+        if ! confirm_action "Install an isolated copy too?"; then
             tool_info "Installation cancelled."
             return
         fi
@@ -740,7 +740,7 @@ install_sdk() {
     tool_info "Location: $install_dir"
 }
 
-remove_sdk() {
+remove_isolated_sdk() {
     resolve_remove_version || return 0
 
     # Removal is intentionally scoped to the selected version directory under SDK_ROOT.
@@ -754,7 +754,7 @@ remove_sdk() {
 
     tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
 
-    if ! confirm "Continue?"; then
+    if ! confirm_action "Continue?"; then
         tool_info "Removal cancelled."
         return
     fi
@@ -866,10 +866,10 @@ fi
 
 case "$ACTION" in
     install)
-        install_sdk
+        install_isolated_sdk
         ;;
     remove)
-        remove_sdk
+        remove_isolated_sdk
         ;;
     list)
         list_isolated_sdks
