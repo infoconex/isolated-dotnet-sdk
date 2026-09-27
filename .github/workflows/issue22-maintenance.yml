@@ -36,4 +36,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add isolated-dotnet-sdk.ps1 .github/workflows/issue22-maintenance.yml
           git commit -m 'fix: keep blob IDs in provenance config only'
-          git push
+          git pull --rebase origin issue-22-supply-chain-integrity
+          git push origin HEAD:issue-22-supply-chain-integrity
