@@ -44,6 +44,8 @@ If the final version destination already exists before an installation attempt:
 
 This means a failed clean-start attempt is retryable without manual cleanup because incomplete installer output is never promoted. A non-valid pre-existing final destination remains a deliberate operator decision: retries continue to fail closed until that state is resolved externally.
 
+Supplying an exact SDK version continues to bypass Microsoft release-metadata discovery; the transaction mechanics do not introduce a metadata dependency for explicit-version installs.
+
 Cleanup is restricted to artifacts created and owned by the current operation. Cleanup failure is reported and must not hide the primary installation failure. Installation success is emitted only after the requested exact SDK has been verified in staging, promoted to the final destination, and normal operation-owned cleanup has completed.
 
 ## Platform-specific failure semantics
