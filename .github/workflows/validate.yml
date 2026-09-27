@@ -6,7 +6,6 @@ on:
     branches:
       - main
       - 'release/**'
-      - 'test/20-failure-boundary-coverage'
   pull_request:
 
 permissions:
