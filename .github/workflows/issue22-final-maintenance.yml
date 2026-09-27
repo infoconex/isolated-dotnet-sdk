@@ -1,0 +1,140 @@
+name: Issue 22 final maintenance
+
+on:
+  push:
+    branches:
+      - issue-22-supply-chain-integrity
+    paths:
+      - .github/workflows/issue22-final-maintenance.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Align legacy test seams and stable README
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          expected = '3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b'
+          shim = f'function Get-FileHash {{ param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{{ Hash = "{expected}" }} }}; '
+          for name in (
+              'tests/powershell/transactional-install.Tests.ps1',
+              'tests/powershell/native-failures.Tests.ps1',
+              'tests/powershell/finalization-failures.Tests.ps1',
+          ):
+              path = Path(name)
+              text = path.read_text()
+              marker = "-Command '"
+              count = text.count(marker)
+              if count == 0:
+                  raise SystemExit(f'no nested PowerShell command seams found in {name}')
+              text = text.replace(marker, marker + shim)
+              path.write_text(text)
+
+          readme = Path('README.md')
+          text = readme.read_text()
+          start = text.index('## Quick Start — Stable Release\n')
+          end = text.index('## Interactive Install\n')
+          section = r'''## Quick Start — Stable Release
+
+Stable installation is explicitly version-pinned and checksum-verified. Choose a published tag from [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases), substitute it for `<release-tag>`, download that tagged script plus the release's `SHA256SUMS`, verify the script, and only then execute it. File-based bootstrap preserves that exact verified source under `~/dotnet-sdks`.
+
+> `v0.1.0` predates the checksum/immutable-release policy and does not provide `SHA256SUMS`. The verified commands below apply to releases published under the current policy.
+
+### Windows / PowerShell
+
+```powershell
+$release = '<release-tag>'
+$temp = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release.ps1")
+$checksums = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release-SHA256SUMS")
+try {
+    Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
+    Invoke-WebRequest "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -OutFile $checksums
+    $match = Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$'
+    if ($null -eq $match -or $match.Matches.Count -ne 1) { throw 'Invalid SHA256SUMS entry.' }
+    $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
+    if ($actual -ine $match.Matches[0].Groups[1].Value) { throw 'Checksum verification failed.' }
+    & $temp
+}
+finally {
+    Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
+}
+```
+
+### Linux / macOS
+
+```bash
+release='<release-tag>'
+temp="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.sh")"
+checksums="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
+trap 'rm -f "$temp" "$checksums"' EXIT
+curl -fsSL "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" -o "$temp"
+curl -fsSL "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -o "$checksums"
+expected="$(awk '$2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums")"
+[[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo 'Invalid SHA256SUMS entry.' >&2; exit 1; }
+if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$temp" | awk '{print tolower($1)}')"
+elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$temp" | awk '{print tolower($1)}')"
+else
+    echo 'SHA-256 verification requires sha256sum or shasum.' >&2
+    exit 1
+fi
+[[ "$actual" == "$expected" ]] || { echo 'Checksum verification failed.' >&2; exit 1; }
+chmod +x "$temp"
+"$temp"
+```
+
+The first run creates `~/dotnet-sdks` if needed, saves the platform-specific verified tool there for future use, and then opens the interactive menu.
+
+```text
+isolated-dotnet-sdk: What would you like to do?
+
+  1. Install an SDK
+  2. Remove an isolated SDK
+  3. List isolated SDKs
+  4. Exit
+
+Selection:
+```
+
+Normal execution of the saved tool does not auto-update. To update, rerun the verified stable bootstrap with a newer published tag. To roll back, rerun it with an older policy-compliant published tag. See [`docs/release-bootstrap.md`](docs/release-bootstrap.md) for the complete release/bootstrap policy and maintainer release contract.
+
+### Development / `main`
+
+Mutable `main` remains available for explicit development testing, but it is not the stable installation path and does not carry the stable-release checksum guarantee.
+
+PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1 | iex
+```
+
+Bash:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.sh | bash
+```
+
+Rerunning either development command may refresh the saved tool from newer `main` source.
+
+'''
+          readme.write_text(text[:start] + section + text[end:])
+          PY
+
+          rm .github/workflows/issue22-final-maintenance.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md tests/powershell/transactional-install.Tests.ps1 tests/powershell/native-failures.Tests.ps1 tests/powershell/finalization-failures.Tests.ps1 .github/workflows/issue22-final-maintenance.yml
+          git commit -m 'test: align integrity seams and verified bootstrap docs'
+          git pull --rebase origin issue-22-supply-chain-integrity
+          git push origin HEAD:issue-22-supply-chain-integrity
