@@ -25,22 +25,33 @@ Each SDK is stored in its own version-specific directory and is not added to `PA
 
 The scripts also run from `dotnet-sdks` rather than from the repository where you invoked them. This prevents a repository-level `global.json` from unexpectedly influencing SDK operations performed by the tool.
 
-## Quick Start
+## Quick Start — Stable Release
+
+Stable installation is explicitly version-pinned. Choose a published tag from [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases), substitute it for `<release-tag>`, download that tagged script to a temporary file, and execute the file. File-based bootstrap preserves that exact released source under `~/dotnet-sdks`.
 
 ### Windows / PowerShell
 
-Run:
-
 ```powershell
-irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1 | iex
+$release = '<release-tag>'
+$temp = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release.ps1")
+try {
+    Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
+    & $temp
+}
+finally {
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+}
 ```
 
 ### Linux / macOS
 
-Run:
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.sh | bash
+release='<release-tag>'
+temp="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.sh")"
+trap 'rm -f "$temp"' EXIT
+curl -fsSL "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" -o "$temp"
+chmod +x "$temp"
+"$temp"
 ```
 
 The first run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then opens the interactive menu.
@@ -56,7 +67,25 @@ isolated-dotnet-sdk: What would you like to do?
 Selection:
 ```
 
-Rerunning either quick-start command refreshes the saved copy of the tool from this repository before running it.
+Normal execution of the saved tool does not auto-update. To update, rerun the stable bootstrap with a newer published tag. To roll back, rerun it with an older published tag. See [`docs/release-bootstrap.md`](docs/release-bootstrap.md) for the complete release/bootstrap policy and maintainer release contract.
+
+### Development / `main`
+
+Mutable `main` remains available for explicit development testing, but it is not the stable installation path.
+
+PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1 | iex
+```
+
+Bash:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.sh | bash
+```
+
+Rerunning either development command may refresh the saved tool from newer `main` source.
 
 ## Interactive Install
 
@@ -317,7 +346,7 @@ The release index identifies each .NET channel and links to the detailed release
 
 ## Security Note
 
-The quick-start commands download and execute the current script from this repository's `main` branch. Review the script first if you prefer not to execute remote code directly.
+Stable bootstrap downloads and executes source from an explicit published tag. Development commands intentionally download and execute mutable `main`. Review remote scripts first if you prefer not to execute remote code directly. Artifact-integrity protections such as checksums or signing are tracked separately from this release/bootstrap policy.
 
 ## License
 
