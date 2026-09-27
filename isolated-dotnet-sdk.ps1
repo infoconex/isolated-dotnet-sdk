@@ -720,7 +720,7 @@ function Install-IsolatedSdk {
             Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $InstallScript
         }
         catch {
-            throw "Unable to download Microsoft's dotnet-install.ps1 script."
+            throw "Unable to download Microsoft's dotnet-install.ps1 script: $($_.Exception.Message)"
         }
 
         if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
