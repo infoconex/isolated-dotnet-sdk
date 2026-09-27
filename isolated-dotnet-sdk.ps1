@@ -84,7 +84,7 @@ function Format-ToolPrefix {
 
     $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
     $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi' -or
-        ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
+    ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
 
     if (-not $UseAnsi) {
         return $Prefix
@@ -177,7 +177,7 @@ function Install-ToolIfNeeded {
 
     $StagedToolPath = Join-Path `
         $SdkRoot `
-        ('.{0}.{1}.tmp' -f $ToolName, [guid]::NewGuid().ToString('N'))
+    ('.{0}.{1}.tmp' -f $ToolName, [guid]::NewGuid().ToString('N'))
 
     try {
         if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath)) {
@@ -439,10 +439,10 @@ function Select-InstallVersion {
 
             Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
                 ($Index + 1), `
-                $Channel.'channel-version', `
-                $ReleaseType, `
-                $SupportPhase, `
-                $Channel.'latest-sdk')
+                    $Channel.'channel-version', `
+                    $ReleaseType, `
+                    $SupportPhase, `
+                    $Channel.'latest-sdk')
         }
 
         Write-ToolDisplay
@@ -709,10 +709,10 @@ function Install-IsolatedSdk {
 
     $InstallScript = Join-Path `
         $SdkRoot `
-        ('dotnet-install.{0}.ps1' -f [guid]::NewGuid().ToString('N'))
+    ('dotnet-install.{0}.ps1' -f [guid]::NewGuid().ToString('N'))
     $StagingDir = Join-Path `
         $SdkRoot `
-        ('.install-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
+    ('.install-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
     $StagedDotNet = Join-Path $StagingDir 'dotnet.exe'
     $PrimaryFailure = $null
     $CleanupFailure = $null
@@ -898,10 +898,10 @@ function Remove-IsolatedSdk {
     }
 
     $UseToolConfirmation = -not $Yes -and
-        -not $ConfirmWasSpecified -and
-        $ConfirmPreference -in @(
-            [System.Management.Automation.ConfirmImpact]::High,
-            [System.Management.Automation.ConfirmImpact]::None)
+    -not $ConfirmWasSpecified -and
+    $ConfirmPreference -in @(
+        [System.Management.Automation.ConfirmImpact]::High,
+        [System.Management.Automation.ConfirmImpact]::None)
 
     if ($UseToolConfirmation -and -not (Confirm-Action -Prompt 'Continue?')) {
         Write-ToolInfo 'Removal cancelled.'
