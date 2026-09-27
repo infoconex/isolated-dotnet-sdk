@@ -111,13 +111,13 @@ jobs:
               ConvertFrom-Json
           $analysisConfig = Get-Content -LiteralPath './.config/static-analysis.json' -Raw |
               ConvertFrom-Json
-          $pesterVersion = [version][string]$testConfig.pesterVersion
-          $analyzerVersion = [version][string]$analysisConfig.psScriptAnalyzerVersion
+          $pesterVersion = [string]$testConfig.pesterVersion
+          $analyzerVersion = [string]$analysisConfig.psScriptAnalyzerVersion
 
-          if ($null -eq $pesterVersion) {
+          if ([string]::IsNullOrWhiteSpace($pesterVersion)) {
               throw 'pesterVersion is required in .config/test-frameworks.json.'
           }
-          if ($null -eq $analyzerVersion) {
+          if ([string]::IsNullOrWhiteSpace($analyzerVersion)) {
               throw 'psScriptAnalyzerVersion is required in .config/static-analysis.json.'
           }
 
