@@ -52,18 +52,15 @@ If a material requirement is unclear, contradictory, or missing and the choice c
 
 Do not stop for routine implementation choices that can be resolved from established repository conventions. Update the issue before implementation when requirements need refinement so it remains authoritative.
 
-## 3. Create the working branch and Draft PR
+## 3. Create the working branch
 
 After requirements are clear:
 
 1. create a focused short-lived branch from current `main`;
 2. keep the issue open;
-3. create the pull request as **Draft** as soon as there is a useful diff to review;
-4. link the PR to the issue, normally with `Closes #<issue>` when appropriate.
+3. do **not** open a pull request yet.
 
-The user decides when the Draft PR becomes ready for review. Do not mark it ready automatically.
-
-Do not merge without explicit user approval.
+The working branch is the implementation workspace. Complete the planned work, repository-owned validation, and full branch review before creating a Draft PR.
 
 ## 4. Record the implementation plan
 
@@ -173,7 +170,22 @@ Do not recommend merge while blocking findings remain.
 
 Record the completed comprehensive review under `## Full review — implementation complete`.
 
-## 10. Record final evidence
+## 10. Open the Draft PR
+
+Open the pull request as **Draft** only after all of the following are true:
+
+- planned implementation Tasks are complete;
+- relevant repository-owned validation is green on the branch;
+- the full branch diff against current `main` has been reviewed;
+- no known blocking findings remain.
+
+The Draft PR is the formal review artifact for final exact-head CI/verification and the user's Ready-for-Review decision. It is not the routine work-in-progress implementation workspace.
+
+Link the PR to the issue, normally with `Closes #<issue>` when appropriate. Record `## Draft PR opened` when the PR link, reviewed head, and Draft status add useful traceability.
+
+Do not mark the Draft PR ready automatically. The user decides when it becomes ready for review. Do not merge without explicit user approval.
+
+## 11. Record final evidence
 
 Before the PR is considered complete, record concise durable evidence, including as applicable:
 
@@ -194,9 +206,9 @@ The completion handoff to the user must clearly separate:
 
 If no user judgment remains other than an explicit lifecycle approval gate, say so directly.
 
-## 11. Ready for review
+## 12. Ready for review
 
-Keep the PR Draft until implementation, validation, and review confidence are sufficient.
+The PR should already be Draft only after implementation, branch validation, and full review reached the quality threshold in the previous step. Use final PR CI and exact-head verification to confirm that reviewed state before readiness.
 
 Do not mark the PR ready unless the user explicitly directs it.
 
@@ -207,13 +219,13 @@ When the user marks it ready, verify:
 - required CI on that head is green;
 - the final diff has no new blocking findings.
 
-## 12. Merge
+## 13. Merge
 
 Do not merge until the user explicitly approves the merge.
 
 Prefer **squash merge** unless the repository or issue requires another strategy. Protect against head movement by verifying/using the exact expected reviewed head where tooling supports it.
 
-## 13. Post-merge verification
+## 14. Post-merge verification
 
 After merge, verify:
 
@@ -229,6 +241,6 @@ Record the result under `## Post-merge verification`.
 
 If post-merge validation fails, treat the issue as unfinished and investigate before moving on.
 
-## 14. Stop at the issue boundary
+## 15. Stop at the issue boundary
 
 After the issue is fully closed out, stop. Report the completed state and let the user decide when to begin the next issue.
