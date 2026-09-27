@@ -49,7 +49,6 @@ $ErrorActionPreference = 'Stop'
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
 $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
 $DotNetInstallCommit = 'da3ce11ba63f3dbb0fb835d41bda2665d5c48e84'
-$DotNetInstallBlob = '0942202517385e2c756d3b32087291c48d078713'
 $DotNetInstallSha256 = '3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b'
 $DotNetInstallUrl = "https://raw.githubusercontent.com/dotnet/install-scripts/$DotNetInstallCommit/src/dotnet-install.ps1"
 $ToolName = 'isolated-dotnet-sdk.ps1'
