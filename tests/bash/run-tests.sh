@@ -24,4 +24,5 @@ exec bats \
   "$repo_root/tests/bash/native-failures.bats" \
   "$repo_root/tests/bash/transactional-install.bats" \
   "$repo_root/tests/bash/promotion-conflict.bats" \
-  "$repo_root/tests/bash/transactional-regressions.bats"
+  "$repo_root/tests/bash/transactional-regressions.bats" \
+  "$repo_root/tests/bash/finalization-failures.bats"
