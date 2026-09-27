@@ -1,0 +1,18 @@
+{
+  "dotnetInstall": {
+    "upstreamRepository": "dotnet/install-scripts",
+    "commit": "da3ce11ba63f3dbb0fb835d41bda2665d5c48e84",
+    "bash": {
+      "path": "src/dotnet-install.sh",
+      "blob": "bd13ffa6656fe776c95b561fe4df640918867523",
+      "sha256": "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e",
+      "url": "https://raw.githubusercontent.com/dotnet/install-scripts/da3ce11ba63f3dbb0fb835d41bda2665d5c48e84/src/dotnet-install.sh"
+    },
+    "powershell": {
+      "path": "src/dotnet-install.ps1",
+      "blob": "0942202517385e2c756d3b32087291c48d078713",
+      "sha256": "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b",
+      "url": "https://raw.githubusercontent.com/dotnet/install-scripts/da3ce11ba63f3dbb0fb835d41bda2665d5c48e84/src/dotnet-install.ps1"
+    }
+  }
+}
