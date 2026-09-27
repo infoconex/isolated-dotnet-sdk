@@ -26,6 +26,17 @@ Add sections such as baseline behavior, behavioral scenarios, sequencing/depende
 
 Issue #9 is a useful example of this structure.
 
+## Issue checkbox state
+
+Task and acceptance-criteria checkboxes are live lifecycle state, not static planning text.
+
+- Keep Task numbering stable across the issue body, implementation plan, and completion comments so `Task N` always identifies the same deliverable.
+- When a Task is completed, add `## Task N complete — <concise task/capability>` and check the matching Task checkbox as part of the same completion step.
+- Check an acceptance criterion as soon as durable evidence establishes it. Leave it unchecked only when its requirement genuinely depends on a later lifecycle event such as exact-head PR validation or merge.
+- Reconcile Task and acceptance-criteria checkbox state at the lifecycle gates defined in [`issue-workflow.md`](issue-workflow.md), including before Draft PR creation, after exact-head validation, and after merge.
+
+A completed Task or satisfied acceptance criterion left unchecked is stale issue state and should be corrected before proceeding through the applicable lifecycle gate.
+
 ## Issue comment headings
 
 Use Markdown level-2 headings (`##`) as the first line of substantive issue comments so the history is easy to scan.
@@ -51,13 +62,13 @@ Use comments sparingly and intentionally. The expected sequence is:
 
 1. **Requirements review / kickoff** — understanding, assumptions, ambiguities, and confirmed scope.
 2. **Implementation plan** — planned Tasks, likely commit boundaries, scope, validation approach, and initial test-list behaviors for behavioral work.
-3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, TDD evidence where applicable, validation, and follow-up findings.
+3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, TDD evidence where applicable, validation, follow-up findings, and synchronized Task/acceptance checkbox state.
 4. **Supplemental/remediation evidence** — only when new findings materially change or extend a Task record.
 5. **Manual evidence** — only when automation cannot reliably establish the behavior.
 6. **Full review** — comprehensive branch/diff review result after implementation and validation are complete.
-7. **Draft PR opening** — only after implementation, repository validation, and full review are complete with no known blocking findings.
-8. **Final completion evidence** — exact reviewed PR head, final PR CI evidence, final review result, and intentional follow-ups.
-9. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, and roadmap status.
+7. **Draft PR opening** — only after implementation, repository validation, full review, and linked-issue state reconciliation are complete with no known blocking findings.
+8. **Final completion evidence** — exact reviewed PR head, final PR CI evidence, final review result, reconciled acceptance criteria, and intentional follow-ups.
+9. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, roadmap status, and final issue checkbox reconciliation.
 
 Do not add generic comments for every tool call, commit, or routine status change.
 
