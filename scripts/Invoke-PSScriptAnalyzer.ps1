@@ -19,12 +19,13 @@ catch {
 }
 
 $AnalysisPaths = @(
-    (Join-Path $RepositoryRoot 'isolated-dotnet-sdk.ps1'),
-    (Join-Path $RepositoryRoot 'tests/powershell/run-tests.ps1'),
-    (Join-Path $RepositoryRoot 'tests/powershell/behavior.Tests.ps1'),
-    (Join-Path $RepositoryRoot 'tests/powershell/removal.Tests.ps1'),
-    (Join-Path $RepositoryRoot 'scripts/Invoke-PSFormatter.ps1'),
-    $PSCommandPath
+    (Join-Path $RepositoryRoot 'isolated-dotnet-sdk.ps1')
+    Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'scripts') -Filter '*.ps1' -File |
+        Sort-Object FullName |
+        ForEach-Object { $_.FullName }
+    Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'tests/powershell') -Filter '*.ps1' -File |
+        Sort-Object FullName |
+        ForEach-Object { $_.FullName }
 )
 
 try {
