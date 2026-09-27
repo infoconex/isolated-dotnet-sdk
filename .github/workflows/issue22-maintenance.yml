@@ -17,7 +17,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Apply focused cleanup
+      - name: Keep blob IDs in provenance config only
         shell: bash
         run: |
           set -euo pipefail
@@ -25,32 +25,24 @@ jobs:
           from pathlib import Path
 
           replacements = {
-              Path('isolated-dotnet-sdk.sh'): [
-                  ('DOTNET_INSTALL_BLOB="bd13ffa6656fe776c95b561fe4df640918867523"\n', ''),
-              ],
-              Path('isolated-dotnet-sdk.ps1'): [
-                  ("$DotNetInstallBlob = '0942202517385e2c756d3b32087291c48d078713'\n", ''),
-              ],
-              Path('tests/bash/metadata.bats'): [
-                  ('https://dot.net/v1/dotnet-install.sh', 'https://raw.githubusercontent.com/dotnet/install-scripts/da3ce11ba63f3dbb0fb835d41bda2665d5c48e84/src/dotnet-install.sh'),
-              ],
-              Path('tests/bash/public-boundaries.bats'): [
-                  ('https://dot.net/v1/dotnet-install.sh', 'https://raw.githubusercontent.com/dotnet/install-scripts/da3ce11ba63f3dbb0fb835d41bda2665d5c48e84/src/dotnet-install.sh'),
-              ],
+              Path('isolated-dotnet-sdk.sh'): (
+                  'DOTNET_INSTALL_BLOB="bd13ffa6656fe776c95b561fe4df640918867523"\n',
+                  ''),
+              Path('isolated-dotnet-sdk.ps1'): (
+                  "$DotNetInstallBlob = '0942202517385e2c756d3b32087291c48d078713'\n",
+                  ''),
           }
 
-          for path, edits in replacements.items():
+          for path, (old, new) in replacements.items():
               text = path.read_text()
-              for old, new in edits:
-                  if old not in text:
-                      raise SystemExit(f'expected text missing in {path}: {old!r}')
-                  text = text.replace(old, new)
-              path.write_text(text)
+              if old not in text:
+                  raise SystemExit(f'expected text missing in {path}: {old!r}')
+              path.write_text(text.replace(old, new))
           PY
 
           rm .github/workflows/issue22-maintenance.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add isolated-dotnet-sdk.sh isolated-dotnet-sdk.ps1 tests/bash/metadata.bats tests/bash/public-boundaries.bats .github/workflows/issue22-maintenance.yml
-          git commit -m 'fix: align integrity pins with analyzers and tests'
+          git add isolated-dotnet-sdk.sh isolated-dotnet-sdk.ps1 .github/workflows/issue22-maintenance.yml
+          git commit -m 'fix: keep blob IDs in provenance config only'
           git push
