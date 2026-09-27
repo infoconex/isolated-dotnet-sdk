@@ -26,4 +26,5 @@ exec bats \
   "$repo_root/tests/bash/promotion-conflict.bats" \
   "$repo_root/tests/bash/transactional-regressions.bats" \
   "$repo_root/tests/bash/finalization-failures.bats" \
-  "$repo_root/tests/bash/release-bootstrap.bats"
+  "$repo_root/tests/bash/release-bootstrap.bats" \
+  "$repo_root/tests/bash/installer-integrity.bats"
