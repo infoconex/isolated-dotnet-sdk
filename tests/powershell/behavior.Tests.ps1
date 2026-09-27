@@ -170,7 +170,7 @@ Describe 'PowerShell process-level behavior' {
         $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "transport-specific-helper-detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match "Unable to download Microsoft''s dotnet-install\.ps1 script\."
+        ($failureOutput -join [Environment]::NewLine) | Should -Match "Unable to download Microsoft's dotnet-install\.ps1 script\."
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'transport-specific-helper-detail'
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
     }
