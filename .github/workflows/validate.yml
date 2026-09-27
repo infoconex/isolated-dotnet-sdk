@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - 'issue-25-coding-naming-consistency'
       - 'release/**'
   pull_request:
 
