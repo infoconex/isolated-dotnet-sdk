@@ -85,7 +85,7 @@ These commands preserve the Issue #21 semantics while adding a pre-execution int
 
 ### Legacy `v0.1.0`
 
-`v0.1.0` predates the Issue #22 integrity policy. It has no `SHA256SUMS` release asset and was published without release immutability. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to releases published under the new policy.
+`v0.1.0` predates the Issue #22 checksum policy and has no `SHA256SUMS` release asset. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to releases published under the new policy.
 
 ## Updates
 
@@ -147,12 +147,11 @@ For releases after Issue #22, a version becomes available for stable installatio
 3. `pwsh -NoProfile -File ./scripts/New-ReleaseChecksums.ps1 -OutputPath <path>/SHA256SUMS` is run against that exact release tree;
 4. the generated `SHA256SUMS` contains SHA-256 entries for `isolated-dotnet-sdk.ps1` and `isolated-dotnet-sdk.sh` and is retained unchanged for publication;
 5. a GitHub Release is created as a **draft** for that tag;
-6. `SHA256SUMS` and every other intended release asset are attached while the release is still a draft;
-7. the draft is reviewed and then published; and
-8. repository release immutability is enabled so publication locks the release tag and assets.
+6. `SHA256SUMS` and every other intended release asset are attached while the release is still a draft; and
+7. the draft, tag target, checksum file, and intended assets are reviewed before publication.
 
-GitHub recommends attaching all assets to a draft before publishing an immutable release. Under GitHub's immutable-release behavior, the published release's tag cannot be moved and its assets cannot be replaced or deleted while the release exists; GitHub also creates a release attestation. The checksum file remains useful as the direct cross-platform bootstrap verification input, while the GitHub attestation provides platform provenance.
+Repository-level immutable releases are intentionally not part of this policy. Maintainers may retire/delete prior releases according to normal GitHub administration needs. That flexibility means GitHub release/tag/asset administration remains an accepted trust boundary: the `SHA256SUMS` manifest detects mismatched or corrupted acquired bytes, but it is not an independent signature and cannot protect against an authorized administrator deliberately replacing both the tagged source and matching checksum material.
 
-Release immutability applies only to future releases, which is why `v0.1.0` remains a documented legacy trust boundary rather than being rewritten.
+For that reason, release review should record the intended tag target and checksum asset at publication time. The bootstrap contract relies on the release state the repository presents for the explicitly selected tag; it does not claim that GitHub itself prevents later administrative mutation.
 
 See [`supply-chain-integrity.md`](supply-chain-integrity.md) for the complete remote-dependency inventory and residual trust assumptions.
