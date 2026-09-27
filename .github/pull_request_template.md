@@ -3,7 +3,9 @@ Keep this description concise and evidence-focused.
 Authoritative guidance:
 - docs/issue-workflow.md
 - docs/issue-conventions.md
-Lifecycle evidence such as Kickoff, Task completion, Full review, Final review, and Post-merge verification belongs in the linked issue history.
+Open this Draft PR only after implementation is believed complete, repository-owned branch validation is green, and the full branch diff has been reviewed with no known blocking findings.
+The Draft PR is for final exact-head CI/verification and the explicit Ready-for-Review decision.
+Lifecycle evidence such as Kickoff, Task completion, Full review, Draft PR opening, Final review, and Post-merge verification belongs in the linked issue history.
 -->
 
 Closes #
@@ -38,7 +40,7 @@ Closes #
 
 ## Review status
 
-<!-- Summarize full-review status and any remaining blocking findings. Draft readiness and merge still require explicit user approval. -->
+<!-- Confirm the pre-PR full review completed with no known blocking findings, then summarize any findings from final PR-level verification. Ready for Review and merge still require separate explicit user approval. -->
 
 -
 
