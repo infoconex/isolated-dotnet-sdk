@@ -152,9 +152,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
-          Write-Output 'FORMATTER_OUTPUT_BASE64_BEGIN'
-          Write-Output ([Convert]::ToBase64String([IO.File]::ReadAllBytes('./isolated-dotnet-sdk.ps1')))
-          Write-Output 'FORMATTER_OUTPUT_BASE64_END'
+          git diff --no-ext-diff --unified=3 -- isolated-dotnet-sdk.ps1
 
       - name: Run PowerShell behavioral tests
         shell: pwsh
