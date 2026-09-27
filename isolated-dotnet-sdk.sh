@@ -6,7 +6,6 @@ RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/r
 TOOL_NAME="isolated-dotnet-sdk.sh"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
-INSTALL_SCRIPT="$SDK_ROOT/dotnet-install.sh"
 
 if [[ -t 1 ]]; then
     CYAN='\033[0;36m'
@@ -533,6 +532,28 @@ list_isolated_sdks() {
     done <<< "$versions"
 }
 
+cleanup_install_transaction() {
+    local helper_path="${1:-}"
+    local staging_path="${2:-}"
+    local cleanup_failed="false"
+
+    if [[ -n "$helper_path" && ( -e "$helper_path" || -L "$helper_path" ) ]]; then
+        if ! rm -f "$helper_path"; then
+            tool_warn "Unable to clean install helper: $helper_path"
+            cleanup_failed="true"
+        fi
+    fi
+
+    if [[ -n "$staging_path" && ( -e "$staging_path" || -L "$staging_path" ) ]]; then
+        if ! rm -rf "$staging_path"; then
+            tool_warn "Unable to clean install staging directory: $staging_path"
+            cleanup_failed="true"
+        fi
+    fi
+
+    [[ "$cleanup_failed" == "false" ]]
+}
+
 install_sdk() {
     resolve_install_version || return 0
 
@@ -541,6 +562,9 @@ install_sdk() {
     local installed_sdks=""
     local installed_versions=""
     local isolated_sdks=""
+    local install_script=""
+    local staging_dir=""
+    local staged_dotnet=""
     local status=0
 
     tool_info "Target SDK: $VERSION"
@@ -582,6 +606,10 @@ install_sdk() {
         fi
     fi
 
+    if [[ -e "$install_dir" || -L "$install_dir" ]]; then
+        tool_fail "Isolated SDK destination already exists and cannot be replaced: $install_dir"
+    fi
+
     tool_info "No existing isolated copy was found."
     echo
 
@@ -596,13 +624,24 @@ install_sdk() {
         echo
     fi
 
+    install_script="$(mktemp "$SDK_ROOT/dotnet-install.sh.XXXXXX")"
+    trap 'cleanup_install_transaction "$install_script" "$staging_dir" || true' EXIT
+
     tool_info "Downloading Microsoft's dotnet-install.sh script..."
-    curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$INSTALL_SCRIPT"
+    if curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$install_script"; then
+        :
+    else
+        status=$?
+        tool_fail "Unable to download Microsoft's dotnet-install.sh script with exit code $status."
+    fi
+
+    staging_dir="$(mktemp -d "$SDK_ROOT/.install-$VERSION.XXXXXX")"
+    staged_dotnet="$staging_dir/dotnet"
 
     tool_info "Installing .NET SDK $VERSION..."
-    if bash "$INSTALL_SCRIPT" \
+    if bash "$install_script" \
         --version "$VERSION" \
-        --install-dir "$install_dir" \
+        --install-dir "$staging_dir" \
         --no-path; then
         :
     else
@@ -613,9 +652,11 @@ install_sdk() {
     echo
     tool_info "Verifying the isolated SDK..."
 
-    # Verify through the isolated host so a matching system-wide SDK cannot satisfy
-    # the post-install check for the requested version.
-    if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+    if [[ ! -x "$staged_dotnet" ]]; then
+        tool_fail "The isolated dotnet executable was not found at $staged_dotnet"
+    fi
+
+    if isolated_sdks="$("$staged_dotnet" --list-sdks)"; then
         :
     else
         status=$?
@@ -626,6 +667,28 @@ install_sdk() {
     if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
         tool_fail "SDK $VERSION was not found after installation."
     fi
+
+    if [[ -e "$install_dir" || -L "$install_dir" ]]; then
+        tool_fail "Isolated SDK destination already exists and cannot be replaced: $install_dir"
+    fi
+
+    if mv "$staging_dir" "$install_dir"; then
+        staging_dir=""
+    else
+        status=$?
+        tool_fail "Unable to promote isolated SDK $VERSION into $install_dir with exit code $status."
+    fi
+
+    if ! cleanup_install_transaction "$install_script" "$staging_dir"; then
+        install_script=""
+        staging_dir=""
+        trap - EXIT
+        tool_fail "Isolated SDK $VERSION was installed, but transaction cleanup failed."
+    fi
+
+    install_script=""
+    staging_dir=""
+    trap - EXIT
 
     echo
     tool_success "Isolated SDK installation completed successfully."

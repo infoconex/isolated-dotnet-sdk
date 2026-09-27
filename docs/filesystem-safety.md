@@ -22,6 +22,32 @@ The Bash interactive release picker writes channel metadata to a collision-resis
 
 Similarly named pre-existing files are not considered operation-owned and must not be removed by cleanup.
 
+## Transactional SDK installation
+
+A new SDK installation never targets the final `~/dotnet-sdks/<version>` directory directly. Each attempt owns two collision-resistant temporary artifacts beneath the isolated SDK root:
+
+- an operation-scoped Microsoft `dotnet-install` helper file;
+- an operation-scoped SDK staging directory.
+
+The helper is downloaded fresh for the current attempt. A failed helper download cannot fall back to a stable helper left by an earlier operation, and the operation-owned helper is removed after success or failure where cleanup is possible.
+
+The Microsoft installer writes only into the operation-owned staging directory. Installer failure, a missing staged host, a nonzero staged-host inventory command, or an inventory that omits the requested exact SDK all fail before promotion. The staging directory is then removed where cleanup is possible, so an attempt that started without a final destination leaves no partial final version directory.
+
+After staged verification succeeds, the tool checks the final destination again and promotes the staging directory only when that destination is still absent. If a destination appears before promotion, or promotion otherwise fails, the pre-existing/newly appeared final destination is preserved and cleanup remains limited to the operation-owned staging state.
+
+If the final version destination already exists before an installation attempt:
+
+- a working isolated host that reports the requested exact version retains the existing `already installed` behavior;
+- every other existing file or directory state is treated as recovery/user state and causes deterministic destination-conflict failure;
+- the installer is not run against that destination;
+- the tool does not delete, replace, merge into, or repair that state automatically.
+
+This means a failed clean-start attempt is retryable without manual cleanup because incomplete installer output is never promoted. A non-valid pre-existing final destination remains a deliberate operator decision: retries continue to fail closed until that state is resolved externally.
+
+Supplying an exact SDK version continues to bypass Microsoft release-metadata discovery; the transaction mechanics do not introduce a metadata dependency for explicit-version installs.
+
+Cleanup is restricted to artifacts created and owned by the current operation. Cleanup failure is reported and must not hide the primary installation failure. Installation success is emitted only after the requested exact SDK has been verified in staging, promoted to the final destination, and normal operation-owned cleanup has completed.
+
 ## Platform-specific failure semantics
 
 The portable contract is based on observable filesystem success or failure rather than one operating system's locking model:
@@ -34,6 +60,6 @@ The portable contract is based on observable filesystem success or failure rathe
 
 This means a Windows locked-file failure and a Unix permission/deletion failure may originate differently, but both must satisfy the same external contract: non-success, no false success message, and no broadened destructive scope.
 
-## Boundaries with later roadmap work
+## Roadmap boundaries
 
-This contract does not define network error policy for release metadata or bootstrap sources; that belongs to the network-failure roadmap work. It also does not make SDK installation fully transactional or define rollback of a partially populated SDK version directory; that belongs to the transactional-install roadmap work.
+This contract defines filesystem ownership, cleanup, and transactional SDK-install behavior. It does not add generic retry/backoff behavior, automatic repair of arbitrary pre-existing SDK destinations, or a generalized transaction framework. Stable release/bootstrap versioning policy and remote artifact integrity remain separate roadmap concerns.

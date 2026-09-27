@@ -27,6 +27,45 @@ EOF
   chmod +x "$fake_bin/dotnet"
 }
 
+@test "failed install helper download uses operation-scoped temporary state" {
+  fake_bin="$test_root/download-fake-bin"
+  mkdir -p "$fake_bin"
+  make_successful_system_dotnet "$fake_bin"
+
+  stable_helper="$tool_root/dotnet-install.sh"
+  printf '%s\n' 'preserve-stable-helper' > "$stable_helper"
+
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+out_file=''
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == '-o' ]]; then
+    out_file="$2"
+    shift 2
+  else
+    shift
+  fi
+done
+printf '%s\n' "$out_file" > "$HOME/download-target.txt"
+printf '%s\n' 'partial-download' > "$out_file"
+printf '%s\n' 'download-failed' >&2
+exit 81
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" install "$version" --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"download-failed"* ]]
+  [ ! -d "$install_dir" ]
+  [ "$(cat "$stable_helper")" = 'preserve-stable-helper' ]
+  download_target="$(cat "$test_home/download-target.txt")"
+  [ "$download_target" != "$stable_helper" ]
+  [[ "$download_target" == "$tool_root/dotnet-install.sh."* ]]
+  [ ! -e "$download_target" ]
+}
+
 @test "existing isolated host failure stops installation with context" {
   fake_bin="$test_root/existing-probe-fake-bin"
   mkdir -p "$fake_bin" "$install_dir"
