@@ -1,12 +1,10 @@
 name: Validate
 
-# Temporary Issue #25 branch validation trigger.
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-      - 'issue-25-coding-naming-consistency'
       - 'release/**'
   pull_request:
 
