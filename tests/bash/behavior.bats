@@ -243,6 +243,37 @@ EOF
   [[ "$output" != *"Select a supported or development .NET channel:"* ]]
 }
 
+@test "--yes does not bypass unresolved install selection" {
+  bootstrap_tool
+
+  fake_bin="$test_root/yes-selection-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+cat <<'JSON'
+{
+  "releases-index": [
+    {
+      "channel-version": "99.0",
+      "latest-sdk": "99.0.100",
+      "support-phase": "active",
+      "release-type": "sts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
+JSON
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run bash -c 'exec </dev/null; env HOME="$1" PATH="$2:$PATH" "$3" install --yes' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Interactive input is unavailable."* ]]
+  [[ "$output" == *"Select a supported or development .NET channel:"* ]]
+}
+
 @test "system SDK inventory failure stops installation with context" {
   bootstrap_tool
 
