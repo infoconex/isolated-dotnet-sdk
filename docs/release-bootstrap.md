@@ -26,12 +26,12 @@ try {
     Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
     Invoke-WebRequest "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -OutFile $checksums
 
-    $match = Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$'
-    if ($null -eq $match -or $match.Matches.Count -ne 1) {
+    $checksumMatches = @(Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$')
+    if ($checksumMatches.Count -ne 1) {
         throw 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.ps1 entry.'
     }
 
-    $expected = $match.Matches[0].Groups[1].Value
+    $expected = $checksumMatches[0].Matches[0].Groups[1].Value
     $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
     if ($actual -ine $expected) {
         throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
@@ -85,7 +85,7 @@ These commands preserve the Issue #21 semantics while adding a pre-execution int
 
 ### Legacy `v0.1.0`
 
-`v0.1.0` predates the Issue #22 integrity policy. It has no `SHA256SUMS` release asset and was published before release immutability was enabled. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to releases published under the new policy.
+`v0.1.0` predates the Issue #22 integrity policy. It has no `SHA256SUMS` release asset and was published without release immutability. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to releases published under the new policy.
 
 ## Updates
 
