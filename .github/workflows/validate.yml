@@ -1,5 +1,6 @@
 name: Validate
 
+# Temporary Issue #25 branch validation trigger.
 on:
   workflow_dispatch:
   push:
