@@ -3,12 +3,26 @@ Describe 'PowerShell transactional SDK installation' {
         $script:RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
         $script:HomeVariableName = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
-        $script:FakeHostRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-fake-host-{0}" -f [guid]::NewGuid())
-        $script:FakeHostPath = Join-Path $script:FakeHostRoot 'dotnet.exe'
-        New-Item -ItemType Directory -Path $script:FakeHostRoot -Force | Out-Null
+        $script:FakeHostProjectRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-fake-host-{0}" -f [guid]::NewGuid())
+        $script:FakeHostOutput = Join-Path $script:FakeHostProjectRoot 'out'
+        New-Item -ItemType Directory -Path $script:FakeHostProjectRoot -Force | Out-Null
 
-        Add-Type -TypeDefinition @'
+        Set-Content -LiteralPath (Join-Path $script:FakeHostProjectRoot 'FakeDotNet.csproj') -Value @'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>dotnet</AssemblyName>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+</Project>
+'@
+
+        Set-Content -LiteralPath (Join-Path $script:FakeHostProjectRoot 'Program.cs') -Value @'
 using System;
+using System.IO;
+
 public static class Program
 {
     public static int Main(string[] args)
@@ -21,6 +35,13 @@ public static class Program
 
         if (args.Length > 0 && args[0] == "--list-sdks")
         {
+            var conflictPath = Environment.GetEnvironmentVariable("FAKE_DOTNET_CREATE_CONFLICT");
+            if (!string.IsNullOrWhiteSpace(conflictPath))
+            {
+                Directory.CreateDirectory(conflictPath);
+                File.WriteAllText(Path.Combine(conflictPath, "sentinel.txt"), "preserve-conflict");
+            }
+
             var version = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
             Console.WriteLine(version + " [C:\\fake]");
         }
@@ -28,11 +49,21 @@ public static class Program
         return 0;
     }
 }
-'@ -OutputAssembly $script:FakeHostPath -OutputType ConsoleApplication
+'@
+
+        & dotnet build `
+            (Join-Path $script:FakeHostProjectRoot 'FakeDotNet.csproj') `
+            -c Release `
+            -o $script:FakeHostOutput `
+            --nologo `
+            --verbosity quiet
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to build the deterministic fake dotnet host. Exit code: $LASTEXITCODE"
+        }
     }
 
     AfterAll {
-        Remove-Item -LiteralPath $script:FakeHostRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $script:FakeHostProjectRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     BeforeEach {
@@ -52,22 +83,24 @@ public static class Program
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:TestHome, 'Process')
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER = $script:InstallerPath
-        $env:ISOLATED_DOTNET_SDK_FAKE_HOST = $script:FakeHostPath
+        $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT = $script:FakeHostOutput
         $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET = $script:InstallerTargetPath
         $env:ISOLATED_DOTNET_SDK_DOWNLOAD_TARGET = $script:DownloadTargetPath
         $env:FAKE_DOTNET_SDK_VERSION = $script:Version
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
+        Remove-Item Env:FAKE_DOTNET_CREATE_CONFLICT -ErrorAction SilentlyContinue
     }
 
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:ISOLATED_DOTNET_SDK_TOOL_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -ErrorAction SilentlyContinue
-        Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_HOST -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_DOWNLOAD_TARGET -ErrorAction SilentlyContinue
         Remove-Item Env:FAKE_DOTNET_SDK_VERSION -ErrorAction SilentlyContinue
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
+        Remove-Item Env:FAKE_DOTNET_CREATE_CONFLICT -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -153,13 +186,35 @@ function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:I
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
+    It 'blocks promotion when the staged host exits nonzero' {
+        $env:FAKE_DOTNET_EXIT_CODE = '74'
+        Set-Content -LiteralPath $script:InstallerPath -Value @'
+param([string]$Version, [string]$InstallDir, [switch]$NoPath)
+Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
+exit 0
+'@
+
+        $failureOutput = @(& pwsh -NoProfile -Command '
+function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
+' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code 74\.'
+        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
+        Test-Path -LiteralPath $target | Should -BeFalse
+        Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
+    }
+
     It 'blocks promotion when staged inventory omits the requested version' {
         $env:FAKE_DOTNET_SDK_VERSION = '98.0.100'
         Set-Content -LiteralPath $script:InstallerPath -Value @'
 param([string]$Version, [string]$InstallDir, [switch]$NoPath)
 Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_HOST -Destination (Join-Path $InstallDir 'dotnet.exe') -Force
+Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
 exit 0
 '@
 
@@ -175,12 +230,34 @@ function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:I
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
+    It 'preserves a destination that appears before promotion' {
+        $env:FAKE_DOTNET_CREATE_CONFLICT = $script:InstallDir
+        Set-Content -LiteralPath $script:InstallerPath -Value @'
+param([string]$Version, [string]$InstallDir, [switch]$NoPath)
+Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
+exit 0
+'@
+
+        $failureOutput = @(& pwsh -NoProfile -Command '
+function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
+' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'destination already exists'
+        (Get-Content -LiteralPath (Join-Path $script:InstallDir 'sentinel.txt') -Raw).Trim() | Should -Be 'preserve-conflict'
+        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
+        Test-Path -LiteralPath $target | Should -BeFalse
+    }
+
     It 'promotes only a verified staged installation' {
         Set-Content -LiteralPath $script:InstallerPath -Value @'
 param([string]$Version, [string]$InstallDir, [switch]$NoPath)
 Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_HOST -Destination (Join-Path $InstallDir 'dotnet.exe') -Force
+Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
 exit 0
 '@
 
@@ -216,7 +293,7 @@ function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:I
         Set-Content -LiteralPath $script:InstallerPath -Value @'
 param([string]$Version, [string]$InstallDir, [switch]$NoPath)
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_HOST -Destination (Join-Path $InstallDir 'dotnet.exe') -Force
+Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
 exit 0
 '@
 
