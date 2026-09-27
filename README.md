@@ -181,6 +181,8 @@ Bash:
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list
 ```
 
+An explicit List action does not accept a version. Supplying one is treated as invalid input rather than silently ignoring it. A bare version with no action is still the Install convenience form shown above.
+
 ## Remove an Isolated SDK
 
 Running `remove` without a version opens a picker containing only SDKs installed under `~/dotnet-sdks`.
@@ -249,7 +251,7 @@ For intentional automation, PowerShell accepts either the existing `-Yes` switch
 
 `-WhatIf` always takes precedence over `-Yes`. Explicit `-WhatIf` and `-Confirm` are currently supported only for the PowerShell `Remove` action; using them with `Install` or `List` fails rather than implying unsupported risk-mitigation semantics.
 
-After removal is approved, the PowerShell tool asks the selected isolated SDK to shut down its build servers. A nonzero shutdown result stops the operation before directory deletion. Success is reported only after the selected version directory has been removed and verified absent.
+After removal is approved, the selected isolated SDK is asked to shut down its build servers before directory deletion. In both implementations, a nonzero shutdown result stops the operation, reports the selected SDK and native exit code where available, and suppresses removal success. Success is reported only after the selected version directory has been removed and verified absent.
 
 The Bash implementation keeps its existing default-no confirmation and `--yes` automation behavior.
 
@@ -264,22 +266,28 @@ The Bash implementation keeps its existing default-no confirmation and `--yes` a
 
 For scripts and CI jobs, provide the action and version explicitly rather than using the interactive picker. For PowerShell removal, use `-Yes` or `-Confirm:$false` only when you intentionally approve deletion; use `-WhatIf` for a no-change preview. For Bash, use `--yes` when you intentionally want to bypass the confirmation prompt.
 
+`-Yes` and `--yes` bypass supported confirmation prompts; they do not supply a missing action or version. If a command still needs interactive selection and input is unavailable, the tool fails nonzero with repository-owned context instead of hanging, guessing, or treating end-of-input as a successful cancellation.
+
 Operational failures return a nonzero exit status. Choosing to cancel an interactive install or removal is treated as a normal user action rather than an error.
+
+## PowerShell / Bash Behavioral Parity
+
+The two implementations share the same product contract where behavior is portable, while retaining shell-native features such as PowerShell `ShouldProcess` and Bash CLI conventions. Observable install, list, remove, confirmation, failure-propagation, cleanup, and status rules are specified in [`docs/behavioral-parity.md`](docs/behavioral-parity.md).
+
+The implementations do not need byte-for-byte output, identical streams, identical casing rules, or identical source structure. Platform-specific host names, PowerShell-only `-WhatIf` / `-Confirm`, and shell-native bootstrap mechanics are intentional differences.
 
 ## Directory Layout
 
-After installing an SDK, the directory looks similar to:
+After installing an SDK, persistent state looks similar to:
 
 ```text
 dotnet-sdks/
-├── isolated-dotnet-sdk.ps1   # Windows
+├── isolated-dotnet-sdk.ps1   # Windows, or
 ├── isolated-dotnet-sdk.sh    # Linux/macOS
-├── dotnet-install.ps1        # Windows, downloaded from Microsoft
-├── dotnet-install.sh         # Linux/macOS, downloaded from Microsoft
 └── 11.0.100-rc.1.26425.128/
 ```
 
-Only the files appropriate to the current platform will normally be present.
+Only the tool file appropriate to the current platform will normally be present. Microsoft's `dotnet-install.ps1` / `dotnet-install.sh` helper and `.install-*` staging directory are operation-scoped transaction artifacts: each install attempt owns its temporary copies and normally removes them after success or failure. They are not persistent installation state.
 
 ## Why This Exists
 
