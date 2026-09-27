@@ -148,4 +148,50 @@ Describe 'PowerShell process-level behavior' {
         ($metadataOutput -join [Environment]::NewLine) | Should -Match 'Unable to load .NET release metadata from Microsoft\.'
         ($metadataOutput -join [Environment]::NewLine) | Should -Not -Match 'transport-specific detail'
     }
+
+    It '-Yes does not bypass unresolved install selection' {
+        Install-TestTool
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+
+        $failureOutput = @(& pwsh -NoProfile -NonInteractive -Command '$releaseIndex = [pscustomobject]@{ "releases-index" = @([pscustomobject]@{ "channel-version" = "99.0"; "latest-sdk" = "99.0.100"; "support-phase" = "active"; "release-type" = "sts"; "releases.json" = "https://example.invalid/releases.json" }) }; function Invoke-RestMethod { return $releaseIndex }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Yes' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Interactive input is unavailable\.'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Select a supported or development .NET channel:'
+    }
+
+    It 'reports unavailable interactive input with repository-owned context' {
+        Install-TestTool
+        $version = '99.0.100-input-test'
+        $installDirectory = Join-Path $script:ToolRoot $version
+        New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
+
+        $failureOutput = @(& pwsh -NoProfile -NonInteractive -File $script:ToolPath -Action Remove -Version $version 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Interactive input is unavailable\.'
+        Test-Path -LiteralPath $installDirectory | Should -BeTrue
+    }
+
+    It 'reports install-helper download failure with repository-owned context' {
+        Install-TestTool
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "transport-specific-helper-detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match "Unable to download Microsoft's dotnet-install\.ps1 script"
+        ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
+    }
+
+    It 'rejects a version with an explicit List action' {
+        Install-TestTool
+
+        $failureOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List -Version 99.0.100 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Version.*supported only with.*Install or Remove'
+        ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'Isolated SDKs under'
+    }
 }

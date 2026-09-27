@@ -243,6 +243,37 @@ EOF
   [[ "$output" != *"Select a supported or development .NET channel:"* ]]
 }
 
+@test "--yes does not bypass unresolved install selection" {
+  bootstrap_tool
+
+  fake_bin="$test_root/yes-selection-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+cat <<'JSON'
+{
+  "releases-index": [
+    {
+      "channel-version": "99.0",
+      "latest-sdk": "99.0.100",
+      "support-phase": "active",
+      "release-type": "sts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
+JSON
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run bash -c 'exec </dev/null; env HOME="$1" PATH="$2:$PATH" "$3" install --yes' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Interactive input is unavailable."* ]]
+  [[ "$output" == *"Select a supported or development .NET channel:"* ]]
+}
+
 @test "system SDK inventory failure stops installation with context" {
   bootstrap_tool
 
@@ -265,4 +296,74 @@ EOF
   [[ "$output" == *"Unable to list SDKs through the system dotnet host with exit code 71."* ]]
   [[ "$output" != *"continued-to-download"* ]]
   [[ "$output" != *"installation completed successfully"* ]]
+}
+
+@test "unavailable confirmation input fails instead of becoming successful cancellation" {
+  bootstrap_tool
+
+  version='99.0.100'
+  fake_bin="$test_root/noninteractive-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/dotnet" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' '$version [/fake]'
+exit 0
+EOF
+  chmod +x "$fake_bin/dotnet"
+
+  run bash -c 'exec </dev/null; env HOME="$1" PATH="$2:$PATH" "$3" install "$4"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$version"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Interactive input is unavailable."* ]]
+  [[ "$output" != *"Installation cancelled."* ]]
+}
+
+@test "explicit blank confirmation remains a successful cancellation" {
+  bootstrap_tool
+
+  version='99.0.100'
+  fake_bin="$test_root/cancel-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/dotnet" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' '$version [/fake]'
+exit 0
+EOF
+  chmod +x "$fake_bin/dotnet"
+
+  run bash -c 'printf "\n" | env HOME="$1" PATH="$2:$PATH" "$3" install "$4"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$version"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Installation cancelled."* ]]
+}
+
+@test "removal shutdown failure reports SDK context and preserves the destination" {
+  bootstrap_tool
+
+  version='99.0.100'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 72
+EOF
+  chmod +x "$install_dir/dotnet"
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Build-server shutdown failed for SDK $version with exit code 72."* ]]
+  [[ "$output" != *"Isolated SDK $version was removed."* ]]
+  [ -d "$install_dir" ]
+}
+
+@test "list rejects an explicit version argument" {
+  bootstrap_tool
+
+  run env HOME="$test_home" "$tool_path" list 99.0.100
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unknown argument: 99.0.100"* ]]
 }

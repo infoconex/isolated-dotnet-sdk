@@ -11,9 +11,9 @@ The tool treats an external command's exit status as correctness-significant whe
 | Existing isolated host `--list-sdks` | Check `$LASTEXITCODE` | Separate command execution from version matching | Fail instead of treating a broken isolated host as an absent SDK |
 | Microsoft `dotnet-install` execution | Check `$LASTEXITCODE` | Capture the installer status explicitly | Stop before verification and success output when the installer fails |
 | Post-install isolated host `--list-sdks` | Check `$LASTEXITCODE` | Capture the command status explicitly | Report host-command failure separately from a successful inventory that omits the requested SDK |
-| Removal build-server shutdown | Protected by the removal contract from Issue #11 | Standalone command failure is propagated by `set -e` | Do not remove the SDK after shutdown failure |
+| Removal build-server shutdown | Check `$LASTEXITCODE` and report SDK/exit context | Capture the command status and report SDK/exit context | Do not remove the SDK after shutdown failure and do not report removal success |
 
-Diagnostics at these boundaries identify the failed operation and, where applicable, the SDK version and native exit code.
+Diagnostics at these boundaries identify the failed operation and, where applicable, the SDK version and native exit code. Runtime-specific details may differ, but a shared product failure should not depend only on shell-native failure text when repository-owned context can identify the operation.
 
 ## Related boundaries owned by other issues
 
@@ -21,7 +21,9 @@ Release-index and channel-metadata transport/shape failures are governed by Issu
 
 Filesystem ownership, bootstrap staging cleanup, and removal safety are governed by Issue #15. Native-command hardening must not widen the set of paths the tool may remove.
 
-Installer rollback, partial-install cleanup, transactional staging, retry policy, and download transactionality belong to Issue #18. A native installer failure is reported immediately, but Issue #17 does not attempt to undo files the installer may already have created.
+Issue #18 owns installer rollback/recovery semantics: each install uses operation-owned helper/staging state, verifies the staged host before promotion, preserves pre-existing destinations, cleans transaction-owned state when possible, and supports deterministic retry after a clean-start failure. Native installer or verification failure must preserve that transaction contract rather than writing directly into or replacing the final destination.
+
+Cross-shell observable behavior and intentional runtime differences are specified in [`behavioral-parity.md`](behavioral-parity.md).
 
 ## Verification distinction
 

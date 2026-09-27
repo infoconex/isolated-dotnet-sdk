@@ -128,6 +128,17 @@ function Assert-ValidVersion {
     }
 }
 
+function Read-ToolInput {
+    param([string]$Prompt)
+
+    try {
+        return Read-Host $Prompt
+    }
+    catch {
+        throw 'Interactive input is unavailable.'
+    }
+}
+
 function Confirm-Action {
     param([string]$Prompt)
 
@@ -135,7 +146,7 @@ function Confirm-Action {
         return $true
     }
 
-    $Response = Read-Host "isolated-dotnet-sdk: $Prompt [y/N]"
+    $Response = Read-ToolInput "isolated-dotnet-sdk: $Prompt [y/N]"
     return $Response -match '^[Yy]$'
 }
 
@@ -302,7 +313,7 @@ function Select-Action {
         Write-ToolDisplay '  4. Exit'
         Write-ToolDisplay
 
-        $Selection = Read-Host 'Selection'
+        $Selection = Read-ToolInput 'Selection'
 
         switch ($Selection) {
             '1' { $script:Action = 'Install'; return $true }
@@ -316,7 +327,11 @@ function Select-Action {
     }
 }
 
-function Assert-RemovalRiskParameterUsage {
+function Assert-ActionParameterUsage {
+    if ($script:Action -eq 'List' -and $script:VersionWasSpecified) {
+        throw '-Version is supported only with -Action Install or Remove.'
+    }
+
     if ($script:Action -eq 'Remove') {
         return
     }
@@ -374,7 +389,7 @@ function Get-ChannelSdkVersion {
 }
 
 function Read-ManualVersion {
-    $script:Version = Read-Host 'isolated-dotnet-sdk: .NET SDK version'
+    $script:Version = Read-ToolInput 'isolated-dotnet-sdk: .NET SDK version'
     if ([string]::IsNullOrWhiteSpace($script:Version)) {
         throw 'An SDK version is required.'
     }
@@ -438,7 +453,7 @@ function Select-InstallVersion {
         Write-ToolDisplay '  Q. Cancel'
         Write-ToolDisplay
 
-        $Selection = Read-Host 'Selection'
+        $Selection = Read-ToolInput 'Selection'
 
         if ($Selection -match '^[Mm]$') {
             Read-ManualVersion
@@ -525,7 +540,7 @@ function Select-InstallVersion {
             Write-ToolDisplay '  Q. Cancel'
             Write-ToolDisplay
 
-            $Selection = Read-Host 'Selection'
+            $Selection = Read-ToolInput 'Selection'
 
             if ($Selection -match '^[Bb]$') {
                 break
@@ -574,7 +589,7 @@ function Select-RemoveVersion {
         Write-ToolDisplay '  Q. Cancel'
         Write-ToolDisplay
 
-        $Selection = Read-Host 'Selection'
+        $Selection = Read-ToolInput 'Selection'
 
         if ($Selection -match '^[Qq]$') {
             return $false
@@ -701,7 +716,12 @@ function Install-IsolatedSdk {
 
     try {
         Write-ToolInfo "Downloading Microsoft's dotnet-install.ps1 script..."
-        Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $InstallScript
+        try {
+            Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $InstallScript
+        }
+        catch {
+            throw "Unable to download Microsoft's dotnet-install.ps1 script: $($_.Exception.Message)"
+        }
 
         if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
             Unblock-File -Path $InstallScript -WhatIf:$false -Confirm:$false
@@ -907,7 +927,7 @@ try {
             return
         }
 
-        Assert-RemovalRiskParameterUsage
+        Assert-ActionParameterUsage
 
         switch ($Action) {
             'Install' { Install-IsolatedSdk }

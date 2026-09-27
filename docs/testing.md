@@ -13,7 +13,7 @@ Use the smallest level that verifies the observable contract without forcing pro
 
 ### Process-level behavioral tests
 
-Process-level tests invoke the public script entry point in a child process with isolated temporary user/home state. Use them for bootstrap behavior, CLI/action parsing, output/stream contracts, environment handling, and behavior whose public contract depends on a real process boundary.
+Process-level tests invoke the public script entry point in a child process with isolated temporary user/home state. Use them for bootstrap behavior, CLI/action parsing, output/stream contracts, environment handling, interactive-input availability, and behavior whose public contract depends on a real process boundary.
 
 ### Focused function/component tests
 
@@ -55,12 +55,17 @@ Ensure the selected prefix's `bin` directory is on `PATH`, then run from the rep
 bash tests/bash/run-tests.sh
 ```
 
-The Bash suite covers:
+The Bash suites cover, among other focused reliability cases:
 
 - isolated temporary `HOME` handling;
-- file-based bootstrap source preservation;
-- the `list` command;
-- rejection of an invalid SDK version.
+- file-based bootstrap source preservation and bootstrap filesystem failures;
+- `list` behavior, including rejection of an explicit list-version argument;
+- rejection of an invalid SDK version;
+- release-metadata transport/shape failures and exact-version metadata independence;
+- system and isolated-host native-command failures;
+- unavailable interactive input versus explicit default-no cancellation;
+- build-server shutdown failure context and deletion blocking;
+- transactional installation staging, verification, promotion, conflict preservation, cleanup, and retry behavior.
 
 ## PowerShell behavioral tests
 
@@ -85,12 +90,15 @@ pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
 The PowerShell behavioral coverage includes:
 
 - isolated temporary home/profile handling;
-- file-based bootstrap source preservation;
-- the `List` action;
+- file-based bootstrap source preservation and bootstrap filesystem failures;
+- the `List` action, including rejection of explicit List plus Version;
 - information-stream versus success-stream separation;
 - ANSI informational and success presentation colors;
 - ANSI-free redirected output and `NO_COLOR` behavior;
 - rejection of an invalid SDK version;
+- release-metadata transport/shape behavior and exact-version metadata independence;
+- repository-owned unavailable-interactive-input context;
+- repository-owned install-helper download context;
 - source bootstrap forwarding for `-WhatIf`;
 - rejection of removal-only risk-mitigation parameters on unsupported actions;
 - fail-safe non-interactive removal without explicit approval;
@@ -100,9 +108,10 @@ The PowerShell behavioral coverage includes:
 - `-Yes` automation and `-WhatIf` precedence;
 - shutdown-before-delete ordering;
 - shutdown failure blocking deletion;
-- deletion failure blocking success reporting.
+- deletion failure blocking success reporting;
+- transactional installation staging, verification, promotion, conflict preservation, cleanup, and retry behavior.
 
-The authoritative removal behavior specification is [`powershell-removal.md`](powershell-removal.md).
+The cross-shell product contract is documented in [`behavioral-parity.md`](behavioral-parity.md). The authoritative PowerShell-specific removal behavior specification is [`powershell-removal.md`](powershell-removal.md).
 
 ## Static analysis
 
@@ -146,7 +155,7 @@ The runner rejects missing or mismatched ShellCheck versions and ignores caller/
 
 The behavioral suites create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
 
-The current behavioral checks do not install an SDK or require release-metadata downloads.
+The current behavioral checks do not install a real SDK or require live release-metadata downloads. External downloads and native commands are replaced with deterministic test seams where necessary to exercise failure and transaction boundaries.
 
 ## CI
 

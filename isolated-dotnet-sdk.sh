@@ -6,6 +6,7 @@ RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/r
 TOOL_NAME="isolated-dotnet-sdk.sh"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
+TOOL_INPUT=""
 
 if [[ -t 1 ]]; then
     CYAN='\033[0;36m'
@@ -34,6 +35,15 @@ tool_success() {
 tool_fail() {
     printf "%s %s\n" "isolated-dotnet-sdk:" "$1" >&2
     exit 1
+}
+
+read_tool_input() {
+    local prompt="$1"
+    TOOL_INPUT=""
+
+    if ! IFS= read -r -p "$prompt" TOOL_INPUT; then
+        tool_fail "Interactive input is unavailable."
+    fi
 }
 
 bootstrap_if_needed() {
@@ -110,13 +120,14 @@ bootstrap_if_needed() {
 
 confirm() {
     local prompt="$1"
+    local response=""
 
     if [[ "$YES" == "true" ]]; then
         return 0
     fi
 
-    local response=""
-    read -r -p "isolated-dotnet-sdk: $prompt [y/N] " response || true
+    read_tool_input "isolated-dotnet-sdk: $prompt [y/N] "
+    response="$TOOL_INPUT"
     [[ "$response" =~ ^[Yy]$ ]]
 }
 
@@ -221,7 +232,8 @@ select_action() {
         echo "  3. List isolated SDKs"
         echo "  4. Exit"
         echo
-        read -r -p "Selection: " selection || true
+        read_tool_input "Selection: "
+        selection="$TOOL_INPUT"
 
         case "$selection" in
             1) ACTION="install"; return 0 ;;
@@ -313,11 +325,13 @@ select_install_version() {
         echo "  M. Enter an exact SDK version manually"
         echo "  Q. Cancel"
         echo
-        read -r -p "Selection: " selection || true
+        read_tool_input "Selection: "
+        selection="$TOOL_INPUT"
 
         case "$selection" in
             [mM])
-                read -r -p "isolated-dotnet-sdk: .NET SDK version: " VERSION || true
+                read_tool_input "isolated-dotnet-sdk: .NET SDK version: "
+                VERSION="$TOOL_INPUT"
                 [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                 validate_version
                 return 0
@@ -419,12 +433,14 @@ select_install_version() {
             echo "  M. Enter an exact SDK version manually"
             echo "  Q. Cancel"
             echo
-            read -r -p "Selection: " selection || true
+            read_tool_input "Selection: "
+            selection="$TOOL_INPUT"
 
             case "$selection" in
                 [bB]) break ;;
                 [mM])
-                    read -r -p "isolated-dotnet-sdk: .NET SDK version: " VERSION || true
+                    read_tool_input "isolated-dotnet-sdk: .NET SDK version: "
+                    VERSION="$TOOL_INPUT"
                     [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                     validate_version
                     return 0
@@ -474,7 +490,8 @@ select_remove_version() {
         echo
         echo "  Q. Cancel"
         echo
-        read -r -p "Selection: " selection || true
+        read_tool_input "Selection: "
+        selection="$TOOL_INPUT"
 
         case "$selection" in
             [qQ]) return 1 ;;
@@ -701,6 +718,7 @@ remove_sdk() {
     # Removal is intentionally scoped to the selected version directory under SDK_ROOT.
     local install_dir="$SDK_ROOT/$VERSION"
     local isolated_dotnet="$install_dir/dotnet"
+    local status=0
 
     if [[ ! -x "$isolated_dotnet" ]]; then
         tool_fail "Isolated SDK $VERSION was not found at $install_dir"
@@ -714,7 +732,12 @@ remove_sdk() {
     fi
 
     tool_info "Shutting down build servers for SDK $VERSION..."
-    "$isolated_dotnet" build-server shutdown
+    if "$isolated_dotnet" build-server shutdown; then
+        :
+    else
+        status=$?
+        tool_fail "Build-server shutdown failed for SDK $VERSION with exit code $status."
+    fi
 
     tool_info "Removing $install_dir..."
     rm -rf "$install_dir"
