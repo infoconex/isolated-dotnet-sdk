@@ -4,6 +4,7 @@ Authoritative guidance:
 - docs/issue-workflow.md
 - docs/issue-conventions.md
 Open this Draft PR only after implementation is believed complete, repository-owned branch validation is green, and the full branch diff has been reviewed with no known blocking findings.
+Before opening the Draft PR, reconcile the linked issue so completed Tasks are checked and acceptance criteria already established by durable evidence are checked; leave only criteria that genuinely depend on exact-head PR validation or merge open.
 The Draft PR is for final exact-head CI/verification and the explicit Ready-for-Review decision.
 Lifecycle evidence such as Kickoff, Task completion, Full review, Draft PR opening, Final review, and Post-merge verification belongs in the linked issue history.
 -->
