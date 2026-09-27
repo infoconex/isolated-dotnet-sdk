@@ -104,6 +104,27 @@ public static class Program
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    It 'keeps valid existing exact SDK behavior and skips download' {
+        New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
+        Copy-Item `
+            -Path (Join-Path $script:FakeHostOutput '*') `
+            -Destination $script:InstallDir `
+            -Recurse `
+            -Force
+        $sentinel = Join-Path $script:InstallDir 'sentinel.txt'
+        Set-Content -LiteralPath $sentinel -Value 'preserve-existing'
+
+        $successOutput = @(& pwsh -NoProfile -Command '
+function Invoke-WebRequest { throw "continued-to-download" }
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
+' 2>&1)
+
+        $LASTEXITCODE | Should -Be 0
+        ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 99\.0\.100 is already installed\.'
+        ($successOutput -join [Environment]::NewLine) | Should -Not -Match 'continued-to-download'
+        (Get-Content -LiteralPath $sentinel -Raw).Trim() | Should -Be 'preserve-existing'
+    }
+
     It 'uses operation-scoped install-helper state on download failure' {
         $stableHelper = Join-Path $script:ToolRoot 'dotnet-install.ps1'
         Set-Content -LiteralPath $stableHelper -Value 'preserve-stable-helper'
@@ -164,6 +185,37 @@ function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:I
         $target | Should -Match ([regex]::Escape($script:ToolRoot) + '[\\/]\.install-99\.0\.100-[^\\/]+$')
         Test-Path -LiteralPath $target | Should -BeFalse
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
+    }
+
+    It 'reports cleanup failure without masking installer failure' {
+        Set-Content -LiteralPath $script:InstallerPath -Value @'
+param([string]$Version, [string]$InstallDir, [switch]$NoPath)
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $InstallDir 'partial.txt') -Value 'partial'
+exit 73
+'@
+
+        $failureOutput = @(& pwsh -NoProfile -Command '
+function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
+function Remove-Item {
+    param(
+        [string]$LiteralPath,
+        [switch]$Recurse,
+        [switch]$Force,
+        [switch]$WhatIf,
+        [switch]$Confirm
+    )
+    throw "cleanup-remove-failed"
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
+' 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'dotnet-install failed for SDK 99\.0\.100 with exit code 73\.'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to clean install helper'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to clean install staging directory'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'cleanup-remove-failed'
+        ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
     }
 
     It 'cleans staging when the installer does not produce a host' {
