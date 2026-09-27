@@ -37,10 +37,10 @@ Use these default patterns:
 3. `## Task N complete — <concise task/capability>`
 4. `## Task N supplemental — <finding>` when new evidence extends an existing Task record.
 5. `## Task N remediation complete — <finding>` when a Task required correction after new evidence.
-6. `## Draft PR opened` when recording the PR link/head and Draft status adds useful traceability.
-7. `## Manual validation — <behavior>` only when manual validation is genuinely required.
-8. `## Full review — implementation complete` for the comprehensive branch/diff review after implementation and validation are complete.
-9. `## Final review — completion evidence` for the final exact-head CI/review/follow-up summary before the user decides readiness or merge.
+6. `## Manual validation — <behavior>` only when manual validation is genuinely required.
+7. `## Full review — implementation complete` for the comprehensive branch/diff review after implementation and validation are complete.
+8. `## Draft PR opened` after the implementation/validation/full-review quality threshold is met, when recording the PR link, reviewed head, and Draft status adds useful traceability.
+9. `## Final review — completion evidence` for the final exact-head PR CI/review/follow-up summary before the user decides readiness or merge.
 10. `## Post-merge verification` for final closure evidence after merge.
 
 Keep text after the em dash concise and specific. Exceptional comments may use the same grammar with a precise qualifier. The heading should identify the lifecycle event and, for Task comments, the relevant Task.
@@ -54,9 +54,10 @@ Use comments sparingly and intentionally. The expected sequence is:
 3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, TDD evidence where applicable, validation, and follow-up findings.
 4. **Supplemental/remediation evidence** — only when new findings materially change or extend a Task record.
 5. **Manual evidence** — only when automation cannot reliably establish the behavior.
-6. **Full review** — comprehensive diff review result after implementation and validation are complete.
-7. **Final completion evidence** — exact reviewed head, CI evidence, final review result, and intentional follow-ups.
-8. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, and roadmap status.
+6. **Full review** — comprehensive branch/diff review result after implementation and validation are complete.
+7. **Draft PR opening** — only after implementation, repository validation, and full review are complete with no known blocking findings.
+8. **Final completion evidence** — exact reviewed PR head, final PR CI evidence, final review result, and intentional follow-ups.
+9. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, and roadmap status.
 
 Do not add generic comments for every tool call, commit, or routine status change.
 
