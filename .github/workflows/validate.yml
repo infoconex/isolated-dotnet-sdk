@@ -10,7 +10,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write # temporary: allow pinned formatter to commit exact normalization bytes
+  contents: read
 
 jobs:
   bash:
@@ -145,20 +145,12 @@ jobs:
               exit $LASTEXITCODE
           }
 
-      - name: Apply PowerShell formatter normalization once
+      - name: Check PowerShell formatting
         shell: pwsh
         run: |
-          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Write
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
-          }
-
-          if (-not (git diff --quiet -- isolated-dotnet-sdk.ps1)) {
-              git config user.name 'github-actions[bot]'
-              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-              git add -- isolated-dotnet-sdk.ps1
-              git commit -m 'style: normalize PowerShell source formatting'
-              git push origin HEAD:issue-24-source-formatting
           }
 
       - name: Run PowerShell behavioral tests
