@@ -4,7 +4,6 @@ set -euo pipefail
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
 DOTNET_INSTALL_COMMIT="da3ce11ba63f3dbb0fb835d41bda2665d5c48e84"
-DOTNET_INSTALL_BLOB="bd13ffa6656fe776c95b561fe4df640918867523"
 DOTNET_INSTALL_SHA256="082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e"
 DOTNET_INSTALL_URL="https://raw.githubusercontent.com/dotnet/install-scripts/$DOTNET_INSTALL_COMMIT/src/dotnet-install.sh"
 TOOL_NAME="isolated-dotnet-sdk.sh"
