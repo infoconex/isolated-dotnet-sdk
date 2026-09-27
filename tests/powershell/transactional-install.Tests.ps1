@@ -114,7 +114,7 @@ public static class Program
         $sentinel = Join-Path $script:InstallDir 'sentinel.txt'
         Set-Content -LiteralPath $sentinel -Value 'preserve-existing'
 
-        $successOutput = @(& pwsh -NoProfile -Command '
+        $successOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { throw "continued-to-download" }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -129,7 +129,7 @@ function Invoke-WebRequest { throw "continued-to-download" }
         $stableHelper = Join-Path $script:ToolRoot 'dotnet-install.ps1'
         Set-Content -LiteralPath $stableHelper -Value 'preserve-stable-helper'
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest {
     param($Uri, $OutFile)
     Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_DOWNLOAD_TARGET -Value $OutFile
@@ -153,7 +153,7 @@ function Invoke-WebRequest {
         $sentinel = Join-Path $script:InstallDir 'sentinel.txt'
         Set-Content -LiteralPath $sentinel -Value 'preserve-me'
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { throw "continued-to-download" }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -173,7 +173,7 @@ Set-Content -LiteralPath (Join-Path $InstallDir 'partial.txt') -Value 'partial'
 exit 73
 '@
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -195,7 +195,7 @@ Set-Content -LiteralPath (Join-Path $InstallDir 'partial.txt') -Value 'partial'
 exit 73
 '@
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 function Remove-Item {
     param(
@@ -226,7 +226,7 @@ New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 exit 0
 '@
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -248,7 +248,7 @@ Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destina
 exit 0
 '@
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -270,7 +270,7 @@ Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destina
 exit 0
 '@
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -292,7 +292,7 @@ Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destina
 exit 0
 '@
 
-        $failureOutput = @(& pwsh -NoProfile -Command '
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -313,7 +313,7 @@ Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destina
 exit 0
 '@
 
-        $successOutput = @(& pwsh -NoProfile -Command '
+        $successOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1)
@@ -335,7 +335,7 @@ Set-Content -LiteralPath (Join-Path $InstallDir 'partial.txt') -Value 'partial'
 exit 73
 '@
 
-        @(& pwsh -NoProfile -Command '
+        @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1) | Out-Null
@@ -349,7 +349,7 @@ Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destina
 exit 0
 '@
 
-        @(& pwsh -NoProfile -Command '
+        @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } }; 
 function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
 & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
 ' 2>&1) | Out-Null

@@ -88,6 +88,10 @@ exit 0
 
     It 'cleans transaction state when promotion fails' {
         $failureOutput = @(& pwsh -NoProfile -Command '
+            function Get-FileHash {
+                param([string]$LiteralPath, [string]$Algorithm)
+                [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" }
+            }
             function Invoke-WebRequest {
                 param($Uri, $OutFile)
                 Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force
@@ -111,6 +115,10 @@ exit 0
 
     It 'fails after successful promotion when helper cleanup fails' {
         $failureOutput = @(& pwsh -NoProfile -Command '
+            function Get-FileHash {
+                param([string]$LiteralPath, [string]$Algorithm)
+                [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" }
+            }
             function Invoke-WebRequest {
                 param($Uri, $OutFile)
                 Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force

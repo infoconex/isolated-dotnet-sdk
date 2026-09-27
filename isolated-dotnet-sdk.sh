@@ -3,6 +3,9 @@ set -euo pipefail
 
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
+DOTNET_INSTALL_COMMIT="da3ce11ba63f3dbb0fb835d41bda2665d5c48e84"
+DOTNET_INSTALL_SHA256="082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e"
+DOTNET_INSTALL_URL="https://raw.githubusercontent.com/dotnet/install-scripts/$DOTNET_INSTALL_COMMIT/src/dotnet-install.sh"
 TOOL_NAME="isolated-dotnet-sdk.sh"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
@@ -571,6 +574,22 @@ cleanup_install_transaction() {
     [[ "$cleanup_failed" == "false" ]]
 }
 
+calculate_sha256() {
+    local path="$1"
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$path" | awk '{print $1}'
+        return
+    fi
+
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$path" | awk '{print $1}'
+        return
+    fi
+
+    return 1
+}
+
 install_sdk() {
     resolve_install_version || return 0
 
@@ -582,6 +601,7 @@ install_sdk() {
     local install_script=""
     local staging_dir=""
     local staged_dotnet=""
+    local actual_install_script_hash=""
     local status=0
 
     tool_info "Target SDK: $VERSION"
@@ -644,12 +664,20 @@ install_sdk() {
     install_script="$(mktemp "$SDK_ROOT/dotnet-install.sh.XXXXXX")"
     trap 'cleanup_install_transaction "$install_script" "$staging_dir" || true' EXIT
 
-    tool_info "Downloading Microsoft's dotnet-install.sh script..."
-    if curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$install_script"; then
+    tool_info "Downloading Microsoft's pinned dotnet-install.sh script..."
+    if curl -fsSL "$DOTNET_INSTALL_URL" -o "$install_script"; then
         :
     else
         status=$?
         tool_fail "Unable to download Microsoft's dotnet-install.sh script with exit code $status."
+    fi
+
+    if ! actual_install_script_hash="$(calculate_sha256 "$install_script")"; then
+        tool_fail "Unable to verify Microsoft's dotnet-install.sh script because no SHA-256 utility is available."
+    fi
+
+    if [[ "$actual_install_script_hash" != "$DOTNET_INSTALL_SHA256" ]]; then
+        tool_fail "Integrity verification failed for Microsoft's dotnet-install.sh script."
     fi
 
     staging_dir="$(mktemp -d "$SDK_ROOT/.install-$VERSION.XXXXXX")"

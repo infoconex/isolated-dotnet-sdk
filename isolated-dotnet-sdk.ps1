@@ -48,6 +48,9 @@ $ErrorActionPreference = 'Stop'
 
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
 $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
+$DotNetInstallCommit = 'da3ce11ba63f3dbb0fb835d41bda2665d5c48e84'
+$DotNetInstallSha256 = '3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b'
+$DotNetInstallUrl = "https://raw.githubusercontent.com/dotnet/install-scripts/$DotNetInstallCommit/src/dotnet-install.ps1"
 $ToolName = 'isolated-dotnet-sdk.ps1'
 $SdkRoot = Join-Path $HOME 'dotnet-sdks'
 $ToolPath = Join-Path $SdkRoot $ToolName
@@ -715,12 +718,23 @@ function Install-IsolatedSdk {
     $CleanupFailure = $null
 
     try {
-        Write-ToolInfo "Downloading Microsoft's dotnet-install.ps1 script..."
+        Write-ToolInfo "Downloading Microsoft's pinned dotnet-install.ps1 script..."
         try {
-            Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $InstallScript
+            Invoke-WebRequest $DotNetInstallUrl -OutFile $InstallScript
         }
         catch {
             throw "Unable to download Microsoft's dotnet-install.ps1 script: $($_.Exception.Message)"
+        }
+
+        try {
+            $ActualInstallScriptHash = (Get-FileHash -LiteralPath $InstallScript -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+        catch {
+            throw "Unable to verify Microsoft's dotnet-install.ps1 script: $($_.Exception.Message)"
+        }
+
+        if ($ActualInstallScriptHash -ne $DotNetInstallSha256) {
+            throw "Integrity verification failed for Microsoft's dotnet-install.ps1 script."
         }
 
         if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {

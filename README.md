@@ -27,34 +27,11 @@ The scripts also run from `dotnet-sdks` rather than from the repository where yo
 
 ## Quick Start — Stable Release
 
-Stable installation is explicitly version-pinned. Choose a published tag from [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases), substitute it for `<release-tag>`, download that tagged script to a temporary file, and execute the file. File-based bootstrap preserves that exact released source under `~/dotnet-sdks`.
+Stable installation is explicitly version-pinned and integrity-checked. Choose a release published under the Issue #22 policy, substitute its tag for `<release-tag>`, and use the checksum-verifying bootstrap commands in [`docs/release-bootstrap.md`](docs/release-bootstrap.md). Those commands download both the explicitly tagged platform script and that release's `SHA256SUMS`, verify the script's SHA-256 before execution, and then execute the verified temporary file so file-based bootstrap preserves those exact bytes under `~/dotnet-sdks`.
 
-### Windows / PowerShell
+`v0.1.0` predates this integrity policy and does not have a `SHA256SUMS` release asset. It remains available as legacy history but is not compatible with the checksum-verifying stable bootstrap.
 
-```powershell
-$release = '<release-tag>'
-$temp = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release.ps1")
-try {
-    Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
-    & $temp
-}
-finally {
-    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
-}
-```
-
-### Linux / macOS
-
-```bash
-release='<release-tag>'
-temp="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.sh")"
-trap 'rm -f "$temp"' EXIT
-curl -fsSL "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" -o "$temp"
-chmod +x "$temp"
-"$temp"
-```
-
-The first run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then opens the interactive menu.
+The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then opens the interactive menu.
 
 ```text
 isolated-dotnet-sdk: What would you like to do?
@@ -67,11 +44,11 @@ isolated-dotnet-sdk: What would you like to do?
 Selection:
 ```
 
-Normal execution of the saved tool does not auto-update. To update, rerun the stable bootstrap with a newer published tag. To roll back, rerun it with an older published tag. See [`docs/release-bootstrap.md`](docs/release-bootstrap.md) for the complete release/bootstrap policy and maintainer release contract.
+Normal execution of the saved tool does not auto-update. To update, rerun the verified stable bootstrap with a newer published tag. To roll back, rerun it with an older policy-compliant published tag. The release/bootstrap document contains the copy/paste PowerShell and Bash commands plus the maintainer release contract.
 
 ### Development / `main`
 
-Mutable `main` remains available for explicit development testing, but it is not the stable installation path.
+Mutable `main` remains available for explicit development testing, but it is not the stable installation path and does not carry the stable-release checksum guarantee.
 
 PowerShell:
 
@@ -346,7 +323,7 @@ The release index identifies each .NET channel and links to the detailed release
 
 ## Security Note
 
-Stable bootstrap downloads and executes source from an explicit published tag. Development commands intentionally download and execute mutable `main`. Review remote scripts first if you prefer not to execute remote code directly. Artifact-integrity protections such as checksums or signing are tracked separately from this release/bootstrap policy.
+Stable bootstrap for releases published under the Issue #22 policy verifies the explicitly tagged script against that release's `SHA256SUMS` before execution. SDK installation downloads Microsoft's install helper from an immutable upstream commit and verifies its repository-pinned SHA-256 before execution. The downloaded .NET SDK payload itself remains an explicit Microsoft distribution trust boundary; independent SDK-archive checksum verification is deferred for later hardening. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee.
 
 ## License
 
