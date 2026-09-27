@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - 'release/**'
+      - issue-21-stable-bootstrap-semantics
   pull_request:
 
 permissions:
@@ -87,7 +88,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1 # v7.0.1
 
       - name: Validate PowerShell syntax
         shell: pwsh
@@ -111,13 +112,13 @@ jobs:
               ConvertFrom-Json
           $analysisConfig = Get-Content -LiteralPath './.config/static-analysis.json' -Raw |
               ConvertFrom-Json
-          $pesterVersion = [string]$testConfig.pesterVersion
-          $analyzerVersion = [string]$analysisConfig.psScriptAnalyzerVersion
+          $pesterVersion = [version][string]$testConfig.pesterVersion
+          $analyzerVersion = [version][string]$analysisConfig.psScriptAnalyzerVersion
 
-          if ([string]::IsNullOrWhiteSpace($pesterVersion)) {
+          if ($null -eq $pesterVersion) {
               throw 'pesterVersion is required in .config/test-frameworks.json.'
           }
-          if ([string]::IsNullOrWhiteSpace($analyzerVersion)) {
+          if ($null -eq $analyzerVersion) {
               throw 'psScriptAnalyzerVersion is required in .config/static-analysis.json.'
           }
 
