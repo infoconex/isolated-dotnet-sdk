@@ -259,7 +259,7 @@ EOF
     "$tool_path" install 99.9.999 --yes
 
   [ "$status" -ne 0 ]
-  grep -Fq 'https://dot.net/v1/dotnet-install.sh' "$curl_log"
+  grep -Fq 'https://raw.githubusercontent.com/dotnet/install-scripts/da3ce11ba63f3dbb0fb835d41bda2665d5c48e84/src/dotnet-install.sh' "$curl_log"
   ! grep -Fq 'releases-index.json' "$curl_log"
   [[ "$output" != *"Loading available .NET SDK releases from Microsoft"* ]]
 }
