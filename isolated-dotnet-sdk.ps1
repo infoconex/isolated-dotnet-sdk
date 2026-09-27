@@ -51,7 +51,6 @@ $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/
 $ToolName = 'isolated-dotnet-sdk.ps1'
 $SdkRoot = Join-Path $HOME 'dotnet-sdks'
 $ToolPath = Join-Path $SdkRoot $ToolName
-$InstallScript = Join-Path $SdkRoot 'dotnet-install.ps1'
 $script:Bootstrapped = $false
 $script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
 $script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
@@ -622,7 +621,6 @@ function Resolve-RemoveVersion {
     return $true
 }
 
-# Install with Microsoft's dotnet-install script under the exact-version directory.
 function Install-IsolatedSdk {
     if (-not (Resolve-InstallVersion)) {
         return
@@ -658,7 +656,7 @@ function Install-IsolatedSdk {
 
     Write-ToolInfo 'Checking for an existing isolated SDK...'
 
-    if (Test-Path $IsolatedDotNet) {
+    if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
         $IsolatedSdks = & $IsolatedDotNet --list-sdks
         $ExitCode = $LASTEXITCODE
         if ($ExitCode -ne 0) {
@@ -671,6 +669,10 @@ function Install-IsolatedSdk {
             Write-ToolInfo "Location: $InstallDir"
             return
         }
+    }
+
+    if (Test-Path -LiteralPath $InstallDir) {
+        throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
     }
 
     Write-ToolInfo 'No existing isolated copy was found.'
@@ -687,44 +689,123 @@ function Install-IsolatedSdk {
         Write-ToolDisplay
     }
 
-    Write-ToolInfo "Downloading Microsoft's dotnet-install.ps1 script..."
-    Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $InstallScript
+    $InstallScript = Join-Path `
+        $SdkRoot `
+        ('dotnet-install.{0}.ps1' -f [guid]::NewGuid().ToString('N'))
+    $StagingDir = Join-Path `
+        $SdkRoot `
+        ('.install-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
+    $StagedDotNet = Join-Path $StagingDir 'dotnet.exe'
+    $PrimaryFailure = $null
+    $CleanupFailure = $null
 
-    if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
-        Unblock-File -Path $InstallScript
+    try {
+        Write-ToolInfo "Downloading Microsoft's dotnet-install.ps1 script..."
+        Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $InstallScript
+
+        if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
+            Unblock-File -Path $InstallScript -WhatIf:$false -Confirm:$false
+        }
+
+        New-Item `
+            -ItemType Directory `
+            -Path $StagingDir `
+            -WhatIf:$false `
+            -Confirm:$false | Out-Null
+
+        Write-ToolInfo "Installing .NET SDK $Version..."
+
+        & $InstallScript `
+            -Version $Version `
+            -InstallDir $StagingDir `
+            -NoPath
+        $ExitCode = $LASTEXITCODE
+        if ($ExitCode -ne 0) {
+            throw "dotnet-install failed for SDK $Version with exit code $ExitCode."
+        }
+
+        Write-ToolDisplay
+        Write-ToolInfo 'Verifying the isolated SDK...'
+
+        if (-not (Test-Path -LiteralPath $StagedDotNet -PathType Leaf)) {
+            throw "The isolated dotnet executable was not found at $StagedDotNet"
+        }
+
+        $IsolatedSdks = & $StagedDotNet --list-sdks
+        $ExitCode = $LASTEXITCODE
+        if ($ExitCode -ne 0) {
+            throw "Unable to verify isolated SDK $Version with exit code $ExitCode."
+        }
+
+        foreach ($IsolatedSdk in $IsolatedSdks) {
+            Write-ToolDisplay $IsolatedSdk
+        }
+
+        $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+        if ($IsolatedVersions -notcontains $Version) {
+            throw "SDK $Version was not found after installation."
+        }
+
+        if (Test-Path -LiteralPath $InstallDir) {
+            throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
+        }
+
+        try {
+            Move-Item `
+                -LiteralPath $StagingDir `
+                -Destination $InstallDir `
+                -WhatIf:$false `
+                -Confirm:$false
+            $StagingDir = $null
+        }
+        catch {
+            throw "Unable to promote isolated SDK $Version into ${InstallDir}: $($_.Exception.Message)"
+        }
+    }
+    catch {
+        $PrimaryFailure = $_
+    }
+    finally {
+        if (Test-Path -LiteralPath $InstallScript -PathType Leaf) {
+            try {
+                Remove-Item `
+                    -LiteralPath $InstallScript `
+                    -Force `
+                    -WhatIf:$false `
+                    -Confirm:$false
+            }
+            catch {
+                Write-ToolWarning "Unable to clean install helper ${InstallScript}: $($_.Exception.Message)"
+                if ($null -eq $CleanupFailure) {
+                    $CleanupFailure = $_
+                }
+            }
+        }
+
+        if ($StagingDir -and (Test-Path -LiteralPath $StagingDir)) {
+            try {
+                Remove-Item `
+                    -LiteralPath $StagingDir `
+                    -Recurse `
+                    -Force `
+                    -WhatIf:$false `
+                    -Confirm:$false
+            }
+            catch {
+                Write-ToolWarning "Unable to clean install staging directory ${StagingDir}: $($_.Exception.Message)"
+                if ($null -eq $CleanupFailure) {
+                    $CleanupFailure = $_
+                }
+            }
+        }
     }
 
-    Write-ToolInfo "Installing .NET SDK $Version..."
-
-    & $InstallScript `
-        -Version $Version `
-        -InstallDir $InstallDir `
-        -NoPath
-    $ExitCode = $LASTEXITCODE
-    if ($ExitCode -ne 0) {
-        throw "dotnet-install failed for SDK $Version with exit code $ExitCode."
+    if ($null -ne $PrimaryFailure) {
+        throw $PrimaryFailure
     }
 
-    Write-ToolDisplay
-    Write-ToolInfo 'Verifying the isolated SDK...'
-
-    if (-not (Test-Path $IsolatedDotNet)) {
-        throw "The isolated dotnet executable was not found at $IsolatedDotNet"
-    }
-
-    $IsolatedSdks = & $IsolatedDotNet --list-sdks
-    $ExitCode = $LASTEXITCODE
-    if ($ExitCode -ne 0) {
-        throw "Unable to verify isolated SDK $Version with exit code $ExitCode."
-    }
-
-    foreach ($IsolatedSdk in $IsolatedSdks) {
-        Write-ToolDisplay $IsolatedSdk
-    }
-
-    $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-    if ($IsolatedVersions -notcontains $Version) {
-        throw "SDK $Version was not found after installation."
+    if ($null -ne $CleanupFailure) {
+        throw "Isolated SDK $Version was installed, but transaction cleanup failed: $($CleanupFailure.Exception.Message)"
     }
 
     Write-ToolDisplay
