@@ -123,7 +123,11 @@ For each Task:
 2. run relevant validation;
 3. commit the scoped change;
 4. add `## Task N complete — <concise task/capability>` with durable evidence;
-5. then move to the next Task.
+5. update the matching Task checkbox in the issue from `[ ]` to `[x]` as part of the same completion step;
+6. check any acceptance criteria that the completed work and durable evidence have already established; leave only criteria that genuinely depend on a later lifecycle event unchecked;
+7. then move to the next Task.
+
+A Task is not complete for lifecycle purposes until both its numbered completion evidence and its issue checkbox are synchronized. Issue Task and acceptance-criteria checkboxes are live execution state, not static planning text.
 
 Task evidence should include material contract decisions, TDD evidence for behavioral work, validation performed, relevant commit/CI evidence, and follow-up findings when applicable. Use supplemental or remediation comments only when new evidence materially changes or extends the Task record.
 
@@ -174,7 +178,8 @@ Record the completed comprehensive review under `## Full review — implementati
 
 Open the pull request as **Draft** only after all of the following are true:
 
-- planned implementation Tasks are complete;
+- planned implementation Tasks are complete and their issue checkboxes are checked;
+- the linked issue has been reconciled so acceptance criteria already established by durable evidence are checked, with only criteria genuinely dependent on exact-head PR validation or merge left open;
 - relevant repository-owned validation is green on the branch;
 - the full branch diff against current `main` has been reviewed;
 - no known blocking findings remain.
@@ -196,6 +201,8 @@ Before the PR is considered complete, record concise durable evidence, including
 - manual validation evidence;
 - final review result;
 - intentionally deferred follow-up issues.
+
+After exact-head validation and final PR verification, reconcile the linked issue again. Check every acceptance criterion now established by durable evidence. Any criterion left unchecked at the Ready-for-Review decision must genuinely depend on merge or another later lifecycle event.
 
 Use `## Final review — completion evidence` for the final exact-head summary. Avoid duplicating long specifications when the issue or repository document is already authoritative.
 
@@ -235,7 +242,10 @@ After merge, verify:
 4. `main` points to the expected merge result;
 5. post-merge `main` validation completes successfully;
 6. the roadmap/tracker is updated when applicable;
-7. acceptance criteria that depend on merge are satisfied.
+7. acceptance criteria that depend on merge are satisfied and checked;
+8. no completed Task or satisfied acceptance criterion remains unchecked in the issue.
+
+Reconcile the issue checkbox state before declaring the issue fully closed out. A stale unchecked completed Task or satisfied acceptance criterion is unfinished lifecycle bookkeeping and must be corrected.
 
 Record the result under `## Post-merge verification`.
 
