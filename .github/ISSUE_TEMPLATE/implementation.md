@@ -27,10 +27,14 @@ Authoritative guidance:
 
 ## Tasks
 
+<!-- Task checkboxes are live lifecycle state. When Task N is completed and its numbered completion comment is posted, check the matching Task checkbox in the same completion step. -->
+
 - [ ] **Task 1 —**
   -
 
 ## Acceptance criteria
+
+<!-- Check each criterion as soon as durable evidence establishes it. Leave only criteria that genuinely depend on a later lifecycle event unchecked. -->
 
 - [ ]
 
