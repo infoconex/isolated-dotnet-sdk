@@ -8,6 +8,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$IsCheck = $Check -or -not $Write
 
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $VersionConfigPath = Join-Path $RepositoryRoot '.config/static-analysis.json'
@@ -55,7 +56,7 @@ foreach ($Path in $FormattingPaths) {
 
     $ChangedPaths += $Path
 
-    if ($Write) {
+    if (-not $IsCheck) {
         $Output = if ($OriginalUsesCrLf) {
             $NormalizedFormatted.Replace("`n", "`r`n")
         }
@@ -70,7 +71,7 @@ foreach ($Path in $FormattingPaths) {
     }
 }
 
-if ($Write) {
+if (-not $IsCheck) {
     if ($ChangedPaths.Count -eq 0) {
         Write-Output "PowerShell formatting already satisfied for $($FormattingPaths.Count) file(s)."
     }
