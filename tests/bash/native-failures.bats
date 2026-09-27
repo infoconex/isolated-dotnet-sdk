@@ -27,6 +27,46 @@ EOF
   chmod +x "$fake_bin/dotnet"
 }
 
+@test "failed install helper download cannot execute stale helper state" {
+  fake_bin="$test_root/download-fake-bin"
+  mkdir -p "$fake_bin"
+  make_successful_system_dotnet "$fake_bin"
+
+  cat > "$tool_root/dotnet-install.sh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'stale-helper-executed' >&2
+exit 0
+EOF
+  chmod +x "$tool_root/dotnet-install.sh"
+
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+out_file=''
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == '-o' ]]; then
+    out_file="$2"
+    shift 2
+  else
+    shift
+  fi
+done
+printf '%s\n' 'partial-download' > "$out_file"
+printf '%s\n' 'download-failed' >&2
+exit 81
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" install "$version" --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"download-failed"* ]]
+  [[ "$output" != *"stale-helper-executed"* ]]
+  [ ! -d "$install_dir" ]
+  [ -f "$tool_root/dotnet-install.sh" ]
+  ! compgen -G "$tool_root/dotnet-install.sh.*" >/dev/null
+}
+
 @test "existing isolated host failure stops installation with context" {
   fake_bin="$test_root/existing-probe-fake-bin"
   mkdir -p "$fake_bin" "$install_dir"
