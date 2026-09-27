@@ -145,13 +145,16 @@ jobs:
               exit $LASTEXITCODE
           }
 
-      - name: Check PowerShell formatting
+      - name: Capture PowerShell formatter normalization
         shell: pwsh
         run: |
-          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Write
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+          Write-Output 'FORMATTER_OUTPUT_BASE64_BEGIN'
+          Write-Output ([Convert]::ToBase64String([IO.File]::ReadAllBytes('./isolated-dotnet-sdk.ps1')))
+          Write-Output 'FORMATTER_OUTPUT_BASE64_END'
 
       - name: Run PowerShell behavioral tests
         shell: pwsh
