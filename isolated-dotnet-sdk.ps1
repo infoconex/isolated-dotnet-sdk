@@ -1,18 +1,24 @@
 <#
 .SYNOPSIS
-Installs and manages isolated .NET SDK versions.
+Installs and manages isolated .NET SDK versions on Windows with PowerShell 7.
 
 .DESCRIPTION
-Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. The script can install, remove, and list isolated SDKs and provides an interactive workflow when an action or version is not supplied.
+Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. Isolated SDKs remain under that user-owned root and are not added to PATH.
+
+Supported product actions are Install, Remove, and List. When Action is omitted and Version is supplied, Install is selected. Explicit List with Version is invalid. Install or Remove without a resolved version may require interactive selection.
+
+Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
+
+Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata.
 
 .PARAMETER Action
 Specifies the operation to perform: Install, Remove, or List. When omitted, the script prompts for an action unless Version is supplied, in which case Install is selected.
 
 .PARAMETER Version
-Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow.
+Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Version is invalid with an explicit List action.
 
 .PARAMETER Yes
-Skips confirmation prompts that support automatic confirmation.
+Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action List
@@ -27,15 +33,31 @@ Installs .NET SDK 10.0.100 in an isolated directory.
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Remove -Version 10.0.100 -Yes
 
-Removes the isolated .NET SDK 10.0.100 without prompting for confirmation.
+Removes the isolated .NET SDK 10.0.100 without the tool-owned confirmation prompt.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action Remove -Version 10.0.100 -WhatIf
+
+Previews removal without shutting down build servers or deleting the isolated SDK.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1
 
 Starts the interactive workflow.
 
+.NOTES
+Supported product mapping: Windows with PowerShell 7. Linux and macOS use the Bash implementation. PowerShell on Linux/macOS and Bash on Windows are not supported product combinations.
+
+Run an installed isolated SDK directly from $HOME\dotnet-sdks\<version>\dotnet.exe. The tool does not add isolated SDKs to the normal PATH.
+
 .LINK
 https://github.com/infoconex/isolated-dotnet-sdk
+
+.LINK
+https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/behavioral-parity.md
+
+.LINK
+https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/cross-platform-support.md
 #>
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
 param(
