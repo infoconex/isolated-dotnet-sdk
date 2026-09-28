@@ -76,7 +76,7 @@ bootstrap_if_needed() {
     tool_info "Installing tool to $TOOL_PATH"
     staged_path="$(mktemp "$SDK_ROOT/.${TOOL_NAME}.XXXXXX.tmp")"
 
-    if [[ -n "$current_path" && -f "$current_path" ]]; then
+    if [[ -n "$current_path" && -f "$current_source" ]]; then
         if cp "$current_path" "$staged_path"; then
             :
         else
@@ -224,6 +224,114 @@ extract_sdk_versions() {
         awk '!seen[$0]++'
 }
 
+sdk_version_sort_key() {
+    local version="$1"
+    local core="${version%%-*}"
+    local prerelease=""
+    local major=0
+    local minor=0
+    local patch=0
+    local rank=9
+    local sequence=0
+    local build=0
+    local revision=0
+
+    if [[ "$version" == *-* ]]; then
+        prerelease="${version#*-}"
+        rank=1
+    fi
+
+    IFS='.' read -r major minor patch <<< "$core"
+    [[ "$major" =~ ^[0-9]+$ ]] || major=0
+    [[ "$minor" =~ ^[0-9]+$ ]] || minor=0
+    [[ "$patch" =~ ^[0-9]+$ ]] || patch=0
+
+    if [[ -n "$prerelease" ]]; then
+        local label=""
+        IFS='.' read -r label sequence build revision <<< "$prerelease"
+        [[ "$sequence" =~ ^[0-9]+$ ]] || sequence=0
+        [[ "$build" =~ ^[0-9]+$ ]] || build=0
+        [[ "$revision" =~ ^[0-9]+$ ]] || revision=0
+
+        case "$label" in
+            rc) rank=8 ;;
+            preview) rank=7 ;;
+        esac
+    fi
+
+    printf '%09d.%09d.%09d.%d.%09d.%09d.%09d' \
+        "$major" "$minor" "$patch" "$rank" "$sequence" "$build" "$revision"
+}
+
+sort_sdk_versions() {
+    local remaining=("$@")
+    local best_index
+    local best_key
+    local candidate_key
+    local i
+
+    while (( ${#remaining[@]} > 0 )); do
+        best_index=0
+        best_key="$(sdk_version_sort_key "${remaining[0]}")"
+
+        for ((i=1; i<${#remaining[@]}; i++)); do
+            candidate_key="$(sdk_version_sort_key "${remaining[$i]}")"
+            if [[ "$candidate_key" > "$best_key" ]]; then
+                best_index=$i
+                best_key="$candidate_key"
+            fi
+        done
+
+        printf '%s\n' "${remaining[$best_index]}"
+        unset 'remaining[best_index]'
+        remaining=("${remaining[@]}")
+    done
+}
+
+sdk_feature_band() {
+    local version="$1"
+    local core="${version%%-*}"
+    local major=0
+    local minor=0
+    local patch=0
+
+    IFS='.' read -r major minor patch <<< "$core"
+    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ || ! "$patch" =~ ^[0-9]+$ ]]; then
+        printf '%s' "$core"
+        return
+    fi
+
+    printf '%s.%s.%dxx' "$major" "$minor" "$((patch / 100))"
+}
+
+build_compact_sdk_versions() {
+    local all_versions="$1"
+    local latest_sdk="$2"
+    local latest_band=""
+    local seen_bands='|'
+    local version
+    local band
+
+    if [[ -n "$latest_sdk" ]] && contains_line "$all_versions" "$latest_sdk"; then
+        printf '%s\n' "$latest_sdk"
+        latest_band="$(sdk_feature_band "$latest_sdk")"
+        seen_bands="${seen_bands}${latest_band}|"
+    fi
+
+    while IFS= read -r version; do
+        [[ -n "$version" ]] || continue
+        [[ "$version" == "$latest_sdk" ]] && continue
+
+        band="$(sdk_feature_band "$version")"
+        if [[ "$seen_bands" == *"|${band}|"* ]]; then
+            continue
+        fi
+
+        printf '%s\n' "$version"
+        seen_bands="${seen_bands}${band}|"
+    done <<< "$all_versions"
+}
+
 select_action() {
     local selection=""
 
@@ -261,6 +369,10 @@ select_install_version() {
     local metadata_file=""
     local metadata_json=""
     local versions=""
+    local all_versions=""
+    local compact_versions=""
+    local display_versions=""
+    local show_all_versions="false"
     local system_versions=""
     local isolated_versions=""
     local line=""
@@ -311,12 +423,20 @@ select_install_version() {
         done <<< "$channel_data"
 
         for ((i=0; i<${#channels[@]}; i++)); do
-            printf "  %d. .NET %s  %s  %s  latest SDK %s\n" \
-                "$((i + 1))" \
-                "${channels[$i]}" \
-                "$(printf '%s' "${release_types[$i]}" | tr '[:lower:]' '[:upper:]')" \
-                "$(format_support_phase "${phases[$i]}")" \
-                "${latest_sdks[$i]}"
+            if [[ -n "${latest_sdks[$i]}" ]]; then
+                printf "  %d. .NET %s  %s  %s  latest SDK %s\n" \
+                    "$((i + 1))" \
+                    "${channels[$i]}" \
+                    "$(printf '%s' "${release_types[$i]}" | tr '[:lower:]' '[:upper:]')" \
+                    "$(format_support_phase "${phases[$i]}")" \
+                    "${latest_sdks[$i]}"
+            else
+                printf "  %d. .NET %s  %s  %s\n" \
+                    "$((i + 1))" \
+                    "${channels[$i]}" \
+                    "$(printf '%s' "${release_types[$i]}" | tr '[:lower:]' '[:upper:]')" \
+                    "$(format_support_phase "${phases[$i]}")"
+            fi
         done
 
         echo
@@ -324,6 +444,9 @@ select_install_version() {
             echo "  S. Show supported/development channels"
         else
             echo "  A. Show end-of-life channels"
+        fi
+        if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+            echo "  B. Back to Main"
         fi
         echo "  M. Enter an exact SDK version manually"
         echo "  Q. Cancel"
@@ -341,6 +464,11 @@ select_install_version() {
                 ;;
             [qQ])
                 return 1
+                ;;
+            [bB])
+                if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    return 2
+                fi
                 ;;
             [aA])
                 if [[ "$show_archived" == "false" ]]; then
@@ -387,14 +515,22 @@ select_install_version() {
             tool_fail "Invalid release metadata for .NET $channel."
         fi
 
-        # The channel-specific metadata supplies the exact SDK versions presented
-        # to the user; latest-sdk from the index is only used as a display marker.
         versions="$(extract_sdk_versions < "$metadata_file" || true)"
         trap - EXIT TERM INT HUP
         rm -f "$metadata_file" || true
         metadata_file=""
 
         [[ -n "$versions" ]] || tool_fail "No SDK versions were found for .NET $channel."
+
+        local discovered_versions=()
+        while IFS= read -r line; do
+            [[ -n "$line" ]] || continue
+            discovered_versions+=("$line")
+        done <<< "$versions"
+
+        all_versions="$(sort_sdk_versions "${discovered_versions[@]}")"
+        compact_versions="$(build_compact_sdk_versions "$all_versions" "$latest_sdk")"
+        show_all_versions="false"
 
         system_versions="$(get_system_sdk_versions)"
         isolated_versions="$(get_isolated_sdk_versions)"
@@ -404,17 +540,23 @@ select_install_version() {
             tool_info "Available .NET $channel SDKs:"
             echo
 
+            if [[ "$show_all_versions" == "true" ]]; then
+                display_versions="$all_versions"
+            else
+                display_versions="$compact_versions"
+            fi
+
             local sdk_versions=()
             while IFS= read -r line; do
                 [[ -n "$line" ]] || continue
                 sdk_versions+=("$line")
-            done <<< "$versions"
+            done <<< "$display_versions"
 
             for ((i=0; i<${#sdk_versions[@]}; i++)); do
                 local markers=""
                 line="${sdk_versions[$i]}"
 
-                if [[ "$line" == "$latest_sdk" ]]; then
+                if [[ -n "$latest_sdk" && "$line" == "$latest_sdk" ]]; then
                     markers="latest"
                 fi
                 if contains_line "$system_versions" "$line"; then
@@ -432,6 +574,13 @@ select_install_version() {
             done
 
             echo
+            if [[ "$compact_versions" != "$all_versions" ]]; then
+                if [[ "$show_all_versions" == "true" ]]; then
+                    echo "  S. Show featured versions"
+                else
+                    echo "  S. Show all versions"
+                fi
+            fi
             echo "  B. Back to .NET channels"
             echo "  M. Enter an exact SDK version manually"
             echo "  Q. Cancel"
@@ -441,6 +590,16 @@ select_install_version() {
 
             case "$selection" in
                 [bB]) break ;;
+                [sS])
+                    if [[ "$compact_versions" != "$all_versions" ]]; then
+                        if [[ "$show_all_versions" == "true" ]]; then
+                            show_all_versions="false"
+                        else
+                            show_all_versions="true"
+                        fi
+                        continue
+                    fi
+                    ;;
                 [mM])
                     read_tool_input "isolated-dotnet-sdk: .NET SDK version: "
                     VERSION="$TOOL_INPUT"
@@ -491,12 +650,20 @@ select_remove_version() {
         done
 
         echo
+        if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+            echo "  B. Back to Main"
+        fi
         echo "  Q. Cancel"
         echo
         read_tool_input "Selection: "
         selection="$TOOL_INPUT"
 
         case "$selection" in
+            [bB])
+                if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    return 2
+                fi
+                ;;
             [qQ]) return 1 ;;
         esac
 
@@ -512,27 +679,47 @@ select_remove_version() {
 }
 
 resolve_install_version() {
+    local status=0
+
     if [[ -n "$VERSION" ]]; then
         validate_version
         return 0
     fi
 
-    if ! select_install_version; then
-        tool_info "Installation cancelled."
-        return 1
+    if select_install_version; then
+        return 0
+    else
+        status=$?
     fi
+
+    if (( status == 2 )); then
+        return 2
+    fi
+
+    tool_info "Installation cancelled."
+    return 1
 }
 
 resolve_remove_version() {
+    local status=0
+
     if [[ -n "$VERSION" ]]; then
         validate_version
         return 0
     fi
 
-    if ! select_remove_version; then
-        tool_info "Removal cancelled."
-        return 1
+    if select_remove_version; then
+        return 0
+    else
+        status=$?
     fi
+
+    if (( status == 2 )); then
+        return 2
+    fi
+
+    tool_info "Removal cancelled."
+    return 1
 }
 
 list_isolated_sdks() {
@@ -775,6 +962,23 @@ remove_isolated_sdk() {
     tool_success "Isolated SDK $VERSION was removed."
 }
 
+run_selected_action() {
+    case "$ACTION" in
+        install)
+            install_isolated_sdk
+            ;;
+        remove)
+            remove_isolated_sdk
+            ;;
+        list)
+            list_isolated_sdks
+            ;;
+        *)
+            tool_fail "Unknown action: $ACTION"
+            ;;
+    esac
+}
+
 usage() {
     cat <<'USAGE'
 Isolated .NET SDK
@@ -802,8 +1006,9 @@ Options:
   --help, -h         Show this help text.
 
 Behavior:
-  No command         Show the interactive action menu.
-  Bare version       Treat the version as an install request.
+  No command         Start a persistent interactive session that returns to Main after normal operations.
+  Bare version       Treat the version as a one-shot install request.
+  Explicit actions   Run once and exit without entering the persistent Main loop.
   Exact-version installs bypass release-metadata discovery.
   Interactive install selection uses Microsoft's published release metadata.
   Required interactive input that is unavailable is an operational failure.
@@ -831,6 +1036,7 @@ cd "$SDK_ROOT"
 ACTION=""
 VERSION=""
 YES="false"
+INTERACTIVE_SESSION="false"
 
 if [[ $# -gt 0 ]]; then
     case "$1" in
@@ -872,23 +1078,21 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-if [[ -z "$ACTION" ]]; then
-    if ! select_action; then
-        exit 0
-    fi
+if [[ -z "$ACTION" && -z "$VERSION" ]]; then
+    INTERACTIVE_SESSION="true"
 fi
 
-case "$ACTION" in
-    install)
-        install_isolated_sdk
-        ;;
-    remove)
-        remove_isolated_sdk
-        ;;
-    list)
-        list_isolated_sdks
-        ;;
-    *)
-        tool_fail "Unknown action: $ACTION"
-        ;;
-esac
+if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+    while true; do
+        ACTION=""
+        VERSION=""
+
+        if ! select_action; then
+            exit 0
+        fi
+
+        run_selected_action
+    done
+fi
+
+run_selected_action
