@@ -29,6 +29,21 @@ Describe 'Repository supply-chain configuration' {
             Should -Match 'actions/checkout@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+'
     }
 
+    It 'uses explicit versioned runner labels for the supported CI matrix' {
+        $script:WorkflowContent | Should -Not -Match '(?m)\b(?:ubuntu|macos|windows)-latest\b'
+        $script:Workflow | Should -Match '(?m)^\s*- ubuntu-24\.04\s*$'
+        $script:Workflow | Should -Match '(?m)^\s*- macos-26\s*$'
+        $script:Workflow | Should -Match '(?m)^\s*runs-on:\s+windows-2025\s*$'
+        $script:MonitorWorkflow | Should -Match '(?m)^\s*runs-on:\s+ubuntu-24\.04\s*$'
+    }
+
+    It 'does not persist checkout credentials in read-only workflow checkouts' {
+        foreach ($workflowContent in @($script:Workflow, $script:MonitorWorkflow)) {
+            $workflowContent | Should -Match 'actions/checkout@[0-9a-f]{40}'
+            $workflowContent | Should -Match '(?m)^\s*persist-credentials:\s+false\s*$'
+        }
+    }
+
     It 'keeps scheduled dependency monitoring least privilege and manually runnable' {
         $script:MonitorWorkflow | Should -Match '(?m)^\s*workflow_dispatch:\s*$'
         $script:MonitorWorkflow | Should -Match '(?m)^\s*schedule:\s*$'

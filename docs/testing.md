@@ -153,6 +153,39 @@ bash scripts/run-shellcheck.sh
 
 The runner rejects missing or mismatched ShellCheck versions and ignores caller/user ShellCheck configuration so local analysis stays aligned with CI.
 
+## Local validation layers
+
+CI keeps syntax/parser checks separate from analyzers, formatting, and behavioral tests. The same layers can be run locally without a separate validation harness.
+
+For Bash, validate syntax before static analysis and behavioral tests:
+
+```bash
+bash -n isolated-dotnet-sdk.sh
+bash scripts/run-shellcheck.sh
+bash tests/bash/run-tests.sh
+```
+
+For PowerShell, validate parser errors and then run the repository-owned analyzer, formatting check, and behavioral suite:
+
+```powershell
+$tokens = $null
+$errors = $null
+[System.Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path './isolated-dotnet-sdk.ps1'),
+    [ref]$tokens,
+    [ref]$errors) | Out-Null
+if ($errors.Count -gt 0) {
+    $errors | ForEach-Object { Write-Error $_.Message }
+    throw 'PowerShell syntax validation failed.'
+}
+
+pwsh -NoProfile -File ./scripts/Invoke-PSScriptAnalyzer.ps1
+pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
+```
+
+Install the pinned framework/analyzer versions described above before running these commands. The formatting check uses the pinned PSScriptAnalyzer version and the repository-owned formatter settings; it does not silently format files in check mode.
+
 ## Isolation
 
 The behavioral suites create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
@@ -161,11 +194,16 @@ The current behavioral checks do not install a real SDK or require live release-
 
 ## CI
 
-`.github/workflows/validate.yml` installs the exact framework pins from `.config/test-frameworks.json` and runs:
+`.github/workflows/validate.yml` uses explicit versioned GitHub-hosted runner labels and installs the repository-owned framework/analyzer pins rather than relying on preinstalled tool versions. It runs:
 
-- Bash syntax validation and the Bats behavioral suite on Ubuntu and macOS;
-- ShellCheck once on Ubuntu;
-- PowerShell parser validation and the Pester suite on Windows;
-- PSScriptAnalyzer once on Windows.
+- Bash syntax validation and the Bats behavioral suite on `ubuntu-24.04` and `macos-26`;
+- ShellCheck once on `ubuntu-24.04`;
+- PowerShell parser validation, PSScriptAnalyzer, formatting checks, and the Pester behavioral suite on `windows-2025`.
 
-Syntax/parser checks, static analysis, and behavioral tests remain separate validation layers. Framework failure output is emitted directly by Bats/Pester so CI retains test names, assertion context, and framework diagnostics.
+The dependency-update monitor uses `ubuntu-24.04` and remains separate from product validation. Both workflows pin external Actions to full commit SHAs and disable persisted checkout credentials when the checkout is only used for read access.
+
+Versioned hosted-runner labels intentionally pin the OS/architecture family, not an immutable VM image build. GitHub can patch and rebuild a selected hosted image over time; the exact resolved image and build revision are visible in each job log. Repository-owned test frameworks, analyzers, checksums, and action references remain independently pinned so those dependencies do not silently follow runner-image contents.
+
+CI invokes the same repository-owned behavioral/analyzer/formatting commands documented above instead of maintaining parallel CI-only runners. Syntax/parser checks remain inline because they are small shell/runtime primitives rather than a second test harness. Framework failure output is emitted directly by Bats/Pester so CI retains test names, assertion context, and framework diagnostics.
+
+Syntax/parser checks, static analysis/formatting, and behavioral tests remain separate validation layers because they identify different failure classes. Static analyzers intentionally run once per relevant shell; cross-platform duplication is not added without evidence that it catches a platform-specific analyzer contract.

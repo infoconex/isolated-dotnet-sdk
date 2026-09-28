@@ -4,11 +4,13 @@ The repository supports one implementation per operating-system family:
 
 | Supported platform | Product entry point | Validation mapping |
 | --- | --- | --- |
-| Windows | `isolated-dotnet-sdk.ps1` under PowerShell 7 | `windows-latest` PowerShell job |
-| Linux | `isolated-dotnet-sdk.sh` under Bash | `ubuntu-latest` Bash job |
-| macOS | `isolated-dotnet-sdk.sh` under Bash | `macos-latest` Bash job |
+| Windows | `isolated-dotnet-sdk.ps1` under PowerShell 7 | `windows-2025` PowerShell job |
+| Linux | `isolated-dotnet-sdk.sh` under Bash | `ubuntu-24.04` Bash job |
+| macOS | `isolated-dotnet-sdk.sh` under Bash | `macos-26` Bash job |
 
 This matrix is the supported product contract. PowerShell on Linux/macOS and Bash on Windows are not currently supported product combinations. Expanding that matrix requires separate requirements rather than incidental compatibility work.
+
+The versioned GitHub-hosted runner labels make major OS/architecture transitions explicit repository changes instead of inheriting migrations through `*-latest` aliases. They do not make the hosted VM image immutable: GitHub continues to patch and rebuild each selected image family. Repository-owned actions, test frameworks, analyzers, and integrity metadata therefore remain pinned independently rather than relying on whatever versions happen to be preinstalled on a runner image.
 
 ## Runtime and tool assumptions
 
@@ -61,11 +63,13 @@ Byte-for-byte output or identical stream mechanics are not required across shell
 
 The `Validate` workflow maps product implementations to the supported operating systems:
 
-- Bash syntax and Bats behavioral tests run on both Ubuntu and macOS;
-- ShellCheck runs on Ubuntu;
-- PowerShell parser validation, PSScriptAnalyzer, formatting checks, and Pester behavioral tests run on Windows.
+- Bash syntax and Bats behavioral tests run on `ubuntu-24.04` and `macos-26`;
+- ShellCheck runs once on `ubuntu-24.04`;
+- PowerShell parser validation, PSScriptAnalyzer, formatting checks, and Pester behavioral tests run on `windows-2025`.
 
-This mapping validates the supported product combinations while avoiding unsupported shell/OS combinations. It does not claim that hosted-runner image versions themselves are a long-term reproducibility policy; runner assumptions and pinning remain Issue #28.
+The macOS label selects GitHub's arm64 hosted-runner family. The Linux and Windows labels select x64 hosted-runner families. These are validation choices, not a claim that product support is limited to only those processor architectures.
+
+This mapping validates the supported product combinations while avoiding unsupported shell/OS combinations. Runner-label changes are intentional maintenance changes: they should be reviewed with the same cross-platform validation before being adopted. Patch revisions inside a selected GitHub-hosted image family remain GitHub-managed and are visible in workflow job logs.
 
 ## Boundaries
 
@@ -76,5 +80,5 @@ This document records platform support and intentional mechanics. It does not:
 - add compatibility layers for hypothetical case, path, or locking behavior;
 - replace deterministic failure injection with timing-sensitive native races;
 - redesign stable bootstrap or supply-chain policy from Issues #21/#22;
-- redesign CI runner-image reproducibility owned by Issue #28;
-- perform the broader CLI/help and operational-documentation work owned by Issue #23.
+- require self-hosted runners or immutable custom runner images;
+- change the CLI/help and operational-documentation contract completed by Issue #23.
