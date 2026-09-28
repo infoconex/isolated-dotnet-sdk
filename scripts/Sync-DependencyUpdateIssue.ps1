@@ -17,22 +17,22 @@ function Select-DependencyMonitorIssue {
         [object[]]$Issue
     )
 
-    $matches = @(
+    $trackingIssues = @(
         $Issue | Where-Object {
             [string]$_.title -eq $script:DependencyMonitorIssueTitle -and
             $null -eq $_.pull_request
         }
     )
 
-    if ($matches.Count -gt 1) {
+    if ($trackingIssues.Count -gt 1) {
         throw 'Found multiple dependency monitor tracking issues; reconcile the duplicates before monitoring can continue.'
     }
 
-    if ($matches.Count -eq 0) {
+    if ($trackingIssues.Count -eq 0) {
         return $null
     }
 
-    return $matches[0]
+    return $trackingIssues[0]
 }
 
 function Get-DependencyMonitorIssueDecision {
