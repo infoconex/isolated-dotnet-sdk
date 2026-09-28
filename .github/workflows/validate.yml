@@ -155,9 +155,7 @@ jobs:
 
           $testPath = './tests/powershell/interactive-lifecycle.Tests.ps1'
           $test = Get-Content -LiteralPath $testPath -Raw
-          $updatedTest = $test.Replace(
-              "'1\\. 10\\.0\\.401 \\(latest\\)'",
-              "'1\\. 10\\.0\\.401 \\(latest(?:, [^)]+)*\\)'")
+          $updatedTest = $test.Replace('\(latest\)', '\(latest')
           if ($updatedTest -eq $test) {
               throw 'PowerShell latest-marker test repair did not match expected source.'
           }
