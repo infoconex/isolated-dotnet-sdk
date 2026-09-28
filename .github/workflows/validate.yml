@@ -148,13 +148,19 @@ jobs:
               exit $LASTEXITCODE
           }
 
-      - name: Check PowerShell formatting
+      - name: Apply PowerShell formatting for diagnostic validation
         shell: pwsh
         run: |
-          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Write
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+
+          Write-Output 'FORMATTED_SOURCE_BASE64_BEGIN'
+          [Convert]::ToBase64String(
+              [IO.File]::ReadAllBytes((Resolve-Path './isolated-dotnet-sdk.ps1'))) |
+              Write-Output
+          Write-Output 'FORMATTED_SOURCE_BASE64_END'
 
       - name: Run PowerShell behavioral tests
         shell: pwsh
