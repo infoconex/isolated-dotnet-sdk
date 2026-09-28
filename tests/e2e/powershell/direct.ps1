@@ -11,7 +11,8 @@ if ([string]::IsNullOrWhiteSpace($sdkVersion)) {
 $baseTemp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
 $testRoot = Join-Path $baseTemp ("isolated-dotnet-sdk-e2e-direct-{0}" -f [guid]::NewGuid())
 $testHome = Join-Path $testRoot 'home'
-New-Item -ItemType Directory -Path $testHome -Force | Out-Null
+$dotnetCliHome = Join-Path $testHome '.dotnet-cli'
+New-Item -ItemType Directory -Path $dotnetCliHome -Force | Out-Null
 
 function Invoke-E2EProcess {
     param(
@@ -31,6 +32,10 @@ function Invoke-E2EProcess {
     $startInfo.RedirectStandardError = $true
     $startInfo.Environment['HOME'] = $testHome
     $startInfo.Environment['USERPROFILE'] = $testHome
+    $startInfo.Environment['DOTNET_CLI_HOME'] = $dotnetCliHome
+    $startInfo.Environment['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1'
+    $startInfo.Environment['DOTNET_NOLOGO'] = '1'
+    $startInfo.Environment['DOTNET_SKIP_FIRST_TIME_EXPERIENCE'] = '1'
 
     foreach ($argument in $Arguments) {
         $startInfo.ArgumentList.Add($argument)
