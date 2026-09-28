@@ -3,7 +3,7 @@ Describe 'Pinned dependency update discovery' {
         $script:RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
         . (Join-Path $script:RepositoryRoot 'scripts/Invoke-DependencyUpdateCheck.ps1')
 
-        function New-TestCurrentPin {
+        function Get-TestCurrentPin {
             return [pscustomobject]@{
                 PSScriptAnalyzerVersion = '1.25.0'
                 PesterVersion = '6.2.0'
@@ -14,7 +14,7 @@ Describe 'Pinned dependency update discovery' {
             }
         }
 
-        function New-TestCandidateSnapshot {
+        function Get-TestCandidateSnapshot {
             param(
                 [string]$PSScriptAnalyzerVersion = '1.25.0',
                 [string]$PesterVersion = '6.2.0',
@@ -55,8 +55,8 @@ Describe 'Pinned dependency update discovery' {
     It 'reports no update when every stable candidate matches the repository pins' {
         $updates = @(
             Get-DependencyUpdateRecord `
-                -Current (New-TestCurrentPin) `
-                -Candidate (New-TestCandidateSnapshot)
+                -Current (Get-TestCurrentPin) `
+                -Candidate (Get-TestCandidateSnapshot)
         )
 
         $updates.Count | Should -Be 0
@@ -65,7 +65,7 @@ Describe 'Pinned dependency update discovery' {
     }
 
     It 'reports every newer candidate with authoritative context and coupled metadata guidance' {
-        $candidate = New-TestCandidateSnapshot `
+        $candidate = Get-TestCandidateSnapshot `
             -PSScriptAnalyzerVersion '1.26.0' `
             -PesterVersion '6.3.0' `
             -ShellCheckVersion 'v0.12.0' `
@@ -74,7 +74,7 @@ Describe 'Pinned dependency update discovery' {
             -DotNetVersion 'v2026.10.01' `
             -DotNetCommit 'dddddddddddddddddddddddddddddddddddddddd'
 
-        $updates = @(Get-DependencyUpdateRecord -Current (New-TestCurrentPin) -Candidate $candidate)
+        $updates = @(Get-DependencyUpdateRecord -Current (Get-TestCurrentPin) -Candidate $candidate)
         $report = ConvertTo-DependencyUpdateReport -Update $updates
 
         $updates.Count | Should -Be 5
@@ -90,11 +90,11 @@ Describe 'Pinned dependency update discovery' {
     }
 
     It 'fails visibly when a same-version Bats release resolves to a different commit' {
-        $candidate = New-TestCandidateSnapshot `
+        $candidate = Get-TestCandidateSnapshot `
             -BatsCommit 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 
         {
-            Get-DependencyUpdateRecord -Current (New-TestCurrentPin) -Candidate $candidate
+            Get-DependencyUpdateRecord -Current (Get-TestCurrentPin) -Candidate $candidate
         } | Should -Throw '*now resolves to*instead of pinned commit*'
     }
 
@@ -119,7 +119,7 @@ Describe 'Pinned dependency update discovery' {
             $beforeHashes = @($configPaths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
 
             $update = @(
-                New-DependencyUpdateRecord `
+                ConvertTo-DependencyUpdateRecord `
                     -Dependency 'ShellCheck' `
                     -Current '0.11.0' `
                     -Candidate '0.12.0' `
