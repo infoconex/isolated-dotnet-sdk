@@ -2,6 +2,8 @@
 
 The PowerShell and Bash implementations target the same product-level behavior where the contract is shared. Parity is judged at observable boundaries such as action selection, exact-version handling, confirmation, failure propagation, installation ownership, cleanup, and exit status. It does not require source-code structure, shell idioms, presentation streams, or platform mechanics to be identical.
 
+The supported operating-system/runtime matrix and intentional platform mechanics are specified in [`cross-platform-support.md`](cross-platform-support.md).
+
 ## Shared contract
 
 | Behavior | Shared contract |
@@ -67,9 +69,8 @@ This parity contract deliberately does not absorb later roadmap work:
 
 - broad failure and boundary coverage consolidation remains Issue #20;
 - stable-release bootstrap, development-source selection, and self-update policy remain Issue #21;
-- additional cross-platform path and race-condition hardening remains with Issue #20 or Issue #27 as applicable;
 - general CLI/help redesign, formatting cleanup, and source-structure normalization are not parity requirements.
 
 ## Regression protection
 
-The repository's Pester and Bats suites protect the focused shared behaviors, while the existing transactional-install suites protect the Issue #18 baseline. See [testing.md](testing.md) for the repository-owned validation commands and CI matrix, and [native-command-failures.md](native-command-failures.md) for correctness-significant native command boundaries.
+The repository's Pester and Bats suites protect the focused shared behaviors, while the existing transactional-install suites protect the Issue #18 baseline. See [testing.md](testing.md) for the repository-owned validation commands and CI matrix, [cross-platform-support.md](cross-platform-support.md) for supported platform/runtime mechanics, and [native-command-failures.md](native-command-failures.md) for correctness-significant native command boundaries.
