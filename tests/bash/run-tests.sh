@@ -60,6 +60,7 @@ EOF
 chmod +x "$test_support_dir/shasum"
 
 PATH="$test_support_dir:$PATH" bats \
+  "$repo_root/tests/bash/help.bats" \
   "$repo_root/tests/bash/behavior.bats" \
   "$repo_root/tests/bash/cross-platform.bats" \
   "$repo_root/tests/bash/metadata.bats" \
