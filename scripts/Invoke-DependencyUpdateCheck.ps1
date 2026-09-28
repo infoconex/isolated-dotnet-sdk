@@ -215,7 +215,7 @@ function Get-UpstreamDependencySnapshot {
     }
 }
 
-function New-DependencyUpdateRecord {
+function ConvertTo-DependencyUpdateRecord {
     param(
         [Parameter(Mandatory)]
         [string]$Dependency,
@@ -260,7 +260,7 @@ function Get-DependencyUpdateRecord {
     $updates = [System.Collections.Generic.List[object]]::new()
 
     if (Test-DependencyVersionUpdate -CurrentVersion $Current.PSScriptAnalyzerVersion -CandidateVersion $Candidate.PSScriptAnalyzer.Version) {
-        $updates.Add((New-DependencyUpdateRecord `
+        $updates.Add((ConvertTo-DependencyUpdateRecord `
                     -Dependency 'PSScriptAnalyzer' `
                     -Current $Current.PSScriptAnalyzerVersion `
                     -Candidate $Candidate.PSScriptAnalyzer.Version `
@@ -269,7 +269,7 @@ function Get-DependencyUpdateRecord {
     }
 
     if (Test-DependencyVersionUpdate -CurrentVersion $Current.PesterVersion -CandidateVersion $Candidate.Pester.Version) {
-        $updates.Add((New-DependencyUpdateRecord `
+        $updates.Add((ConvertTo-DependencyUpdateRecord `
                     -Dependency 'Pester' `
                     -Current $Current.PesterVersion `
                     -Candidate $Candidate.Pester.Version `
@@ -279,7 +279,7 @@ function Get-DependencyUpdateRecord {
 
     $shellCheckCandidateVersion = ([string]$Candidate.ShellCheck.Version).TrimStart('v')
     if (Test-DependencyVersionUpdate -CurrentVersion $Current.ShellCheckVersion -CandidateVersion $shellCheckCandidateVersion) {
-        $updates.Add((New-DependencyUpdateRecord `
+        $updates.Add((ConvertTo-DependencyUpdateRecord `
                     -Dependency 'ShellCheck' `
                     -Current $Current.ShellCheckVersion `
                     -Candidate $shellCheckCandidateVersion `
@@ -296,7 +296,7 @@ function Get-DependencyUpdateRecord {
         throw "Bats-core release v$($Current.BatsVersion) now resolves to '$($Candidate.Bats.Commit)' instead of pinned commit '$($Current.BatsCommit)'."
     }
     if ($batsIsNewer) {
-        $updates.Add((New-DependencyUpdateRecord `
+        $updates.Add((ConvertTo-DependencyUpdateRecord `
                     -Dependency 'Bats-core' `
                     -Current "$($Current.BatsVersion) ($($Current.BatsCommit))" `
                     -Candidate "$batsCandidateVersion ($($Candidate.Bats.Commit))" `
@@ -308,7 +308,7 @@ function Get-DependencyUpdateRecord {
         throw 'dotnet/install-scripts candidate release did not resolve to a full lowercase Git commit SHA.'
     }
     if ([string]$Candidate.DotNetInstall.Commit -ne $Current.DotNetInstallCommit) {
-        $updates.Add((New-DependencyUpdateRecord `
+        $updates.Add((ConvertTo-DependencyUpdateRecord `
                     -Dependency 'Microsoft dotnet/install-scripts' `
                     -Current $Current.DotNetInstallCommit `
                     -Candidate "$($Candidate.DotNetInstall.Version) ($($Candidate.DotNetInstall.Commit))" `
