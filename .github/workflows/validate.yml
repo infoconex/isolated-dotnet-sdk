@@ -145,29 +145,33 @@ jobs:
         run: |
           $sourcePath = './isolated-dotnet-sdk.ps1'
           $source = Get-Content -LiteralPath $sourcePath -Raw
-          $source = $source -replace '(?ms)            \$SdkVersions = if \(\$ShowAllVersions\) \{\r?\n                \$AllSdkVersions\r?\n            \}\r?\n            else \{\r?\n                \$FeaturedSdkVersions\r?\n            \}', @'
-            if ($ShowAllVersions) {
-                $SdkVersions = @($AllSdkVersions)
-            }
-            else {
-                $SdkVersions = @($FeaturedSdkVersions)
-            }
-'@
-          Set-Content -LiteralPath $sourcePath -Value $source -NoNewline
+          $pattern = '(?ms)            \$SdkVersions = if \(\$ShowAllVersions\) \{\r?\n                \$AllSdkVersions\r?\n            \}\r?\n            else \{\r?\n                \$FeaturedSdkVersions\r?\n            \}'
+          $replacement = "            if (`$ShowAllVersions) {`r`n                `$SdkVersions = @(`$AllSdkVersions)`r`n            }`r`n            else {`r`n                `$SdkVersions = @(`$FeaturedSdkVersions)`r`n            }"
+          $updated = [regex]::Replace($source, $pattern, $replacement, 1)
+          if ($updated -eq $source) {
+              throw 'PowerShell SDK picker repair did not match expected source.'
+          }
+          Set-Content -LiteralPath $sourcePath -Value $updated -NoNewline
 
           $testPath = './tests/powershell/interactive-lifecycle.Tests.ps1'
           $test = Get-Content -LiteralPath $testPath -Raw
-          $test = $test.Replace(
+          $updatedTest = $test.Replace(
               "'1\\. 10\\.0\\.401 \\(latest\\)'",
               "'1\\. 10\\.0\\.401 \\(latest(?:, [^)]+)*\\)'")
-          Set-Content -LiteralPath $testPath -Value $test -NoNewline
+          if ($updatedTest -eq $test) {
+              throw 'PowerShell latest-marker test repair did not match expected source.'
+          }
+          Set-Content -LiteralPath $testPath -Value $updatedTest -NoNewline
 
           $bashPath = './isolated-dotnet-sdk.sh'
           $bash = Get-Content -LiteralPath $bashPath -Raw
-          $bash = $bash.Replace(
+          $updatedBash = $bash.Replace(
               'if [[ -n "$current_path" && -f "$current_source" ]]; then',
               'if [[ -n "$current_path" && -f "$current_path" ]]; then')
-          Set-Content -LiteralPath $bashPath -Value $bash -NoNewline
+          if ($updatedBash -eq $bash) {
+              throw 'Bash bootstrap repair did not match expected source.'
+          }
+          Set-Content -LiteralPath $bashPath -Value $updatedBash -NoNewline
 
           $readmePath = './README.md'
           $readme = Get-Content -LiteralPath $readmePath -Raw
@@ -177,9 +181,6 @@ jobs:
           $readme = $readme.Replace(
               'After selecting a channel, the tool lists the SDK versions published for that channel. Versions already present on the machine are marked so you can see where they are installed.',
               'After selecting a channel, the tool starts with a compact SDK list: Microsoft''s `latest-sdk` when available plus the newest SDK from each other feature band. Older servicing versions stay available through **Show all versions**. Versions already present on the machine are marked so you can see where they are installed. In a persistent interactive session, **Back** returns from SDK selection to channel selection, from channel selection to Main, and from Remove selection to Main; explicit one-shot commands keep cancellation semantics instead.')
-          $readme = $readme.Replace(
-              "  1. 11.0.100-rc.1.26425.128 (latest, isolated)`r`n  2. 11.0.100-preview.7.26381.103`r`n  3. 11.0.100-preview.6.26359.118",
-              "  1. 11.0.100-rc.1.26425.128 (latest, isolated)`r`n`r`n  S. Show all versions`r`n  B. Back to .NET channels")
           $readme = $readme.Replace(
               'You can also choose manual entry at either picker when you already know the exact SDK version you want.',
               'You can also choose manual entry at either picker when you already know the exact SDK version you want. See [`docs/interactive-sessions.md`](docs/interactive-sessions.md) for the full persistent-session and navigation contract.')
@@ -217,7 +218,7 @@ jobs:
       - name: Commit validated repair and restore normal workflow
         shell: pwsh
         run: |
-          git fetch --depth=1 origin 89cea3e7f817bf9c8cec8921a9eda3d4cdb8e870
+          git fetch --depth=1 origin main
           git checkout FETCH_HEAD -- .github/workflows/validate.yml
           git diff --check
           git config user.name 'github-actions[bot]'
