@@ -1,18 +1,42 @@
 Describe 'Repository supply-chain configuration' {
     BeforeAll {
         $script:RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-        $script:WorkflowPath = Join-Path $script:RepositoryRoot '.github/workflows/validate.yml'
+        $script:WorkflowRoot = Join-Path $script:RepositoryRoot '.github/workflows'
+        $script:WorkflowPath = Join-Path $script:WorkflowRoot 'validate.yml'
         $script:Workflow = Get-Content -LiteralPath $script:WorkflowPath -Raw
+        $script:MonitorWorkflowPath = Join-Path $script:WorkflowRoot 'dependency-update-monitor.yml'
+        $script:MonitorWorkflow = Get-Content -LiteralPath $script:MonitorWorkflowPath -Raw
+        $script:WorkflowContent = @(
+            Get-ChildItem -LiteralPath $script:WorkflowRoot -File |
+                Where-Object { $_.Extension -in @('.yml', '.yaml') } |
+                Sort-Object -Property Name |
+                ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
+        ) -join [Environment]::NewLine
         $script:TestConfig = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot '.config/test-frameworks.json') -Raw | ConvertFrom-Json
         $script:AnalysisConfig = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot '.config/static-analysis.json') -Raw | ConvertFrom-Json
     }
 
-    It 'keeps every checkout reference pinned to a full commit SHA' {
-        $allCheckoutRefs = [regex]::Matches($script:Workflow, 'actions/checkout@[^\s#]+')
-        $pinnedCheckoutRefs = [regex]::Matches($script:Workflow, 'actions/checkout@[0-9a-f]{40}(?=\s|#)')
+    It 'keeps every external action reference pinned to a full commit SHA' {
+        $allActionRefs = [regex]::Matches($script:WorkflowContent, 'uses:\s+[^@\s]+@[^\s#]+')
+        $pinnedActionRefs = [regex]::Matches($script:WorkflowContent, 'uses:\s+[^@\s]+@[0-9a-f]{40}(?=\s|#)')
 
-        $allCheckoutRefs.Count | Should -BeGreaterThan 0
-        $pinnedCheckoutRefs.Count | Should -Be $allCheckoutRefs.Count
+        $allActionRefs.Count | Should -BeGreaterThan 0
+        $pinnedActionRefs.Count | Should -Be $allActionRefs.Count
+    }
+
+    It 'keeps readable release context on the monitor workflow action pin' {
+        $script:MonitorWorkflow |
+            Should -Match 'actions/checkout@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+'
+    }
+
+    It 'keeps scheduled dependency monitoring least privilege and manually runnable' {
+        $script:MonitorWorkflow | Should -Match '(?m)^\s*workflow_dispatch:\s*$'
+        $script:MonitorWorkflow | Should -Match '(?m)^\s*schedule:\s*$'
+        $script:MonitorWorkflow | Should -Match '(?m)^\s*contents:\s+read\s*$'
+        $script:MonitorWorkflow | Should -Match '(?m)^\s*issues:\s+write\s*$'
+        $script:MonitorWorkflow | Should -Not -Match '(?m)^\s*pull-requests:\s+write\s*$'
+        $script:MonitorWorkflow | Should -Match 'Invoke-DependencyUpdateCheck\.ps1'
+        $script:MonitorWorkflow | Should -Match 'Sync-DependencyUpdateIssue\.ps1'
     }
 
     It 'keeps Bats pinned to an exact Git commit' {
