@@ -189,7 +189,7 @@ EOF
   [ -z "$(find "$tool_root" -maxdepth 1 -type f -name '.release-metadata.*' -print -quit)" ]
 }
 
-@test "duplicate SDK metadata is shown once in first-seen order" {
+@test "duplicate SDK metadata remains unique when all versions are expanded" {
   cat > "$fake_bin/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -229,11 +229,12 @@ esac
 EOF
   chmod +x "$fake_bin/curl"
 
-  run bash -c 'printf "1\nq\n" | env HOME="$1" PATH="$2:$PATH" "$3" install' _ \
+  run bash -c 'printf "1\ns\nq\n" | env HOME="$1" PATH="$2:$PATH" "$3" install' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+[0-9]+\. 99\.0\.100')" -eq 1 ]
+  [[ "$output" == *"S. Show all versions"* ]]
+  [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+[0-9]+\. 99\.0\.100')" -eq 2 ]
   [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+[0-9]+\. 99\.0\.101')" -eq 1 ]
 }
 
