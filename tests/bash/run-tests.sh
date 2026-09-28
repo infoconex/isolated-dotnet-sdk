@@ -61,6 +61,7 @@ chmod +x "$test_support_dir/shasum"
 
 PATH="$test_support_dir:$PATH" bats \
   "$repo_root/tests/bash/behavior.bats" \
+  "$repo_root/tests/bash/cross-platform.bats" \
   "$repo_root/tests/bash/metadata.bats" \
   "$repo_root/tests/bash/metadata-boundaries.bats" \
   "$repo_root/tests/bash/public-boundaries.bats" \
