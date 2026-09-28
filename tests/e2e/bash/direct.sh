@@ -15,6 +15,12 @@ cleanup() {
 trap cleanup EXIT
 
 export HOME="$test_home"
+export DOTNET_CLI_HOME="$test_home/.dotnet-cli"
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_NOLOGO=1
+export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+mkdir -p "$DOTNET_CLI_HOME"
+
 source_tool="$repo_root/isolated-dotnet-sdk.sh"
 tool_root="$HOME/dotnet-sdks"
 saved_tool="$tool_root/isolated-dotnet-sdk.sh"
