@@ -92,7 +92,7 @@ EOF
   [[ "$output" != *"Available .NET 99.0 SDKs:"* ]]
 }
 
-@test "duplicate SDK versions preserve first-seen order" {
+@test "duplicate SDK versions remain unique after deterministic ordering" {
   cat > "$fake_bin/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -131,11 +131,11 @@ esac
 EOF
   chmod +x "$fake_bin/curl"
 
-  run bash -c 'printf "1\nq\n" | env HOME="$1" PATH="$2:$PATH" "$3" install' _ \
+  run bash -c 'printf "1\ns\nq\n" | env HOME="$1" PATH="$2:$PATH" "$3" install' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+1\. 99\.0\.101')" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+1\. 99\.0\.101')" -eq 2 ]
   [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+2\. 99\.0\.100')" -eq 1 ]
-  [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+[0-9]+\. 99\.0\.101')" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -Ec '^[[:space:]]+[0-9]+\. 99\.0\.101')" -eq 2 ]
 }
