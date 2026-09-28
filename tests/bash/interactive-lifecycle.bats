@@ -201,3 +201,30 @@ EOF
   [ "$(printf '%s\n' "$output" | grep -c '10\.0\.400' || true)" -eq 1 ]
   [ "$(printf '%s\n' "$output" | grep -c '10\.0\.303' || true)" -eq 1 ]
 }
+
+@test "one interactive session can Install List Remove and Exit" {
+  bootstrap_tool
+  fake_bin="$test_root/multi-operation-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  version='10.0.401'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir"
+  cat > "$install_dir/dotnet" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf '%s\n' '$version [/fake]'
+fi
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+
+  run bash -c 'printf "1\n1\n1\n3\n2\n1\ny\n4\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [ "$(count_main_prompts "$output")" -eq 4 ]
+  [[ "$output" == *"Isolated SDK $version is already installed."* ]]
+  [[ "$output" == *"Isolated SDK $version was removed."* ]]
+  [[ "$output" == *"Exiting."* ]]
+  [ ! -d "$install_dir" ]
+}
