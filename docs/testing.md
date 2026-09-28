@@ -190,17 +190,25 @@ Install the pinned framework/analyzer versions described above before running th
 
 The behavioral suites create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
 
-The current behavioral checks do not install a real SDK or require live release-metadata downloads. External downloads and native commands are replaced with deterministic test seams where necessary to exercise failure and transaction boundaries.
+The deterministic behavioral checks do not install a real SDK or require live release-metadata downloads. External downloads and native commands are replaced with deterministic test seams where necessary to exercise failure and transaction boundaries.
+
+## Real end-to-end validation
+
+Real Microsoft/.NET ecosystem coverage is intentionally separate from the deterministic behavioral suites. The repository-owned fixed SDK target, direct and persistent-interactive scenarios, isolated job-state rules, and manual workflow procedure are documented in [`e2e-testing.md`](e2e-testing.md).
+
+`.github/workflows/e2e.yml` is manually invoked with `workflow_dispatch` for now. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft metadata, installer acquisition, and SDK payloads. It is not a required PR or merge check until the organization/merge-queue work tracked separately is implemented.
 
 ## CI
 
-`.github/workflows/validate.yml` uses explicit versioned GitHub-hosted runner labels and installs the repository-owned framework/analyzer pins rather than relying on preinstalled tool versions. It runs:
+`.github/workflows/validate.yml` uses explicit versioned GitHub-hosted runner labels and repository-owned dependency pins rather than relying on preinstalled tool versions. It runs:
 
 - Bash syntax validation and the Bats behavioral suite on `ubuntu-24.04` and `macos-26`;
 - ShellCheck once on `ubuntu-24.04`;
 - PowerShell parser validation, PSScriptAnalyzer, formatting checks, and the Pester behavioral suite on `windows-2025`.
 
-The dependency-update monitor uses `ubuntu-24.04` and remains separate from product validation. Both workflows pin external Actions to full commit SHAs and disable persisted checkout credentials when the checkout is only used for read access.
+Validate uses exact-key caches for pinned Bats-core, ShellCheck, Pester, and PSScriptAnalyzer where practical. Cache identity derives from the repository-owned pin/configuration files plus relevant runner/runtime identity. A cache miss acquires the exact configured dependency; a cache hit still revalidates the configured commit, checksum, or module version before use. No broad restore-key fallback accepts an older toolset, and product/E2E SDK or HOME/profile state is not cached.
+
+The dependency-update monitor uses `ubuntu-24.04` and remains separate from product validation. Workflows pin external Actions to full commit SHAs and disable persisted checkout credentials when the checkout is only used for read access.
 
 Versioned hosted-runner labels intentionally pin the OS/architecture family, not an immutable VM image build. GitHub can patch and rebuild a selected hosted image over time; the exact resolved image and build revision are visible in each job log. Repository-owned test frameworks, analyzers, checksums, and action references remain independently pinned so those dependencies do not silently follow runner-image contents.
 
