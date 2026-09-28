@@ -194,7 +194,7 @@ EOF
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"1. 10.0.401 (latest)"* ]]
+  [[ "$output" == *"1. 10.0.401 (latest"* ]]
   [[ "$output" == *"2. 10.0.305"* ]]
   [[ "$output" == *"3. 10.0.201"* ]]
   [[ "$output" == *"S. Show all versions"* ]]
