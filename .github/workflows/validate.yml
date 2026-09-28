@@ -19,12 +19,14 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
-          - macos-latest
+          - ubuntu-24.04
+          - macos-26
 
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Validate Bash syntax
         shell: bash
@@ -49,7 +51,7 @@ jobs:
           printf '%s\n' "$prefix/bin" >> "$GITHUB_PATH"
 
       - name: Install pinned ShellCheck
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |
           set -euo pipefail
@@ -65,7 +67,7 @@ jobs:
           sudo install "$RUNNER_TEMP/shellcheck-v${version}/shellcheck" /usr/local/bin/shellcheck
 
       - name: Run ShellCheck
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |
           set -euo pipefail
@@ -82,12 +84,14 @@ jobs:
         run: bash tests/bash/run-tests.sh
 
   powershell:
-    name: PowerShell (windows-latest)
-    runs-on: windows-latest
+    name: PowerShell (windows-2025)
+    runs-on: windows-2025
 
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Validate PowerShell syntax
         shell: pwsh
