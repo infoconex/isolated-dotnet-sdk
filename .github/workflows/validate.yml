@@ -30,7 +30,10 @@ jobs:
 
       - name: Validate Bash syntax
         shell: bash
-        run: bash -n isolated-dotnet-sdk.sh
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          bash -n tests/e2e/bash/direct.sh
+          bash -n tests/e2e/bash/interactive.sh
 
       - name: Restore pinned Bats-core cache
         id: bats-cache
@@ -131,12 +134,19 @@ jobs:
       - name: Validate PowerShell syntax
         shell: pwsh
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-              (Resolve-Path './isolated-dotnet-sdk.ps1'),
-              [ref]$tokens,
-              [ref]$errors) | Out-Null
+          $errors = @()
+          foreach ($path in @(
+              './isolated-dotnet-sdk.ps1',
+              './tests/e2e/powershell/direct.ps1',
+              './tests/e2e/powershell/interactive.ps1')) {
+              $tokens = $null
+              $parseErrors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                  (Resolve-Path $path),
+                  [ref]$tokens,
+                  [ref]$parseErrors) | Out-Null
+              $errors += $parseErrors
+          }
 
           if ($errors.Count -gt 0) {
               $errors | ForEach-Object { Write-Error $_.Message }
