@@ -64,6 +64,22 @@ curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/
 
 Rerunning either development command may refresh the saved tool from newer `main` source.
 
+## Requirements
+
+The supported product mapping is:
+
+- Windows with PowerShell 7;
+- Linux with Bash;
+- macOS with Bash.
+
+PowerShell on Linux/macOS and Bash on Windows are not supported product combinations. A system-wide `dotnet` installation is not required.
+
+On Linux and macOS, normal product execution uses standard shell utilities including `curl`, `awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, and `rm`. SDK installation also requires either `sha256sum` or `shasum` so the pinned Microsoft install helper can be verified before execution.
+
+Network access is required when bootstrap or installation needs to download remote artifacts. Interactive install selection also requires Microsoft's published release metadata. Supplying an exact SDK version bypasses that metadata lookup, but a new installation still downloads the repository-pinned Microsoft install helper and the requested SDK payload from Microsoft.
+
+See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the authoritative platform/runtime assumptions.
+
 ## Interactive Install
 
 Choosing **Install an SDK**, or explicitly running the `install` action without a version, loads Microsoft's official .NET release metadata and shows the currently supported or development channels.
@@ -189,6 +205,24 @@ Bash:
 
 An explicit List action does not accept a version. Supplying one is treated as invalid input rather than silently ignoring it. A bare version with no action is still the Install convenience form shown above.
 
+## Use an Isolated SDK
+
+The tool does not add isolated SDKs to `PATH` and does not provide a separate `use` action. Invoke the selected version's isolated `dotnet` host directly when you want to use it.
+
+PowerShell on Windows:
+
+```powershell
+& "$HOME\dotnet-sdks\10.0.401\dotnet.exe" --info
+```
+
+Bash on Linux or macOS:
+
+```bash
+"$HOME/dotnet-sdks/10.0.401/dotnet" --info
+```
+
+Replace `10.0.401` with the exact version you installed and pass normal `dotnet` arguments after the host path. This isolates the SDK installation itself; it is not a full process or user-profile sandbox, and the .NET CLI can still create normal per-user state during use.
+
 ## Remove an Isolated SDK
 
 Running `remove` without a version opens a picker containing only SDKs installed under `~/dotnet-sdks`.
@@ -268,13 +302,13 @@ The Bash implementation keeps its existing default-no confirmation and `--yes` a
     --yes
 ```
 
-## Automation
+## Automation and Failure Behavior
 
 For scripts and CI jobs, provide the action and version explicitly rather than using the interactive picker. For PowerShell removal, use `-Yes` or `-Confirm:$false` only when you intentionally approve deletion; use `-WhatIf` for a no-change preview. For Bash, use `--yes` when you intentionally want to bypass the confirmation prompt.
 
 `-Yes` and `--yes` bypass supported confirmation prompts; they do not supply a missing action or version. If a command still needs interactive selection and input is unavailable, the tool fails nonzero with repository-owned context instead of hanging, guessing, or treating end-of-input as a successful cancellation.
 
-Operational failures return a nonzero exit status. Choosing to cancel an interactive install or removal is treated as a normal user action rather than an error.
+Operational failures return a nonzero exit status and do not produce a misleading success result. Choosing to cancel an interactive install or removal is treated as a normal successful no-change user action rather than an operational failure. Exact numeric failure codes may differ between shells unless a narrower contract says otherwise.
 
 ## PowerShell / Bash Behavioral Parity
 
@@ -313,6 +347,17 @@ https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json
 
 The release index identifies each .NET channel and links to the detailed release metadata used to enumerate exact SDK versions. Explicit-version installs do not require the picker and bypass this metadata lookup.
 
+## Operational Contract Reference
+
+The README and CLI help summarize supported workflows. These repository specifications are authoritative for the detailed operational contracts:
+
+- [`docs/release-bootstrap.md`](docs/release-bootstrap.md) — stable release, bootstrap, update, and rollback semantics;
+- [`docs/behavioral-parity.md`](docs/behavioral-parity.md) — shared PowerShell/Bash product behavior and intentional shell-native differences;
+- [`docs/cross-platform-support.md`](docs/cross-platform-support.md) — supported OS/runtime mapping and platform assumptions;
+- [`docs/filesystem-safety.md`](docs/filesystem-safety.md) — isolated-root ownership, staging, cleanup, transactional install, and recovery semantics;
+- [`docs/native-command-failures.md`](docs/native-command-failures.md) — correctness-significant external-command failure boundaries;
+- [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md) — remote-artifact integrity controls and residual trust boundaries.
+
 ## Microsoft References
 
 - [.NET install scripts](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script)
@@ -323,7 +368,7 @@ The release index identifies each .NET channel and links to the detailed release
 
 ## Security Note
 
-Stable bootstrap for releases published under the Issue #22 policy verifies the explicitly tagged script against that release's `SHA256SUMS` before execution. SDK installation downloads Microsoft's install helper from an immutable upstream commit and verifies its repository-pinned SHA-256 before execution. The downloaded .NET SDK payload itself remains an explicit Microsoft distribution trust boundary; independent SDK-archive checksum verification is deferred for later hardening. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee.
+Stable bootstrap for releases published under the Issue #22 policy verifies the explicitly tagged script against that release's `SHA256SUMS` before execution. SDK installation downloads Microsoft's install helper from an immutable upstream commit and verifies its repository-pinned SHA-256 before execution. The downloaded .NET SDK payload itself remains an explicit Microsoft distribution trust boundary; independent SDK-archive checksum verification is deferred for later hardening. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee. See [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md) for the complete integrity model.
 
 ## License
 
