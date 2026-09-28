@@ -153,6 +153,39 @@ bash scripts/run-shellcheck.sh
 
 The runner rejects missing or mismatched ShellCheck versions and ignores caller/user ShellCheck configuration so local analysis stays aligned with CI.
 
+## Local validation layers
+
+CI keeps syntax/parser checks separate from analyzers, formatting, and behavioral tests. The same layers can be run locally without a separate validation harness.
+
+For Bash, validate syntax before static analysis and behavioral tests:
+
+```bash
+bash -n isolated-dotnet-sdk.sh
+bash scripts/run-shellcheck.sh
+bash tests/bash/run-tests.sh
+```
+
+For PowerShell, validate parser errors and then run the repository-owned analyzer, formatting check, and behavioral suite:
+
+```powershell
+$tokens = $null
+$errors = $null
+[System.Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path './isolated-dotnet-sdk.ps1'),
+    [ref]$tokens,
+    [ref]$errors) | Out-Null
+if ($errors.Count -gt 0) {
+    $errors | ForEach-Object { Write-Error $_.Message }
+    throw 'PowerShell syntax validation failed.'
+}
+
+pwsh -NoProfile -File ./scripts/Invoke-PSScriptAnalyzer.ps1
+pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
+```
+
+Install the pinned framework/analyzer versions described above before running these commands. The formatting check uses the pinned PSScriptAnalyzer version and the repository-owned formatter settings; it does not silently format files in check mode.
+
 ## Isolation
 
 The behavioral suites create temporary user/home state and clean it up when the run completes. They do not intentionally read from or modify the developer's real `~/dotnet-sdks` installation.
