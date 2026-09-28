@@ -31,7 +31,7 @@ Stable installation is explicitly version-pinned and integrity-checked. Choose a
 
 `v0.1.0` predates this integrity policy and does not have a `SHA256SUMS` release asset. It remains available as legacy history but is not compatible with the checksum-verifying stable bootstrap.
 
-The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then opens the interactive menu.
+The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then starts a persistent interactive session. Successful operations and normal cancellations return to the main menu until you explicitly exit. Explicit Install, List, Remove, or exact-version invocations remain one-shot for automation and scripting.
 
 ```text
 isolated-dotnet-sdk: What would you like to do?
@@ -99,7 +99,7 @@ isolated-dotnet-sdk: Select a supported or development .NET channel:
   Q. Cancel
 ```
 
-After selecting a channel, the tool lists the SDK versions published for that channel. Versions already present on the machine are marked so you can see where they are installed.
+After selecting a channel, the tool starts with a compact SDK list: Microsoft's `latest-sdk` when available plus the newest SDK from each other feature band. Older servicing versions stay available through **Show all versions**. Versions already present on the machine are marked so you can see where they are installed. In a persistent interactive session, **Back** returns from SDK selection to channel selection, from channel selection to Main, and from Remove selection to Main; explicit one-shot commands keep cancellation semantics instead.
 
 ```text
   1. 11.0.100-rc.1.26425.128 (latest, isolated)
@@ -115,7 +115,7 @@ The possible markers are:
 
 If you select an SDK that is already installed normally, the existing confirmation still applies before creating an isolated copy.
 
-You can also choose manual entry at either picker when you already know the exact SDK version you want.
+You can also choose manual entry at either picker when you already know the exact SDK version you want. See [`docs/interactive-sessions.md`](docs/interactive-sessions.md) for the full persistent-session and navigation contract.
 
 ### Start the install picker directly
 

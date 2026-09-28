@@ -35,7 +35,7 @@ Describe 'PowerShell release-metadata behavior' {
         $LASTEXITCODE | Should -Not -Be 0
         $text = $metadataOutput -join [Environment]::NewLine
         $text | Should -Match 'No selectable .NET channels were found in Microsoft release metadata\.'
-        $text | Should -Not -Match 'Select a supported or development .NET channel:'
+        $text | Should -Not -Match 'Select a supported or development \.NET channel:'
     }
 
     It 'reports a selected-channel network failure with channel context' {
@@ -69,11 +69,11 @@ Describe 'PowerShell release-metadata behavior' {
         $text | Should -Not -Match 'transport-specific channel detail'
     }
 
-    It 'normalizes sdk and sdks entries and removes duplicates in first-seen order' {
+    It 'normalizes sdk and sdks entries and selects the displayed newest SDK' {
         $metadataOutput = @(& pwsh -NoProfile -Command '
             $global:metadataResponses = [System.Collections.Generic.Queue[string]]::new()
             $global:metadataResponses.Enqueue("1")
-            $global:metadataResponses.Enqueue("2")
+            $global:metadataResponses.Enqueue("1")
             function Read-Host { param([string]$Prompt) $global:metadataResponses.Dequeue() }
             function Invoke-RestMethod {
                 param([string]$Uri)

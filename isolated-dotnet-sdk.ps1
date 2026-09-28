@@ -5,14 +5,14 @@ Installs and manages isolated .NET SDK versions on Windows with PowerShell 7.
 .DESCRIPTION
 Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. Isolated SDKs remain under that user-owned root and are not added to PATH.
 
-Supported product actions are Install, Remove, and List. When Action is omitted and Version is supplied, Install is selected. Explicit List with Version is invalid. Install or Remove without a resolved version may require interactive selection.
+Supported product actions are Install, Remove, and List. When Action and Version are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and Version is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with Version is invalid. Install or Remove without a resolved version may require interactive selection.
 
 Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
 
 Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata.
 
 .PARAMETER Action
-Specifies the operation to perform: Install, Remove, or List. When omitted, the script prompts for an action unless Version is supplied, in which case Install is selected.
+Specifies the operation to perform: Install, Remove, or List. When omitted, the script starts the persistent interactive session unless Version is supplied, in which case Install is selected.
 
 .PARAMETER Version
 Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Version is invalid with an explicit List action.
@@ -23,7 +23,7 @@ Skips confirmation prompts that support automatic confirmation. It does not supp
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action List
 
-Lists SDKs installed in the isolated SDK directory.
+Lists SDKs installed in the isolated SDK directory once and exits.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Install -Version 10.0.100
@@ -43,7 +43,7 @@ Previews removal without shutting down build servers or deleting the isolated SD
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1
 
-Starts the interactive workflow.
+Starts the persistent interactive session.
 
 .NOTES
 Supported product mapping: Windows with PowerShell 7. Linux and macOS use the Bash implementation. PowerShell on Linux/macOS and Bash on Windows are not supported product combinations.
@@ -79,6 +79,8 @@ $ToolPath = Join-Path $SdkRoot $ToolName
 $script:Bootstrapped = $false
 $script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
 $script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
+$script:InteractiveSession = -not $script:ActionWasSpecified -and -not $script:VersionWasSpecified
+$script:BackToMain = $false
 $script:ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
 $script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParameters['Confirm'] } else { $false }
 $script:WhatIfWasSpecified = $PSBoundParameters.ContainsKey('WhatIf')
@@ -317,6 +319,109 @@ function Format-SupportPhase {
     }
 }
 
+function Get-SdkVersionSortKey {
+    param([string]$SdkVersion)
+
+    $Match = [regex]::Match(
+        $SdkVersion,
+        '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-(?<label>[^.]+)(?:\.(?<sequence>\d+))?(?:\.(?<build>\d+))?(?:\.(?<revision>\d+))?)?$')
+
+    if (-not $Match.Success) {
+        return "000000000.000000000.000000000.0.000000000.000000000.000000000.$SdkVersion"
+    }
+
+    $Major = [int]$Match.Groups['major'].Value
+    $Minor = [int]$Match.Groups['minor'].Value
+    $Patch = [int]$Match.Groups['patch'].Value
+    $Rank = 9
+    $Sequence = 0
+    $Build = 0
+    $Revision = 0
+
+    if ($Match.Groups['label'].Success) {
+        $Rank = switch ($Match.Groups['label'].Value) {
+            'rc' { 8 }
+            'preview' { 7 }
+            default { 1 }
+        }
+
+        if ($Match.Groups['sequence'].Success) {
+            $Sequence = [int]$Match.Groups['sequence'].Value
+        }
+        if ($Match.Groups['build'].Success) {
+            $Build = [int]$Match.Groups['build'].Value
+        }
+        if ($Match.Groups['revision'].Success) {
+            $Revision = [int]$Match.Groups['revision'].Value
+        }
+    }
+
+    return '{0:D9}.{1:D9}.{2:D9}.{3}.{4:D9}.{5:D9}.{6:D9}' -f `
+        $Major, $Minor, $Patch, $Rank, $Sequence, $Build, $Revision
+}
+
+function Get-SdkFeatureBand {
+    param([string]$SdkVersion)
+
+    $Match = [regex]::Match($SdkVersion, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)')
+    if (-not $Match.Success) {
+        return $SdkVersion
+    }
+
+    $Patch = [int]$Match.Groups['patch'].Value
+    return '{0}.{1}.{2}xx' -f `
+        $Match.Groups['major'].Value, `
+        $Match.Groups['minor'].Value, `
+        [math]::Floor($Patch / 100)
+}
+
+function Get-OrderedSdkVersion {
+    param([string[]]$SdkVersions)
+
+    return @(
+        $SdkVersions |
+            ForEach-Object {
+                [pscustomobject]@{
+                    Version = $_
+                    SortKey = Get-SdkVersionSortKey $_
+                }
+            } |
+            Sort-Object `
+            @{ Expression = 'SortKey'; Descending = $true }, `
+            @{ Expression = 'Version'; Descending = $true } |
+            ForEach-Object { $_.Version }
+    )
+}
+
+function Get-FeaturedSdkVersion {
+    param(
+        [string[]]$OrderedSdkVersions,
+        [string]$LatestSdk
+    )
+
+    $Result = [System.Collections.Generic.List[string]]::new()
+    $SeenBands = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    if (-not [string]::IsNullOrWhiteSpace($LatestSdk) -and
+        $OrderedSdkVersions -contains $LatestSdk) {
+        $Result.Add($LatestSdk)
+        [void]$SeenBands.Add((Get-SdkFeatureBand $LatestSdk))
+    }
+
+    foreach ($SdkVersion in $OrderedSdkVersions) {
+        if ($SdkVersion -eq $LatestSdk) {
+            continue
+        }
+
+        $FeatureBand = Get-SdkFeatureBand $SdkVersion
+        if ($SeenBands.Add($FeatureBand)) {
+            $Result.Add($SdkVersion)
+        }
+    }
+
+    return @($Result)
+}
+
 function Select-Action {
     Assert-ValidAction
 
@@ -424,6 +529,7 @@ function Read-ManualVersion {
 
 # Select from Microsoft's release index when no exact SDK version was supplied.
 function Select-InstallVersion {
+    $script:BackToMain = $false
     $ReleaseIndex = Get-ReleaseIndex
     $AllChannels = @(
         $ReleaseIndex.'releases-index' |
@@ -458,13 +564,23 @@ function Select-InstallVersion {
             $Channel = $Channels[$Index]
             $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
             $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
+            $LatestSdk = [string]$Channel.'latest-sdk'
 
-            Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
-                ($Index + 1), `
-                    $Channel.'channel-version', `
-                    $ReleaseType, `
-                    $SupportPhase, `
-                    $Channel.'latest-sdk')
+            if ([string]::IsNullOrWhiteSpace($LatestSdk)) {
+                Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}" -f `
+                    ($Index + 1), `
+                        $Channel.'channel-version', `
+                        $ReleaseType, `
+                        $SupportPhase)
+            }
+            else {
+                Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
+                    ($Index + 1), `
+                        $Channel.'channel-version', `
+                        $ReleaseType, `
+                        $SupportPhase, `
+                        $LatestSdk)
+            }
         }
 
         Write-ToolDisplay
@@ -473,6 +589,9 @@ function Select-InstallVersion {
         }
         else {
             Write-ToolDisplay '  A. Show end-of-life channels'
+        }
+        if ($script:InteractiveSession) {
+            Write-ToolDisplay '  B. Back to Main'
         }
         Write-ToolDisplay '  M. Enter an exact SDK version manually'
         Write-ToolDisplay '  Q. Cancel'
@@ -486,6 +605,11 @@ function Select-InstallVersion {
         }
 
         if ($Selection -match '^[Qq]$') {
+            return $false
+        }
+
+        if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
+            $script:BackToMain = $true
             return $false
         }
 
@@ -509,6 +633,7 @@ function Select-InstallVersion {
 
         $SelectedChannel = $Channels[$Number - 1]
         $ChannelVersion = [string]$SelectedChannel.'channel-version'
+        $LatestSdk = [string]$SelectedChannel.'latest-sdk'
         $ChannelMetadataUrl = [string]$SelectedChannel.'releases.json'
 
         try {
@@ -523,12 +648,16 @@ function Select-InstallVersion {
             throw "Invalid release metadata for .NET $ChannelVersion."
         }
 
-        $SdkVersions = @(Get-ChannelSdkVersion $ChannelMetadata)
-
-        if (-not $SdkVersions) {
+        $DiscoveredSdkVersions = @(Get-ChannelSdkVersion $ChannelMetadata)
+        if (-not $DiscoveredSdkVersions) {
             throw "No SDK versions were found for .NET $ChannelVersion."
         }
 
+        $AllSdkVersions = @(Get-OrderedSdkVersion $DiscoveredSdkVersions)
+        $FeaturedSdkVersions = @(Get-FeaturedSdkVersion `
+                -OrderedSdkVersions $AllSdkVersions `
+                -LatestSdk $LatestSdk)
+        $ShowAllVersions = $false
         $SystemVersions = @(Get-SystemSdkVersion)
         $IsolatedVersions = @(Get-IsolatedSdkVersion)
 
@@ -537,11 +666,19 @@ function Select-InstallVersion {
             Write-ToolInfo "Available .NET $ChannelVersion SDKs:"
             Write-ToolDisplay
 
+            if ($ShowAllVersions) {
+                $SdkVersions = @($AllSdkVersions)
+            }
+            else {
+                $SdkVersions = @($FeaturedSdkVersions)
+            }
+
             for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
                 $SdkVersion = $SdkVersions[$Index]
                 $Markers = [System.Collections.Generic.List[string]]::new()
 
-                if ($SdkVersion -eq $SelectedChannel.'latest-sdk') {
+                if (-not [string]::IsNullOrWhiteSpace($LatestSdk) -and
+                    $SdkVersion -eq $LatestSdk) {
                     $Markers.Add('latest')
                 }
                 if ($SystemVersions -contains $SdkVersion) {
@@ -560,6 +697,14 @@ function Select-InstallVersion {
             }
 
             Write-ToolDisplay
+            if ($FeaturedSdkVersions.Count -lt $AllSdkVersions.Count) {
+                if ($ShowAllVersions) {
+                    Write-ToolDisplay '  S. Show featured versions'
+                }
+                else {
+                    Write-ToolDisplay '  S. Show all versions'
+                }
+            }
             Write-ToolDisplay '  B. Back to .NET channels'
             Write-ToolDisplay '  M. Enter an exact SDK version manually'
             Write-ToolDisplay '  Q. Cancel'
@@ -569,6 +714,12 @@ function Select-InstallVersion {
 
             if ($Selection -match '^[Bb]$') {
                 break
+            }
+
+            if ($Selection -match '^[Ss]$' -and
+                $FeaturedSdkVersions.Count -lt $AllSdkVersions.Count) {
+                $ShowAllVersions = -not $ShowAllVersions
+                continue
             }
 
             if ($Selection -match '^[Mm]$') {
@@ -595,6 +746,7 @@ function Select-InstallVersion {
 }
 
 function Select-RemoveVersion {
+    $script:BackToMain = $false
     $SdkVersions = @(Get-IsolatedSdkVersion)
 
     if (-not $SdkVersions) {
@@ -611,10 +763,18 @@ function Select-RemoveVersion {
         }
 
         Write-ToolDisplay
+        if ($script:InteractiveSession) {
+            Write-ToolDisplay '  B. Back to Main'
+        }
         Write-ToolDisplay '  Q. Cancel'
         Write-ToolDisplay
 
         $Selection = Read-ToolInput 'Selection'
+
+        if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
+            $script:BackToMain = $true
+            return $false
+        }
 
         if ($Selection -match '^[Qq]$') {
             return $false
@@ -640,7 +800,9 @@ function Resolve-InstallVersion {
     }
 
     if (-not (Select-InstallVersion)) {
-        Write-ToolInfo 'Installation cancelled.'
+        if (-not $script:BackToMain) {
+            Write-ToolInfo 'Installation cancelled.'
+        }
         return $false
     }
 
@@ -654,7 +816,9 @@ function Resolve-RemoveVersion {
     }
 
     if (-not (Select-RemoveVersion)) {
-        Write-ToolInfo 'Removal cancelled.'
+        if (-not $script:BackToMain) {
+            Write-ToolInfo 'Removal cancelled.'
+        }
         return $false
     }
 
@@ -941,6 +1105,29 @@ function Remove-IsolatedSdk {
     Write-ToolSuccess "Isolated SDK $Version was removed."
 }
 
+function Invoke-SelectedAction {
+    Assert-ActionParameterUsage
+
+    switch ($script:Action) {
+        'Install' { Install-IsolatedSdk }
+        'Remove' {
+            $RemoveArguments = @{}
+            if ($Yes) {
+                $RemoveArguments.Yes = $true
+            }
+            if ($script:ConfirmWasSpecified) {
+                $RemoveArguments.Confirm = $script:ConfirmValue
+            }
+            if ($script:WhatIfWasSpecified) {
+                $RemoveArguments.WhatIf = $script:WhatIfValue
+            }
+
+            Remove-IsolatedSdk @RemoveArguments
+        }
+        'List' { Show-IsolatedSdk }
+    }
+}
+
 Install-ToolIfNeeded
 
 if ($script:Bootstrapped) {
@@ -959,30 +1146,25 @@ New-Item `
 Push-Location $SdkRoot
 try {
     try {
+        if ($script:InteractiveSession) {
+            while ($true) {
+                $script:Action = $null
+                $script:Version = $null
+                $script:BackToMain = $false
+
+                if (-not (Select-Action)) {
+                    return
+                }
+
+                Invoke-SelectedAction
+            }
+        }
+
         if (-not (Select-Action)) {
             return
         }
 
-        Assert-ActionParameterUsage
-
-        switch ($Action) {
-            'Install' { Install-IsolatedSdk }
-            'Remove' {
-                $RemoveArguments = @{}
-                if ($Yes) {
-                    $RemoveArguments.Yes = $true
-                }
-                if ($script:ConfirmWasSpecified) {
-                    $RemoveArguments.Confirm = $script:ConfirmValue
-                }
-                if ($script:WhatIfWasSpecified) {
-                    $RemoveArguments.WhatIf = $script:WhatIfValue
-                }
-
-                Remove-IsolatedSdk @RemoveArguments
-            }
-            'List' { Show-IsolatedSdk }
-        }
+        Invoke-SelectedAction
     }
     catch {
         Write-Error -Message "isolated-dotnet-sdk: $($_.Exception.Message)" -ErrorAction Continue
