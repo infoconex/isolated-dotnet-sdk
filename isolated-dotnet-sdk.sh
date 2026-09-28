@@ -781,6 +781,9 @@ Isolated .NET SDK
 
 Install and manage exact .NET SDK versions under ~/dotnet-sdks without modifying the system-wide .NET installation or PATH.
 
+Supported platform:
+  Linux and macOS with Bash. Windows uses the PowerShell implementation.
+
 Usage:
   isolated-dotnet-sdk.sh
   isolated-dotnet-sdk.sh install [version] [--yes|-y]
@@ -792,18 +795,29 @@ Usage:
 Commands:
   install [version]  Install an isolated SDK. Without a version, show the SDK picker.
   remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
-  list               List isolated SDKs under ~/dotnet-sdks.
+  list               List isolated SDKs under ~/dotnet-sdks. A version is invalid with list.
 
 Options:
-  --yes, -y          Skip confirmation prompts that support automatic confirmation.
+  --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
   --help, -h         Show this help text.
 
 Behavior:
   No command         Show the interactive action menu.
   Bare version       Treat the version as an install request.
+  Exact-version installs bypass release-metadata discovery.
+  Interactive install selection uses Microsoft's published release metadata.
+  Required interactive input that is unavailable is an operational failure.
+  Explicit cancellation is a successful no-change result.
+  Operational failures return a nonzero exit status.
 
-Project:
-  https://github.com/infoconex/isolated-dotnet-sdk
+Isolation:
+  SDKs remain under ~/dotnet-sdks and are not added to PATH.
+  Invoke ~/dotnet-sdks/<version>/dotnet directly to use an installed isolated SDK.
+
+Documentation:
+  https://github.com/infoconex/isolated-dotnet-sdk#readme
+  https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/behavioral-parity.md
+  https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/cross-platform-support.md
 USAGE
 }
 
