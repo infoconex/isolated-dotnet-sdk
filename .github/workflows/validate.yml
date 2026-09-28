@@ -9,7 +9,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   bash:
@@ -91,7 +91,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Validate PowerShell syntax
         shell: pwsh
@@ -140,55 +140,6 @@ jobs:
               -Repository PSGallery `
               -Force
 
-      - name: Apply issue 57 repair and formatting
-        shell: pwsh
-        run: |
-          $sourcePath = './isolated-dotnet-sdk.ps1'
-          $source = Get-Content -LiteralPath $sourcePath -Raw
-          $pattern = '(?ms)            \$SdkVersions = if \(\$ShowAllVersions\) \{\r?\n                \$AllSdkVersions\r?\n            \}\r?\n            else \{\r?\n                \$FeaturedSdkVersions\r?\n            \}'
-          $replacement = "            if (`$ShowAllVersions) {`r`n                `$SdkVersions = @(`$AllSdkVersions)`r`n            }`r`n            else {`r`n                `$SdkVersions = @(`$FeaturedSdkVersions)`r`n            }"
-          $updated = [regex]::Replace($source, $pattern, $replacement, 1)
-          if ($updated -eq $source) {
-              throw 'PowerShell SDK picker repair did not match expected source.'
-          }
-          Set-Content -LiteralPath $sourcePath -Value $updated -NoNewline
-
-          $testPath = './tests/powershell/interactive-lifecycle.Tests.ps1'
-          $test = Get-Content -LiteralPath $testPath -Raw
-          $updatedTest = $test.Replace('\(latest\)', '\(latest')
-          if ($updatedTest -eq $test) {
-              throw 'PowerShell latest-marker test repair did not match expected source.'
-          }
-          Set-Content -LiteralPath $testPath -Value $updatedTest -NoNewline
-
-          $bashPath = './isolated-dotnet-sdk.sh'
-          $bash = Get-Content -LiteralPath $bashPath -Raw
-          $updatedBash = $bash.Replace(
-              'if [[ -n "$current_path" && -f "$current_source" ]]; then',
-              'if [[ -n "$current_path" && -f "$current_path" ]]; then')
-          if ($updatedBash -eq $bash) {
-              throw 'Bash bootstrap repair did not match expected source.'
-          }
-          Set-Content -LiteralPath $bashPath -Value $updatedBash -NoNewline
-
-          $readmePath = './README.md'
-          $readme = Get-Content -LiteralPath $readmePath -Raw
-          $readme = $readme.Replace(
-              'The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then opens the interactive menu.',
-              'The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then starts a persistent interactive session. Successful operations and normal cancellations return to the main menu until you explicitly exit. Explicit Install, List, Remove, or exact-version invocations remain one-shot for automation and scripting.')
-          $readme = $readme.Replace(
-              'After selecting a channel, the tool lists the SDK versions published for that channel. Versions already present on the machine are marked so you can see where they are installed.',
-              'After selecting a channel, the tool starts with a compact SDK list: Microsoft''s `latest-sdk` when available plus the newest SDK from each other feature band. Older servicing versions stay available through **Show all versions**. Versions already present on the machine are marked so you can see where they are installed. In a persistent interactive session, **Back** returns from SDK selection to channel selection, from channel selection to Main, and from Remove selection to Main; explicit one-shot commands keep cancellation semantics instead.')
-          $readme = $readme.Replace(
-              'You can also choose manual entry at either picker when you already know the exact SDK version you want.',
-              'You can also choose manual entry at either picker when you already know the exact SDK version you want. See [`docs/interactive-sessions.md`](docs/interactive-sessions.md) for the full persistent-session and navigation contract.')
-          Set-Content -LiteralPath $readmePath -Value $readme -NoNewline
-
-          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Write
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
-          }
-
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -212,15 +163,3 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
-
-      - name: Commit validated repair and restore normal workflow
-        shell: pwsh
-        run: |
-          git fetch --depth=1 origin main
-          git checkout FETCH_HEAD -- .github/workflows/validate.yml
-          git diff --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add isolated-dotnet-sdk.ps1 isolated-dotnet-sdk.sh README.md tests/powershell/interactive-lifecycle.Tests.ps1 .github/workflows/validate.yml
-          git commit -m 'fix: finalize interactive lifecycle behavior'
-          git push origin HEAD:feat/57-interactive-menu-lifecycle

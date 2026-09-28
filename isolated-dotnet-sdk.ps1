@@ -387,8 +387,8 @@ function Get-OrderedSdkVersion {
                 }
             } |
             Sort-Object `
-                @{ Expression = 'SortKey'; Descending = $true }, `
-                @{ Expression = 'Version'; Descending = $true } |
+            @{ Expression = 'SortKey'; Descending = $true }, `
+            @{ Expression = 'Version'; Descending = $true } |
             ForEach-Object { $_.Version }
     )
 }
@@ -666,11 +666,11 @@ function Select-InstallVersion {
             Write-ToolInfo "Available .NET $ChannelVersion SDKs:"
             Write-ToolDisplay
 
-            $SdkVersions = if ($ShowAllVersions) {
-                $AllSdkVersions
+            if ($ShowAllVersions) {
+                $SdkVersions = @($AllSdkVersions)
             }
             else {
-                $FeaturedSdkVersions
+                $SdkVersions = @($FeaturedSdkVersions)
             }
 
             for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {

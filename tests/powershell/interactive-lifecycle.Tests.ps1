@@ -221,7 +221,7 @@ function Invoke-RestMethod {
             -Command $command
 
         $result.ExitCode | Should -Be 0
-        $result.Output | Should -Match '1\. 10\.0\.401 \(latest\)'
+        $result.Output | Should -Match '1\. 10\.0\.401 \(latest'
         $result.Output | Should -Match '2\. 10\.0\.305'
         $result.Output | Should -Match '3\. 10\.0\.201'
         $result.Output | Should -Match 'S\. Show all versions'

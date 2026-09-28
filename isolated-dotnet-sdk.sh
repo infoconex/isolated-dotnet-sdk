@@ -76,7 +76,7 @@ bootstrap_if_needed() {
     tool_info "Installing tool to $TOOL_PATH"
     staged_path="$(mktemp "$SDK_ROOT/.${TOOL_NAME}.XXXXXX.tmp")"
 
-    if [[ -n "$current_path" && -f "$current_source" ]]; then
+    if [[ -n "$current_path" && -f "$current_path" ]]; then
         if cp "$current_path" "$staged_path"; then
             :
         else
