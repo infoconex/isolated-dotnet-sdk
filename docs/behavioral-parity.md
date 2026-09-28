@@ -45,11 +45,40 @@ This contract intentionally says nothing about making the Microsoft install help
 
 ## Interactive and automation behavior
 
+Invocation mode is determined from the caller's arguments, not from later menu choices.
+
+When no action or exact version is supplied, the tool enters a persistent interactive session. The session shows Main, performs one selected operation, and returns to Main after a normal completion or a normal cancellation/no-change outcome. It remains active until the user explicitly selects Exit or an operational failure terminates the process.
+
+When the caller supplies an explicit action, or supplies an exact version through the supported bare-version convenience form, the tool remains one-shot. It performs that requested operation once and exits after success, cancellation/no-change, or failure. Explicit invocation never enters the persistent Main loop after the operation.
+
+Interactive navigation is deliberately limited:
+
+- Install channel selection provides Back to Main;
+- Install SDK version selection provides Back to channel selection;
+- Remove SDK selection provides Back to Main.
+
+Back is a selection-menu concept only. Ordinary yes/no install and removal confirmations retain their existing default-no cancellation behavior and do not become navigation menus. In a persistent interactive session, declining such a confirmation is a successful no-change result and returns to Main.
+
+Operational failures are never converted into navigation results. Metadata, filesystem, installer, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
+
 Automation should provide both the action and exact version when a version is required. `-Yes` and `--yes` are confirmation controls, not selection controls.
 
 For example, `Install <exact-version> -Yes` / `install <exact-version> --yes` can run without the normally-installed-SDK confirmation. `Install -Yes` / `install --yes` still needs interactive selection because no version has been resolved. If that input cannot be obtained, the command fails rather than guessing or silently cancelling.
 
 An explicit user decision to cancel is different from input failure. A blank/no answer at a default-no confirmation and `q`/`Q` at a documented picker remain successful no-change outcomes.
+
+### SDK version picker
+
+For a selected channel, the default SDK picker prioritizes likely choices without removing exact-version access:
+
+- when Microsoft release-index metadata supplies a `latest-sdk` value that is present in the selected channel data, that SDK is displayed first and marked `latest`;
+- the default list also contains the newest SDK from every other available feature band;
+- older servicing releases are hidden behind `Show all versions`;
+- the expanded list contains every discovered SDK version in deterministic newest-first order;
+- Back remains available from both compact and expanded version views;
+- manual exact-version entry remains available and explicit exact-version command invocation continues to bypass release-metadata discovery.
+
+Feature-band grouping is derived from SDK version data rather than menu positions. Preview and release-candidate labels are part of deterministic version ordering; fixed numeric menu positions are not a product contract. `latest-sdk` remains optional display metadata: its absence does not invalidate an otherwise usable channel and does not cause the tool to invent an authoritative `latest` marker.
 
 ## Intentional runtime and platform differences
 
