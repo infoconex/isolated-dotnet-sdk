@@ -68,6 +68,7 @@ $releaseIndex = [pscustomobject]@{
 $channelMetadata = [pscustomobject]@{
     releases = @(
         [pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.401' } },
+        [pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.400' } },
         [pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.303' } }
     )
 }
@@ -151,6 +152,19 @@ function Invoke-RestMethod {
         $result.Output | Should -Match 'Available \.NET 10\.0 SDKs:'
         $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match 'Installation cancelled\.'
+        $result.Output | Should -Match 'Exiting\.'
+    }
+
+    It 'exits the persistent session directly from expanded SDK version selection' {
+        $result = Invoke-GlobalExitToolProcess `
+            -InputLines @('1', '1', 's', 'e') `
+            -Command $script:ReleaseIndexCommand
+
+        $result.ExitCode | Should -Be 0
+        (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
+        $result.Output | Should -Match 'S\. Show all versions'
+        $result.Output | Should -Match '10\.0\.400'
+        $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Match 'Exiting\.'
     }
 
