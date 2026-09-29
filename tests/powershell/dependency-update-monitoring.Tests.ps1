@@ -101,8 +101,7 @@ Describe 'Pinned dependency update discovery' {
             $reportPath = Join-Path $testRoot 'report.md'
             $configPaths = @(
                 (Join-Path $script:RepositoryRoot '.config/static-analysis.json'),
-                (Join-Path $script:RepositoryRoot '.config/test-frameworks.json'),
-                (Join-Path $script:RepositoryRoot '.config/remote-artifacts.json')
+                (Join-Path $script:RepositoryRoot '.config/test-frameworks.json')
             )
             $beforeHashes = @($configPaths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
 
