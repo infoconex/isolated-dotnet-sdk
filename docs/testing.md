@@ -194,9 +194,9 @@ The deterministic behavioral checks do not install a real SDK or require live re
 
 ## Real end-to-end validation
 
-Real Microsoft/.NET ecosystem coverage is intentionally separate from the deterministic behavioral suites. The repository-owned fixed SDK target, direct and persistent-interactive scenarios, isolated job-state rules, and manual workflow procedure are documented in [`e2e-testing.md`](e2e-testing.md).
+Real Microsoft/.NET ecosystem coverage is intentionally separate from the deterministic behavioral suites. The repository-owned fixed SDK target, direct and persistent-interactive scenarios, isolated job-state rules, automatic post-merge trigger, and manual rerun procedure are documented in [`e2e-testing.md`](e2e-testing.md).
 
-`.github/workflows/e2e.yml` is manually invoked with `workflow_dispatch` for now. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft metadata, installer acquisition, and SDK payloads. It is not a required PR or merge check until the organization/merge-queue work tracked separately is implemented.
+`.github/workflows/e2e.yml` runs automatically on `push` to `main` and also supports `workflow_dispatch` for ad hoc reruns. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft metadata, installer acquisition, and SDK payloads. It is a post-merge confidence signal, not a required PR or merge check; required merge-candidate E2E remains tracked separately in Issue #60.
 
 ## CI
 
