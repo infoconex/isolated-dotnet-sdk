@@ -105,50 +105,53 @@ function Invoke-RestMethod {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'advertises Q Exit at Main and rejects numeric 4 as an Exit alias' {
-        $result = Invoke-GlobalExitToolProcess -InputLines @('4', 'q')
+    It 'advertises E Exit at Main and rejects numeric 4 as an Exit alias' {
+        $result = Invoke-GlobalExitToolProcess -InputLines @('4', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 2
-        $result.Output | Should -Match 'Q\. Exit'
+        $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match '4\. Exit'
+        $result.Output | Should -Match 'Please choose 1, 2, 3, or E\.'
         $result.Output | Should -Match 'Exiting\.'
     }
 
     It 'exits the persistent session directly from supported channel selection' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', 'q', 'q') `
+            -InputLines @('1', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
-        $result.Output | Should -Match 'Q\. Exit'
+        $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match 'Installation cancelled\.'
         $result.Output | Should -Match 'Exiting\.'
     }
 
     It 'exits the persistent session directly from the end-of-life channel view' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', 'a', 'q', 'q') `
+            -InputLines @('1', 'a', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
         $result.Output | Should -Match 'Select an end-of-life \.NET channel:'
-        $result.Output | Should -Match 'Q\. Exit'
+        $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match 'Installation cancelled\.'
+        $result.Output | Should -Match 'Exiting\.'
     }
 
     It 'exits the persistent session directly from SDK version selection' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', '1', 'q', 'q') `
+            -InputLines @('1', '1', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
         $result.Output | Should -Match 'Available \.NET 10\.0 SDKs:'
-        $result.Output | Should -Match 'Q\. Exit'
+        $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match 'Installation cancelled\.'
+        $result.Output | Should -Match 'Exiting\.'
     }
 
     It 'exits the persistent session directly from Remove selection' {
@@ -157,11 +160,11 @@ function Invoke-RestMethod {
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
         New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
 
-        $result = Invoke-GlobalExitToolProcess -InputLines @('2', 'q', 'q')
+        $result = Invoke-GlobalExitToolProcess -InputLines @('2', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
-        $result.Output | Should -Match 'Q\. Exit'
+        $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match 'Removal cancelled\.'
         $result.Output | Should -Match 'Exiting\.'
     }
