@@ -18,42 +18,43 @@ A directory at the stable saved-tool path is treated as a conflict rather than a
 
 ## Release-metadata temporary files
 
-The Bash interactive release picker writes channel metadata to a collision-resistant temporary file under the isolated SDK root. The file is removed after normal processing, on metadata-download failure, and on EXIT, TERM, INT, or HUP while the temporary file is active. Signal cleanup removes only the exact file created by the current operation, restores the signal's default action, and re-raises the signal so interruption is still observable as interruption/failure.
+Interactive release selection uses collision-resistant metadata files beneath the isolated SDK root where filesystem-backed metadata processing is required. Installation of an exact SDK also uses operation-owned release metadata to resolve the exact platform archive and its SHA-512. Those files are transaction state, not persistent product state.
 
-Similarly named pre-existing files are not considered operation-owned and must not be removed by cleanup.
+Operation-owned metadata files are removed after normal processing and on failure where cleanup is possible. Similarly named pre-existing files are not considered operation-owned and must not be removed by cleanup.
 
 ## Transactional SDK installation
 
-A new SDK installation never targets the final `~/dotnet-sdks/<version>` directory directly. Each attempt owns two collision-resistant temporary artifacts beneath the isolated SDK root:
+A new SDK installation never targets the final `~/dotnet-sdks/<version>` directory directly. Each attempt owns collision-resistant temporary artifacts beneath the isolated SDK root:
 
-- an operation-scoped Microsoft `dotnet-install` helper file;
+- operation-scoped Microsoft release metadata;
+- an operation-scoped downloaded SDK payload archive;
 - an operation-scoped SDK staging directory.
 
-The helper is downloaded fresh for the current attempt. A failed helper download cannot fall back to a stable helper left by an earlier operation, and the operation-owned helper is removed after success or failure where cleanup is possible.
+The exact SDK artifact URL and SHA-512 are resolved from Microsoft's release metadata for the requested version and supported runtime identifier. The archive is downloaded into operation-owned state and its SHA-512 is verified before extraction. Missing or malformed required metadata, payload download failure, or checksum mismatch fails before extraction. The tool does not fall back to an unverified archive.
 
-The Microsoft installer writes only into the operation-owned staging directory. Installer failure, a missing staged host, a nonzero staged-host inventory command, or an inventory that omits the requested exact SDK all fail before promotion. The staging directory is then removed where cleanup is possible, so an attempt that started without a final destination leaves no partial final version directory.
+Only a verified archive is extracted into the operation-owned staging directory. Extraction failure, a missing staged host, a nonzero staged-host inventory command, or an inventory that omits the requested exact SDK all fail before promotion. The staging directory and transaction files are then removed where cleanup is possible, so an attempt that started without a final destination leaves no partial final version directory.
 
-After staged verification succeeds, the tool checks the final destination again and promotes the staging directory only when that destination is still absent. If a destination appears before promotion, or promotion otherwise fails, the pre-existing/newly appeared final destination is preserved and cleanup remains limited to the operation-owned staging state.
+After staged verification succeeds, the tool checks the final destination again and promotes the staging directory only when that destination is still absent. If a destination appears before promotion, or promotion otherwise fails, the pre-existing/newly appeared final destination is preserved and cleanup remains limited to the operation-owned transaction state.
 
 If the final version destination already exists before an installation attempt:
 
 - a working isolated host that reports the requested exact version retains the existing `already installed` behavior;
 - every other existing file or directory state is treated as recovery/user state and causes deterministic destination-conflict failure;
-- the installer is not run against that destination;
+- no payload is downloaded or extracted into that destination;
 - the tool does not delete, replace, merge into, or repair that state automatically.
 
-This means a failed clean-start attempt is retryable without manual cleanup because incomplete installer output is never promoted. A non-valid pre-existing final destination remains a deliberate operator decision: retries continue to fail closed until that state is resolved externally.
+This means a failed clean-start attempt is retryable without manual cleanup because incomplete output is never promoted. A non-valid pre-existing final destination remains a deliberate operator decision: retries continue to fail closed until that state is resolved externally.
 
-Supplying an exact SDK version continues to bypass Microsoft release-metadata discovery; the transaction mechanics do not introduce a metadata dependency for explicit-version installs.
+Supplying an exact SDK version bypasses interactive release-index/channel discovery, but a new installation still retrieves the exact version's Microsoft release metadata needed to identify the supported platform archive and its checksum. This metadata lookup is part of payload integrity verification, not version selection.
 
-Cleanup is restricted to artifacts created and owned by the current operation. Cleanup failure is reported and must not hide the primary installation failure. Installation success is emitted only after the requested exact SDK has been verified in staging, promoted to the final destination, and normal operation-owned cleanup has completed.
+Cleanup is restricted to artifacts created and owned by the current operation. Cleanup failure is reported and must not hide the primary installation failure. Installation success is emitted only after the payload checksum has been verified, the requested exact SDK has been verified in staging, staging has been promoted to the final destination, and normal operation-owned cleanup has completed.
 
 ## Platform-specific failure semantics
 
 The portable contract is based on observable filesystem success or failure rather than one operating system's locking model:
 
 - directory/path-type conflicts fail on all supported platforms;
-- access, replacement, or deletion failures propagate and do not produce success output;
+- access, replacement, extraction, or deletion failures propagate and do not produce success output;
 - PowerShell removal verifies that the target no longer exists after `Remove-Item`;
 - Bash relies on the `rm` exit status and also verifies that the target directory is gone;
 - deterministic tests inject filesystem-command failures instead of depending on timing-sensitive lock behavior that differs between Windows, macOS, and Linux.
@@ -62,4 +63,4 @@ This means a Windows locked-file failure and a Unix permission/deletion failure 
 
 ## Roadmap boundaries
 
-This contract defines filesystem ownership, cleanup, and transactional SDK-install behavior. It does not add generic retry/backoff behavior, automatic repair of arbitrary pre-existing SDK destinations, or a generalized transaction framework. Stable release/bootstrap versioning policy and remote artifact integrity remain separate roadmap concerns.
+This contract defines filesystem ownership, cleanup, transactional SDK-install behavior, and the filesystem side of payload verification. It does not add generic retry/backoff behavior, automatic repair of arbitrary pre-existing SDK destinations, or a generalized transaction framework. Stable release/bootstrap versioning policy remains a separate concern.
