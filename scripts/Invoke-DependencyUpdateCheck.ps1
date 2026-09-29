@@ -50,16 +50,12 @@ function Get-RepositoryDependencyPin {
         ConvertFrom-Json
     $test = Get-Content -LiteralPath (Join-Path $Root '.config/test-frameworks.json') -Raw |
         ConvertFrom-Json
-    $remote = Get-Content -LiteralPath (Join-Path $Root '.config/remote-artifacts.json') -Raw |
-        ConvertFrom-Json
-
     $requiredValues = @{
         'psScriptAnalyzerVersion' = [string]$analysis.psScriptAnalyzerVersion
         'shellCheckVersion' = [string]$analysis.shellCheckVersion
         'pesterVersion' = [string]$test.pesterVersion
         'batsVersion' = [string]$test.batsVersion
         'batsCommit' = [string]$test.batsCommit
-        'dotnetInstallCommit' = [string]$remote.dotnetInstall.commit
     }
 
     foreach ($entry in $requiredValues.GetEnumerator()) {
@@ -71,9 +67,6 @@ function Get-RepositoryDependencyPin {
     if ($requiredValues['batsCommit'] -notmatch '^[0-9a-f]{40}$') {
         throw 'batsCommit must be a full lowercase Git commit SHA.'
     }
-    if ($requiredValues['dotnetInstallCommit'] -notmatch '^[0-9a-f]{40}$') {
-        throw 'dotnetInstall.commit must be a full lowercase Git commit SHA.'
-    }
 
     return [pscustomobject][ordered]@{
         PSScriptAnalyzerVersion = $requiredValues['psScriptAnalyzerVersion']
@@ -81,7 +74,6 @@ function Get-RepositoryDependencyPin {
         ShellCheckVersion = $requiredValues['shellCheckVersion']
         BatsVersion = $requiredValues['batsVersion']
         BatsCommit = $requiredValues['batsCommit']
-        DotNetInstallCommit = $requiredValues['dotnetInstallCommit']
     }
 }
 
@@ -204,14 +196,12 @@ function Get-UpstreamDependencySnapshot {
     $pester = Get-PowerShellGalleryStableRelease -Name 'Pester'
     $shellCheck = Get-GitHubStableRelease -Repository 'koalaman/shellcheck'
     $bats = Get-GitHubStableRelease -Repository 'bats-core/bats-core' -ResolveCommit
-    $dotnetInstall = Get-GitHubStableRelease -Repository 'dotnet/install-scripts' -ResolveCommit
 
     return [pscustomobject][ordered]@{
         PSScriptAnalyzer = $analyzer
         Pester = $pester
         ShellCheck = $shellCheck
         Bats = $bats
-        DotNetInstall = $dotnetInstall
     }
 }
 
@@ -302,18 +292,6 @@ function Get-DependencyUpdateRecord {
                     -Candidate "$batsCandidateVersion ($($Candidate.Bats.Commit))" `
                     -SourceUrl $Candidate.Bats.SourceUrl `
                     -ReviewTogether 'Update batsVersion and the reviewed immutable batsCommit together.'))
-    }
-
-    if ([string]$Candidate.DotNetInstall.Commit -notmatch '^[0-9a-f]{40}$') {
-        throw 'dotnet/install-scripts candidate release did not resolve to a full lowercase Git commit SHA.'
-    }
-    if ([string]$Candidate.DotNetInstall.Commit -ne $Current.DotNetInstallCommit) {
-        $updates.Add((ConvertTo-DependencyUpdateRecord `
-                    -Dependency 'Microsoft dotnet/install-scripts' `
-                    -Current $Current.DotNetInstallCommit `
-                    -Candidate "$($Candidate.DotNetInstall.Version) ($($Candidate.DotNetInstall.Commit))" `
-                    -SourceUrl $Candidate.DotNetInstall.SourceUrl `
-                    -ReviewTogether 'Review the release commit, Bash/PowerShell blob IDs, commit-qualified URLs, SHA-256 values, and embedded product constants together.'))
     }
 
     return @($updates)

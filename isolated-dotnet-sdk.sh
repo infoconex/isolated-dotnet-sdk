@@ -3,9 +3,6 @@ set -euo pipefail
 
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
-DOTNET_INSTALL_COMMIT="da3ce11ba63f3dbb0fb835d41bda2665d5c48e84"
-DOTNET_INSTALL_SHA256="082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e"
-DOTNET_INSTALL_URL="https://raw.githubusercontent.com/dotnet/install-scripts/$DOTNET_INSTALL_COMMIT/src/dotnet-install.sh"
 TOOL_NAME="isolated-dotnet-sdk.sh"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
@@ -774,13 +771,21 @@ list_isolated_sdks() {
 }
 
 cleanup_install_transaction() {
-    local helper_path="${1:-}"
-    local staging_path="${2:-}"
+    local metadata_path="${1:-}"
+    local archive_path="${2:-}"
+    local staging_path="${3:-}"
     local cleanup_failed="false"
 
-    if [[ -n "$helper_path" && ( -e "$helper_path" || -L "$helper_path" ) ]]; then
-        if ! rm -f "$helper_path"; then
-            tool_warn "Unable to clean install helper: $helper_path"
+    if [[ -n "$metadata_path" && ( -e "$metadata_path" || -L "$metadata_path" ) ]]; then
+        if ! rm -f "$metadata_path"; then
+            tool_warn "Unable to clean SDK release metadata: $metadata_path"
+            cleanup_failed="true"
+        fi
+    fi
+
+    if [[ -n "$archive_path" && ( -e "$archive_path" || -L "$archive_path" ) ]]; then
+        if ! rm -f "$archive_path"; then
+            tool_warn "Unable to clean SDK payload archive: $archive_path"
             cleanup_failed="true"
         fi
     fi
@@ -795,20 +800,87 @@ cleanup_install_transaction() {
     [[ "$cleanup_failed" == "false" ]]
 }
 
-calculate_sha256() {
+calculate_sha512() {
     local path="$1"
 
-    if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "$path" | awk '{print $1}'
+    if command -v sha512sum >/dev/null 2>&1; then
+        sha512sum "$path" | awk '{print tolower($1)}'
         return
     fi
 
     if command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "$path" | awk '{print $1}'
+        shasum -a 512 "$path" | awk '{print tolower($1)}'
         return
     fi
 
     return 1
+}
+
+get_sdk_channel() {
+    local core="${VERSION%%-*}"
+    local major=""
+    local minor=""
+    local rest=""
+
+    IFS='.' read -r major minor rest <<< "$core"
+    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
+        tool_fail "Unable to determine the .NET release channel for SDK $VERSION."
+    fi
+
+    printf '%s.%s' "$major" "$minor"
+}
+
+get_sdk_rid() {
+    local os=""
+    local arch=""
+    local machine=""
+
+    case "$(uname -s)" in
+        Linux)
+            os="linux"
+            if [[ -f /etc/alpine-release ]] || \
+               { command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; }; then
+                os="linux-musl"
+            fi
+            ;;
+        Darwin) os="osx" ;;
+        *) tool_fail "Unable to map the current operating system to a Microsoft SDK artifact." ;;
+    esac
+
+    machine="$(uname -m)"
+    case "$machine" in
+        x86_64|amd64) arch="x64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        armv7l|armv8l) arch="arm" ;;
+        s390x) arch="s390x" ;;
+        ppc64le) arch="ppc64le" ;;
+        *) tool_fail "Unable to map architecture $machine to a Microsoft SDK artifact." ;;
+    esac
+
+    printf '%s-%s' "$os" "$arch"
+}
+
+extract_sdk_artifact_metadata() {
+    local expected_url="$1"
+
+    awk -v expected="$expected_url" '
+        /"url"[[:space:]]*:/ {
+            value=$0
+            sub(/^[^:]*:[[:space:]]*"/, "", value)
+            sub(/".*$/, "", value)
+            if (value == expected) {
+                candidate=value
+            }
+            next
+        }
+        candidate != "" && /"hash"[[:space:]]*:/ {
+            hash=$0
+            sub(/^[^:]*:[[:space:]]*"/, "", hash)
+            sub(/".*$/, "", hash)
+            print candidate "|" hash
+            candidate=""
+        }
+    ' | awk '!seen[$0]++'
 }
 
 install_isolated_sdk() {
@@ -819,10 +891,19 @@ install_isolated_sdk() {
     local installed_sdks=""
     local installed_versions=""
     local isolated_sdks=""
-    local install_script=""
+    local metadata_file=""
+    local archive_file=""
     local staging_dir=""
     local staged_dotnet=""
-    local actual_install_script_hash=""
+    local channel=""
+    local rid=""
+    local metadata_url=""
+    local expected_artifact_url=""
+    local artifact_data=""
+    local artifact_count=0
+    local artifact_url=""
+    local expected_hash=""
+    local actual_hash=""
     local status=0
 
     tool_info "Target SDK: $VERSION"
@@ -882,37 +963,61 @@ install_isolated_sdk() {
         echo
     fi
 
-    install_script="$(mktemp "$SDK_ROOT/dotnet-install.sh.XXXXXX")"
-    trap 'cleanup_install_transaction "$install_script" "$staging_dir" || true' EXIT
+    channel="$(get_sdk_channel)"
+    rid="$(get_sdk_rid)"
+    metadata_url="https://builds.dotnet.microsoft.com/dotnet/release-metadata/$channel/releases.json"
+    expected_artifact_url="https://builds.dotnet.microsoft.com/dotnet/Sdk/$VERSION/dotnet-sdk-$VERSION-$rid.tar.gz"
+    metadata_file="$(mktemp "$SDK_ROOT/.release-metadata-$VERSION.XXXXXX")"
+    archive_file="$(mktemp "$SDK_ROOT/.sdk-payload-$VERSION.XXXXXX")"
+    trap 'cleanup_install_transaction "$metadata_file" "$archive_file" "$staging_dir" || true' EXIT
 
-    tool_info "Downloading Microsoft's pinned dotnet-install.sh script..."
-    if curl -fsSL "$DOTNET_INSTALL_URL" -o "$install_script"; then
-        :
-    else
+    tool_info "Loading Microsoft release metadata for SDK $VERSION..."
+    if ! curl -fsSL "$metadata_url" -o "$metadata_file"; then
         status=$?
-        tool_fail "Unable to download Microsoft's dotnet-install.sh script with exit code $status."
+        tool_fail "Unable to load Microsoft release metadata for SDK $VERSION with exit code $status."
     fi
 
-    if ! actual_install_script_hash="$(calculate_sha256 "$install_script")"; then
-        tool_fail "Unable to verify Microsoft's dotnet-install.sh script because no SHA-256 utility is available."
+    if ! looks_like_json_object "$(cat "$metadata_file")" || \
+       [[ "$(cat "$metadata_file")" != *'"releases"'* ]]; then
+        tool_fail "Invalid Microsoft release metadata for SDK $VERSION."
     fi
 
-    if [[ "$actual_install_script_hash" != "$DOTNET_INSTALL_SHA256" ]]; then
-        tool_fail "Integrity verification failed for Microsoft's dotnet-install.sh script."
+    artifact_data="$(extract_sdk_artifact_metadata "$expected_artifact_url" < "$metadata_file")"
+    artifact_count="$(printf '%s\n' "$artifact_data" | awk 'NF { count++ } END { print count + 0 }')"
+    if (( artifact_count != 1 )); then
+        tool_fail "Microsoft release metadata did not contain exactly one SDK archive for $VERSION and $rid."
+    fi
+
+    IFS='|' read -r artifact_url expected_hash <<< "$artifact_data"
+    if [[ "$artifact_url" != "$expected_artifact_url" ]]; then
+        tool_fail "Microsoft release metadata returned an unexpected SDK archive URL for $VERSION and $rid."
+    fi
+    if [[ ! "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
+        tool_fail "Microsoft release metadata contained an invalid SHA-512 hash for SDK $VERSION and $rid."
+    fi
+    expected_hash="$(printf '%s' "$expected_hash" | tr '[:upper:]' '[:lower:]')"
+
+    tool_info "Downloading .NET SDK $VERSION payload..."
+    if ! curl -fsSL "$artifact_url" -o "$archive_file"; then
+        status=$?
+        tool_fail "Unable to download the .NET SDK $VERSION payload with exit code $status."
+    fi
+
+    if ! actual_hash="$(calculate_sha512 "$archive_file")"; then
+        tool_fail "Unable to verify the .NET SDK $VERSION payload because no SHA-512 utility is available."
+    fi
+
+    if [[ "$actual_hash" != "$expected_hash" ]]; then
+        tool_fail "Integrity verification failed for the .NET SDK $VERSION payload."
     fi
 
     staging_dir="$(mktemp -d "$SDK_ROOT/.install-$VERSION.XXXXXX")"
     staged_dotnet="$staging_dir/dotnet"
 
-    tool_info "Installing .NET SDK $VERSION..."
-    if bash "$install_script" \
-        --version "$VERSION" \
-        --install-dir "$staging_dir" \
-        --no-path; then
-        :
-    else
+    tool_info "Extracting verified .NET SDK $VERSION payload..."
+    if ! tar -xzf "$archive_file" -C "$staging_dir"; then
         status=$?
-        tool_fail "dotnet-install failed for SDK $VERSION with exit code $status."
+        tool_fail "Unable to extract the verified .NET SDK $VERSION payload with exit code $status."
     fi
 
     echo
@@ -939,21 +1044,22 @@ install_isolated_sdk() {
     fi
 
     if mv "$staging_dir" "$install_dir"; then
-        # Promotion moved the staged SDK to its final path; cleanup must no longer target it.
         staging_dir=""
     else
         status=$?
         tool_fail "Unable to promote isolated SDK $VERSION into $install_dir with exit code $status."
     fi
 
-    if ! cleanup_install_transaction "$install_script" "$staging_dir"; then
-        install_script=""
+    if ! cleanup_install_transaction "$metadata_file" "$archive_file" "$staging_dir"; then
+        metadata_file=""
+        archive_file=""
         staging_dir=""
         trap - EXIT
         tool_fail "Isolated SDK $VERSION was installed, but transaction cleanup failed."
     fi
 
-    install_script=""
+    metadata_file=""
+    archive_file=""
     staging_dir=""
     trap - EXIT
 
