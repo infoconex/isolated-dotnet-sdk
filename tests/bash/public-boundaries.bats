@@ -47,7 +47,7 @@ EOF
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"Target SDK: 99.0.100"* ]]
-  grep -Fq 'https://raw.githubusercontent.com/dotnet/install-scripts/da3ce11ba63f3dbb0fb835d41bda2665d5c48e84/src/dotnet-install.sh' "$curl_log"
+  grep -Fq 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/99.0/releases.json' "$curl_log"
 }
 
 @test "remove with no installed SDKs is a successful no-change result" {

@@ -875,7 +875,7 @@ function Get-SdkRid {
     return "win-$arch"
 }
 
-function Get-SdkArtifactMetadata {
+function Resolve-SdkArtifact {
     param(
         [Parameter(Mandatory)]
         [psobject]$Metadata,
@@ -1022,7 +1022,7 @@ function Install-IsolatedSdk {
             throw "Unable to load valid Microsoft release metadata for SDK ${Version}: $($_.Exception.Message)"
         }
 
-        $Artifact = Get-SdkArtifactMetadata -Metadata $Metadata -SdkVersion $Version -Rid $Rid
+        $Artifact = Resolve-SdkArtifact -Metadata $Metadata -SdkVersion $Version -Rid $Rid
 
         Write-ToolInfo "Downloading .NET SDK $Version payload..."
         try {
