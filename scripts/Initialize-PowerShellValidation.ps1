@@ -79,4 +79,4 @@ if (-not [string]::IsNullOrWhiteSpace($GitHubEnvironmentFile)) {
     "PSModulePath=$modulePath" | Add-Content -LiteralPath $GitHubEnvironmentFile
 }
 
-Write-Host "PowerShell validation setup passed with Pester $pesterVersion and PSScriptAnalyzer $analyzerVersion."
+Write-Output "PowerShell validation setup passed with Pester $pesterVersion and PSScriptAnalyzer $analyzerVersion."
