@@ -2,12 +2,9 @@ Describe 'PowerShell transactional SDK installation' {
     BeforeAll {
         $script:RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
+        $script:FixtureScript = Join-Path $PSScriptRoot 'sdk-payload-fixture.ps1'
         $script:HomeVariableName = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
         $script:FakeHostOutput = $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT
-        if ([string]::IsNullOrWhiteSpace($script:FakeHostOutput) -or
-            -not (Test-Path -LiteralPath $script:FakeHostOutput -PathType Container)) {
-            throw 'Shared deterministic fake dotnet host is required. Run tests through tests/powershell/run-tests.ps1.'
-        }
     }
 
     BeforeEach {
@@ -18,286 +15,140 @@ Describe 'PowerShell transactional SDK installation' {
         $script:Version = '99.0.100'
         $script:InstallDir = Join-Path $script:ToolRoot $script:Version
         $script:OriginalHomeValue = [Environment]::GetEnvironmentVariable($script:HomeVariableName, 'Process')
-        $script:InstallerPath = Join-Path $script:TestRoot 'fake-installer.ps1'
-        $script:InstallerTargetPath = Join-Path $script:TestHome 'installer-target.txt'
+        $script:StagingTargetPath = Join-Path $script:TestHome 'staging-target.txt'
         $script:DownloadTargetPath = Join-Path $script:TestHome 'download-target.txt'
-
         New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
         Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:TestHome, 'Process')
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
-        $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER = $script:InstallerPath
+        $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE = $script:FixtureScript
         $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT = $script:FakeHostOutput
-        $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET = $script:InstallerTargetPath
-        $env:ISOLATED_DOTNET_SDK_DOWNLOAD_TARGET = $script:DownloadTargetPath
         $env:FAKE_DOTNET_SDK_VERSION = $script:Version
-        Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
-        Remove-Item Env:FAKE_DOTNET_CREATE_CONFLICT -ErrorAction SilentlyContinue
+        $env:SDK_TEST_STAGING_TARGET = $script:StagingTargetPath
+        $env:SDK_TEST_DOWNLOAD_TARGET = $script:DownloadTargetPath
+        foreach ($name in @('FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN')) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+        }
     }
 
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
-        Remove-Item Env:ISOLATED_DOTNET_SDK_TOOL_PATH -ErrorAction SilentlyContinue
-        Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -ErrorAction SilentlyContinue
-        Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT -ErrorAction SilentlyContinue
-        Remove-Item Env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -ErrorAction SilentlyContinue
-        Remove-Item Env:ISOLATED_DOTNET_SDK_DOWNLOAD_TARGET -ErrorAction SilentlyContinue
-        Remove-Item Env:FAKE_DOTNET_SDK_VERSION -ErrorAction SilentlyContinue
-        Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
-        Remove-Item Env:FAKE_DOTNET_CREATE_CONFLICT -ErrorAction SilentlyContinue
+        foreach ($name in @('ISOLATED_DOTNET_SDK_TOOL_PATH','ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE','ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT','FAKE_DOTNET_SDK_VERSION','FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_STAGING_TARGET','SDK_TEST_DOWNLOAD_TARGET','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN')) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+        }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     It 'keeps valid existing exact SDK behavior and skips download' {
         New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
-        Copy-Item `
-            -Path (Join-Path $script:FakeHostOutput '*') `
-            -Destination $script:InstallDir `
-            -Recurse `
-            -Force
+        Copy-Item -Path (Join-Path $script:FakeHostOutput '*') -Destination $script:InstallDir -Recurse -Force
         $sentinel = Join-Path $script:InstallDir 'sentinel.txt'
         Set-Content -LiteralPath $sentinel -Value 'preserve-existing'
-
-        $successOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { throw "continued-to-download" }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+        $successOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Be 0
         ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 99\.0\.100 is already installed\.'
         ($successOutput -join [Environment]::NewLine) | Should -Not -Match 'continued-to-download'
         (Get-Content -LiteralPath $sentinel -Raw).Trim() | Should -Be 'preserve-existing'
     }
 
-    It 'uses operation-scoped install-helper state on download failure' {
-        $stableHelper = Join-Path $script:ToolRoot 'dotnet-install.ps1'
-        Set-Content -LiteralPath $stableHelper -Value 'preserve-stable-helper'
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest {
-    param($Uri, $OutFile)
-    Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_DOWNLOAD_TARGET -Value $OutFile
-    Set-Content -LiteralPath $OutFile -Value "partial-download"
-    throw "download-failed"
-}
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+    It 'uses operation-scoped metadata state on download failure' {
+        $env:SDK_TEST_METADATA_FAILURE = 'metadata-download-failed'
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
-        (Get-Content -LiteralPath $stableHelper -Raw).Trim() | Should -Be 'preserve-stable-helper'
         $downloadTarget = (Get-Content -LiteralPath $script:DownloadTargetPath -Raw).Trim()
-        $downloadTarget | Should -Not -Be $stableHelper
-        $downloadTarget | Should -Match ([regex]::Escape($script:ToolRoot) + '[\\/]dotnet-install\.[^\\/]+\.ps1$')
+        $downloadTarget | Should -Match ([regex]::Escape($script:ToolRoot) + '[\\/]\.release-metadata-99\.0\.100-[^\\/]+\.json$')
         Test-Path -LiteralPath $downloadTarget | Should -BeFalse
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'download-failed'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'metadata-download-failed'
     }
 
     It 'preserves a pre-existing non-valid destination and fails before download' {
         New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
         $sentinel = Join-Path $script:InstallDir 'sentinel.txt'
         Set-Content -LiteralPath $sentinel -Value 'preserve-me'
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { throw "continued-to-download" }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'destination already exists'
-        ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'continued-to-download'
+        $text = $failureOutput -join [Environment]::NewLine
+        $text | Should -Match 'destination already exists'
+        $text | Should -Not -Match 'continued-to-download'
         (Get-Content -LiteralPath $sentinel -Raw).Trim() | Should -Be 'preserve-me'
     }
 
-    It 'uses staging for installer failure and cleans the failed attempt' {
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $InstallDir 'partial.txt') -Value 'partial'
-exit 73
-'@
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+    It 'uses staging for extraction failure and cleans the failed attempt' {
+        $env:SDK_TEST_EXTRACT_FAILURE = 'extract-failed'
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'dotnet-install failed for SDK 99\.0\.100 with exit code 73\.'
-        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
-        $target | Should -Not -Be $script:InstallDir
-        $target | Should -Match ([regex]::Escape($script:ToolRoot) + '[\\/]\.install-99\.0\.100-[^\\/]+$')
-        Test-Path -LiteralPath $target | Should -BeFalse
+        $text = $failureOutput -join [Environment]::NewLine
+        $text | Should -Match 'Unable to extract the verified \.NET SDK 99\.0\.100 payload'
+        $text | Should -Match 'extract-failed'
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Directory -Filter '.install-99.0.100-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
     }
 
-    It 'reports cleanup failure without masking installer failure' {
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $InstallDir 'partial.txt') -Value 'partial'
-exit 73
-'@
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-function Remove-Item {
-    param(
-        [string]$LiteralPath,
-        [switch]$Recurse,
-        [switch]$Force,
-        [switch]$WhatIf,
-        [switch]$Confirm
-    )
-    throw "cleanup-remove-failed"
-}
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+    It 'reports cleanup failure without masking extraction failure' {
+        $env:SDK_TEST_EXTRACT_FAILURE = 'extract-failed'
+        $env:SDK_TEST_CLEANUP_PATTERN = '.sdk-payload-'
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 6>&1 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'dotnet-install failed for SDK 99\.0\.100 with exit code 73\.'
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to clean install helper'
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to clean install staging directory'
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'cleanup-remove-failed'
-        ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
+        $text = $failureOutput -join [Environment]::NewLine
+        $text | Should -Match 'Unable to extract the verified \.NET SDK 99\.0\.100 payload'
+        $text | Should -Match 'Unable to clean install transaction file'
+        $text | Should -Match 'cleanup-remove-failed'
+        $text | Should -Not -Match 'installation completed successfully'
     }
 
-    It 'cleans staging when the installer does not produce a host' {
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-exit 0
-'@
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+    It 'cleans staging when extraction does not produce a host' {
+        $env:SDK_TEST_MISSING_HOST = '1'
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'isolated dotnet executable was not found'
-        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
+        $target = (Get-Content -LiteralPath $script:StagingTargetPath -Raw).Trim()
         Test-Path -LiteralPath $target | Should -BeFalse
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
     It 'blocks promotion when the staged host exits nonzero' {
         $env:FAKE_DOTNET_EXIT_CODE = '74'
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
-exit 0
-'@
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code 74\.'
-        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
-        Test-Path -LiteralPath $target | Should -BeFalse
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
     It 'blocks promotion when staged inventory omits the requested version' {
         $env:FAKE_DOTNET_SDK_VERSION = '98.0.100'
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
-exit 0
-'@
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'SDK 99\.0\.100 was not found after installation\.'
-        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
-        Test-Path -LiteralPath $target | Should -BeFalse
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
     It 'preserves a destination that appears before promotion' {
         $env:FAKE_DOTNET_CREATE_CONFLICT = $script:InstallDir
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
-exit 0
-'@
-
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'destination already exists'
         (Get-Content -LiteralPath (Join-Path $script:InstallDir 'sentinel.txt') -Raw).Trim() | Should -Be 'preserve-conflict'
-        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
-        Test-Path -LiteralPath $target | Should -BeFalse
     }
 
     It 'promotes only a verified staged installation' {
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_INSTALLER_TARGET -Value $InstallDir
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
-exit 0
-'@
-
-        $successOutput = @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1)
-
+        $successOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Be 0
-        ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK installation completed successfully\.'
-        $target = (Get-Content -LiteralPath $script:InstallerTargetPath -Raw).Trim()
-        $target | Should -Not -Be $script:InstallDir
-        Test-Path -LiteralPath $target | Should -BeFalse
+        $text = $successOutput -join [Environment]::NewLine
+        $text | Should -Match 'Extracting verified \.NET SDK 99\.0\.100 payload'
+        $text | Should -Match 'Isolated SDK installation completed successfully\.'
         Test-Path -LiteralPath (Join-Path $script:InstallDir 'dotnet.exe') | Should -BeTrue
-        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter 'dotnet-install.*.ps1' -ErrorAction SilentlyContinue).Count | Should -Be 0
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.sdk-payload-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
     }
 
     It 'retries deterministically after a failed clean-start attempt' {
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $InstallDir 'partial.txt') -Value 'partial'
-exit 73
-'@
-
-        @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1) | Out-Null
+        $env:SDK_TEST_EXTRACT_FAILURE = 'extract-failed'
+        @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1) | Out-Null
         $LASTEXITCODE | Should -Not -Be 0
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
-
-        Set-Content -LiteralPath $script:InstallerPath -Value @'
-param([string]$Version, [string]$InstallDir, [switch]$NoPath)
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $InstallDir -Recurse -Force
-exit 0
-'@
-
-        @(& pwsh -NoProfile -Command 'function Get-FileHash { param([string]$LiteralPath, [string]$Algorithm) [pscustomobject]@{ Hash = "3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b" } };
-function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item -LiteralPath $env:ISOLATED_DOTNET_SDK_FAKE_INSTALLER -Destination $OutFile -Force }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
-' 2>&1) | Out-Null
+        Remove-Item Env:SDK_TEST_EXTRACT_FAILURE
+        $successOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Be 0
+        ($successOutput -join [Environment]::NewLine) | Should -Match 'installation completed successfully'
         Test-Path -LiteralPath (Join-Path $script:InstallDir 'dotnet.exe') | Should -BeTrue
     }
 }

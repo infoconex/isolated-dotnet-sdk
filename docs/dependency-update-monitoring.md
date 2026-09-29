@@ -22,7 +22,8 @@ Repository-owned dependency pins are intentionally immutable until a reviewed re
 | Pester | `pesterVersion` in `.config/test-frameworks.json` | Exact PowerShell Gallery module version | PowerShell Gallery package metadata | Repository-owned unsupported-pin monitor |
 | ShellCheck | `shellCheckVersion` in `.config/static-analysis.json` | Linux x64 release archive SHA-256 in the same configuration | Official `koalaman/shellcheck` GitHub stable releases | Repository-owned unsupported-pin monitor |
 | Bats-core | `batsVersion` plus `batsCommit` in `.config/test-frameworks.json` | Release version must resolve to the reviewed immutable upstream commit | Official `bats-core/bats-core` GitHub stable releases and release tag object | Repository-owned unsupported-pin monitor |
-| Microsoft `dotnet/install-scripts` | `commit` in `.config/remote-artifacts.json` and matching product constants | Release commit, Git blob IDs, commit-qualified raw URLs, SHA-256 values, and embedded runtime URL/hash constants must remain synchronized | Official `dotnet/install-scripts` GitHub stable releases and release tag object | Repository-owned unsupported-pin monitor |
+
+The Microsoft `dotnet/install-scripts` helper is no longer a product runtime dependency after Issue #72. SDK acquisition now consumes Microsoft's per-version release metadata and payload checksum dynamically for the exact requested SDK rather than pinning a helper release, so there is no helper dependency pin for this monitor to track.
 
 There are currently no repository-owned executable/module/tool pins that require a manual-only monitoring exception. If a future dependency cannot be monitored from a deterministic authoritative package or release source, document that exception here with the reason and review cadence instead of adding heuristic scraping.
 
@@ -69,19 +70,6 @@ Changing `shellCheckVersion` requires reviewing the selected upstream release as
 ### Bats-core
 
 Changing `batsVersion` requires resolving the selected stable release tag to its immutable commit and updating `batsCommit` in the same reviewed change. CI must continue fetching and checking out that exact commit rather than a mutable tag.
-
-### Microsoft installer helper
-
-Changing the selected `dotnet/install-scripts` release requires synchronized review of:
-
-- the official upstream release and its immutable commit;
-- the Bash and PowerShell Git blob IDs;
-- commit-qualified raw URLs;
-- SHA-256 digests for the exact downloaded helper bytes;
-- matching embedded runtime URL/hash constants in both product scripts;
-- deterministic integrity and bootstrap tests.
-
-Discovery may identify a newer release, but it must not synthesize or commit these coupled values automatically.
 
 ## Maintainer workflow
 

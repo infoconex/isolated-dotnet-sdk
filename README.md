@@ -75,9 +75,9 @@ The supported product mapping is:
 
 PowerShell on Linux/macOS and Bash on Windows are not supported product combinations. A system-wide `dotnet` installation is not required.
 
-On Linux and macOS, normal product execution uses standard shell utilities including `curl`, `awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, and `rm`. SDK installation also requires either `sha256sum` or `shasum` so the pinned Microsoft install helper can be verified before execution.
+On Linux and macOS, normal product execution uses standard shell utilities including `curl`, `awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, and `rm`. SDK installation also requires an available SHA-512 utility (`sha512sum` where available or `shasum -a 512`) so the downloaded SDK archive can be verified before extraction.
 
-Network access is required when bootstrap or installation needs to download remote artifacts. Interactive install selection also requires Microsoft's published release metadata. Supplying an exact SDK version bypasses that metadata lookup, but a new installation still downloads the repository-pinned Microsoft install helper and the requested SDK payload from Microsoft.
+Network access is required when bootstrap or installation needs to download remote artifacts. Interactive install selection requires Microsoft's published release index and channel metadata. Supplying an exact SDK version bypasses interactive version discovery, but a new installation still retrieves Microsoft's exact-version release metadata to resolve the supported platform archive and published SHA-512 before downloading the SDK payload.
 
 See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the authoritative platform/runtime assumptions.
 
@@ -329,7 +329,7 @@ dotnet-sdks/
 └── 11.0.100-rc.1.26425.128/
 ```
 
-Only the tool file appropriate to the current platform will normally be present. Microsoft's `dotnet-install.ps1` / `dotnet-install.sh` helper and `.install-*` staging directory are operation-scoped transaction artifacts: each install attempt owns its temporary copies and normally removes them after success or failure. They are not persistent installation state.
+Only the tool file appropriate to the current platform will normally be present. During installation, exact-version Microsoft release metadata, the downloaded SDK archive, and the `.install-*` staging directory are operation-scoped transaction artifacts. Each attempt owns its temporary files/directories and normally removes them after success or failure; they are not persistent installation state.
 
 ## Why This Exists
 
@@ -347,7 +347,7 @@ The interactive install picker reads Microsoft's published .NET release metadata
 https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json
 ```
 
-The release index identifies each .NET channel and links to the detailed release metadata used to enumerate exact SDK versions. Explicit-version installs do not require the picker and bypass this metadata lookup.
+The release index identifies each .NET channel and links to detailed release metadata used to enumerate exact SDK versions. New installations also use the detailed metadata for the chosen exact SDK version to select the supported platform artifact and its published SHA-512. An explicit version bypasses the interactive picker/release-index selection flow, but it does not bypass this integrity metadata lookup.
 
 ## Operational Contract Reference
 
@@ -362,7 +362,6 @@ The README and CLI help summarize supported workflows. These repository specific
 
 ## Microsoft References
 
-- [.NET install scripts](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script)
 - [Test prerelease .NET SDKs locally](https://learn.microsoft.com/en-us/dotnet/core/tools/test-prerelease-sdk-locally)
 - [`dotnet build-server`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-build-server)
 - [`global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
@@ -370,7 +369,7 @@ The README and CLI help summarize supported workflows. These repository specific
 
 ## Security Note
 
-Stable bootstrap for releases published under the Issue #22 policy verifies the explicitly tagged script against that release's `SHA256SUMS` before execution. SDK installation downloads Microsoft's install helper from an immutable upstream commit and verifies its repository-pinned SHA-256 before execution. The downloaded .NET SDK payload itself remains an explicit Microsoft distribution trust boundary; independent SDK-archive checksum verification is deferred for later hardening. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee. See [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md) for the complete integrity model.
+Stable bootstrap for releases published under the Issue #22 policy verifies the explicitly tagged script against that release's `SHA256SUMS` before execution. For SDK installation, the tool resolves the exact platform archive and SHA-512 from Microsoft's release metadata, downloads the archive into operation-owned state, and verifies the checksum before extraction. Exact-version staged-host verification remains a separate correctness check before promotion. Because Microsoft controls both the metadata/checksum and payload distribution, this improves integrity without claiming independent third-party publisher authentication. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee. See [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md) for the complete integrity model.
 
 ## License
 

@@ -47,7 +47,7 @@ EOF
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"Target SDK: 99.0.100"* ]]
-  grep -Fq 'https://raw.githubusercontent.com/dotnet/install-scripts/da3ce11ba63f3dbb0fb835d41bda2665d5c48e84/src/dotnet-install.sh' "$curl_log"
+  grep -Fq 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/99.0/releases.json' "$curl_log"
 }
 
 @test "remove with no installed SDKs is a successful no-change result" {
@@ -105,14 +105,14 @@ EOF
 exit 0
 EOF
   chmod +x "$install_dir/dotnet"
-  printf '%s\n' helper > "$tool_root/dotnet-install.sh.leftover"
+  printf '%s\n' payload > "$tool_root/.sdk-payload-99.0.200.leftover.tar.gz"
 
   run env HOME="$test_home" "$tool_path" list
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"  $version"* ]]
   [[ "$output" != *"not-an-sdk"* ]]
-  [[ "$output" != *"dotnet-install.sh.leftover"* ]]
+  [[ "$output" != *".sdk-payload-99.0.200.leftover.tar.gz"* ]]
   [[ "$output" != *".install-99.0.200.leftover"* ]]
 }
 

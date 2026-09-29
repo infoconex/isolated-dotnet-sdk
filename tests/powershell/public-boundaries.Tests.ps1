@@ -83,7 +83,7 @@ Describe 'PowerShell public selection and list boundaries' {
         New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $script:ToolRoot 'not-an-sdk') -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $script:ToolRoot '.install-99.0.200.leftover') -Force | Out-Null
-        Set-Content -LiteralPath (Join-Path $script:ToolRoot 'dotnet-install.leftover.ps1') -Value 'helper'
+        Set-Content -LiteralPath (Join-Path $script:ToolRoot '.sdk-payload-99.0.200.leftover.zip') -Value 'payload'
 
         $listOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List 6>&1 2>&1)
 
@@ -91,7 +91,7 @@ Describe 'PowerShell public selection and list boundaries' {
         $text = $listOutput -join [Environment]::NewLine
         $text | Should -Match '(?m)^\s+99\.0\.100\s*$'
         $text | Should -Not -Match 'not-an-sdk'
-        $text | Should -Not -Match 'dotnet-install\.leftover\.ps1'
+        $text | Should -Not -Match '\.sdk-payload-99\.0\.200\.leftover\.zip'
         $text | Should -Not -Match '\.install-99\.0\.200\.leftover'
     }
 }

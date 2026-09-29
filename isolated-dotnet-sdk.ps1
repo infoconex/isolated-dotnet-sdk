@@ -70,9 +70,6 @@ $ErrorActionPreference = 'Stop'
 
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
 $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
-$DotNetInstallCommit = 'da3ce11ba63f3dbb0fb835d41bda2665d5c48e84'
-$DotNetInstallSha256 = '3bb07bc8025211836c1e4f9d3f6a044e55b1fb6eec518a6c78851d04e210442b'
-$DotNetInstallUrl = "https://raw.githubusercontent.com/dotnet/install-scripts/$DotNetInstallCommit/src/dotnet-install.ps1"
 $ToolName = 'isolated-dotnet-sdk.ps1'
 $SdkRoot = Join-Path $HOME 'dotnet-sdks'
 $ToolPath = Join-Path $SdkRoot $ToolName
@@ -857,6 +854,86 @@ function Resolve-RemoveVersion {
     return $true
 }
 
+function Get-SdkChannel {
+    if ($Version -notmatch '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.') {
+        throw "Unable to determine the .NET release channel for SDK $Version."
+    }
+
+    return "$($Matches.major).$($Matches.minor)"
+}
+
+function Get-SdkRid {
+    $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    $arch = switch ($architecture) {
+        ([System.Runtime.InteropServices.Architecture]::X64) { 'x64'; break }
+        ([System.Runtime.InteropServices.Architecture]::X86) { 'x86'; break }
+        ([System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64'; break }
+        ([System.Runtime.InteropServices.Architecture]::Arm) { 'arm'; break }
+        default { throw "Unable to map architecture $architecture to a Microsoft SDK artifact." }
+    }
+
+    return "win-$arch"
+}
+
+function Resolve-SdkArtifact {
+    param(
+        [Parameter(Mandatory)]
+        [psobject]$Metadata,
+        [Parameter(Mandatory)]
+        [string]$SdkVersion,
+        [Parameter(Mandatory)]
+        [string]$Rid
+    )
+
+    $expectedUrl = "https://builds.dotnet.microsoft.com/dotnet/Sdk/$SdkVersion/dotnet-sdk-$SdkVersion-$Rid.zip"
+    $candidates = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($release in @($Metadata.releases)) {
+        $sdkEntries = [System.Collections.Generic.List[object]]::new()
+        if ($null -ne $release.sdk) {
+            $sdkEntries.Add($release.sdk)
+        }
+        foreach ($sdk in @($release.sdks)) {
+            if ($null -ne $sdk) {
+                $sdkEntries.Add($sdk)
+            }
+        }
+
+        foreach ($sdk in $sdkEntries) {
+            if ([string]$sdk.version -ne $SdkVersion) {
+                continue
+            }
+
+            foreach ($file in @($sdk.files)) {
+                if ([string]$file.rid -eq $Rid -and [string]$file.url -eq $expectedUrl) {
+                    $candidates.Add("$([string]$file.url)|$([string]$file.hash)")
+                }
+            }
+        }
+    }
+
+    $uniqueCandidates = @($candidates | Sort-Object -Unique)
+    if ($uniqueCandidates.Count -ne 1) {
+        throw "Microsoft release metadata did not contain exactly one SDK archive for $SdkVersion and $Rid."
+    }
+
+    $parts = $uniqueCandidates[0].Split('|', 2)
+    $url = $parts[0]
+    $hash = $parts[1]
+
+    if ($url -ne $expectedUrl) {
+        throw "Microsoft release metadata returned an unexpected SDK archive URL for $SdkVersion and $Rid."
+    }
+    if ($hash -notmatch '^[0-9A-Fa-f]{128}$') {
+        throw "Microsoft release metadata contained an invalid SHA-512 hash for SDK $SdkVersion and $Rid."
+    }
+
+    return [pscustomobject]@{
+        Url  = $url
+        Hash = $hash.ToLowerInvariant()
+    }
+}
+
 function Install-IsolatedSdk {
     if (-not (Resolve-InstallVersion)) {
         return
@@ -925,55 +1002,54 @@ function Install-IsolatedSdk {
         Write-ToolDisplay
     }
 
-    $InstallScript = Join-Path `
-        $SdkRoot `
-    ('dotnet-install.{0}.ps1' -f [guid]::NewGuid().ToString('N'))
-    $StagingDir = Join-Path `
-        $SdkRoot `
-    ('.install-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
+    $Channel = Get-SdkChannel
+    $Rid = Get-SdkRid
+    $MetadataUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/$Channel/releases.json"
+    $MetadataPath = Join-Path $SdkRoot ('.release-metadata-{0}-{1}.json' -f $Version, [guid]::NewGuid().ToString('N'))
+    $ArchivePath = Join-Path $SdkRoot ('.sdk-payload-{0}-{1}.zip' -f $Version, [guid]::NewGuid().ToString('N'))
+    $StagingDir = Join-Path $SdkRoot ('.install-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
     $StagedDotNet = Join-Path $StagingDir 'dotnet.exe'
     $PrimaryFailure = $null
     $CleanupFailure = $null
 
     try {
-        Write-ToolInfo "Downloading Microsoft's pinned dotnet-install.ps1 script..."
+        Write-ToolInfo "Loading Microsoft release metadata for SDK $Version..."
         try {
-            Invoke-WebRequest $DotNetInstallUrl -OutFile $InstallScript
+            Invoke-WebRequest $MetadataUrl -OutFile $MetadataPath
+            $Metadata = Get-Content -LiteralPath $MetadataPath -Raw | ConvertFrom-Json -ErrorAction Stop
         }
         catch {
-            throw "Unable to download Microsoft's dotnet-install.ps1 script: $($_.Exception.Message)"
+            throw "Unable to load valid Microsoft release metadata for SDK ${Version}: $($_.Exception.Message)"
+        }
+
+        $Artifact = Resolve-SdkArtifact -Metadata $Metadata -SdkVersion $Version -Rid $Rid
+
+        Write-ToolInfo "Downloading .NET SDK $Version payload..."
+        try {
+            Invoke-WebRequest $Artifact.Url -OutFile $ArchivePath
+        }
+        catch {
+            throw "Unable to download the .NET SDK $Version payload: $($_.Exception.Message)"
         }
 
         try {
-            $ActualInstallScriptHash = (Get-FileHash -LiteralPath $InstallScript -Algorithm SHA256).Hash.ToLowerInvariant()
+            $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA512).Hash.ToLowerInvariant()
         }
         catch {
-            throw "Unable to verify Microsoft's dotnet-install.ps1 script: $($_.Exception.Message)"
+            throw "Unable to verify the .NET SDK $Version payload: $($_.Exception.Message)"
         }
 
-        if ($ActualInstallScriptHash -ne $DotNetInstallSha256) {
-            throw "Integrity verification failed for Microsoft's dotnet-install.ps1 script."
+        if ($ActualHash -ne $Artifact.Hash) {
+            throw "Integrity verification failed for the .NET SDK $Version payload."
         }
 
-        if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
-            Unblock-File -Path $InstallScript -WhatIf:$false -Confirm:$false
+        New-Item -ItemType Directory -Path $StagingDir -WhatIf:$false -Confirm:$false | Out-Null
+        Write-ToolInfo "Extracting verified .NET SDK $Version payload..."
+        try {
+            Expand-Archive -LiteralPath $ArchivePath -DestinationPath $StagingDir -Force
         }
-
-        New-Item `
-            -ItemType Directory `
-            -Path $StagingDir `
-            -WhatIf:$false `
-            -Confirm:$false | Out-Null
-
-        Write-ToolInfo "Installing .NET SDK $Version..."
-
-        & $InstallScript `
-            -Version $Version `
-            -InstallDir $StagingDir `
-            -NoPath
-        $ExitCode = $LASTEXITCODE
-        if ($ExitCode -ne 0) {
-            throw "dotnet-install failed for SDK $Version with exit code $ExitCode."
+        catch {
+            throw "Unable to extract the verified .NET SDK $Version payload: $($_.Exception.Message)"
         }
 
         Write-ToolDisplay
@@ -1003,11 +1079,7 @@ function Install-IsolatedSdk {
         }
 
         try {
-            Move-Item `
-                -LiteralPath $StagingDir `
-                -Destination $InstallDir `
-                -WhatIf:$false `
-                -Confirm:$false
+            Move-Item -LiteralPath $StagingDir -Destination $InstallDir -WhatIf:$false -Confirm:$false
             $StagingDir = $null
         }
         catch {
@@ -1018,30 +1090,23 @@ function Install-IsolatedSdk {
         $PrimaryFailure = $_
     }
     finally {
-        if (Test-Path -LiteralPath $InstallScript -PathType Leaf) {
-            try {
-                Remove-Item `
-                    -LiteralPath $InstallScript `
-                    -Force `
-                    -WhatIf:$false `
-                    -Confirm:$false
-            }
-            catch {
-                Write-ToolWarning "Unable to clean install helper ${InstallScript}: $($_.Exception.Message)"
-                if ($null -eq $CleanupFailure) {
-                    $CleanupFailure = $_
+        foreach ($TemporaryPath in @($MetadataPath, $ArchivePath)) {
+            if ($TemporaryPath -and (Test-Path -LiteralPath $TemporaryPath)) {
+                try {
+                    Remove-Item -LiteralPath $TemporaryPath -Force -WhatIf:$false -Confirm:$false
+                }
+                catch {
+                    Write-ToolWarning "Unable to clean install transaction file ${TemporaryPath}: $($_.Exception.Message)"
+                    if ($null -eq $CleanupFailure) {
+                        $CleanupFailure = $_
+                    }
                 }
             }
         }
 
         if ($StagingDir -and (Test-Path -LiteralPath $StagingDir)) {
             try {
-                Remove-Item `
-                    -LiteralPath $StagingDir `
-                    -Recurse `
-                    -Force `
-                    -WhatIf:$false `
-                    -Confirm:$false
+                Remove-Item -LiteralPath $StagingDir -Recurse -Force -WhatIf:$false -Confirm:$false
             }
             catch {
                 Write-ToolWarning "Unable to clean install staging directory ${StagingDir}: $($_.Exception.Message)"

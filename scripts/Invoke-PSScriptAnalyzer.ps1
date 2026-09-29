@@ -2,6 +2,9 @@ $ErrorActionPreference = 'Stop'
 
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $VersionConfigPath = Join-Path $RepositoryRoot '.config/static-analysis.json'
+$AnalysisExcludedPaths = @(
+    (Join-Path $RepositoryRoot 'tests/powershell/sdk-payload-fixture.ps1')
+)
 
 try {
     $VersionConfig = Get-Content -LiteralPath $VersionConfigPath -Raw -ErrorAction Stop |
@@ -24,6 +27,7 @@ $AnalysisPaths = @(
         Sort-Object FullName |
         ForEach-Object { $_.FullName }
     Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'tests/powershell') -Filter '*.ps1' -File |
+        Where-Object { $_.FullName -notin $AnalysisExcludedPaths } |
         Sort-Object FullName |
         ForEach-Object { $_.FullName }
 )
