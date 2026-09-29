@@ -11,6 +11,16 @@ setup() {
   mkdir -p "$tool_root" "$fake_bin"
   cp "$repo_root/isolated-dotnet-sdk.sh" "$tool_path"
   chmod +x "$tool_path"
+
+  cat > "$fake_bin/dotnet" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == '--list-sdks' ]]; then
+  exit 0
+fi
+exit 89
+EOF
+  chmod +x "$fake_bin/dotnet"
 }
 
 teardown() {
