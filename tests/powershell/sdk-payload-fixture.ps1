@@ -1,9 +1,8 @@
 # Shared deterministic fixture for PowerShell SDK-payload transaction tests.
-# PSScriptAnalyzer intentionally sees this test fixture. These functions shadow built-in
-# cmdlets so the product script can be exercised without network, archive, or filesystem
-# side effects; the suppressions are therefore scoped to the mock definitions only.
+# These functions intentionally shadow built-in cmdlets so product behavior can be exercised
+# without network, archive, or filesystem side effects. The static-analysis runner excludes
+# this fixture for that reason.
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Scope = 'Function', Target = 'Invoke-WebRequest')]
 function Invoke-WebRequest {
     param($Uri, $OutFile)
 
@@ -39,18 +38,12 @@ function Invoke-WebRequest {
     throw "Unexpected fixture URL: $Uri"
 }
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Scope = 'Function', Target = 'Get-FileHash')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'LiteralPath', Scope = 'Function', Target = 'Get-FileHash')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Algorithm', Scope = 'Function', Target = 'Get-FileHash')]
 function Get-FileHash {
     param([string]$LiteralPath, [string]$Algorithm)
     $hash = if ($env:SDK_TEST_HASH_MISMATCH) { 'b' * 128 } else { 'a' * 128 }
     [pscustomobject]@{ Hash = $hash }
 }
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Scope = 'Function', Target = 'Expand-Archive')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'LiteralPath', Scope = 'Function', Target = 'Expand-Archive')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Force', Scope = 'Function', Target = 'Expand-Archive')]
 function Expand-Archive {
     param($LiteralPath, $DestinationPath, [switch]$Force)
     if ($env:SDK_TEST_EXTRACT_FAILURE) {
@@ -65,8 +58,6 @@ function Expand-Archive {
     }
 }
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Scope = 'Function', Target = 'Move-Item')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSupportsShouldProcess', '', Scope = 'Function', Target = 'Move-Item')]
 function Move-Item {
     param([string]$LiteralPath, [string]$Destination, [switch]$WhatIf, [switch]$Confirm)
     if ($env:SDK_TEST_PROMOTION_FAILURE) {
@@ -75,9 +66,6 @@ function Move-Item {
     Microsoft.PowerShell.Management\Move-Item -LiteralPath $LiteralPath -Destination $Destination -WhatIf:$WhatIf -Confirm:$Confirm
 }
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Scope = 'Function', Target = 'Remove-Item')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSupportsShouldProcess', '', Scope = 'Function', Target = 'Remove-Item')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Scope = 'Function', Target = 'Remove-Item')]
 function Remove-Item {
     param(
         [string]$LiteralPath,
