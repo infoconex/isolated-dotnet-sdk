@@ -902,7 +902,7 @@ install_isolated_sdk() {
         :
     else
         status=$?
-        tool_fail "Unable to download Microsoft's pinned dotnet-install.sh script with exit code $status."
+        tool_fail "Unable to download Microsoft's dotnet-install.sh script with exit code $status."
     fi
 
     if ! actual_install_script_hash="$(calculate_sha256 "$install_script")"; then
