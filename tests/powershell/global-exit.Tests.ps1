@@ -170,7 +170,9 @@ function Invoke-RestMethod {
     }
 
     It 'keeps Q as Cancel for explicit one-shot interactive Install selection' {
-        $command = $script:ReleaseIndexCommand -replace "& \$env:ISOLATED_DOTNET_SDK_TOOL_PATH$", '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install'
+        $command = $script:ReleaseIndexCommand.Replace(
+            '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH',
+            '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install')
         $result = Invoke-GlobalExitToolProcess -InputLines @('q') -Command $command
 
         $result.ExitCode | Should -Be 0
