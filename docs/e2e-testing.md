@@ -1,4 +1,4 @@
-# Manual real end-to-end validation
+# Real end-to-end validation
 
 This repository keeps deterministic validation and real ecosystem validation as separate signals.
 
@@ -18,9 +18,9 @@ Cache requirements:
 - caching must not weaken immutable commit, version, checksum, or repository-owned pinning controls;
 - E2E SDK installations, temporary HOME/profile state, and other product test state are never cached.
 
-## Manual E2E
+## Live E2E
 
-`.github/workflows/e2e.yml` is intentionally `workflow_dispatch` only for now. It is a real-system confidence layer and is not a required PR or merge check while the repository remains under personal-account ownership.
+`.github/workflows/e2e.yml` runs automatically on `push` to `main` after changes land and also supports `workflow_dispatch` for ad hoc reruns. It is a real-system confidence layer and is not a required PR or merge check while the repository remains under personal-account ownership.
 
 The workflow runs only the supported product mappings:
 
@@ -64,8 +64,12 @@ The persistent session then:
 
 The E2E driver may use the tool’s `-Yes` / `--yes` confirmation control so hosted-runner system SDK inventory cannot introduce an extra confirmation-input branch. `-Yes` / `--yes` does not choose menu items and does not replace the persistent interactive session.
 
+## Trigger and gating model
+
+The automatic `push: main` trigger proves the exact code that actually landed on the default branch against live Microsoft/.NET infrastructure. `workflow_dispatch` remains available when a maintainer needs to rerun the same live suite without creating another commit.
+
+E2E is intentionally not triggered on pull requests and is not a required merge check yet. Issue #60 owns future organization-backed merge-queue enforcement and required merge-candidate E2E gating. Until that protection exists and is demonstrated, deterministic `push: main` Validate remains enabled as the normal post-merge deterministic signal.
+
 ## What E2E does not own
 
 The live suite is deliberately small. It does not replace deterministic tests for metadata failures, network failures, filesystem boundaries, transactional install behavior, native-command propagation, cleanup, invalid input, or other exhaustive edge cases.
-
-E2E currently does not run automatically on pull requests or merges. Issue #60 owns future organization-backed merge-queue enforcement and automatic required E2E gating. Until that protection exists and is demonstrated, deterministic `push: main` validation remains enabled.
