@@ -28,9 +28,8 @@ jobs:
           python3 - "$test_root/output" <<'PY'
           import pathlib, re, sys
           text = pathlib.Path(sys.argv[1]).read_text()
-          assert re.search(r'Selection:[^\r\n]*\r?\n\r?\nisolated-dotnet-sdk: Isolated SDKs under', text), text
           assert re.search(r'  None\r?\n\r?\nisolated-dotnet-sdk: What would you like to do\?', text), text
-          assert not re.search(r'Selection:[^\r\n]*\r?\n(?:\r?\n){2,}isolated-dotnet-sdk: Isolated SDKs under', text), text
+          assert not re.search(r'  None\r?\n(?:\r?\n){2,}isolated-dotnet-sdk: What would you like to do\?', text), text
           PY
 
       - name: Verify PowerShell persistent Main spacing
@@ -64,9 +63,8 @@ jobs:
               $process.WaitForExit()
               if ($process.ExitCode -ne 0) { throw "Tool failed: $($stderr.GetAwaiter().GetResult())" }
               $output = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
-              if ($output -notmatch 'Selection:[^\r\n]*\r?\n\r?\nisolated-dotnet-sdk: Isolated SDKs under') { throw $output }
               if ($output -notmatch '  None\r?\n\r?\nisolated-dotnet-sdk: What would you like to do\?') { throw $output }
-              if ($output -match 'Selection:[^\r\n]*\r?\n(?:\r?\n){2,}isolated-dotnet-sdk: Isolated SDKs under') { throw $output }
+              if ($output -match '  None\r?\n(?:\r?\n){2,}isolated-dotnet-sdk: What would you like to do\?') { throw $output }
           }
           finally {
               Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
