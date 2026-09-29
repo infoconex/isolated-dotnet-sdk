@@ -12,6 +12,8 @@ Describe 'Repository supply-chain configuration' {
                 Sort-Object -Property Name |
                 ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
         ) -join [Environment]::NewLine
+        $script:BashValidationSetup = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot 'scripts/initialize-bash-validation.sh') -Raw
+        $script:PowerShellValidationSetup = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot 'scripts/Initialize-PowerShellValidation.ps1') -Raw
         $script:TestConfig = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot '.config/test-frameworks.json') -Raw | ConvertFrom-Json
         $script:AnalysisConfig = Get-Content -LiteralPath (Join-Path $script:RepositoryRoot '.config/static-analysis.json') -Raw | ConvertFrom-Json
     }
@@ -56,15 +58,18 @@ Describe 'Repository supply-chain configuration' {
 
     It 'keeps Bats pinned to an exact Git commit' {
         [string]$script:TestConfig.batsCommit | Should -Match '^[0-9a-f]{40}$'
-        $script:Workflow | Should -Match 'git -C "\$source_dir" fetch --depth=1 origin "\$commit"'
-        $script:Workflow | Should -Match 'checkout --detach FETCH_HEAD'
+        $script:Workflow | Should -Match 'initialize-bash-validation\.sh'
+        $script:BashValidationSetup | Should -Match 'git -C "\$bats_source_dir" fetch --depth=1 origin "\$bats_commit"'
+        $script:BashValidationSetup | Should -Match 'checkout --detach FETCH_HEAD'
+        $script:BashValidationSetup | Should -Match 'rev-parse HEAD'
     }
 
     It 'verifies the pinned ShellCheck SHA-256 before extraction' {
         [string]$script:AnalysisConfig.shellCheckLinuxX64Sha256 | Should -Match '^[0-9a-f]{64}$'
+        $script:Workflow | Should -Match 'initialize-bash-validation\.sh'
 
-        $verifyIndex = $script:Workflow.IndexOf('sha256sum -c -', [System.StringComparison]::Ordinal)
-        $extractIndex = $script:Workflow.IndexOf('tar -xJf "$archive"', [System.StringComparison]::Ordinal)
+        $verifyIndex = $script:BashValidationSetup.IndexOf('sha256sum -c -', [System.StringComparison]::Ordinal)
+        $extractIndex = $script:BashValidationSetup.IndexOf('tar -xJf "$shellcheck_archive"', [System.StringComparison]::Ordinal)
         $verifyIndex | Should -BeGreaterThan -1
         $extractIndex | Should -BeGreaterThan $verifyIndex
     }
@@ -72,7 +77,9 @@ Describe 'Repository supply-chain configuration' {
     It 'keeps PowerShell framework installation exact-version constrained' {
         [string]$script:TestConfig.pesterVersion | Should -Not -BeNullOrEmpty
         [string]$script:AnalysisConfig.psScriptAnalyzerVersion | Should -Not -BeNullOrEmpty
-        $script:Workflow | Should -Match '-RequiredVersion \$pesterVersion'
-        $script:Workflow | Should -Match '-RequiredVersion \$analyzerVersion'
+        $script:Workflow | Should -Match 'Initialize-PowerShellValidation\.ps1'
+        $script:PowerShellValidationSetup | Should -Match 'Save-Module -Name Pester -RequiredVersion \$pesterVersion'
+        $script:PowerShellValidationSetup | Should -Match 'Save-Module -Name PSScriptAnalyzer -RequiredVersion \$analyzerVersion'
+        $script:PowerShellValidationSetup | Should -Match 'Test-ModuleManifest'
     }
 }

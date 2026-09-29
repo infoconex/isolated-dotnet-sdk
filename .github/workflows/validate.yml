@@ -28,49 +28,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate Bash syntax
-        shell: bash
-        run: |
-          bash -n isolated-dotnet-sdk.sh
-          bash -n tests/e2e/bash/direct.sh
-          bash -n tests/e2e/bash/interactive.sh
-
       - name: Restore pinned Bats-core cache
         id: bats-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/isolated-dotnet-sdk-cache/bats
           key: isolated-dotnet-sdk-bats-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.config/test-frameworks.json') }}
-
-      - name: Install or verify pinned Bats-core
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$(jq -er '.batsVersion | select(type == "string" and length > 0)' .config/test-frameworks.json)"
-          commit="$(jq -er '.batsCommit | select(type == "string" and test("^[0-9a-f]{40}$"))' .config/test-frameworks.json)"
-          cache_dir="$RUNNER_TEMP/isolated-dotnet-sdk-cache/bats"
-          prefix="$cache_dir/prefix"
-          commit_marker="$cache_dir/source-commit"
-
-          if [[ "${{ steps.bats-cache.outputs.cache-hit }}" == "true" ]]; then
-            test -x "$prefix/bin/bats"
-            test -f "$commit_marker"
-            test "$(cat "$commit_marker")" = "$commit"
-          else
-            rm -rf "$cache_dir"
-            mkdir -p "$cache_dir"
-            source_dir="$RUNNER_TEMP/bats-core-source"
-            git -C "$RUNNER_TEMP" init bats-core-source
-            git -C "$source_dir" remote add origin https://github.com/bats-core/bats-core.git
-            git -C "$source_dir" fetch --depth=1 origin "$commit"
-            git -C "$source_dir" checkout --detach FETCH_HEAD
-            test "$(git -C "$source_dir" rev-parse HEAD)" = "$commit"
-            "$source_dir/install.sh" "$prefix"
-            printf '%s\n' "$commit" > "$commit_marker"
-          fi
-
-          test "$($prefix/bin/bats --version | awk '{print $2}')" = "$version"
-          printf '%s\n' "$prefix/bin" >> "$GITHUB_PATH"
 
       - name: Restore pinned ShellCheck archive cache
         if: matrix.os == 'ubuntu-24.04'
@@ -80,29 +43,9 @@ jobs:
           path: ${{ runner.temp }}/isolated-dotnet-sdk-cache/shellcheck
           key: isolated-dotnet-sdk-shellcheck-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.config/static-analysis.json') }}
 
-      - name: Install or verify pinned ShellCheck
-        if: matrix.os == 'ubuntu-24.04'
+      - name: Prepare Bash validation tooling
         shell: bash
-        run: |
-          set -euo pipefail
-          config='.config/static-analysis.json'
-          version="$(jq -er '.shellCheckVersion | select(type == "string" and length > 0)' "$config")"
-          checksum="$(jq -er '.shellCheckLinuxX64Sha256 | select(type == "string" and length > 0)' "$config")"
-          cache_dir="$RUNNER_TEMP/isolated-dotnet-sdk-cache/shellcheck"
-          archive="$cache_dir/shellcheck-v${version}.linux.x86_64.tar.xz"
-          url="https://github.com/koalaman/shellcheck/releases/download/v${version}/shellcheck-v${version}.linux.x86_64.tar.xz"
-
-          mkdir -p "$cache_dir"
-          if [[ "${{ steps.shellcheck-cache.outputs.cache-hit }}" != "true" ]]; then
-            curl -fsSL "$url" -o "$archive"
-          fi
-
-          test -f "$archive"
-          printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
-          rm -rf "$RUNNER_TEMP/shellcheck-v${version}"
-          tar -xJf "$archive" -C "$RUNNER_TEMP"
-          sudo install "$RUNNER_TEMP/shellcheck-v${version}/shellcheck" /usr/local/bin/shellcheck
-          test "$(shellcheck --version | awk '/^version:/ {print $2}')" = "$version"
+        run: bash scripts/initialize-bash-validation.sh '${{ steps.bats-cache.outputs.cache-hit }}' '${{ steps.shellcheck-cache.outputs.cache-hit }}'
 
       - name: Run ShellCheck
         if: matrix.os == 'ubuntu-24.04'
@@ -112,10 +55,7 @@ jobs:
           shellcheck_home="$RUNNER_TEMP/shellcheck-home"
           mkdir -p "$shellcheck_home"
           printf 'shell=sh\n' > "$shellcheck_home/.shellcheckrc"
-
-          HOME="$shellcheck_home" \
-          SHELLCHECK_OPTS='--shell=sh' \
-          bash scripts/run-shellcheck.sh
+          HOME="$shellcheck_home" SHELLCHECK_OPTS='--shell=sh' bash scripts/run-shellcheck.sh
 
       - name: Run Bash behavioral tests
         shell: bash
@@ -131,33 +71,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate PowerShell syntax
-        shell: pwsh
-        run: |
-          $errors = @()
-          foreach ($path in @(
-              './isolated-dotnet-sdk.ps1',
-              './tests/e2e/powershell/direct.ps1',
-              './tests/e2e/powershell/interactive.ps1')) {
-              $tokens = $null
-              $parseErrors = $null
-              [System.Management.Automation.Language.Parser]::ParseFile(
-                  (Resolve-Path $path),
-                  [ref]$tokens,
-                  [ref]$parseErrors) | Out-Null
-              $errors += $parseErrors
-          }
-
-          if ($errors.Count -gt 0) {
-              $errors | ForEach-Object { Write-Error $_.Message }
-              exit 1
-          }
-
       - name: Resolve PowerShell cache identity
         id: pwsh-cache-identity
         shell: pwsh
-        run: |
-          "version=$($PSVersionTable.PSVersion.ToString())" >> $env:GITHUB_OUTPUT
+        run: '"version=$($PSVersionTable.PSVersion.ToString())" >> $env:GITHUB_OUTPUT'
 
       - name: Restore pinned PowerShell module cache
         id: powershell-module-cache
@@ -166,62 +83,13 @@ jobs:
           path: ${{ runner.temp }}/isolated-dotnet-sdk-cache/powershell-modules
           key: isolated-dotnet-sdk-pwsh-${{ runner.os }}-${{ runner.arch }}-${{ steps.pwsh-cache-identity.outputs.version }}-${{ hashFiles('.config/test-frameworks.json', '.config/static-analysis.json') }}
 
-      - name: Install or verify pinned PowerShell test and analysis modules
+      - name: Prepare PowerShell validation tooling
         shell: pwsh
         run: |
-          $testConfig = Get-Content -LiteralPath './.config/test-frameworks.json' -Raw |
-              ConvertFrom-Json
-          $analysisConfig = Get-Content -LiteralPath './.config/static-analysis.json' -Raw |
-              ConvertFrom-Json
-          $pesterVersion = [string]$testConfig.pesterVersion
-          $analyzerVersion = [string]$analysisConfig.psScriptAnalyzerVersion
-          $moduleRoot = Join-Path $env:RUNNER_TEMP 'isolated-dotnet-sdk-cache/powershell-modules'
-
-          if ([string]::IsNullOrWhiteSpace($pesterVersion)) {
-              throw 'pesterVersion is required in .config/test-frameworks.json.'
-          }
-          if ([string]::IsNullOrWhiteSpace($analyzerVersion)) {
-              throw 'psScriptAnalyzerVersion is required in .config/static-analysis.json.'
-          }
-
-          if ('${{ steps.powershell-module-cache.outputs.cache-hit }}' -ne 'true') {
-              Remove-Item -LiteralPath $moduleRoot -Recurse -Force -ErrorAction SilentlyContinue
-              New-Item -ItemType Directory -Path $moduleRoot -Force | Out-Null
-              Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-              Save-Module `
-                  -Name Pester `
-                  -RequiredVersion $pesterVersion `
-                  -Path $moduleRoot `
-                  -Repository PSGallery `
-                  -Force
-              Save-Module `
-                  -Name PSScriptAnalyzer `
-                  -RequiredVersion $analyzerVersion `
-                  -Path $moduleRoot `
-                  -Repository PSGallery `
-                  -Force
-          }
-
-          $pesterManifestPath = Join-Path $moduleRoot "Pester/$pesterVersion/Pester.psd1"
-          $analyzerManifestPath = Join-Path $moduleRoot "PSScriptAnalyzer/$analyzerVersion/PSScriptAnalyzer.psd1"
-          if (-not (Test-Path -LiteralPath $pesterManifestPath -PathType Leaf)) {
-              throw "Cached Pester manifest was not found at $pesterManifestPath."
-          }
-          if (-not (Test-Path -LiteralPath $analyzerManifestPath -PathType Leaf)) {
-              throw "Cached PSScriptAnalyzer manifest was not found at $analyzerManifestPath."
-          }
-
-          $pesterManifest = Test-ModuleManifest -Path $pesterManifestPath
-          $analyzerManifest = Test-ModuleManifest -Path $analyzerManifestPath
-          if ($pesterManifest.Version.ToString() -ne $pesterVersion) {
-              throw "Expected Pester $pesterVersion but cached manifest reports $($pesterManifest.Version)."
-          }
-          if ($analyzerManifest.Version.ToString() -ne $analyzerVersion) {
-              throw "Expected PSScriptAnalyzer $analyzerVersion but cached manifest reports $($analyzerManifest.Version)."
-          }
-
-          $env:PSModulePath = "$moduleRoot$([System.IO.Path]::PathSeparator)$env:PSModulePath"
-          "PSModulePath=$env:PSModulePath" >> $env:GITHUB_ENV
+          & ./scripts/Initialize-PowerShellValidation.ps1 `
+              -ModuleRoot (Join-Path $env:RUNNER_TEMP 'isolated-dotnet-sdk-cache/powershell-modules') `
+              -CacheHit ('${{ steps.powershell-module-cache.outputs.cache-hit }}' -eq 'true') `
+              -GitHubEnvironmentFile $env:GITHUB_ENV
 
       - name: Run PSScriptAnalyzer
         shell: pwsh

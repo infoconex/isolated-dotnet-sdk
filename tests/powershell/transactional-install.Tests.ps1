@@ -3,67 +3,11 @@ Describe 'PowerShell transactional SDK installation' {
         $script:RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
         $script:HomeVariableName = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
-        $script:FakeHostProjectRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-fake-host-{0}" -f [guid]::NewGuid())
-        $script:FakeHostOutput = Join-Path $script:FakeHostProjectRoot 'out'
-        New-Item -ItemType Directory -Path $script:FakeHostProjectRoot -Force | Out-Null
-
-        Set-Content -LiteralPath (Join-Path $script:FakeHostProjectRoot 'FakeDotNet.csproj') -Value @'
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>dotnet</AssemblyName>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>disable</Nullable>
-  </PropertyGroup>
-</Project>
-'@
-
-        Set-Content -LiteralPath (Join-Path $script:FakeHostProjectRoot 'Program.cs') -Value @'
-using System;
-using System.IO;
-
-public static class Program
-{
-    public static int Main(string[] args)
-    {
-        var exitText = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXIT_CODE");
-        if (!string.IsNullOrWhiteSpace(exitText) && int.TryParse(exitText, out var exitCode) && exitCode != 0)
-        {
-            return exitCode;
+        $script:FakeHostOutput = $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT
+        if ([string]::IsNullOrWhiteSpace($script:FakeHostOutput) -or
+            -not (Test-Path -LiteralPath $script:FakeHostOutput -PathType Container)) {
+            throw 'Shared deterministic fake dotnet host is required. Run tests through tests/powershell/run-tests.ps1.'
         }
-
-        if (args.Length > 0 && args[0] == "--list-sdks")
-        {
-            var conflictPath = Environment.GetEnvironmentVariable("FAKE_DOTNET_CREATE_CONFLICT");
-            if (!string.IsNullOrWhiteSpace(conflictPath))
-            {
-                Directory.CreateDirectory(conflictPath);
-                File.WriteAllText(Path.Combine(conflictPath, "sentinel.txt"), "preserve-conflict");
-            }
-
-            var version = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
-            Console.WriteLine(version + " [C:\\fake]");
-        }
-
-        return 0;
-    }
-}
-'@
-
-        & dotnet build `
-            (Join-Path $script:FakeHostProjectRoot 'FakeDotNet.csproj') `
-            -c Release `
-            -o $script:FakeHostOutput `
-            --nologo `
-            --verbosity quiet
-        if ($LASTEXITCODE -ne 0) {
-            throw "Unable to build the deterministic fake dotnet host. Exit code: $LASTEXITCODE"
-        }
-    }
-
-    AfterAll {
-        Remove-Item -LiteralPath $script:FakeHostProjectRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     BeforeEach {
