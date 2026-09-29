@@ -94,64 +94,67 @@ EOF
   chmod +x "$fake_bin/curl"
 }
 
-@test "Main advertises Q Exit and rejects numeric 4 as an Exit alias" {
+@test "Main advertises E Exit and rejects numeric 4 as an Exit alias" {
   bootstrap_tool
 
-  run bash -c 'printf "4\nq\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "4\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
-  [[ "$output" == *"Q. Exit"* ]]
+  [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"4. Exit"* ]]
+  [[ "$output" == *"Please choose 1, 2, 3, or E."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
-@test "Q exits persistent session directly from supported channel selection" {
+@test "E exits persistent session directly from supported channel selection" {
   bootstrap_tool
   fake_bin="$test_root/supported-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\nq\nq\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "1\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]
-  [[ "$output" == *"Q. Exit"* ]]
+  [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"Installation cancelled."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
-@test "Q exits persistent session directly from end-of-life channel view" {
+@test "E exits persistent session directly from end-of-life channel view" {
   bootstrap_tool
   fake_bin="$test_root/eol-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\na\nq\nq\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "1\na\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]
   [[ "$output" == *"Select an end-of-life .NET channel:"* ]]
-  [[ "$output" == *"Q. Exit"* ]]
+  [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"Installation cancelled."* ]]
+  [[ "$output" == *"Exiting."* ]]
 }
 
-@test "Q exits persistent session directly from SDK version selection" {
+@test "E exits persistent session directly from SDK version selection" {
   bootstrap_tool
   fake_bin="$test_root/version-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\n1\nq\nq\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "1\n1\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]
   [[ "$output" == *"Available .NET 10.0 SDKs:"* ]]
-  [[ "$output" == *"Q. Exit"* ]]
+  [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"Installation cancelled."* ]]
+  [[ "$output" == *"Exiting."* ]]
 }
 
-@test "Q exits persistent session directly from Remove selection" {
+@test "E exits persistent session directly from Remove selection" {
   bootstrap_tool
   version='99.0.100'
   mkdir -p "$tool_root/$version"
@@ -161,11 +164,11 @@ exit 0
 EOF
   chmod +x "$tool_root/$version/dotnet"
 
-  run bash -c 'printf "2\nq\nq\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "2\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]
-  [[ "$output" == *"Q. Exit"* ]]
+  [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"Removal cancelled."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
