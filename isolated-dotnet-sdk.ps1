@@ -929,7 +929,7 @@ function Resolve-SdkArtifact {
     }
 
     return [pscustomobject]@{
-        Url = $url
+        Url  = $url
         Hash = $hash.ToLowerInvariant()
     }
 }
