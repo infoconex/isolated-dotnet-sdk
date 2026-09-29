@@ -30,7 +30,7 @@ try {
     }
     $fixtureTimer.Stop()
     $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT = $sharedHostRoot
-    Write-Host ("Shared fake dotnet host setup: {0:N2}s" -f $fixtureTimer.Elapsed.TotalSeconds)
+    Write-Output ("Shared fake dotnet host setup: {0:N2}s" -f $fixtureTimer.Elapsed.TotalSeconds)
 
     $result = Invoke-Pester `
         -Path (Join-Path $PSScriptRoot '*.Tests.ps1') `
@@ -38,7 +38,7 @@ try {
         -Output Detailed
 
     $suiteTimer.Stop()
-    Write-Host ("PowerShell behavioral validation wall time: {0:N2}s" -f $suiteTimer.Elapsed.TotalSeconds)
+    Write-Output ("PowerShell behavioral validation wall time: {0:N2}s" -f $suiteTimer.Elapsed.TotalSeconds)
 
     if ($result.Result -ne 'Passed') {
         exit 1
