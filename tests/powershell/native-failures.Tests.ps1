@@ -21,6 +21,7 @@ Describe 'PowerShell native install command failures' {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:TestHome, 'Process')
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE = $script:FixtureScript
+        $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT = $script:FakeHostOutput
         $env:FAKE_DOTNET_SDK_VERSION = $script:Version
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
         Remove-Item Env:SDK_TEST_PAYLOAD_FAILURE -ErrorAction SilentlyContinue
@@ -29,7 +30,7 @@ Describe 'PowerShell native install command failures' {
 
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
-        foreach ($name in @('ISOLATED_DOTNET_SDK_TOOL_PATH','ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE','FAKE_DOTNET_SDK_VERSION','FAKE_DOTNET_EXIT_CODE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE')) {
+        foreach ($name in @('ISOLATED_DOTNET_SDK_TOOL_PATH','ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE','ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT','FAKE_DOTNET_SDK_VERSION','FAKE_DOTNET_EXIT_CODE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
