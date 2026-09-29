@@ -81,6 +81,7 @@ JSON
 {
   "releases": [
     {"sdk":{"version":"10.0.401","files":[{"url":"https://example.invalid/dotnet/Sdk/10.0.401/a"}]}},
+    {"sdk":{"version":"10.0.400","files":[{"url":"https://example.invalid/dotnet/Sdk/10.0.400/a"}]}},
     {"sdk":{"version":"10.0.303","files":[{"url":"https://example.invalid/dotnet/Sdk/10.0.303/a"}]}}
   ]
 }
@@ -151,6 +152,22 @@ EOF
   [[ "$output" == *"Available .NET 10.0 SDKs:"* ]]
   [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"Installation cancelled."* ]]
+  [[ "$output" == *"Exiting."* ]]
+}
+
+@test "E exits persistent session directly from expanded SDK version selection" {
+  bootstrap_tool
+  fake_bin="$test_root/expanded-version-fake-bin"
+  write_global_exit_fake_curl "$fake_bin"
+
+  run bash -c 'printf "1\n1\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [ "$(count_main_prompts "$output")" -eq 1 ]
+  [[ "$output" == *"S. Show all versions"* ]]
+  [[ "$output" == *"10.0.400"* ]]
+  [[ "$output" == *"E. Exit"* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
