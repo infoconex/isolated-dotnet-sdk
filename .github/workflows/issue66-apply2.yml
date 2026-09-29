@@ -1,0 +1,98 @@
+name: Apply Issue 66 Retry
+
+on:
+  push:
+    branches:
+      - feat/66-global-exit
+    paths:
+      - .github/workflows/issue66-apply2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Apply issue 66 implementation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def exact(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count}, found {actual}: {old!r}")
+              p.write_text(text.replace(old, new))
+
+          ps = 'isolated-dotnet-sdk.ps1'
+          exact(ps, "$script:BackToMain = $false\n$script:ConfirmWasSpecified", "$script:BackToMain = $false\n$script:ExitRequested = $false\n$script:ConfirmWasSpecified")
+          exact(ps, "        Write-ToolDisplay '  3. List isolated SDKs'\n        Write-ToolDisplay '  4. Exit'\n        Write-ToolDisplay\n", "        Write-ToolDisplay '  3. List isolated SDKs'\n        Write-ToolDisplay\n        Write-ToolDisplay '  E. Exit'\n        Write-ToolDisplay\n")
+          exact(ps, "            '4' { Write-ToolInfo 'Exiting.'; return $false }\n            'q' { Write-ToolInfo 'Exiting.'; return $false }\n            'Q' { Write-ToolInfo 'Exiting.'; return $false }\n            default { Write-ToolWarning 'Please choose 1, 2, 3, or 4.' }", "            'e' { Write-ToolInfo 'Exiting.'; return $false }\n            'E' { Write-ToolInfo 'Exiting.'; return $false }\n            default { Write-ToolWarning 'Please choose 1, 2, 3, or E.' }")
+          exact(ps, "        Write-ToolDisplay '  M. Enter an exact SDK version manually'\n        Write-ToolDisplay '  Q. Cancel'\n        Write-ToolDisplay\n", "        Write-ToolDisplay '  M. Enter an exact SDK version manually'\n        if ($script:InteractiveSession) {\n            Write-ToolDisplay '  E. Exit'\n        }\n        else {\n            Write-ToolDisplay '  Q. Cancel'\n        }\n        Write-ToolDisplay\n")
+          exact(ps, "        if ($Selection -match '^[Qq]$') {\n            return $false\n        }", "        if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {\n            $script:ExitRequested = $true\n            Write-ToolInfo 'Exiting.'\n            return $false\n        }\n\n        if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {\n            return $false\n        }", 2)
+          exact(ps, "            Write-ToolDisplay '  B. Back to .NET channels'\n            Write-ToolDisplay '  M. Enter an exact SDK version manually'\n            Write-ToolDisplay '  Q. Cancel'\n            Write-ToolDisplay\n", "            Write-ToolDisplay '  B. Back to .NET channels'\n            Write-ToolDisplay '  M. Enter an exact SDK version manually'\n            if ($script:InteractiveSession) {\n                Write-ToolDisplay '  E. Exit'\n            }\n            else {\n                Write-ToolDisplay '  Q. Cancel'\n            }\n            Write-ToolDisplay\n")
+          exact(ps, "            if ($Selection -match '^[Qq]$') {\n                return $false\n            }", "            if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {\n                $script:ExitRequested = $true\n                Write-ToolInfo 'Exiting.'\n                return $false\n            }\n\n            if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {\n                return $false\n            }")
+          exact(ps, "        if ($script:InteractiveSession) {\n            Write-ToolDisplay '  B. Back to Main'\n        }\n        Write-ToolDisplay '  Q. Cancel'\n        Write-ToolDisplay\n", "        if ($script:InteractiveSession) {\n            Write-ToolDisplay '  B. Back to Main'\n            Write-ToolDisplay '  E. Exit'\n        }\n        else {\n            Write-ToolDisplay '  Q. Cancel'\n        }\n        Write-ToolDisplay\n")
+          exact(ps, "        if (-not $script:BackToMain) {\n            Write-ToolInfo 'Installation cancelled.'\n        }", "        if (-not $script:BackToMain -and -not $script:ExitRequested) {\n            Write-ToolInfo 'Installation cancelled.'\n        }")
+          exact(ps, "        if (-not $script:BackToMain) {\n            Write-ToolInfo 'Removal cancelled.'\n        }", "        if (-not $script:BackToMain -and -not $script:ExitRequested) {\n            Write-ToolInfo 'Removal cancelled.'\n        }")
+          exact(ps, "                $script:BackToMain = $false\n\n                if (-not (Select-Action))", "                $script:BackToMain = $false\n                $script:ExitRequested = $false\n\n                if (-not (Select-Action))")
+          exact(ps, "                Invoke-SelectedAction\n            }", "                Invoke-SelectedAction\n                if ($script:ExitRequested) {\n                    return\n                }\n            }")
+
+          sh = 'isolated-dotnet-sdk.sh'
+          exact(sh, '        echo "  3. List isolated SDKs"\n        echo "  4. Exit"\n        echo\n', '        echo "  3. List isolated SDKs"\n        echo\n        echo "  E. Exit"\n        echo\n')
+          exact(sh, '            4|q|Q) tool_info "Exiting."; return 1 ;;\n            *) tool_warn "Please choose 1, 2, 3, or 4." ;;', '            e|E) tool_info "Exiting."; return 1 ;;\n            *) tool_warn "Please choose 1, 2, 3, or E." ;;')
+          exact(sh, '        echo "  M. Enter an exact SDK version manually"\n        echo "  Q. Cancel"\n        echo\n', '        echo "  M. Enter an exact SDK version manually"\n        if [[ "$INTERACTIVE_SESSION" == "true" ]]; then\n            echo "  E. Exit"\n        else\n            echo "  Q. Cancel"\n        fi\n        echo\n')
+          exact(sh, '            [qQ])\n                return 1\n                ;;', '            [eE])\n                if [[ "$INTERACTIVE_SESSION" == "true" ]]; then\n                    EXIT_REQUESTED="true"\n                    tool_info "Exiting."\n                    return 1\n                fi\n                ;;\n            [qQ])\n                if [[ "$INTERACTIVE_SESSION" != "true" ]]; then\n                    return 1\n                fi\n                ;;')
+          exact(sh, '            echo "  B. Back to .NET channels"\n            echo "  M. Enter an exact SDK version manually"\n            echo "  Q. Cancel"\n            echo\n', '            echo "  B. Back to .NET channels"\n            echo "  M. Enter an exact SDK version manually"\n            if [[ "$INTERACTIVE_SESSION" == "true" ]]; then\n                echo "  E. Exit"\n            else\n                echo "  Q. Cancel"\n            fi\n            echo\n')
+          exact(sh, '                [qQ]) return 1 ;;', '                [eE])\n                    if [[ "$INTERACTIVE_SESSION" == "true" ]]; then\n                        EXIT_REQUESTED="true"\n                        tool_info "Exiting."\n                        return 1\n                    fi\n                    ;;\n                [qQ])\n                    if [[ "$INTERACTIVE_SESSION" != "true" ]]; then\n                        return 1\n                    fi\n                    ;;')
+          exact(sh, '        if [[ "$INTERACTIVE_SESSION" == "true" ]]; then\n            echo "  B. Back to Main"\n        fi\n        echo "  Q. Cancel"\n        echo\n', '        if [[ "$INTERACTIVE_SESSION" == "true" ]]; then\n            echo "  B. Back to Main"\n            echo "  E. Exit"\n        else\n            echo "  Q. Cancel"\n        fi\n        echo\n')
+          exact(sh, '            [qQ]) return 1 ;;', '            [eE])\n                if [[ "$INTERACTIVE_SESSION" == "true" ]]; then\n                    EXIT_REQUESTED="true"\n                    tool_info "Exiting."\n                    return 1\n                fi\n                ;;\n            [qQ])\n                if [[ "$INTERACTIVE_SESSION" != "true" ]]; then\n                    return 1\n                fi\n                ;;')
+          exact(sh, '    tool_info "Installation cancelled."\n    return 1\n}', '    if [[ "$EXIT_REQUESTED" != "true" ]]; then\n        tool_info "Installation cancelled."\n    fi\n    return 1\n}')
+          exact(sh, '    tool_info "Removal cancelled."\n    return 1\n}', '    if [[ "$EXIT_REQUESTED" != "true" ]]; then\n        tool_info "Removal cancelled."\n    fi\n    return 1\n}')
+          exact(sh, 'INTERACTIVE_SESSION="false"\n', 'INTERACTIVE_SESSION="false"\nEXIT_REQUESTED="false"\n')
+          exact(sh, '        ACTION=""\n        VERSION=""\n\n        if ! select_action;', '        ACTION=""\n        VERSION=""\n        EXIT_REQUESTED="false"\n\n        if ! select_action;')
+          exact(sh, '        run_selected_action\n    done', '        run_selected_action\n        if [[ "$EXIT_REQUESTED" == "true" ]]; then\n            exit 0\n        fi\n    done')
+
+          lifecycle = {
+              'tests/powershell/interactive-lifecycle.Tests.ps1': [("@('3', '4')", "@('3', 'e')"), ("@('2', '4')", "@('2', 'e')"), ("@('1', '4')", "@('1', 'e')"), ("@('1', 'b', '4')", "@('1', 'b', 'e')"), ("@('2', 'b', '4')", "@('2', 'b', 'e')")],
+              'tests/bash/interactive-lifecycle.bats': [('printf "3\\n4\\n"', 'printf "3\\ne\\n"'), ('printf "2\\n4\\n"', 'printf "2\\ne\\n"'), ('printf "1\\n4\\n"', 'printf "1\\ne\\n"'), ('printf "1\\nb\\n4\\n"', 'printf "1\\nb\\ne\\n"'), ('printf "2\\nb\\n4\\n"', 'printf "2\\nb\\ne\\n"'), ('printf "1\\n1\\n1\\n3\\n2\\n1\\ny\\n4\\n"', 'printf "1\\n1\\n1\\n3\\n2\\n1\\ny\\ne\\n"')],
+          }
+          for path, pairs in lifecycle.items():
+              p = Path(path)
+              text = p.read_text()
+              for old, new in pairs:
+                  if old not in text:
+                      raise SystemExit(f"{path}: missing {old!r}")
+                  text = text.replace(old, new)
+              p.write_text(text)
+
+          p = Path('tests/e2e/bash/interactive.sh')
+          text = p.read_text()
+          old = "1\\n%s\\nB\\n%s\\nM\\n%s\\n3\\n2\\n1\\n4\\n"
+          if old not in text:
+              raise SystemExit('Bash E2E exit input not found')
+          p.write_text(text.replace(old, "1\\n%s\\nB\\n%s\\nM\\n%s\\n3\\n2\\n1\\ne\\n"))
+
+          p = Path('tests/e2e/powershell/interactive.ps1')
+          text = p.read_text()
+          if "        '4'\n" not in text:
+              raise SystemExit('PowerShell E2E exit input not found')
+          p.write_text(text.replace("        '4'\n", "        'e'\n", 1))
+          PY
+
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/issue66-apply.yml .github/workflows/issue66-apply2.yml
+          git add isolated-dotnet-sdk.ps1 isolated-dotnet-sdk.sh tests
+          git commit -m 'feat: standardize global interactive exit'
+          git push origin HEAD:feat/66-global-exit
