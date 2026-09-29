@@ -1,0 +1,86 @@
+name: Issue 75 capture
+
+on:
+  push:
+    branches:
+      - docs/issue-75-isolation-visual
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture Linux isolation walkthrough
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run real isolation walkthrough
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo mkdir -p /home/demo
+          sudo chown "$(id -u):$(id -g)" /home/demo
+
+          export HOME=/home/demo
+          export DOTNET_CLI_HOME="$HOME/.dotnet-cli"
+          export DOTNET_CLI_TELEMETRY_OPTOUT=1
+          export DOTNET_NOLOGO=1
+          export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+          mkdir -p "$DOTNET_CLI_HOME"
+          cd "$HOME"
+
+          # Bootstrap the exact checked-out tool into the normal saved-tool path.
+          bash "$GITHUB_WORKSPACE/isolated-dotnet-sdk.sh" list >/dev/null 2>&1
+
+          system_before="$(dotnet --version)"
+          path_before="$PATH"
+
+          {
+            printf '$ dotnet --version\n'
+            dotnet --version
+            printf '\n$ ~/dotnet-sdks/isolated-dotnet-sdk.sh install 10.0.100 --yes\n'
+            "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install 10.0.100 --yes
+          } 2>&1 | tee "$RUNNER_TEMP/01-install.txt"
+
+          {
+            printf '$ ~/dotnet-sdks/isolated-dotnet-sdk.sh list\n'
+            "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list
+          } 2>&1 | tee "$RUNNER_TEMP/02-list.txt"
+
+          {
+            printf '$ ~/dotnet-sdks/10.0.100/dotnet --info\n'
+            "$HOME/dotnet-sdks/10.0.100/dotnet" --info
+            printf '\n$ dotnet --version\n'
+            dotnet --version
+          } 2>&1 | tee "$RUNNER_TEMP/03-host.txt"
+
+          isolated_version="$("$HOME/dotnet-sdks/10.0.100/dotnet" --version)"
+          system_after="$(dotnet --version)"
+
+          [[ "$isolated_version" == '10.0.100' ]]
+          [[ "$system_after" == "$system_before" ]]
+          [[ "$PATH" == "$path_before" ]]
+          "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list | grep -Fxq '  10.0.100'
+
+          printf 'system_before=%s\nsystem_after=%s\nisolated=%s\npath_unchanged=true\n' \
+            "$system_before" "$system_after" "$isolated_version" \
+            > "$RUNNER_TEMP/04-assertions.txt"
+
+      - name: Upload capture transcript
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: issue-75-linux-capture
+          path: |
+            ${{ runner.temp }}/01-install.txt
+            ${{ runner.temp }}/02-list.txt
+            ${{ runner.temp }}/03-host.txt
+            ${{ runner.temp }}/04-assertions.txt
+          if-no-files-found: error
+          retention-days: 1
