@@ -75,6 +75,42 @@ curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/
 
 Rerunning either development command may refresh the saved tool from newer `main` source.
 
+## Visual Quick Start — Isolation in Practice
+
+The three visuals below use the supported Linux/Bash mapping and current real-E2E behavior. CI-only home-directory prefixes and timestamps are normalized so the isolated root is readable as `~/dotnet-sdks`; the product output itself is not invented. Windows uses PowerShell and `dotnet.exe`, while macOS uses Bash. See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the supported platform mapping.
+
+The fixed `10.0.100` shown here is the repository's reproducible real-E2E target, not a recommendation to prefer it over a newer serviced SDK. Substitute the exact supported SDK version appropriate to your project.
+
+### 1. Install an exact SDK into the isolated root
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install 10.0.100 --yes
+```
+
+`--yes` only bypasses supported confirmation prompts; the exact version and isolated destination are still explicit.
+
+![Linux Bash E2E-validated transcript showing .NET SDK 10.0.100 installed successfully under ~/dotnet-sdks/10.0.100.](docs/images/isolation-install.svg)
+
+### 2. List the isolated installation
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list
+```
+
+![Linux Bash E2E-validated transcript listing .NET SDK 10.0.100 under the isolated ~/dotnet-sdks root.](docs/images/isolation-list.svg)
+
+### 3. Invoke that version's host directly
+
+```bash
+"$HOME/dotnet-sdks/10.0.100/dotnet" --info
+```
+
+The E2E check uses `--version` for a compact assertion that this exact version-specific host reports `10.0.100`; normal `dotnet` arguments such as `--info` work through the same host path.
+
+![Linux Bash real E2E direct-host check showing ~/dotnet-sdks/10.0.100/dotnet reporting version 10.0.100.](docs/images/isolation-direct-host.svg)
+
+Nothing in this flow adds the isolated SDK to `PATH` or replaces the normal system `dotnet` installation. The explicit version-specific host path is what selects the isolated SDK. This is installation isolation rather than a security sandbox; see [`docs/filesystem-safety.md`](docs/filesystem-safety.md) and [`docs/behavioral-parity.md`](docs/behavioral-parity.md) for the detailed contract.
+
 ## Requirements
 
 The supported product mapping is:
