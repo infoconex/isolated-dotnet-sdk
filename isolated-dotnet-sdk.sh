@@ -972,7 +972,9 @@ install_isolated_sdk() {
     trap 'cleanup_install_transaction "$metadata_file" "$archive_file" "$staging_dir" || true' EXIT
 
     tool_info "Loading Microsoft release metadata for SDK $VERSION..."
-    if ! curl -fsSL "$metadata_url" -o "$metadata_file"; then
+    if curl -fsSL "$metadata_url" -o "$metadata_file"; then
+        :
+    else
         status=$?
         tool_fail "Unable to load Microsoft release metadata for SDK $VERSION with exit code $status."
     fi
@@ -998,7 +1000,9 @@ install_isolated_sdk() {
     expected_hash="$(printf '%s' "$expected_hash" | tr '[:upper:]' '[:lower:]')"
 
     tool_info "Downloading .NET SDK $VERSION payload..."
-    if ! curl -fsSL "$artifact_url" -o "$archive_file"; then
+    if curl -fsSL "$artifact_url" -o "$archive_file"; then
+        :
+    else
         status=$?
         tool_fail "Unable to download the .NET SDK $VERSION payload with exit code $status."
     fi
@@ -1015,7 +1019,9 @@ install_isolated_sdk() {
     staged_dotnet="$staging_dir/dotnet"
 
     tool_info "Extracting verified .NET SDK $VERSION payload..."
-    if ! tar -xzf "$archive_file" -C "$staging_dir"; then
+    if tar -xzf "$archive_file" -C "$staging_dir"; then
+        :
+    else
         status=$?
         tool_fail "Unable to extract the verified .NET SDK $VERSION payload with exit code $status."
     fi

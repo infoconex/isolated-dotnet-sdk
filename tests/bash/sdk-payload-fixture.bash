@@ -129,7 +129,11 @@ write_payload_metadata() {
       "sdk": {
         "version": "$version",
         "files": [
-          { "rid": "$rid", "url": "$artifact_url", "hash": "$hash" }
+          {
+            "rid": "$rid",
+            "url": "$artifact_url",
+            "hash": "$hash"
+          }
         ]
       }
     }
