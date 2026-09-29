@@ -1,0 +1,73 @@
+name: Issue 63 RED-GREEN
+
+on:
+  push:
+    branches:
+      - fix/63-interactive-menu-spacing
+
+permissions:
+  contents: read
+
+jobs:
+  spacing:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify Bash persistent Main spacing
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_root="$(mktemp -d)"
+          trap 'rm -rf "$test_root"' EXIT
+          mkdir -p "$test_root/home"
+          cp isolated-dotnet-sdk.sh "$test_root/tool.sh"
+          chmod +x "$test_root/tool.sh"
+          printf '3\ne\n' | env HOME="$test_root/home" "$test_root/tool.sh" >"$test_root/output" 2>&1
+          python3 - "$test_root/output" <<'PY'
+          import pathlib, re, sys
+          text = pathlib.Path(sys.argv[1]).read_text()
+          assert re.search(r'Selection:[^\r\n]*\r?\n\r?\nisolated-dotnet-sdk: Isolated SDKs under', text), text
+          assert re.search(r'  None\r?\n\r?\nisolated-dotnet-sdk: What would you like to do\?', text), text
+          assert not re.search(r'Selection:[^\r\n]*\r?\n(?:\r?\n){2,}isolated-dotnet-sdk: Isolated SDKs under', text), text
+          PY
+
+      - name: Verify PowerShell persistent Main spacing
+        shell: pwsh
+        run: |
+          $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString('N'))
+          $home = Join-Path $testRoot 'home'
+          New-Item -ItemType Directory -Path $home -Force | Out-Null
+          try {
+              $tool = Join-Path $testRoot 'tool.ps1'
+              Copy-Item ./isolated-dotnet-sdk.ps1 $tool
+              $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+              $startInfo.FileName = 'pwsh'
+              $startInfo.UseShellExecute = $false
+              $startInfo.RedirectStandardInput = $true
+              $startInfo.RedirectStandardOutput = $true
+              $startInfo.RedirectStandardError = $true
+              $startInfo.ArgumentList.Add('-NoProfile')
+              $startInfo.ArgumentList.Add('-File')
+              $startInfo.ArgumentList.Add($tool)
+              $startInfo.Environment['HOME'] = $home
+              $startInfo.Environment['USERPROFILE'] = $home
+              $process = [System.Diagnostics.Process]::new()
+              $process.StartInfo = $startInfo
+              [void]$process.Start()
+              $process.StandardInput.WriteLine('3')
+              $process.StandardInput.WriteLine('e')
+              $process.StandardInput.Close()
+              $stdout = $process.StandardOutput.ReadToEndAsync()
+              $stderr = $process.StandardError.ReadToEndAsync()
+              $process.WaitForExit()
+              if ($process.ExitCode -ne 0) { throw "Tool failed: $($stderr.GetAwaiter().GetResult())" }
+              $output = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
+              if ($output -notmatch 'Selection:[^\r\n]*\r?\n\r?\nisolated-dotnet-sdk: Isolated SDKs under') { throw $output }
+              if ($output -notmatch '  None\r?\n\r?\nisolated-dotnet-sdk: What would you like to do\?') { throw $output }
+              if ($output -match 'Selection:[^\r\n]*\r?\n(?:\r?\n){2,}isolated-dotnet-sdk: Isolated SDKs under') { throw $output }
+          }
+          finally {
+              Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+          }
