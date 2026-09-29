@@ -80,6 +80,8 @@ Describe 'PowerShell interactive lifecycle' {
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
         $result.Output | Should -Match 'Isolated SDKs under'
+        $result.Output | Should -Match '  None\r?\n\r?\nisolated-dotnet-sdk: What would you like to do\?'
+        $result.Output | Should -Not -Match '  None\r?\n(?:\r?\n){2,}isolated-dotnet-sdk: What would you like to do\?'
         $result.Output | Should -Match 'Exiting\.'
     }
 
