@@ -174,14 +174,14 @@ Describe 'PowerShell process-level behavior' {
         Test-Path -LiteralPath $installDirectory | Should -BeTrue
     }
 
-    It 'reports install-helper download failure with repository-owned context' {
+    It 'reports release-metadata download failure with repository-owned context' {
         Install-TestTool
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
 
         $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "transport-specific-helper-detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match "Unable to download Microsoft's dotnet-install\.ps1 script"
+        ($failureOutput -join [Environment]::NewLine) | Should -Match "Unable to load valid Microsoft release metadata for SDK 99\.0\.100"
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'installation completed successfully'
     }
 

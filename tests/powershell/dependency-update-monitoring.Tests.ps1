@@ -10,7 +10,6 @@ Describe 'Pinned dependency update discovery' {
                 ShellCheckVersion = '0.11.0'
                 BatsVersion = '1.14.0'
                 BatsCommit = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-                DotNetInstallCommit = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
             }
         }
 
@@ -20,9 +19,7 @@ Describe 'Pinned dependency update discovery' {
                 [string]$PesterVersion = '6.2.0',
                 [string]$ShellCheckVersion = 'v0.11.0',
                 [string]$BatsVersion = 'v1.14.0',
-                [string]$BatsCommit = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-                [string]$DotNetVersion = 'v2026.07.21',
-                [string]$DotNetCommit = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+                [string]$BatsCommit = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
             )
 
             return [pscustomobject]@{
@@ -42,11 +39,6 @@ Describe 'Pinned dependency update discovery' {
                     Version = $BatsVersion
                     Commit = $BatsCommit
                     SourceUrl = "https://example.invalid/Bats/$BatsVersion"
-                }
-                DotNetInstall = [pscustomobject]@{
-                    Version = $DotNetVersion
-                    Commit = $DotNetCommit
-                    SourceUrl = "https://example.invalid/dotnet-install/$DotNetVersion"
                 }
             }
         }
@@ -70,22 +62,18 @@ Describe 'Pinned dependency update discovery' {
             -PesterVersion '6.3.0' `
             -ShellCheckVersion 'v0.12.0' `
             -BatsVersion 'v1.15.0' `
-            -BatsCommit 'cccccccccccccccccccccccccccccccccccccccc' `
-            -DotNetVersion 'v2026.10.01' `
-            -DotNetCommit 'dddddddddddddddddddddddddddddddddddddddd'
+            -BatsCommit 'cccccccccccccccccccccccccccccccccccccccc'
 
         $updates = @(Get-DependencyUpdateRecord -Current (Get-TestCurrentPin) -Candidate $candidate)
         $report = ConvertTo-DependencyUpdateReport -Update $updates
 
-        $updates.Count | Should -Be 5
+        $updates.Count | Should -Be 4
         $report | Should -Match 'PSScriptAnalyzer'
         $report | Should -Match 'Pester'
         $report | Should -Match 'ShellCheck'
         $report | Should -Match 'Linux x64 release archive SHA-256'
         $report | Should -Match 'Bats-core'
         $report | Should -Match 'cccccccccccccccccccccccccccccccccccccccc'
-        $report | Should -Match 'Microsoft dotnet/install-scripts'
-        $report | Should -Match 'blob IDs'
         $report | Should -Match 'https://example\.invalid/'
     }
 
