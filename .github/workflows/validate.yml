@@ -93,12 +93,24 @@ jobs:
 
       - name: Run PSScriptAnalyzer
         shell: pwsh
-        run: ./scripts/Invoke-PSScriptAnalyzer.ps1
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSScriptAnalyzer.ps1
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
 
       - name: Check PowerShell formatting
         shell: pwsh
-        run: ./scripts/Invoke-PSFormatter.ps1 -Check
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
 
       - name: Run PowerShell behavioral tests
         shell: pwsh
-        run: ./tests/powershell/run-tests.ps1
+        run: |
+          & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
