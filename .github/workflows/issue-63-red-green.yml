@@ -36,8 +36,8 @@ jobs:
         shell: pwsh
         run: |
           $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString('N'))
-          $home = Join-Path $testRoot 'home'
-          New-Item -ItemType Directory -Path $home -Force | Out-Null
+          $testHome = Join-Path $testRoot 'home'
+          New-Item -ItemType Directory -Path $testHome -Force | Out-Null
           try {
               $tool = Join-Path $testRoot 'tool.ps1'
               Copy-Item ./isolated-dotnet-sdk.ps1 $tool
@@ -50,8 +50,8 @@ jobs:
               $startInfo.ArgumentList.Add('-NoProfile')
               $startInfo.ArgumentList.Add('-File')
               $startInfo.ArgumentList.Add($tool)
-              $startInfo.Environment['HOME'] = $home
-              $startInfo.Environment['USERPROFILE'] = $home
+              $startInfo.Environment['HOME'] = $testHome
+              $startInfo.Environment['USERPROFILE'] = $testHome
               $process = [System.Diagnostics.Process]::new()
               $process.StartInfo = $startInfo
               [void]$process.Start()
