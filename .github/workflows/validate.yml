@@ -6,7 +6,6 @@ on:
     branches:
       - main
       - 'release/**'
-      - feat/66-global-exit
   pull_request:
 
 permissions:
@@ -229,7 +228,7 @@ jobs:
         run: |
           & pwsh -NoProfile -File ./scripts/Invoke-PSScriptAnalyzer.ps1
           if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
+            exit $LASTEXITCODE
           }
 
       - name: Check PowerShell formatting
@@ -237,7 +236,7 @@ jobs:
         run: |
           & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
           if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
+            exit $LASTEXITCODE
           }
 
       - name: Run PowerShell behavioral tests
@@ -245,5 +244,5 @@ jobs:
         run: |
           & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
           if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
+            exit $LASTEXITCODE
           }
