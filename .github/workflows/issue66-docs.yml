@@ -1,0 +1,81 @@
+name: Update Issue 66 Docs
+
+on:
+  push:
+    branches:
+      - feat/66-global-exit
+    paths:
+      - .github/workflows/issue66-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Update navigation documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"{path}: expected text not found: {old!r}")
+              p.write_text(text.replace(old, new))
+
+          replace('README.md',
+              '  3. List isolated SDKs\n  4. Exit\n\nSelection:',
+              '  3. List isolated SDKs\n\n  E. Exit\n\nSelection:')
+          replace('README.md',
+              '  A. Show end-of-life channels\n  M. Enter an exact SDK version manually\n  Q. Cancel',
+              '  A. Show end-of-life channels\n  B. Back to Main\n  M. Enter an exact SDK version manually\n  E. Exit')
+          replace('README.md',
+              'After selecting a channel, the tool starts with a compact SDK list: Microsoft\'s `latest-sdk` when available plus the newest SDK from each other feature band. Older servicing versions stay available through **Show all versions**. Versions already present on the machine are marked so you can see where they are installed. In a persistent interactive session, **Back** returns from SDK selection to channel selection, from channel selection to Main, and from Remove selection to Main; explicit one-shot commands keep cancellation semantics instead.',
+              'After selecting a channel, the tool starts with a compact SDK list: Microsoft\'s `latest-sdk` when available plus the newest SDK from each other feature band. Older servicing versions stay available through **Show all versions**. Versions already present on the machine are marked so you can see where they are installed. In a persistent interactive session, **Back** returns from SDK selection to channel selection, from channel selection to Main, and from Remove selection to Main. **E. Exit** leaves the persistent session directly from any selection menu. Explicit one-shot interactive commands remain one-shot and keep `Q. Cancel` where cancellation is the appropriate outcome.')
+
+          p = Path('docs/interactive-sessions.md')
+          text = p.read_text()
+          text = text.replace(
+              'A no-action invocation stays in one interactive session. After a successful Install, List, or Remove operation, the tool returns to Main. Normal cancellation or a no-change result also returns to Main. Choose **Exit** from Main when you are finished.',
+              'A no-action invocation stays in one interactive session. After a successful Install, List, or Remove operation, the tool returns to Main. Normal cancellation or a no-change result also returns to Main. `E`/`e` is the global persistent-session Exit command and is available from Main and each persistent selection menu, so you do not need to navigate back to Main before exiting.')
+          text = text.replace(
+              '## Back and cancellation',
+              '## Back, Exit, and cancellation')
+          text = text.replace(
+              '`Q`/`q` remains the explicit cancellation choice on selection pickers. It is distinct from Back: cancellation ends the current operation, while Back moves to the documented parent selection menu.',
+              'Persistent selection menus use `E`/`e` for Exit and do not expose a redundant menu-level Cancel choice where Back already provides the navigation path. `B`/`b` moves to the documented parent selection menu. Explicit one-shot Install/Remove selection may still use `Q`/`q` to cancel that one-shot command successfully, because there is no persistent session to exit.')
+          text = text.replace(
+              '- manual exact-version entry remains available.',
+              '- manual exact-version entry remains available;\n- `E. Exit` leaves a persistent interactive session directly from either compact or expanded picker views, while explicit one-shot pickers retain `Q. Cancel`.')
+          p.write_text(text)
+
+          p = Path('docs/behavioral-parity.md')
+          text = p.read_text()
+          text = text.replace(
+              'When no action or exact version is supplied, the tool enters a persistent interactive session. The session shows Main, performs one selected operation, and returns to Main after a normal completion or a normal cancellation/no-change outcome. It remains active until the user explicitly selects Exit or an operational failure terminates the process.',
+              'When no action or exact version is supplied, the tool enters a persistent interactive session. The session shows Main, performs one selected operation, and returns to Main after a normal completion or a normal cancellation/no-change outcome. `E`/`e` is the global Exit command from Main and persistent selection menus. The session remains active until the user selects Exit or an operational failure terminates the process.')
+          text = text.replace(
+              'Interactive navigation is deliberately limited:\n\n- Install channel selection provides Back to Main;\n- Install SDK version selection provides Back to channel selection;\n- Remove SDK selection provides Back to Main.',
+              'Interactive navigation is deliberately limited:\n\n- Main and each persistent selection menu provide `E. Exit`;\n- Install channel selection provides Back to Main;\n- Install SDK version selection provides Back to channel selection;\n- Remove SDK selection provides Back to Main;\n- persistent selection menus do not expose redundant `Q. Cancel` actions when Back already provides the relevant workflow navigation;\n- explicit one-shot interactive selection may retain `Q. Cancel` as a successful no-change outcome.')
+          text = text.replace(
+              'An explicit user decision to cancel is different from input failure. A blank/no answer at a default-no confirmation and `q`/`Q` at a documented picker remain successful no-change outcomes.',
+              'An explicit user decision to cancel is different from input failure. A blank/no answer at a default-no confirmation remains a successful no-change outcome. `q`/`Q` remains a documented cancellation command only for explicit one-shot selection; persistent navigation uses `E`/`e` to exit and `B`/`b` to go back.')
+          p.write_text(text)
+          PY
+
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/issue66-docs.yml
+          git add README.md docs/interactive-sessions.md docs/behavioral-parity.md
+          git commit -m 'docs: document global interactive exit'
+          git push origin HEAD:feat/66-global-exit
