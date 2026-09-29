@@ -16,9 +16,9 @@ The versioned GitHub-hosted runner labels make major OS/architecture transitions
 
 The product scripts intentionally use shell-native facilities and a small set of platform tools.
 
-- Windows execution requires PowerShell 7. The repository validation suite currently requires PowerShell 7.4 or newer because of the pinned Pester major version.
-- Linux/macOS execution requires Bash plus standard Unix tools used by the script (`awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, `rm`, and `curl`).
-- Bash installer-integrity verification accepts either `sha256sum` or `shasum -a 256`; this is the deliberate GNU/Linux versus macOS portability boundary.
+- Windows execution requires PowerShell 7. The repository validation suite currently requires PowerShell 7.4 or newer because of the pinned Pester major version. SDK payload verification uses PowerShell's `Get-FileHash -Algorithm SHA512` and `Expand-Archive`.
+- Linux/macOS execution requires Bash plus standard Unix tools used by the script (`awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, `rm`, `tar`, and `curl`).
+- Bash SDK-payload integrity verification accepts either `sha512sum` or `shasum -a 512`; this is the deliberate GNU/Linux versus macOS portability boundary.
 - Product SDK operations use the platform's .NET host name: `dotnet.exe` on Windows and executable `dotnet` on Linux/macOS.
 - Repository validation has additional development dependencies documented in [`testing.md`](testing.md), including Pester, Bats-core, PSScriptAnalyzer, ShellCheck, Git, and `jq`.
 
@@ -30,7 +30,7 @@ PowerShell uses .NET/PowerShell path APIs such as `Join-Path` and `[System.IO.Pa
 
 The tool does not define a synthetic cross-platform case-normalization layer. Path and filename case behavior follows the host filesystem and runtime. Product correctness must not depend on a case-sensitive or case-insensitive filesystem beyond platform-native host naming (`dotnet.exe` versus `dotnet`).
 
-Bootstrap candidates, release-metadata temporary files, install helpers, and SDK staging directories are created under the isolated SDK root. Keeping replacement/promotion on the same root avoids introducing cross-filesystem rename assumptions into normal product behavior.
+Bootstrap candidates, release-metadata temporary files, downloaded SDK payload archives, and SDK staging directories are created under the isolated SDK root. Keeping replacement/promotion on the same root avoids introducing cross-filesystem rename assumptions into normal product behavior.
 
 Filesystem failure mechanics differ by operating system. Windows may reject replacement/deletion because a file is locked or in use; Unix-like systems more commonly surface permission or directory-entry failures. The portable contract is the observable result already defined in [`filesystem-safety.md`](filesystem-safety.md): failure propagates, destructive scope does not broaden, recovery state is preserved where specified, and success is not reported falsely.
 
@@ -67,7 +67,7 @@ The `Validate` workflow maps product implementations to the supported operating 
 - ShellCheck runs once on `ubuntu-24.04`;
 - PowerShell parser validation, PSScriptAnalyzer, formatting checks, and Pester behavioral tests run on `windows-2025`.
 
-The macOS label selects GitHub's arm64 hosted-runner family. The Linux and Windows labels select x64 hosted-runner families. These are validation choices, not a claim that product support is limited to only those processor architectures.
+The macOS label selects GitHub's arm64 hosted-runner family. The Linux and Windows labels select x64 hosted-runner families. These are validation choices, not a claim that product support is limited to only those processor architectures. SDK acquisition maps the current supported OS/architecture to the corresponding Microsoft runtime identifier and fails closed when it cannot map the platform or find exactly one matching archive/checksum entry.
 
 This mapping validates the supported product combinations while avoiding unsupported shell/OS combinations. Runner-label changes are intentional maintenance changes: they should be reviewed with the same cross-platform validation before being adopted. Patch revisions inside a selected GitHub-hosted image family remain GitHub-managed and are visible in workflow job logs.
 
@@ -79,6 +79,6 @@ This document records platform support and intentional mechanics. It does not:
 - require identical implementation structure across shells;
 - add compatibility layers for hypothetical case, path, or locking behavior;
 - replace deterministic failure injection with timing-sensitive native races;
-- redesign stable bootstrap or supply-chain policy from Issues #21/#22;
+- redesign stable bootstrap or supply-chain policy from Issues #21/#22 beyond the SDK-payload verification hardening captured by Issue #72;
 - require self-hosted runners or immutable custom runner images;
 - change the CLI/help and operational-documentation contract completed by Issue #23.
