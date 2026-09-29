@@ -1139,10 +1139,12 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
             exit 0
         fi
 
+        echo
         run_selected_action
         if [[ "$EXIT_REQUESTED" == "true" ]]; then
             exit 0
         fi
+        echo
     done
 fi
 

@@ -98,6 +98,8 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [[ "$output" == *"Isolated SDKs under"* ]]
+  [[ "$output" == *$'  None\n\nisolated-dotnet-sdk: What would you like to do?'* ]]
+  [[ "$output" != *$'  None\n\n\nisolated-dotnet-sdk: What would you like to do?'* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
