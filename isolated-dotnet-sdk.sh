@@ -264,28 +264,16 @@ sdk_version_sort_key() {
 }
 
 sort_sdk_versions() {
-    local remaining=("$@")
-    local best_index
-    local best_key
-    local candidate_key
-    local i
+    local version
+    local key
+    local index=0
+    local tab=$'\t'
 
-    while (( ${#remaining[@]} > 0 )); do
-        best_index=0
-        best_key="$(sdk_version_sort_key "${remaining[0]}")"
-
-        for ((i=1; i<${#remaining[@]}; i++)); do
-            candidate_key="$(sdk_version_sort_key "${remaining[$i]}")"
-            if [[ "$candidate_key" > "$best_key" ]]; then
-                best_index=$i
-                best_key="$candidate_key"
-            fi
-        done
-
-        printf '%s\n' "${remaining[$best_index]}"
-        unset 'remaining[best_index]'
-        remaining=("${remaining[@]}")
-    done
+    for version in "$@"; do
+        key="$(sdk_version_sort_key "$version")"
+        printf '%s\t%09d\t%s\n' "$key" "$index" "$version"
+        index=$((index + 1))
+    done | LC_ALL=C sort -t "$tab" -k1,1r -k2,2n | cut -f3-
 }
 
 sdk_feature_band() {
@@ -951,6 +939,7 @@ install_isolated_sdk() {
     fi
 
     if mv "$staging_dir" "$install_dir"; then
+        # Promotion moved the staged SDK to its final path; cleanup must no longer target it.
         staging_dir=""
     else
         status=$?
