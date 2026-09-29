@@ -341,7 +341,8 @@ select_action() {
         echo "  1. Install an SDK"
         echo "  2. Remove an isolated SDK"
         echo "  3. List isolated SDKs"
-        echo "  4. Exit"
+        echo
+        echo "  E. Exit"
         echo
         read_tool_input "Selection: "
         selection="$TOOL_INPUT"
@@ -350,8 +351,8 @@ select_action() {
             1) ACTION="install"; return 0 ;;
             2) ACTION="remove"; return 0 ;;
             3) ACTION="list"; return 0 ;;
-            4|q|Q) tool_info "Exiting."; return 1 ;;
-            *) tool_warn "Please choose 1, 2, 3, or 4." ;;
+            e|E) tool_info "Exiting."; return 1 ;;
+            *) tool_warn "Please choose 1, 2, 3, or E." ;;
         esac
     done
 }
@@ -449,7 +450,11 @@ select_install_version() {
             echo "  B. Back to Main"
         fi
         echo "  M. Enter an exact SDK version manually"
-        echo "  Q. Cancel"
+        if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+            echo "  E. Exit"
+        else
+            echo "  Q. Cancel"
+        fi
         echo
         read_tool_input "Selection: "
         selection="$TOOL_INPUT"
@@ -462,8 +467,17 @@ select_install_version() {
                 validate_version
                 return 0
                 ;;
+            [eE])
+                if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    EXIT_REQUESTED="true"
+                    tool_info "Exiting."
+                    return 1
+                fi
+                ;;
             [qQ])
-                return 1
+                if [[ "$INTERACTIVE_SESSION" != "true" ]]; then
+                    return 1
+                fi
                 ;;
             [bB])
                 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
@@ -583,7 +597,11 @@ select_install_version() {
             fi
             echo "  B. Back to .NET channels"
             echo "  M. Enter an exact SDK version manually"
-            echo "  Q. Cancel"
+            if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                echo "  E. Exit"
+            else
+                echo "  Q. Cancel"
+            fi
             echo
             read_tool_input "Selection: "
             selection="$TOOL_INPUT"
@@ -607,7 +625,18 @@ select_install_version() {
                     validate_version
                     return 0
                     ;;
-                [qQ]) return 1 ;;
+                [eE])
+                    if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                        EXIT_REQUESTED="true"
+                        tool_info "Exiting."
+                        return 1
+                    fi
+                    ;;
+                [qQ])
+                    if [[ "$INTERACTIVE_SESSION" != "true" ]]; then
+                        return 1
+                    fi
+                    ;;
             esac
 
             if [[ "$selection" =~ ^[0-9]+$ ]] && \
@@ -652,8 +681,10 @@ select_remove_version() {
         echo
         if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
             echo "  B. Back to Main"
+            echo "  E. Exit"
+        else
+            echo "  Q. Cancel"
         fi
-        echo "  Q. Cancel"
         echo
         read_tool_input "Selection: "
         selection="$TOOL_INPUT"
@@ -664,7 +695,18 @@ select_remove_version() {
                     return 2
                 fi
                 ;;
-            [qQ]) return 1 ;;
+            [eE])
+                if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    EXIT_REQUESTED="true"
+                    tool_info "Exiting."
+                    return 1
+                fi
+                ;;
+            [qQ])
+                if [[ "$INTERACTIVE_SESSION" != "true" ]]; then
+                    return 1
+                fi
+                ;;
         esac
 
         if [[ "$selection" =~ ^[0-9]+$ ]] && \
@@ -696,7 +738,9 @@ resolve_install_version() {
         return 2
     fi
 
-    tool_info "Installation cancelled."
+    if [[ "$EXIT_REQUESTED" != "true" ]]; then
+        tool_info "Installation cancelled."
+    fi
     return 1
 }
 
@@ -718,7 +762,9 @@ resolve_remove_version() {
         return 2
     fi
 
-    tool_info "Removal cancelled."
+    if [[ "$EXIT_REQUESTED" != "true" ]]; then
+        tool_info "Removal cancelled."
+    fi
     return 1
 }
 
@@ -1037,6 +1083,7 @@ ACTION=""
 VERSION=""
 YES="false"
 INTERACTIVE_SESSION="false"
+EXIT_REQUESTED="false"
 
 if [[ $# -gt 0 ]]; then
     case "$1" in
@@ -1086,12 +1133,16 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
     while true; do
         ACTION=""
         VERSION=""
+        EXIT_REQUESTED="false"
 
         if ! select_action; then
             exit 0
         fi
 
         run_selected_action
+        if [[ "$EXIT_REQUESTED" == "true" ]]; then
+            exit 0
+        fi
     done
 fi
 

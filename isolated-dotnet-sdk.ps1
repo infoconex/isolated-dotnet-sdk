@@ -81,6 +81,7 @@ $script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
 $script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
 $script:InteractiveSession = -not $script:ActionWasSpecified -and -not $script:VersionWasSpecified
 $script:BackToMain = $false
+$script:ExitRequested = $false
 $script:ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
 $script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParameters['Confirm'] } else { $false }
 $script:WhatIfWasSpecified = $PSBoundParameters.ContainsKey('WhatIf')
@@ -440,7 +441,8 @@ function Select-Action {
         Write-ToolDisplay '  1. Install an SDK'
         Write-ToolDisplay '  2. Remove an isolated SDK'
         Write-ToolDisplay '  3. List isolated SDKs'
-        Write-ToolDisplay '  4. Exit'
+        Write-ToolDisplay
+        Write-ToolDisplay '  E. Exit'
         Write-ToolDisplay
 
         $Selection = Read-ToolInput 'Selection'
@@ -449,10 +451,9 @@ function Select-Action {
             '1' { $script:Action = 'Install'; return $true }
             '2' { $script:Action = 'Remove'; return $true }
             '3' { $script:Action = 'List'; return $true }
-            '4' { Write-ToolInfo 'Exiting.'; return $false }
-            'q' { Write-ToolInfo 'Exiting.'; return $false }
-            'Q' { Write-ToolInfo 'Exiting.'; return $false }
-            default { Write-ToolWarning 'Please choose 1, 2, 3, or 4.' }
+            'e' { Write-ToolInfo 'Exiting.'; return $false }
+            'E' { Write-ToolInfo 'Exiting.'; return $false }
+            default { Write-ToolWarning 'Please choose 1, 2, 3, or E.' }
         }
     }
 }
@@ -594,7 +595,12 @@ function Select-InstallVersion {
             Write-ToolDisplay '  B. Back to Main'
         }
         Write-ToolDisplay '  M. Enter an exact SDK version manually'
-        Write-ToolDisplay '  Q. Cancel'
+        if ($script:InteractiveSession) {
+            Write-ToolDisplay '  E. Exit'
+        }
+        else {
+            Write-ToolDisplay '  Q. Cancel'
+        }
         Write-ToolDisplay
 
         $Selection = Read-ToolInput 'Selection'
@@ -604,7 +610,13 @@ function Select-InstallVersion {
             return $true
         }
 
-        if ($Selection -match '^[Qq]$') {
+        if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+            $script:ExitRequested = $true
+            Write-ToolInfo 'Exiting.'
+            return $false
+        }
+
+        if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
             return $false
         }
 
@@ -707,7 +719,12 @@ function Select-InstallVersion {
             }
             Write-ToolDisplay '  B. Back to .NET channels'
             Write-ToolDisplay '  M. Enter an exact SDK version manually'
-            Write-ToolDisplay '  Q. Cancel'
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  E. Exit'
+            }
+            else {
+                Write-ToolDisplay '  Q. Cancel'
+            }
             Write-ToolDisplay
 
             $Selection = Read-ToolInput 'Selection'
@@ -727,7 +744,13 @@ function Select-InstallVersion {
                 return $true
             }
 
-            if ($Selection -match '^[Qq]$') {
+            if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+                $script:ExitRequested = $true
+                Write-ToolInfo 'Exiting.'
+                return $false
+            }
+
+            if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
                 return $false
             }
 
@@ -765,8 +788,11 @@ function Select-RemoveVersion {
         Write-ToolDisplay
         if ($script:InteractiveSession) {
             Write-ToolDisplay '  B. Back to Main'
+            Write-ToolDisplay '  E. Exit'
         }
-        Write-ToolDisplay '  Q. Cancel'
+        else {
+            Write-ToolDisplay '  Q. Cancel'
+        }
         Write-ToolDisplay
 
         $Selection = Read-ToolInput 'Selection'
@@ -776,7 +802,13 @@ function Select-RemoveVersion {
             return $false
         }
 
-        if ($Selection -match '^[Qq]$') {
+        if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+            $script:ExitRequested = $true
+            Write-ToolInfo 'Exiting.'
+            return $false
+        }
+
+        if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
             return $false
         }
 
@@ -800,7 +832,7 @@ function Resolve-InstallVersion {
     }
 
     if (-not (Select-InstallVersion)) {
-        if (-not $script:BackToMain) {
+        if (-not $script:BackToMain -and -not $script:ExitRequested) {
             Write-ToolInfo 'Installation cancelled.'
         }
         return $false
@@ -816,7 +848,7 @@ function Resolve-RemoveVersion {
     }
 
     if (-not (Select-RemoveVersion)) {
-        if (-not $script:BackToMain) {
+        if (-not $script:BackToMain -and -not $script:ExitRequested) {
             Write-ToolInfo 'Removal cancelled.'
         }
         return $false
@@ -1151,12 +1183,16 @@ try {
                 $script:Action = $null
                 $script:Version = $null
                 $script:BackToMain = $false
+                $script:ExitRequested = $false
 
                 if (-not (Select-Action)) {
                     return
                 }
 
                 Invoke-SelectedAction
+                if ($script:ExitRequested) {
+                    return
+                }
             }
         }
 

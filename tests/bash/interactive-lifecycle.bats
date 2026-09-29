@@ -93,7 +93,7 @@ EOF
 @test "no-action invocation returns to Main after List and exits explicitly" {
   prepare_source
 
-  run bash -c 'printf "3\n4\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
+  run bash -c 'printf "3\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
@@ -104,7 +104,7 @@ EOF
 @test "normal interactive Remove no-change returns to Main" {
   prepare_source
 
-  run bash -c 'printf "2\n4\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
+  run bash -c 'printf "2\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
@@ -132,7 +132,7 @@ exit 7
 EOF
   chmod +x "$fake_bin/curl"
 
-  run bash -c 'printf "1\n4\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "1\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -ne 0 ]
@@ -146,7 +146,7 @@ EOF
   fake_bin="$test_root/channel-back-fake-bin"
   write_metadata_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\nb\n4\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "1\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -177,7 +177,7 @@ exit 0
 EOF
   chmod +x "$tool_root/$version/dotnet"
 
-  run bash -c 'printf "2\nb\n4\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "2\nb\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
@@ -218,7 +218,7 @@ exit 0
 EOF
   chmod +x "$install_dir/dotnet"
 
-  run bash -c 'printf "1\n1\n1\n3\n2\n1\ny\n4\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "1\n1\n1\n3\n2\n1\ny\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]

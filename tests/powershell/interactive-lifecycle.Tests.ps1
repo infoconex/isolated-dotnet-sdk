@@ -75,7 +75,7 @@ Describe 'PowerShell interactive lifecycle' {
     }
 
     It 'returns to Main after interactive List and exits explicitly' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('3', '4')
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('3', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
@@ -84,7 +84,7 @@ Describe 'PowerShell interactive lifecycle' {
     }
 
     It 'returns to Main after normal interactive Remove no-change' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('2', '4')
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('2', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
@@ -109,7 +109,7 @@ function Invoke-RestMethod { throw 'transport failure' }
 '@
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
-            -InputLines @('1', '4') `
+            -InputLines @('1', 'e') `
             -Command $command
 
         $result.ExitCode | Should -Not -Be 0
@@ -134,7 +134,7 @@ function Invoke-RestMethod { return $releaseIndex }
 '@
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
-            -InputLines @('1', 'b', '4') `
+            -InputLines @('1', 'b', 'e') `
             -Command $command
 
         $result.ExitCode | Should -Be 0
@@ -180,7 +180,7 @@ function Invoke-RestMethod {
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
         New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
 
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('2', 'b', '4')
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('2', 'b', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
