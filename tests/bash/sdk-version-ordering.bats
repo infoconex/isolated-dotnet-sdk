@@ -44,7 +44,17 @@ done
 case "$url" in
   *releases-index.json)
     cat <<'JSON'
-{"releases-index":[{"channel-version":"8.0","latest-sdk":"8.0.300","support-phase":"active","release-type":"lts","releases.json":"https://example.invalid/releases.json"}]}
+{
+  "releases-index": [
+    {
+      "channel-version": "8.0",
+      "latest-sdk": "8.0.300",
+      "support-phase": "active",
+      "release-type": "lts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
 JSON
     ;;
   https://example.invalid/releases.json)
