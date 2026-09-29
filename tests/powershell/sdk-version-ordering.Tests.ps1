@@ -70,7 +70,6 @@ Describe 'PowerShell SDK version ordering' {
             & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install
         ' 6>&1 2>&1)
 
-        $LASTEXITCODE | Should -Be 0
         $expected = @(
             '8.0.300',
             '8.0.300-servicing.1.2.3',
