@@ -105,14 +105,14 @@ EOF
 exit 0
 EOF
   chmod +x "$install_dir/dotnet"
-  printf '%s\n' helper > "$tool_root/dotnet-install.sh.leftover"
+  printf '%s\n' payload > "$tool_root/.sdk-payload-99.0.200.leftover.tar.gz"
 
   run env HOME="$test_home" "$tool_path" list
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"  $version"* ]]
   [[ "$output" != *"not-an-sdk"* ]]
-  [[ "$output" != *"dotnet-install.sh.leftover"* ]]
+  [[ "$output" != *".sdk-payload-99.0.200.leftover.tar.gz"* ]]
   [[ "$output" != *".install-99.0.200.leftover"* ]]
 }
 
