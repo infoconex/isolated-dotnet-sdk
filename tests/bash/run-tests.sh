@@ -66,6 +66,7 @@ PATH="$test_support_dir:$PATH" bats \
   "$repo_root/tests/bash/global-exit.bats" \
   "$repo_root/tests/bash/cross-platform.bats" \
   "$repo_root/tests/bash/metadata.bats" \
+  "$repo_root/tests/bash/sdk-version-ordering.bats" \
   "$repo_root/tests/bash/metadata-boundaries.bats" \
   "$repo_root/tests/bash/public-boundaries.bats" \
   "$repo_root/tests/bash/native-failures.bats" \
