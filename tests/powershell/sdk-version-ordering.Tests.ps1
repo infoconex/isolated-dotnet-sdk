@@ -89,7 +89,7 @@ Describe 'PowerShell SDK version ordering' {
             $metadataOutput |
                 ForEach-Object { [string]$_ } |
                 Where-Object { $_ -match '^\s+\d+\. 8\.0\.' } |
-                ForEach-Object { $_ -replace '^\s+\d+\. ', '' -replace ' \(latest\)$', '' } |
+                ForEach-Object { $_ -replace '^\s+\d+\. ', '' -replace ' \([^)]*\)$', '' } |
                 Select-Object -Last 12
         )
 
