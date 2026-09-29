@@ -66,7 +66,7 @@ EOF
   [ "$status" -eq 0 ]
 
   expected=$'8.0.300\n8.0.300-servicing.1.2.3\n8.0.201\n8.0.200\n8.0.101\n8.0.100\n8.0.100-rc.2.23479.7\n8.0.100-rc.2.23479.6\n8.0.100-rc.1.23455.8\n8.0.100-preview.7.23376.4\n8.0.100-preview.7.23376.3\n8.0.100-preview.6.23330.14'
-  actual="$(printf '%s\n' "$output" | awk '/^[[:space:]]+[0-9]+\. 8\.0\./ { sub(/^[[:space:]]+[0-9]+\. /, ""); sub(/ \(latest\)$/, ""); print }' | tail -n 12)"
+  actual="$(printf '%s\n' "$output" | awk '/^[[:space:]]+[0-9]+\. 8\.0\./ { sub(/^[[:space:]]+[0-9]+\. /, ""); sub(/ \([^)]*\)$/, ""); print }' | tail -n 12)"
 
   [ "$actual" = "$expected" ]
 }
