@@ -39,7 +39,8 @@ isolated-dotnet-sdk: What would you like to do?
   1. Install an SDK
   2. Remove an isolated SDK
   3. List isolated SDKs
-  4. Exit
+
+  E. Exit
 
 Selection:
 ```
@@ -95,11 +96,12 @@ isolated-dotnet-sdk: Select a supported or development .NET channel:
   4. .NET 8.0   LTS  Maintenance  latest SDK 8.0.425
 
   A. Show end-of-life channels
+  B. Back to Main
   M. Enter an exact SDK version manually
-  Q. Cancel
+  E. Exit
 ```
 
-After selecting a channel, the tool starts with a compact SDK list: Microsoft's `latest-sdk` when available plus the newest SDK from each other feature band. Older servicing versions stay available through **Show all versions**. Versions already present on the machine are marked so you can see where they are installed. In a persistent interactive session, **Back** returns from SDK selection to channel selection, from channel selection to Main, and from Remove selection to Main; explicit one-shot commands keep cancellation semantics instead.
+After selecting a channel, the tool starts with a compact SDK list: Microsoft's `latest-sdk` when available plus the newest SDK from each other feature band. Older servicing versions stay available through **Show all versions**. Versions already present on the machine are marked so you can see where they are installed. In a persistent interactive session, **Back** returns from SDK selection to channel selection, from channel selection to Main, and from Remove selection to Main. **E. Exit** leaves the persistent session directly from any selection menu. Explicit one-shot interactive commands remain one-shot and keep `Q. Cancel` where cancellation is the appropriate outcome.
 
 ```text
   1. 11.0.100-rc.1.26425.128 (latest, isolated)
