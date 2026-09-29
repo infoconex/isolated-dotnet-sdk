@@ -36,7 +36,8 @@ fi
 
 shellcheck --norc \
     "$repo_root/isolated-dotnet-sdk.sh" \
+    "$repo_root/scripts/initialize-bash-validation.sh" \
     "$repo_root/tests/bash/run-tests.sh" \
     "${BASH_SOURCE[0]}"
 
-printf 'ShellCheck %s passed for 3 file(s).\n' "$required_version"
+printf 'ShellCheck %s passed for 4 file(s).\n' "$required_version"
