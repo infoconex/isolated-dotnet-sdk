@@ -115,7 +115,7 @@ try {
         '3',
         '2',
         '1',
-        '4'
+        'e'
     )
 
     Write-Host "E2E interactive: running persistent session for .NET SDK $sdkVersion"

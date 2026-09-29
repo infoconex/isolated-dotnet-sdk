@@ -14,7 +14,7 @@ Run the saved tool without an action or exact SDK version when you want to work 
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 ```
 
-A no-action invocation stays in one interactive session. After a successful Install, List, or Remove operation, the tool returns to Main. Normal cancellation or a no-change result also returns to Main. Choose **Exit** from Main when you are finished.
+A no-action invocation stays in one interactive session. After a successful Install, List, or Remove operation, the tool returns to Main. Normal cancellation or a no-change result also returns to Main. `E`/`e` is the global persistent-session Exit command and is available from Main and each persistent selection menu, so you do not need to navigate back to Main before exiting. Main no longer exposes a numeric `4. Exit` action, and `4` is not retained as an undocumented Exit alias.
 
 A genuine operational failure is different from navigation or cancellation. Metadata, filesystem, installer, native-command, verification, cleanup, and other correctness-significant failures terminate the process nonzero immediately. The session does not return to Main after such a failure, so a later Exit cannot hide it.
 
@@ -36,7 +36,7 @@ Explicit commands remain automation-friendly and do not enter the persistent Mai
 
 The bare-version Install convenience form is also one-shot. Exact-version installation continues to bypass Microsoft release-metadata discovery.
 
-## Back and cancellation
+## Back, Exit, and cancellation
 
 Back is available only on selection menus where there is a meaningful parent menu:
 
@@ -54,7 +54,7 @@ Main
 
 Ordinary yes/no confirmation prompts are not navigation menus. Declining a confirmation remains a normal cancellation/no-change result. In a persistent session, that result returns to Main; in a one-shot invocation, the command exits successfully without making the declined change.
 
-`Q`/`q` remains the explicit cancellation choice on selection pickers. It is distinct from Back: cancellation ends the current operation, while Back moves to the documented parent selection menu.
+Persistent selection menus use `E`/`e` for Exit and do not expose a redundant menu-level Cancel choice where Back already provides the navigation path. `B`/`b` moves to the documented parent selection menu. Explicit one-shot Install/Remove selection may still use `Q`/`q` to cancel that one-shot command successfully, because there is no persistent session to exit.
 
 ## SDK version picker
 
@@ -65,7 +65,8 @@ After selecting a .NET channel, the default picker keeps the list short:
 - older servicing releases are available through **Show all versions**;
 - the expanded list is ordered deterministically from newest to oldest;
 - **Back to .NET channels** remains available in either view;
-- manual exact-version entry remains available.
+- manual exact-version entry remains available;
+- `E. Exit` leaves a persistent interactive session directly from either compact or expanded picker views, while explicit one-shot pickers retain `Q. Cancel`.
 
 For example, if a channel contains multiple `10.0.4xx`, `10.0.3xx`, and `10.0.2xx` servicing releases, the compact view shows the newest SDK from each of those feature bands rather than every servicing release at once.
 
