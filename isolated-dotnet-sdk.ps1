@@ -1189,10 +1189,12 @@ try {
                     return
                 }
 
+                Write-ToolDisplay
                 Invoke-SelectedAction
                 if ($script:ExitRequested) {
                     return
                 }
+                Write-ToolDisplay
             }
         }
 
