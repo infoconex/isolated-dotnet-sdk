@@ -25,6 +25,16 @@ Each SDK is stored in its own version-specific directory and is not added to `PA
 
 The scripts also run from `dotnet-sdks` rather than from the repository where you invoked them. This prevents a repository-level `global.json` from unexpectedly influencing SDK operations performed by the tool.
 
+## Security and isolation at a glance
+
+- Isolated SDKs and the saved tool live under your user-owned `dotnet-sdks` directory, not in system-wide .NET locations. The tool does not permanently modify the normal `PATH`; you invoke an isolated SDK explicitly.
+- "Isolated" describes where the SDK is installed, not a security sandbox. The tool and downloaded .NET SDK/tool code run with the permissions of your current user account and can create normal per-user state.
+- For stable releases published under the checksum policy, bootstrap downloads an explicitly tagged platform script and that release's `SHA256SUMS`, verifies the script's SHA-256, then executes and saves those verified bytes. The script and checksum both come through GitHub, so this checks consistency rather than providing independent publisher authentication.
+- SDK installation resolves the exact platform archive and SHA-512 from Microsoft release metadata, verifies the archive before extraction, and separately checks that the staged host reports the requested exact SDK version before promotion.
+- These controls still trust Microsoft's release-metadata and payload infrastructure, GitHub release/tag/raw-content hosting and repository administration, TLS, and the local platform tools used to download, hash, extract, and execute code.
+
+For the authoritative details, see [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md), [`docs/filesystem-safety.md`](docs/filesystem-safety.md), [`docs/release-bootstrap.md`](docs/release-bootstrap.md), [`docs/cross-platform-support.md`](docs/cross-platform-support.md), and [`docs/behavioral-parity.md`](docs/behavioral-parity.md).
+
 ## Quick Start — Stable Release
 
 Stable installation is explicitly version-pinned and integrity-checked. Choose a release published under the Issue #22 policy, substitute its tag for `<release-tag>`, and use the checksum-verifying bootstrap commands in [`docs/release-bootstrap.md`](docs/release-bootstrap.md). Those commands download both the explicitly tagged platform script and that release's `SHA256SUMS`, verify the script's SHA-256 before execution, and then execute the verified temporary file so file-based bootstrap preserves those exact bytes under `~/dotnet-sdks`.
