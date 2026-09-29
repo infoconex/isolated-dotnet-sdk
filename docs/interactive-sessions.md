@@ -14,7 +14,7 @@ Run the saved tool without an action or exact SDK version when you want to work 
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 ```
 
-A no-action invocation stays in one interactive session. After a successful Install, List, or Remove operation, the tool returns to Main. Normal cancellation or a no-change result also returns to Main. `E`/`e` is the global persistent-session Exit command and is available from Main and each persistent selection menu, so you do not need to navigate back to Main before exiting.
+A no-action invocation stays in one interactive session. After a successful Install, List, or Remove operation, the tool returns to Main. Normal cancellation or a no-change result also returns to Main. `E`/`e` is the global persistent-session Exit command and is available from Main and each persistent selection menu, so you do not need to navigate back to Main before exiting. Main no longer exposes a numeric `4. Exit` action, and `4` is not retained as an undocumented Exit alias.
 
 A genuine operational failure is different from navigation or cancellation. Metadata, filesystem, installer, native-command, verification, cleanup, and other correctness-significant failures terminate the process nonzero immediately. The session does not return to Main after such a failure, so a later Exit cannot hide it.
 
