@@ -7,11 +7,11 @@ function Invoke-WebRequest {
     param($Uri, $OutFile)
 
     if ([string]$Uri -like '*release-metadata*') {
-        if ($env:SDK_TEST_METADATA_FAILURE) {
-            throw $env:SDK_TEST_METADATA_FAILURE
-        }
         if ($env:SDK_TEST_DOWNLOAD_TARGET) {
             Set-Content -LiteralPath $env:SDK_TEST_DOWNLOAD_TARGET -Value $OutFile
+        }
+        if ($env:SDK_TEST_METADATA_FAILURE) {
+            throw $env:SDK_TEST_METADATA_FAILURE
         }
         $rid = 'win-x64'
         $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/99.0.100/dotnet-sdk-99.0.100-win-x64.zip'
@@ -73,7 +73,7 @@ function Remove-Item {
         [switch]$Force,
         [switch]$WhatIf,
         [switch]$Confirm,
-        [System.Management.Automation.ActionPreference]$ErrorAction
+        [System.Management.Automation.ActionPreference]$ErrorAction = [System.Management.Automation.ActionPreference]::Continue
     )
     if ($env:SDK_TEST_CLEANUP_PATTERN -and $LiteralPath -like "*$($env:SDK_TEST_CLEANUP_PATTERN)*") {
         throw 'cleanup-remove-failed'
