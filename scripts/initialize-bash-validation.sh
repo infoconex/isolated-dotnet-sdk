@@ -41,7 +41,7 @@ else
     printf '%s\n' "$bats_commit" > "$bats_commit_marker"
 fi
 
-test "$($bats_prefix/bin/bats --version | awk '{print $2}')" = "$bats_version"
+test "$("$bats_prefix/bin/bats" --version | awk '{print $2}')" = "$bats_version"
 if [[ -n "${GITHUB_PATH:-}" ]]; then
     printf '%s\n' "$bats_prefix/bin" >> "$GITHUB_PATH"
 fi
