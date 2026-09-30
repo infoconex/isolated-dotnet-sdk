@@ -89,7 +89,7 @@ Describe 'PowerShell public selection and list boundaries' {
 
         $LASTEXITCODE | Should -Be 0
         $text = $listOutput -join [Environment]::NewLine
-        $text | Should -Match '(?m)^\s+99\.0\.100\s*$'
+        $text | Should -Match ([regex]::Escape("99.0.100  $installDirectory"))
         $text | Should -Not -Match 'not-an-sdk'
         $text | Should -Not -Match '\.sdk-payload-99\.0\.200\.leftover\.zip'
         $text | Should -Not -Match '\.install-99\.0\.200\.leftover'
