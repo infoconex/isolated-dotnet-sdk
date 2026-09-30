@@ -79,6 +79,6 @@ This document records platform support and intentional mechanics. It does not:
 - require identical implementation structure across shells;
 - add compatibility layers for hypothetical case, path, or locking behavior;
 - replace deterministic failure injection with timing-sensitive native races;
-- redesign stable bootstrap or supply-chain policy from Issues #21/#22 beyond the SDK-payload verification hardening captured by Issue #72;
+- redesign the stable bootstrap or supply-chain policy beyond the checksum-verifying release and SDK-payload integrity contracts documented in [`release-bootstrap.md`](release-bootstrap.md) and [`supply-chain-integrity.md`](supply-chain-integrity.md);
 - require self-hosted runners or immutable custom runner images;
-- change the CLI/help and operational-documentation contract completed by Issue #23.
+- change the current CLI/help and operational-documentation contract.
