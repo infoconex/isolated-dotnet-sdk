@@ -55,6 +55,40 @@ Describe 'PowerShell installed SDK listing' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    It 'shows an isolated-only inventory with an empty System SDKs group' {
+    Install-TestTool
+    $installDir = Join-Path $script:ToolRoot '10.0.401'
+    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+    New-Item -ItemType File -Path (Join-Path $installDir 'dotnet.exe') -Force | Out-Null
+
+    $fakeBin = Join-Path $script:TestRoot 'empty-system-bin'
+    Write-SystemDotNetStub -Directory $fakeBin
+    $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+    $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
+
+    $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
+    $text = $listOutput -join [Environment]::NewLine
+
+    $LASTEXITCODE | Should -Be 0
+    $text | Should -Match ([regex]::Escape("10.0.401  $installDir"))
+    $text | Should -Match '(?ms)^System SDKs:\r?\n  None'
+}
+
+It 'shows a system-only inventory with an empty Isolated SDKs group' {
+    Install-TestTool
+    $fakeBin = Join-Path $script:TestRoot 'system-only-bin'
+    Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @('10.0.401 [C:\Program Files\dotnet\sdk]')
+    $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+    $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
+
+    $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
+    $text = $listOutput -join [Environment]::NewLine
+
+    $LASTEXITCODE | Should -Be 0
+    $text | Should -Match '(?ms)^Isolated SDKs:\r?\n  None'
+    $text | Should -Match '10\.0\.401  C:\\Program Files\\dotnet\\sdk'
+}
+
     It 'shows isolated SDKs before system SDKs and preserves same-version overlap' {
         Install-TestTool
         foreach ($version in @('11.0.100-rc.1.26425.128', '10.0.401')) {
