@@ -102,26 +102,26 @@ Describe 'PowerShell release-metadata behavior' {
                     )
                 }
             }
-            function Invoke-WebRequest { throw "installer-download-boundary" }
+            function Invoke-WebRequest { throw "release-metadata-download-boundary" }
             & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Yes
         ' 6>&1 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         $text = $metadataOutput -join [Environment]::NewLine
         $text | Should -Match 'Target SDK: 99\.0\.101'
-        $text | Should -Match 'installer-download-boundary'
+        $text | Should -Match 'release-metadata-download-boundary'
     }
 
     It 'bypasses release metadata discovery when an exact version is supplied' {
         $metadataOutput = @(& pwsh -NoProfile -Command '
             function Invoke-RestMethod { throw "metadata-discovery-was-called" }
-            function Invoke-WebRequest { throw "install-download-boundary" }
+            function Invoke-WebRequest { throw "release-metadata-download-boundary" }
             & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.9.999 -Yes
         ' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         $text = $metadataOutput -join [Environment]::NewLine
-        $text | Should -Match 'install-download-boundary'
+        $text | Should -Match 'release-metadata-download-boundary'
         $text | Should -Not -Match 'metadata-discovery-was-called'
         $text | Should -Not -Match 'Loading available \.NET SDK releases from Microsoft'
     }

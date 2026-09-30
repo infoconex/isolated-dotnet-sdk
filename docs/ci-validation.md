@@ -56,7 +56,7 @@ The setup scripts fail with explicit diagnostics when required configuration, ca
 
 ## PowerShell behavioral fixture
 
-The deterministic fake `dotnet` executable used by transaction/finalization tests is built once per PowerShell behavioral run and exposed to those suites as an immutable run-scoped fixture. Each test still creates and removes its own mutable HOME, installer, SDK root, staging state, and environment controls.
+The deterministic fake `dotnet` executable used by transaction/finalization tests is built once per PowerShell behavioral run and exposed to those suites as an immutable run-scoped fixture. Each test still creates and removes its own mutable HOME, SDK root, release-metadata/payload state, staging state, and environment controls.
 
 On the supported Windows runner, fixture compilation prefers the Windows .NET Framework C# compiler to avoid the substantially heavier SDK restore/build startup path. The helper retains a `dotnet build` fallback for development environments where that compiler is unavailable.
 
