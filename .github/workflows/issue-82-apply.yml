@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'chore: stage issue 82 implementation patch'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out branch
@@ -26,62 +25,58 @@ jobs:
 
           bash_path = Path('isolated-dotnet-sdk.sh')
           bash_text = bash_path.read_text()
-          old_bash_menu = '''        if [[ "$show_archived" == "true" ]]; then
-              echo "  S. Show supported/development channels"
+          old_bash_menu = """        if [[ \"$show_archived\" == \"true\" ]]; then
+              echo \"  S. Show supported/development channels\"
           else
-              echo "  A. Show end-of-life channels"
+              echo \"  A. Show end-of-life channels\"
           fi
-          '''
-          new_bash_menu = '''        if [[ "$show_archived" == "true" ]]; then
-              echo "  S. Show supported/development channels"
+          """
+          new_bash_menu = """        if [[ \"$show_archived\" == \"true\" ]]; then
+              echo \"  S. Show supported/development channels\"
           else
-              echo "  S. Show end-of-life channels"
+              echo \"  S. Show end-of-life channels\"
           fi
-          '''
-          old_bash_input = '''            [aA])
-                  if [[ "$show_archived" == "false" ]]; then
-                      show_archived="true"
+          """
+          old_bash_input = """            [aA])
+                  if [[ \"$show_archived\" == \"false\" ]]; then
+                      show_archived=\"true\"
                       continue
                   fi
                   ;;
               [sS])
-                  if [[ "$show_archived" == "true" ]]; then
-                      show_archived="false"
+                  if [[ \"$show_archived\" == \"true\" ]]; then
+                      show_archived=\"false\"
                       continue
                   fi
                   ;;
-          '''
-          new_bash_input = '''            [sS])
-                  if [[ "$show_archived" == "true" ]]; then
-                      show_archived="false"
+          """
+          new_bash_input = """            [sS])
+                  if [[ \"$show_archived\" == \"true\" ]]; then
+                      show_archived=\"false\"
                   else
-                      show_archived="true"
+                      show_archived=\"true\"
                   fi
                   continue
                   ;;
-          '''
-          assert bash_text.count(old_bash_menu) == 1
-          assert bash_text.count(old_bash_input) == 1
-          bash_text = bash_text.replace(old_bash_menu, new_bash_menu).replace(old_bash_input, new_bash_input)
-          bash_path.write_text(bash_text)
+          """
 
           ps_path = Path('isolated-dotnet-sdk.ps1')
           ps_text = ps_path.read_text()
-          old_ps_menu = '''        if ($ShowArchived) {
+          old_ps_menu = """        if ($ShowArchived) {
               Write-ToolDisplay '  S. Show supported/development channels'
           }
           else {
               Write-ToolDisplay '  A. Show end-of-life channels'
           }
-          '''
-          new_ps_menu = '''        if ($ShowArchived) {
+          """
+          new_ps_menu = """        if ($ShowArchived) {
               Write-ToolDisplay '  S. Show supported/development channels'
           }
           else {
               Write-ToolDisplay '  S. Show end-of-life channels'
           }
-          '''
-          old_ps_input = '''        if ($Selection -match '^[Aa]$' -and -not $ShowArchived) {
+          """
+          old_ps_input = """        if ($Selection -match '^[Aa]$' -and -not $ShowArchived) {
               $ShowArchived = $true
               continue
           }
@@ -90,24 +85,45 @@ jobs:
               $ShowArchived = $false
               continue
           }
-          '''
-          new_ps_input = '''        if ($Selection -match '^[Ss]$') {
+          """
+          new_ps_input = """        if ($Selection -match '^[Ss]$') {
               $ShowArchived = -not $ShowArchived
               continue
           }
-          '''
-          assert ps_text.count(old_ps_menu) == 1
-          assert ps_text.count(old_ps_input) == 1
-          ps_text = ps_text.replace(old_ps_menu, new_ps_menu).replace(old_ps_input, new_ps_input)
-          ps_path.write_text(ps_text)
+          """
+
+          old_counts = (
+              bash_text.count(old_bash_menu),
+              bash_text.count(old_bash_input),
+              ps_text.count(old_ps_menu),
+              ps_text.count(old_ps_input),
+          )
+          if old_counts == (1, 1, 1, 1):
+              bash_path.write_text(
+                  bash_text.replace(old_bash_menu, new_bash_menu).replace(old_bash_input, new_bash_input)
+              )
+              ps_path.write_text(
+                  ps_text.replace(old_ps_menu, new_ps_menu).replace(old_ps_input, new_ps_input)
+              )
+          elif old_counts == (0, 0, 0, 0):
+              assert bash_text.count(new_bash_menu) == 1
+              assert bash_text.count(new_bash_input) == 1
+              assert ps_text.count(new_ps_menu) == 1
+              assert ps_text.count(new_ps_input) == 1
+          else:
+              raise SystemExit(f'unexpected partial source state: {old_counts}')
           PY
 
           git diff --check
           git diff -- isolated-dotnet-sdk.sh isolated-dotnet-sdk.ps1
 
-      - name: Commit implementation
+      - name: Commit implementation when needed
         shell: bash
         run: |
+          if git diff --quiet -- isolated-dotnet-sdk.sh isolated-dotnet-sdk.ps1; then
+            echo 'Implementation already applied.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add isolated-dotnet-sdk.sh isolated-dotnet-sdk.ps1
