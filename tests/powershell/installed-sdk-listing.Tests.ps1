@@ -56,38 +56,38 @@ Describe 'PowerShell installed SDK listing' {
     }
 
     It 'shows an isolated-only inventory with an empty System SDKs group' {
-    Install-TestTool
-    $installDir = Join-Path $script:ToolRoot '10.0.401'
-    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-    New-Item -ItemType File -Path (Join-Path $installDir 'dotnet.exe') -Force | Out-Null
+        Install-TestTool
+        $installDir = Join-Path $script:ToolRoot '10.0.401'
+        New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $installDir 'dotnet.exe') -Force | Out-Null
 
-    $fakeBin = Join-Path $script:TestRoot 'empty-system-bin'
-    Write-SystemDotNetStub -Directory $fakeBin
-    $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
-    $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
+        $fakeBin = Join-Path $script:TestRoot 'empty-system-bin'
+        Write-SystemDotNetStub -Directory $fakeBin
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+        $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
-    $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
-    $text = $listOutput -join [Environment]::NewLine
+        $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
+        $text = $listOutput -join [Environment]::NewLine
 
-    $LASTEXITCODE | Should -Be 0
-    $text | Should -Match ([regex]::Escape("10.0.401  $installDir"))
-    $text | Should -Match '(?ms)^System SDKs:\r?\n  None'
-}
+        $LASTEXITCODE | Should -Be 0
+        $text | Should -Match ([regex]::Escape("10.0.401  $installDir"))
+        $text | Should -Match '(?ms)^System SDKs:\r?\n  None'
+    }
 
-It 'shows a system-only inventory with an empty Isolated SDKs group' {
-    Install-TestTool
-    $fakeBin = Join-Path $script:TestRoot 'system-only-bin'
-    Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @('10.0.401 [C:\Program Files\dotnet\sdk]')
-    $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
-    $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
+    It 'shows a system-only inventory with an empty Isolated SDKs group' {
+        Install-TestTool
+        $fakeBin = Join-Path $script:TestRoot 'system-only-bin'
+        Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @('10.0.401 [C:\Program Files\dotnet\sdk]')
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+        $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
-    $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
-    $text = $listOutput -join [Environment]::NewLine
+        $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
+        $text = $listOutput -join [Environment]::NewLine
 
-    $LASTEXITCODE | Should -Be 0
-    $text | Should -Match '(?ms)^Isolated SDKs:\r?\n  None'
-    $text | Should -Match '10\.0\.401  C:\\Program Files\\dotnet\\sdk'
-}
+        $LASTEXITCODE | Should -Be 0
+        $text | Should -Match '(?ms)^Isolated SDKs:\r?\n  None'
+        $text | Should -Match '10\.0\.401  C:\\Program Files\\dotnet\\sdk'
+    }
 
     It 'shows isolated SDKs before system SDKs and preserves same-version overlap' {
         Install-TestTool
@@ -112,8 +112,8 @@ It 'shows a system-only inventory with an empty Isolated SDKs group' {
 
         $LASTEXITCODE | Should -Be 0
         $text | Should -Match 'Installed \.NET SDKs'
-        $text | Should -Match '(?m)^Isolated SDKs:$'
-        $text | Should -Match '(?m)^System SDKs:$'
+        $text | Should -Match '(?m)^Isolated SDKs:\r?$'
+        $text | Should -Match '(?m)^System SDKs:\r?$'
         $text | Should -Match ([regex]::Escape("11.0.100-rc.1.26425.128  $(Join-Path $script:ToolRoot '11.0.100-rc.1.26425.128')"))
         $text | Should -Match ([regex]::Escape("10.0.401  $(Join-Path $script:ToolRoot '10.0.401')"))
         $text | Should -Match '10\.0\.401  C:\\Program Files\\dotnet\\sdk'
@@ -133,9 +133,9 @@ It 'shows a system-only inventory with an empty Isolated SDKs group' {
         $text = $listOutput -join [Environment]::NewLine
 
         $LASTEXITCODE | Should -Be 0
-        $text | Should -Match '(?m)^Isolated SDKs:$'
-        $text | Should -Match '(?m)^System SDKs:$'
-        ([regex]::Matches($text, '(?m)^  None$')).Count | Should -Be 2
+        $text | Should -Match '(?m)^Isolated SDKs:\r?$'
+        $text | Should -Match '(?m)^System SDKs:\r?$'
+        ([regex]::Matches($text, '(?m)^  None\r?$')).Count | Should -Be 2
     }
 
     It 'treats an unavailable system dotnet host as an empty System SDKs group' {
@@ -159,12 +159,12 @@ It 'shows a system-only inventory with an empty Isolated SDKs group' {
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
-        $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
+        $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List' 2>&1)
         $text = $listOutput -join [Environment]::NewLine
 
         $LASTEXITCODE | Should -Not -Be 0
         $text | Should -Match 'Unable to list SDKs through the system dotnet host with exit code 71\.'
-        $text | Should -Not -Match '(?m)^System SDKs:$'
+        $text | Should -Not -Match '(?m)^System SDKs:\r?$'
     }
 
     It 'does not make a system-only SDK removable' {
