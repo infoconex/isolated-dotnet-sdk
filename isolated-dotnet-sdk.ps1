@@ -595,7 +595,7 @@ function Select-InstallVersion {
             Write-ToolDisplay '  S. Show supported/development channels'
         }
         else {
-            Write-ToolDisplay '  A. Show end-of-life channels'
+            Write-ToolDisplay '  S. Show end-of-life channels'
         }
         if ($script:InteractiveSession) {
             Write-ToolDisplay '  B. Back to Main'
@@ -631,13 +631,8 @@ function Select-InstallVersion {
             return $false
         }
 
-        if ($Selection -match '^[Aa]$' -and -not $ShowArchived) {
-            $ShowArchived = $true
-            continue
-        }
-
-        if ($Selection -match '^[Ss]$' -and $ShowArchived) {
-            $ShowArchived = $false
+        if ($Selection -match '^[Ss]$') {
+            $ShowArchived = -not $ShowArchived
             continue
         }
 

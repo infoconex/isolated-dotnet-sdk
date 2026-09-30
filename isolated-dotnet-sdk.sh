@@ -429,7 +429,7 @@ select_install_version() {
         if [[ "$show_archived" == "true" ]]; then
             echo "  S. Show supported/development channels"
         else
-            echo "  A. Show end-of-life channels"
+            echo "  S. Show end-of-life channels"
         fi
         if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
             echo "  B. Back to Main"
@@ -469,17 +469,13 @@ select_install_version() {
                     return 2
                 fi
                 ;;
-            [aA])
-                if [[ "$show_archived" == "false" ]]; then
-                    show_archived="true"
-                    continue
-                fi
-                ;;
             [sS])
                 if [[ "$show_archived" == "true" ]]; then
                     show_archived="false"
-                    continue
+                else
+                    show_archived="true"
                 fi
+                continue
                 ;;
         esac
 
