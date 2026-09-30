@@ -3,10 +3,11 @@ Keep this description concise and evidence-focused.
 Authoritative guidance:
 - docs/issue-workflow.md
 - docs/issue-conventions.md
-Open this Draft PR only after implementation is believed complete, repository-owned branch validation is green, and the full branch diff has been reviewed with no known blocking findings.
+Open this Draft PR only after implementation is believed complete, appropriate targeted pre-PR validation is green, the linked issue is reconciled, and the full branch diff has been reviewed with no known blocking findings.
+A full branch Validate run is optional when it serves a distinct purpose; the normal authoritative full pre-merge signal is Validate on the exact PR head.
 Before opening the Draft PR, reconcile the linked issue so completed Tasks are checked and acceptance criteria already established by durable evidence are checked; leave only criteria that genuinely depend on exact-head PR validation or merge open.
 The Draft PR is for final exact-head CI/verification and the explicit Ready-for-Review decision.
-Lifecycle evidence such as Kickoff, Task completion, Full review, Draft PR opening, Final review, and Post-merge verification belongs in the linked issue history.
+Lifecycle evidence such as Kickoff, consolidated Task reconciliation (or useful incremental Task checkpoints), Full review, Draft PR opening, Final review, and Post-merge verification belongs in the linked issue history.
 -->
 
 Closes #
@@ -29,7 +30,7 @@ Closes #
 
 ## Validation evidence
 
-<!-- Report automated/static/CI evidence already established. Do not assign mechanically verifiable checks to the reviewer. -->
+<!-- Report targeted pre-PR evidence, any justified manual full branch validation, and authoritative exact-head PR CI as it becomes available. Do not assign mechanically verifiable checks to the reviewer. -->
 
 -
 
@@ -41,7 +42,7 @@ Closes #
 
 ## Review status
 
-<!-- Confirm the pre-PR full review completed with no known blocking findings, then summarize any findings from final PR-level verification. Ready for Review and merge still require separate explicit user approval. -->
+<!-- Confirm the pre-PR full diff review completed with no known blocking findings, then summarize any findings from final PR-level verification. Ready for Review and merge still require separate explicit user approval. -->
 
 -
 
