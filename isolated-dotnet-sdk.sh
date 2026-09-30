@@ -146,18 +146,24 @@ get_system_sdk_inventory() {
     if command -v dotnet >/dev/null 2>&1; then
         local sdk_output=""
         if sdk_output="$(dotnet --list-sdks)"; then
-            [[ -n "$sdk_output" ]] && printf "%s\n" "$sdk_output"
+            if [[ -n "$sdk_output" ]]; then
+                printf "%s\n" "$sdk_output"
+            fi
         else
             local status=$?
             tool_fail "Unable to list SDKs through the system dotnet host with exit code $status."
         fi
     fi
+    return 0
 }
 
 get_system_sdk_versions() {
     local sdk_output=""
     sdk_output="$(get_system_sdk_inventory)"
-    [[ -n "$sdk_output" ]] && printf "%s\n" "$sdk_output" | awk '{print $1}'
+    if [[ -n "$sdk_output" ]]; then
+        printf "%s\n" "$sdk_output" | awk '{print $1}'
+    fi
+    return 0
 }
 
 get_isolated_sdk_versions() {

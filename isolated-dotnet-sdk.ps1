@@ -293,13 +293,13 @@ function Get-SystemSdkInventory {
                 if ($Match.Success) {
                     [pscustomobject]@{
                         Version = $Match.Groups['Version'].Value
-                        Path = $Match.Groups['Path'].Value
+                        Path    = $Match.Groups['Path'].Value
                     }
                 }
                 else {
                     [pscustomobject]@{
                         Version = ($Line -split '\s+')[0]
-                        Path = ''
+                        Path    = ''
                     }
                 }
             }
