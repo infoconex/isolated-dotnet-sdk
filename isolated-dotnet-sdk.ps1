@@ -1139,7 +1139,7 @@ function Install-IsolatedSdk {
     Write-ToolInfo "Location: $InstallDir"
 }
 
-function Verify-IsolatedSdk {
+function Test-IsolatedSdk {
     if ([string]::IsNullOrWhiteSpace($script:Version)) {
         throw '-Version is required with -Action Verify.'
     }
@@ -1270,7 +1270,7 @@ function Invoke-SelectedAction {
             Remove-IsolatedSdk @RemoveArguments
         }
         'List' { Show-IsolatedSdk }
-        'Verify' { Verify-IsolatedSdk }
+        'Verify' { Test-IsolatedSdk }
     }
 }
 
