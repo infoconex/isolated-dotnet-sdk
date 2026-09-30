@@ -24,6 +24,7 @@ bats \
   "$repo_root/tests/bash/interactive-lifecycle.bats" \
   "$repo_root/tests/bash/global-exit.bats" \
   "$repo_root/tests/bash/cross-platform.bats" \
+  "$repo_root/tests/bash/presentation.bats" \
   "$repo_root/tests/bash/metadata.bats" \
   "$repo_root/tests/bash/sdk-version-ordering.bats" \
   "$repo_root/tests/bash/metadata-boundaries.bats" \
