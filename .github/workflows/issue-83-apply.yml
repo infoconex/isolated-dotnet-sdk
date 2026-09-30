@@ -21,6 +21,21 @@ jobs:
         with:
           persist-credentials: true
 
+      - name: Prepare behavioral-parity row for scoped edit
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('docs/behavioral-parity.md')
+          text = path.read_text(encoding='utf-8')
+          list_row = '| List | Report the isolated SDK root and recognized installed version directories; report `None` when empty. |\n'
+          detection_row = '| Existing SDK detection | Distinguish SDKs already available from the system `dotnet` host from SDKs already present under the isolated root. |\n'
+          if detection_row not in text:
+              if list_row not in text:
+                  raise SystemExit('Expected List contract row was not found.')
+              text = text.replace(list_row, list_row + detection_row, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Apply scoped Issue 83 edits
         run: python3 scripts/issue-83-apply.py
 
