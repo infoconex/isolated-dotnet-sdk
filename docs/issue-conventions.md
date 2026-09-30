@@ -26,6 +26,12 @@ Add sections such as baseline behavior, behavioral scenarios, sequencing/depende
 
 Issue #9 is a useful example of this structure.
 
+## User-facing documentation references
+
+User-facing product documentation must describe current behavior, guarantees, policies, and capabilities directly. Do not use GitHub issue numbers, pull request numbers, or implementation-history identifiers as product terminology or as context a user must understand to follow the documentation.
+
+Issue and pull-request references remain appropriate when repository history is itself the subject, including contributor workflow, release notes or changelogs, implementation evidence, and explicit traceability records. In product documentation, prefer stable product concepts and repository-relative documentation links over references to the work item that originally introduced a behavior.
+
 ## Issue checkbox state
 
 Task and acceptance-criteria checkboxes are live lifecycle state, not static planning text.
