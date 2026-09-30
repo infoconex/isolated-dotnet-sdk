@@ -139,14 +139,98 @@ Use this deliberately:
 
 The special `$host$` entry described by Microsoft refers to the SDK location associated with the running host. It does not mean the `isolated-dotnet-sdk` home-directory root.
 
-## Authoritative .NET references
+## VS Code with C# and C# Dev Kit
 
-The `global.json` behavior in this guide is based on current Microsoft documentation:
+Editor behavior is owned by the editor/extensions and can change independently of this repository. The guidance in this section was verified against the current VS Code .NET Install Tool and C# Dev Kit documentation in September 2026.
 
-- [`global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
-- [Test prerelease .NET SDKs locally with `global.json` paths](https://learn.microsoft.com/en-us/dotnet/core/tools/test-prerelease-sdk-locally)
+### Point the .NET extensions at an existing isolated host
 
-Editor-specific configuration is version-sensitive and is covered separately below as it is added to this guide.
+The current .NET Install Tool supports `dotnetAcquisitionExtension.existingDotnetPath` for telling a requesting extension which existing `dotnet` executable should run that extension's .NET components.
+
+For the C# extension, the current extension ID is `ms-dotnettools.csharp`. For C# Dev Kit, it is `ms-dotnettools.csdevkit`. Add an entry for each extension you use.
+
+A Windows workspace setting can look like this:
+
+```json
+{
+  "dotnetAcquisitionExtension.existingDotnetPath": [
+    {
+      "extensionId": "ms-dotnettools.csharp",
+      "path": "C:\\Users\\<user>\\dotnet-sdks\\10.0.401\\dotnet.exe"
+    },
+    {
+      "extensionId": "ms-dotnettools.csdevkit",
+      "path": "C:\\Users\\<user>\\dotnet-sdks\\10.0.401\\dotnet.exe"
+    }
+  ]
+}
+```
+
+Use the equivalent full executable path on Linux or macOS:
+
+| Platform | `path` value |
+| --- | --- |
+| Linux | `/home/<user>/dotnet-sdks/10.0.401/dotnet` |
+| macOS | `/Users/<user>/dotnet-sdks/10.0.401/dotnet` |
+
+The upstream .NET Install Tool requires the full host executable path, not the `sdk/<version>` directory. Restart VS Code after changing the setting.
+
+For a trusted workspace, placing the setting in `.vscode/settings.json` keeps the selection scoped to that workspace. Because the path contains the local user's home directory, do not commit that file merely to share a machine-specific absolute path. User Settings are another option when a developer intentionally wants the same host preference across workspaces.
+
+Current .NET Install Tool metadata also marks these existing-host settings as restricted in untrusted workspaces: workspace/folder values are ignored until the workspace is trusted. That is editor security behavior, not behavior controlled by `isolated-dotnet-sdk`.
+
+The selected host must satisfy the extension's own .NET runtime requirements. If it does not, the editor extension may reject the path or acquire another compatible runtime. Do not disable that validation merely to force an incompatible isolated SDK to host the extension.
+
+### What `existingDotnetPath` does not guarantee
+
+The .NET Install Tool explicitly distinguishes the host used to run extension code from the .NET runtime/SDK used by your project. Setting `dotnetAcquisitionExtension.existingDotnetPath` therefore does **not** by itself guarantee that a terminal command, build task, test task, or launched application uses the isolated SDK.
+
+Keep project selection explicit:
+
+- use `global.json` to state the project's SDK-version contract;
+- invoke `~/dotnet-sdks/<version>/dotnet` directly when a command must use the isolated host;
+- optionally use .NET 10+ `sdk.paths` when its host-version and machine-specific-path tradeoffs are acceptable.
+
+### Make VS Code build/test tasks host-explicit
+
+VS Code task configuration supports `${userHome}` and OS-specific command overrides. A project-local `.vscode/tasks.json` can therefore invoke the isolated host without changing `PATH` or hard-coding a username:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dotnet: build with isolated SDK",
+      "type": "process",
+      "command": "${userHome}/dotnet-sdks/10.0.401/dotnet",
+      "windows": {
+        "command": "${userHome}\\dotnet-sdks\\10.0.401\\dotnet.exe"
+      },
+      "args": [
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    }
+  ]
+}
+```
+
+Use the same pattern with `"test"`, `"run"`, or other normal .NET CLI arguments. Because the task's executable is the isolated host itself, this guarantees the task does not silently fall back to a different `dotnet` from `PATH`.
+
+VS Code Remote, Dev Containers, WSL, and other remote extension-host scenarios have their own filesystem and extension-placement rules. This repository does not add support promises for those editor environments; use paths that exist in the environment where the relevant extension/task actually runs and follow current VS Code documentation.
+
+## Authoritative upstream references
+
+The version-sensitive behavior in this guide is based on current upstream documentation:
+
+- [Microsoft `global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
+- [Microsoft: test prerelease .NET SDKs locally with `global.json` paths](https://learn.microsoft.com/en-us/dotnet/core/tools/test-prerelease-sdk-locally)
+- [VS Code .NET Install Tool README](https://github.com/dotnet/vscode-dotnet-runtime/blob/main/vscode-dotnet-runtime-extension/README.md)
+- [VS Code C# Dev Kit FAQ](https://code.visualstudio.com/docs/csharp/cs-dev-kit-faq)
+- [VS Code variables reference](https://code.visualstudio.com/docs/reference/variables-reference)
+- [VS Code tasks documentation](https://code.visualstudio.com/docs/debugtest/tasks)
 
 ## Related repository guidance
 
