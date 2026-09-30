@@ -46,7 +46,7 @@ A suppression is acceptable only when the rule genuinely does not apply or when 
 
 The PowerShell CLI does not suppress `PSAvoidUsingWriteHost`. User-facing display and status messages use the information stream, warnings use the warning stream, and failures use the error stream so presentation does not become success-pipeline data.
 
-PowerShell presentation color is applied only at the presentation boundary using `$PSStyle`. Informational prefixes use cyan and success prefixes use green when ANSI rendering is appropriate. Warning and error colors remain owned by their semantic PowerShell streams. `PlainText`/`NO_COLOR` execution is not decorated, and default redirected information output must not contain ANSI escape sequences.
+Presentation color is selected by explicit semantic role at the call site rather than inferred from punctuation. Interactive/menu and section headings use a restrained cyan accent, success messages use green, and ordinary informational text, values, choices, and paths remain neutral. PowerShell warning and error colors remain owned by their semantic streams; Bash warnings retain their warning presentation while failures stay on stderr. `PlainText`/`NO_COLOR` PowerShell execution is not decorated, and redirected/captured output from both implementations must not contain ANSI escape sequences.
 
 `Remove-IsolatedSdk` now implements native `ShouldProcess` semantics and no longer suppresses `PSUseShouldProcessForStateChangingFunctions`. Its `-WhatIf`, `-Confirm`, default confirmation, and `-Yes` behavior is specified in [`powershell-removal.md`](powershell-removal.md) and protected by the dedicated removal behavioral suite.
 
