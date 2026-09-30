@@ -12,7 +12,7 @@ Development usage is separate and opt-in. Commands that execute the script direc
 
 ## Stable installation
 
-Choose an explicit published release tag from GitHub Releases. Releases published under the Issue #22 policy include a `SHA256SUMS` release asset containing entries for both platform scripts.
+Choose an explicit published release tag from GitHub Releases. Stable releases that support checksum-verifying bootstrap include a `SHA256SUMS` release asset containing entries for both platform scripts.
 
 ### PowerShell
 
@@ -81,11 +81,11 @@ chmod +x "$temp"
 "$temp"
 ```
 
-These commands preserve the Issue #21 semantics while adding a pre-execution integrity gate: the user explicitly chooses a published tag, the downloaded source must match the checksum material for that release, and file-based bootstrap then preserves the exact verified source.
+These commands preserve the existing explicit-tag, file-based bootstrap semantics while adding a pre-execution integrity gate: the user explicitly chooses a published tag, the downloaded source must match the checksum material for that release, and file-based bootstrap then preserves the exact verified source.
 
 ### Legacy `v0.1.0`
 
-`v0.1.0` predates the Issue #22 checksum policy and has no `SHA256SUMS` release asset. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to releases published under the new policy.
+`v0.1.0` predates the checksum-verifying stable-release policy and has no `SHA256SUMS` release asset. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to releases published under the current policy.
 
 ## Updates
 
@@ -140,7 +140,7 @@ Shell-native temporary-file and SHA-256 mechanics may differ.
 
 ## Release-maintenance contract
 
-For releases after Issue #22, a version becomes available for stable installation only when all of the following are true:
+For checksum-policy-compliant stable releases, a version becomes available for stable installation only when all of the following are true:
 
 1. the intended release commit has passed repository validation;
 2. a Git tag for the release version points to that reviewed release commit;
