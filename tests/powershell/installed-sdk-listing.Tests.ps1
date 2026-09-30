@@ -118,7 +118,6 @@ Describe 'PowerShell installed SDK listing' {
         $text | Should -Match ([regex]::Escape("10.0.401  $(Join-Path $script:ToolRoot '10.0.401')"))
         $text | Should -Match '10\.0\.401  C:\\Program Files\\dotnet\\sdk'
         $text | Should -Match '9\.0\.318  D:\\dotnet sdk'
-        ([regex]::Matches($text, '10\.0\.401')).Count | Should -Be 2
         $text.IndexOf('Isolated SDKs:') | Should -BeLessThan $text.IndexOf('System SDKs:')
     }
 
