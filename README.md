@@ -293,6 +293,8 @@ Bash on Linux or macOS:
 
 Replace `10.0.401` with the exact version you installed and pass normal `dotnet` arguments after the host path. This isolates the SDK installation itself; it is not a full process or user-profile sandbox, and the .NET CLI can still create normal per-user state during use.
 
+For project-level `global.json`, VS Code/C# tooling, and explicit task examples that preserve this no-PATH model, see [Project and editor use of isolated SDKs](docs/project-editor-usage.md).
+
 ## Remove an Isolated SDK
 
 Running `remove` without a version opens a picker containing only SDKs installed under `~/dotnet-sdks`.
