@@ -5,17 +5,17 @@ Installs and manages isolated .NET SDK versions on Windows with PowerShell 7.
 .DESCRIPTION
 Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. Isolated SDKs remain under that user-owned root and are not added to PATH.
 
-Supported product actions are Install, Remove, and List. When Action and Version are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and Version is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with Version is invalid. Install or Remove without a resolved version may require interactive selection.
+Supported product actions are Install, Remove, List, and Verify. When Action and Version are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and Version is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with Version is invalid. Verify requires an exact Version and remains direct-command-only; it does not appear on the persistent Main menu. Install or Remove without a resolved version may require interactive selection.
 
 Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
 
 Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata.
 
 .PARAMETER Action
-Specifies the operation to perform: Install, Remove, or List. When omitted, the script starts the persistent interactive session unless Version is supplied, in which case Install is selected.
+Specifies the operation to perform: Install, Remove, List, or Verify. When omitted, the script starts the persistent interactive session unless Version is supplied, in which case Install is selected.
 
 .PARAMETER Version
-Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Version is invalid with an explicit List action.
+Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Verify requires Version. Version is invalid with an explicit List action.
 
 .PARAMETER Yes
 Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
@@ -29,6 +29,11 @@ Lists SDKs installed in the isolated SDK directory once and exits.
 .\isolated-dotnet-sdk.ps1 -Action Install -Version 10.0.100
 
 Installs .NET SDK 10.0.100 in an isolated directory.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action Verify -Version 10.0.100
+
+Verifies that the existing isolated .NET SDK 10.0.100 has a launchable host that reports the requested exact version.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Remove -Version 10.0.100 -Yes
@@ -142,7 +147,7 @@ function Assert-ValidAction {
         return
     }
 
-    if ($script:Action -notin @('Install', 'Remove', 'List')) {
+    if ($script:Action -notin @('Install', 'Remove', 'List', 'Verify')) {
         throw "Invalid action: $script:Action"
     }
 }
@@ -457,7 +462,11 @@ function Select-Action {
 
 function Assert-ActionParameterUsage {
     if ($script:Action -eq 'List' -and $script:VersionWasSpecified) {
-        throw '-Version is supported only with -Action Install or Remove.'
+        throw '-Version is supported only with -Action Install, Remove, or Verify.'
+    }
+
+    if ($script:Action -eq 'Verify' -and [string]::IsNullOrWhiteSpace($script:Version)) {
+        throw '-Version is required with -Action Verify.'
     }
 
     if ($script:Action -eq 'Remove') {
@@ -1130,6 +1139,45 @@ function Install-IsolatedSdk {
     Write-ToolInfo "Location: $InstallDir"
 }
 
+function Test-IsolatedSdk {
+    if ([string]::IsNullOrWhiteSpace($script:Version)) {
+        throw '-Version is required with -Action Verify.'
+    }
+
+    Assert-ValidVersion
+
+    $InstallDir = Join-Path $SdkRoot $Version
+    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
+
+    if (-not (Test-Path -LiteralPath $InstallDir -PathType Container)) {
+        throw "Isolated SDK $Version is not installed under $SdkRoot."
+    }
+
+    if (-not (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf)) {
+        throw "Isolated SDK $Version is incomplete: expected dotnet host was not found at $IsolatedDotNet."
+    }
+
+    try {
+        $IsolatedSdks = & $IsolatedDotNet --list-sdks
+        $ExitCode = $LASTEXITCODE
+    }
+    catch {
+        throw "Unable to launch isolated SDK $Version host at ${IsolatedDotNet}: $($_.Exception.Message)"
+    }
+
+    if ($ExitCode -ne 0) {
+        throw "Unable to verify isolated SDK $Version with exit code $ExitCode."
+    }
+
+    $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+    if ($IsolatedVersions -notcontains $Version) {
+        throw "Isolated SDK $Version failed verification: the host did not report SDK $Version."
+    }
+
+    Write-ToolSuccess "Isolated SDK $Version is healthy."
+    Write-ToolInfo "Location: $InstallDir"
+}
+
 function Invoke-IsolatedSdkBuildServerShutdown {
     param(
         [string]$DotNetPath,
@@ -1222,6 +1270,7 @@ function Invoke-SelectedAction {
             Remove-IsolatedSdk @RemoveArguments
         }
         'List' { Show-IsolatedSdk }
+        'Verify' { Test-IsolatedSdk }
     }
 }
 

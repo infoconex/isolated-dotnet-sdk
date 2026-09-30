@@ -102,6 +102,15 @@ try {
         throw "Expected isolated SDK version $sdkVersion but dotnet reported $actualVersion."
     }
 
+    $verify = Invoke-E2EProcess `
+        -FilePath 'pwsh' `
+        -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Verify', '-Version', $sdkVersion)
+    Assert-Success -Result $verify -Operation 'Direct verify'
+    Write-Host $verify.Output
+    if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion is healthy.")) {
+        throw "Verify output did not report SDK $sdkVersion healthy."
+    }
+
     $list = Invoke-E2EProcess `
         -FilePath 'pwsh' `
         -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'List')

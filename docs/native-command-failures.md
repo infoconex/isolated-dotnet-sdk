@@ -13,6 +13,7 @@ The tool treats an external command's exit status as correctness-significant whe
 | SDK payload hash verification | `Get-FileHash -Algorithm SHA512` must complete and match authoritative metadata | The selected SHA-512 utility must complete and match authoritative metadata | Stop before extraction when hashing fails or the digest does not match |
 | Verified payload extraction | `Expand-Archive` failure is caught with SDK/version context | Archive extraction status is captured explicitly | Stop before staged-host verification and promotion when extraction fails |
 | Post-extraction isolated host `--list-sdks` | Check `$LASTEXITCODE` | Capture the command status explicitly | Report host-command failure separately from a successful inventory that omits the requested SDK |
+| Standalone Verify isolated host `--list-sdks` | Catch host-launch failure and check `$LASTEXITCODE` | Require the host to be executable and capture command status explicitly | Fail nonzero without mutation when the host cannot run, exits nonzero, or succeeds without reporting the requested exact SDK |
 | Removal build-server shutdown | Check `$LASTEXITCODE` and report SDK/exit context | Capture the command status and report SDK/exit context | Do not remove the SDK after shutdown failure and do not report removal success |
 
 Diagnostics at these boundaries identify the failed operation and, where applicable, the SDK version and native exit code. Runtime-specific details may differ, but a shared product failure should not depend only on shell-native failure text when repository-owned context can identify the operation.
@@ -35,4 +36,4 @@ Payload integrity verification and post-extraction exact-version verification ar
 2. After extraction, if the isolated host command itself exits nonzero, the tool reports that staged SDK verification could not be performed and includes the exit code.
 3. If the isolated host command succeeds but its SDK inventory does not contain the requested exact version, the existing `SDK <version> was not found after installation.` contract applies.
 
-Keeping those cases separate prevents a corrupt/mismatched archive from reaching extraction and prevents a broken staged host process from being misreported as a valid inventory that simply lacks the requested SDK.
+Keeping those cases separate prevents a corrupt/mismatched archive from reaching extraction and prevents a broken staged host process from being misreported as a valid inventory that simply lacks the requested SDK. Standalone Verify reuses the host-inventory proof for an already-installed exact version, but it is diagnostic only: it does not repair, reacquire, promote, delete, or update anything.

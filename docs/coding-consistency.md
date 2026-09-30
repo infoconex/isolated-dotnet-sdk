@@ -4,10 +4,10 @@ This repository shares one product vocabulary across the PowerShell and Bash imp
 
 ## Public vocabulary
 
-The stable product actions are install, remove, and list.
+The stable product actions are install, remove, list, and verify.
 
-- PowerShell exposes them through `-Action Install`, `-Action Remove`, and `-Action List`.
-- Bash exposes the corresponding lowercase `install`, `remove`, and `list` subcommands.
+- PowerShell exposes them through `-Action Install`, `-Action Remove`, `-Action List`, and `-Action Verify`.
+- Bash exposes the corresponding lowercase `install`, `remove`, `list`, and `verify` subcommands.
 - `Version` / version, isolated SDK, SDK root, confirmation, release metadata, and install transaction use the same product terminology where the concepts are shared.
 
 PowerShell parameter casing and Bash positional/option syntax are intentional language idioms. PowerShell-only `-WhatIf` and `-Confirm` remain part of native `ShouldProcess` behavior rather than cross-shell naming targets. Public command, action, parameter, and option names should not be renamed for source-style symmetry.
@@ -29,7 +29,8 @@ Where a Bash helper represents a specific product concept, prefer the more speci
 - `confirm_action` for tool-owned confirmation;
 - `format_support_phase` for release support-phase presentation;
 - `install_isolated_sdk` for the isolated-SDK install operation;
-- `remove_isolated_sdk` for the isolated-SDK remove operation.
+- `remove_isolated_sdk` for the isolated-SDK remove operation;
+- `verify_isolated_sdk` for the read-only exact-version health check.
 
 Plural Bash helpers such as `get_system_sdk_versions` and `get_isolated_sdk_versions` remain idiomatic because Bash function names are not subject to PowerShell's singular-noun analyzer convention.
 
