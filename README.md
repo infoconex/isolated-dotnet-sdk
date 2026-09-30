@@ -37,7 +37,7 @@ For the authoritative details, see [`docs/supply-chain-integrity.md`](docs/suppl
 
 ## Quick Start — Stable Release
 
-Stable installation is explicitly version-pinned and integrity-checked. Choose a release published under the Issue #22 policy, substitute its tag for `<release-tag>`, and use the checksum-verifying bootstrap commands in [`docs/release-bootstrap.md`](docs/release-bootstrap.md). Those commands download both the explicitly tagged platform script and that release's `SHA256SUMS`, verify the script's SHA-256 before execution, and then execute the verified temporary file so file-based bootstrap preserves those exact bytes under `~/dotnet-sdks`.
+Stable installation is explicitly version-pinned and integrity-checked. Choose a published release that includes the required `SHA256SUMS` asset for checksum-verifying bootstrap, substitute its tag for `<release-tag>`, and use the commands in [`docs/release-bootstrap.md`](docs/release-bootstrap.md). Those commands download both the explicitly tagged platform script and that release's `SHA256SUMS`, verify the script's SHA-256 before execution, and then execute the verified temporary file so file-based bootstrap preserves those exact bytes under `~/dotnet-sdks`.
 
 `v0.1.0` predates this integrity policy and does not have a `SHA256SUMS` release asset. It remains available as legacy history but is not compatible with the checksum-verifying stable bootstrap.
 
@@ -441,7 +441,7 @@ The README and CLI help summarize supported workflows. These repository specific
 
 ## Security Note
 
-Stable bootstrap for releases published under the Issue #22 policy verifies the explicitly tagged script against that release's `SHA256SUMS` before execution. For SDK installation, the tool resolves the exact platform archive and SHA-512 from Microsoft's release metadata, downloads the archive into operation-owned state, and verifies the checksum before extraction. Exact-version staged-host verification remains a separate correctness check before promotion. Because Microsoft controls both the metadata/checksum and payload distribution, this improves integrity without claiming independent third-party publisher authentication. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee. See [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md) for the complete integrity model.
+Stable bootstrap for releases that include the required `SHA256SUMS` asset verifies the explicitly tagged script against that release's checksum before execution. For SDK installation, the tool resolves the exact platform archive and SHA-512 from Microsoft's release metadata, downloads the archive into operation-owned state, and verifies the checksum before extraction. Exact-version staged-host verification remains a separate correctness check before promotion. Because Microsoft controls both the metadata/checksum and payload distribution, this improves integrity without claiming independent third-party publisher authentication. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee. See [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md) for the complete integrity model.
 
 ## License
 

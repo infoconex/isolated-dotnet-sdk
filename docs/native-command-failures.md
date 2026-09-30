@@ -18,13 +18,13 @@ The tool treats an external command's exit status as correctness-significant whe
 
 Diagnostics at these boundaries identify the failed operation and, where applicable, the SDK version and native exit code. Runtime-specific details may differ, but a shared product failure should not depend only on shell-native failure text when repository-owned context can identify the operation.
 
-## Related boundaries owned by other issues
+## Related product boundaries
 
-Release-index and channel-metadata transport/shape failures for interactive discovery are governed by Issue #16. Supplying an exact SDK version bypasses interactive version discovery, but installation still retrieves exact-version Microsoft release metadata to resolve the supported payload artifact and its checksum.
+Release-index and channel-metadata transport/shape failures for interactive discovery follow the interactive discovery contract. Supplying an exact SDK version bypasses interactive version discovery, but installation still retrieves exact-version Microsoft release metadata to resolve the supported payload artifact and its checksum.
 
-Filesystem ownership, bootstrap staging cleanup, and removal safety are governed by Issue #15. Native-command hardening must not widen the set of paths the tool may remove.
+Filesystem ownership, bootstrap staging cleanup, and removal safety are specified in [`filesystem-safety.md`](filesystem-safety.md). Native-command hardening must not widen the set of paths the tool may remove.
 
-Issue #18 owns installation rollback/recovery semantics: each install uses operation-owned metadata, payload, and staging state; verifies the archive before extraction; verifies the staged host before promotion; preserves pre-existing destinations; cleans transaction-owned state when possible; and supports deterministic retry after a clean-start failure. Acquisition, hashing, extraction, or verification failure must preserve that transaction contract rather than writing directly into or replacing the final destination.
+The transactional installation contract requires each install to use operation-owned metadata, payload, and staging state; verify the archive before extraction; verify the staged host before promotion; preserve pre-existing destinations; clean transaction-owned state when possible; and support deterministic retry after a clean-start failure. Acquisition, hashing, extraction, or verification failure must preserve that transaction contract rather than writing directly into or replacing the final destination.
 
 Cross-shell observable behavior and intentional runtime differences are specified in [`behavioral-parity.md`](behavioral-parity.md).
 

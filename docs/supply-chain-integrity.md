@@ -40,7 +40,7 @@ The residual trust boundary remains Microsoft release metadata, Microsoft payloa
 
 ## Stable release integrity
 
-For releases after the Issue #22 policy is adopted:
+For checksum-policy-compliant stable releases:
 
 1. the release commit must pass repository validation;
 2. release checksum material is generated deterministically from the reviewed release tree;
