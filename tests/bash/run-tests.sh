@@ -19,6 +19,7 @@ fi
 bats \
   "$repo_root/tests/bash/help.bats" \
   "$repo_root/tests/bash/behavior.bats" \
+  "$repo_root/tests/bash/verify.bats" \
   "$repo_root/tests/bash/interactive-lifecycle.bats" \
   "$repo_root/tests/bash/global-exit.bats" \
   "$repo_root/tests/bash/cross-platform.bats" \
