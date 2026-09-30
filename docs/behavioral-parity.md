@@ -9,7 +9,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Behavior | Shared contract |
 | --- | --- |
 | Bare exact version | Treat it as an Install request. |
-| Explicit Install with a version | Bypass Microsoft release-metadata discovery and install that exact version. |
+| Explicit Install with a version | Bypass Microsoft release-index/channel discovery and install that exact version. The exact-version artifact metadata required for payload acquisition and SHA-512 verification is still retrieved. |
 | Install without a version | Use the interactive release/channel/version picker. Explicit picker cancellation is a successful no-change result. |
 | Existing matching isolated SDK | Report it as already installed and return success without downloading or reinstalling. |
 | Pre-existing non-valid destination | Fail closed and preserve the destination. |
@@ -83,7 +83,7 @@ For a selected channel, the default SDK picker prioritizes likely choices withou
 - older servicing releases are hidden behind `Show all versions`;
 - the expanded list contains every discovered SDK version in deterministic newest-first order;
 - Back remains available from both compact and expanded version views;
-- manual exact-version entry remains available and explicit exact-version command invocation continues to bypass release-metadata discovery.
+- manual exact-version entry remains available and explicit exact-version command invocation continues to bypass release-index/channel discovery while retaining the exact-version artifact metadata lookup required for installation.
 
 Feature-band grouping is derived from SDK version data rather than menu positions. Preview and release-candidate labels are part of deterministic version ordering; fixed numeric menu positions are not a product contract. `latest-sdk` remains optional display metadata: its absence does not invalidate an otherwise usable channel and does not cause the tool to invent an authoritative `latest` marker.
 
