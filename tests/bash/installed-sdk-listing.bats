@@ -54,6 +54,33 @@ EOF
   chmod +x "$install_dir/dotnet"
 }
 
+@test "direct list shows an isolated-only inventory with an empty System SDKs group" {
+  bootstrap_tool
+  create_isolated_sdk '10.0.401'
+  fake_bin="$test_root/empty-system-bin"
+  write_fake_system_dotnet "$fake_bin"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"10.0.401  $tool_root/10.0.401"* ]]
+  system_section="$(printf '%s\n' "$output" | sed -n '/^System SDKs:$/,$p')"
+  [[ "$system_section" == *"  None"* ]]
+}
+
+@test "direct list shows a system-only inventory with an empty Isolated SDKs group" {
+  bootstrap_tool
+  fake_bin="$test_root/system-only-bin"
+  write_fake_system_dotnet "$fake_bin" '10.0.401 [/usr/share/dotnet/sdk]'
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+
+  [ "$status" -eq 0 ]
+  isolated_section="$(printf '%s\n' "$output" | sed -n '/^Isolated SDKs:$/,/^System SDKs:$/p')"
+  [[ "$isolated_section" == *"  None"* ]]
+  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk"* ]]
+}
+
 @test "direct list shows isolated SDKs before system SDKs and preserves overlap" {
   bootstrap_tool
   create_isolated_sdk '11.0.100-rc.1.26425.128'
