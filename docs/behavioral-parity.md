@@ -26,7 +26,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Remove with a version | Target only that version's directory under the isolated SDK root. |
 | Removal confirmation | Default to no unless approval is explicitly supplied through the shell's supported mechanism. |
 | Build-server shutdown | Must succeed before deletion. Failure identifies the selected SDK and native exit code where available, blocks deletion, and suppresses removal success. |
-| Helper download / installer / verification / promotion failure | Return nonzero and do not report install success. |
+| Release-metadata / payload / extraction / verification / promotion failure | Return nonzero and do not report install success. |
 | Operational failure | Return a nonzero status. Exact numeric status need not be identical across runtimes unless a narrower contract specifies it. |
 | Diagnostics | Identify the failed product operation. Runtime-specific command/exception detail may be appended when useful. |
 
@@ -34,17 +34,18 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 
 Issue #18 established the installation ownership and recovery baseline for both shells. Behavioral parity work must preserve these rules:
 
-- each new install uses an operation-owned Microsoft install helper;
+- each new install uses operation-owned Microsoft release metadata and SDK payload archive state;
 - installation occurs in an operation-owned staging directory rather than directly in the final version directory;
+- the downloaded SDK archive must match its Microsoft-published SHA-512 before extraction;
 - the staged host must exist, execute successfully, and report the requested exact SDK before promotion;
 - a pre-existing final destination is never replaced or adopted accidentally;
 - a final destination that appears before promotion blocks promotion and is preserved;
 - clean-start failures do not leave a new final destination;
-- operation-owned helper and staging state is cleaned after success or failure when cleanup is possible;
+- operation-owned metadata, payload-archive, and staging state is cleaned after success or failure when cleanup is possible;
 - cleanup failure is reported and does not mask the primary failure;
 - a failed clean-start attempt can be retried deterministically.
 
-This contract intentionally says nothing about making the Microsoft install helper persistent state. Install helpers and staging directories are transaction-scoped artifacts.
+Release metadata, downloaded payload archives, and staging directories are transaction-scoped artifacts rather than persistent product state.
 
 ## Interactive and automation behavior
 
@@ -65,7 +66,7 @@ Interactive navigation is deliberately limited:
 
 Back is a selection-menu concept only. Ordinary yes/no install and removal confirmations retain their existing default-no cancellation behavior and do not become navigation menus. In a persistent interactive session, declining such a confirmation is a successful no-change result and returns to Main.
 
-Operational failures are never converted into navigation results. Metadata, filesystem, installer, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
+Operational failures are never converted into navigation results. Metadata, filesystem, payload acquisition/checksum/extraction, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
 
 Automation should provide both the action and exact version when a version is required. `Verify <exact-version>` / `verify <exact-version>` is always one-shot and never enters the persistent Main menu. `-Yes` and `--yes` are confirmation controls, not selection controls.
 
