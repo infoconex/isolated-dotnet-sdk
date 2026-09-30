@@ -109,14 +109,15 @@ Describe 'PowerShell process-level behavior' {
         $listInformationOutput | Should -Match 'Isolated SDKs:'
         $listInformationOutput | Should -Match 'System SDKs:'
         $listInformationOutput | Should -Match 'None'
+        $listInformationOutput | Should -Not -Match 'isolated-dotnet-sdk:'
         $listInformationOutput.Contains([char]27) | Should -BeFalse
     }
 
-    It 'uses informational and success colors when ANSI rendering is requested' {
+    It 'uses heading and success colors when ANSI rendering is requested' {
         Install-TestTool
         $env:ISOLATED_DOTNET_SDK_SOURCE_COPY = $script:SourceCopy
 
-        & pwsh -NoProfile -Command '$PSStyle.OutputRendering = "Ansi"; $output = @(& $env:ISOLATED_DOTNET_SDK_SOURCE_COPY -Action List 6>&1); $text = $output -join [Environment]::NewLine; $expectedInfoPrefix = "$($PSStyle.Foreground.Cyan)isolated-dotnet-sdk:$($PSStyle.Reset)"; $expectedSuccessPrefix = "$($PSStyle.Foreground.Green)isolated-dotnet-sdk:$($PSStyle.Reset)"; if (-not $text.Contains($expectedInfoPrefix)) { exit 1 }; if (-not $text.Contains("$expectedSuccessPrefix Tool installed.")) { exit 1 }'
+        & pwsh -NoProfile -Command '$PSStyle.OutputRendering = "Ansi"; $output = @(& $env:ISOLATED_DOTNET_SDK_SOURCE_COPY -Action List 6>&1); $text = $output -join [Environment]::NewLine; $expectedHeading = "$($PSStyle.Foreground.Cyan)Installed .NET SDKs$($PSStyle.Reset)"; $expectedSuccess = "$($PSStyle.Foreground.Green)Tool installed.$($PSStyle.Reset)"; if (-not $text.Contains($expectedHeading)) { exit 1 }; if (-not $text.Contains($expectedSuccess)) { exit 1 }; if ($text.Contains("isolated-dotnet-sdk:")) { exit 1 }'
 
         $LASTEXITCODE | Should -Be 0
     }
@@ -126,7 +127,7 @@ Describe 'PowerShell process-level behavior' {
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         [Environment]::SetEnvironmentVariable('NO_COLOR', '1', 'Process')
 
-        & pwsh -NoProfile -Command '$output = @(& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 6>&1); $text = $output -join [Environment]::NewLine; if ($PSStyle.OutputRendering -ne "PlainText") { exit 1 }; if ($text.Contains([char]27)) { exit 1 }'
+        & pwsh -NoProfile -Command '$output = @(& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 6>&1); $text = $output -join [Environment]::NewLine; if ($PSStyle.OutputRendering -ne "PlainText") { exit 1 }; if ($text.Contains([char]27)) { exit 1 }; if ($text.Contains("isolated-dotnet-sdk:")) { exit 1 }'
 
         $LASTEXITCODE | Should -Be 0
     }

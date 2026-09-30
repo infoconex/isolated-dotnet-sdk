@@ -98,15 +98,15 @@ function Write-ToolDisplay {
     Write-Information -MessageData $Message -InformationAction Continue
 }
 
-function Format-ToolPrefix {
+function Format-ToolMessage {
     param(
-        [ValidateSet('Info', 'Success')]
-        [string]$Kind
+        [ValidateSet('Heading', 'Success')]
+        [string]$Kind,
+        [string]$Message
     )
 
-    $Prefix = 'isolated-dotnet-sdk:'
     if ($null -eq $PSStyle) {
-        return $Prefix
+        return $Message
     }
 
     $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
@@ -114,7 +114,7 @@ function Format-ToolPrefix {
     ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
 
     if (-not $UseAnsi) {
-        return $Prefix
+        return $Message
     }
 
     $Foreground = if ($Kind -eq 'Success') {
@@ -124,22 +124,27 @@ function Format-ToolPrefix {
         $PSStyle.Foreground.Cyan
     }
 
-    return "$Foreground$Prefix$($PSStyle.Reset)"
+    return "$Foreground$Message$($PSStyle.Reset)"
 }
 
 function Write-ToolInfo {
     param([string]$Message)
-    Write-ToolDisplay "$(Format-ToolPrefix -Kind Info) $Message"
+    Write-ToolDisplay $Message
+}
+
+function Write-ToolHeading {
+    param([string]$Message)
+    Write-ToolDisplay (Format-ToolMessage -Kind Heading -Message $Message)
 }
 
 function Write-ToolSuccess {
     param([string]$Message)
-    Write-ToolDisplay "$(Format-ToolPrefix -Kind Success) $Message"
+    Write-ToolDisplay (Format-ToolMessage -Kind Success -Message $Message)
 }
 
 function Write-ToolWarning {
     param([string]$Message)
-    Write-Warning "isolated-dotnet-sdk: $Message"
+    Write-Warning $Message
 }
 
 function Assert-ValidAction {
@@ -176,7 +181,7 @@ function Confirm-Action {
         return $true
     }
 
-    $Response = Read-ToolInput "isolated-dotnet-sdk: $Prompt [y/N]"
+    $Response = Read-ToolInput "$Prompt [y/N]"
     return $Response -match '^[Yy]$'
 }
 
@@ -328,9 +333,9 @@ function Show-InstalledSdk {
     $IsolatedVersions = @(Get-IsolatedSdkVersion)
     $SystemSdks = @(Get-SystemSdkInventory)
 
-    Write-ToolInfo 'Installed .NET SDKs'
+    Write-ToolHeading 'Installed .NET SDKs'
     Write-ToolDisplay
-    Write-ToolDisplay 'Isolated SDKs:'
+    Write-ToolHeading 'Isolated SDKs:'
 
     if (-not $IsolatedVersions) {
         Write-ToolDisplay '  None'
@@ -342,7 +347,7 @@ function Show-InstalledSdk {
     }
 
     Write-ToolDisplay
-    Write-ToolDisplay 'System SDKs:'
+    Write-ToolHeading 'System SDKs:'
 
     if (-not $SystemSdks) {
         Write-ToolDisplay '  None'
@@ -488,7 +493,7 @@ function Select-Action {
     }
 
     while ($true) {
-        Write-ToolInfo 'What would you like to do?'
+        Write-ToolHeading 'What would you like to do?'
         Write-ToolDisplay
         Write-ToolDisplay '  1. Install an SDK'
         Write-ToolDisplay '  2. Remove an isolated SDK'
@@ -576,7 +581,7 @@ function Get-ChannelSdkVersion {
 }
 
 function Read-ManualVersion {
-    $script:Version = Read-ToolInput 'isolated-dotnet-sdk: .NET SDK version'
+    $script:Version = Read-ToolInput '.NET SDK version'
     if ([string]::IsNullOrWhiteSpace($script:Version)) {
         throw 'An SDK version is required.'
     }
@@ -607,11 +612,11 @@ function Select-InstallVersion {
         Write-ToolDisplay
 
         if ($ShowArchived) {
-            Write-ToolInfo 'Select an end-of-life .NET channel:'
+            Write-ToolHeading 'Select an end-of-life .NET channel:'
             $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
         }
         else {
-            Write-ToolInfo 'Select a supported or development .NET channel:'
+            Write-ToolHeading 'Select a supported or development .NET channel:'
             $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
         }
 
@@ -726,7 +731,7 @@ function Select-InstallVersion {
 
         while ($true) {
             Write-ToolDisplay
-            Write-ToolInfo "Available .NET $ChannelVersion SDKs:"
+            Write-ToolHeading "Available .NET $ChannelVersion SDKs:"
             Write-ToolDisplay
 
             if ($ShowAllVersions) {
@@ -829,7 +834,7 @@ function Select-RemoveVersion {
     }
 
     while ($true) {
-        Write-ToolInfo 'Select an isolated SDK to remove:'
+        Write-ToolHeading 'Select an isolated SDK to remove:'
         Write-ToolDisplay
 
         for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
@@ -1364,7 +1369,7 @@ try {
         Invoke-SelectedAction
     }
     catch {
-        Write-Error -Message "isolated-dotnet-sdk: $($_.Exception.Message)" -ErrorAction Continue
+        Write-Error -Message $_.Exception.Message -ErrorAction Continue
         exit 1
     }
 }
