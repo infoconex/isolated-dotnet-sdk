@@ -19,6 +19,8 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Explicit interactive no/blank/q cancellation | Return success with no state change where that response is part of the prompt's normal cancellation contract. |
 | List | Report the isolated SDK root and recognized installed version directories; report `None` when empty. |
 | Explicit List plus Version | Reject the version instead of silently ignoring it. |
+| Verify with an exact version | Run a direct-command-only, read-only health check against that version directory under the isolated SDK root. Require the platform host to be present/runnable, require `--list-sdks` to succeed, and require the host to report the requested exact SDK version. |
+| Unhealthy Verify result | Return nonzero with repository-owned context for not-installed, missing/non-runnable host, native host failure, or exact-version mismatch. Verification never repairs or mutates the installation. |
 | Remove without a version | Present the installed isolated SDK picker. Explicit cancellation or an empty installed set is a normal no-change result. |
 | Remove with a version | Target only that version's directory under the isolated SDK root. |
 | Removal confirmation | Default to no unless approval is explicitly supplied through the shell's supported mechanism. |
@@ -64,7 +66,7 @@ Back is a selection-menu concept only. Ordinary yes/no install and removal confi
 
 Operational failures are never converted into navigation results. Metadata, filesystem, installer, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
 
-Automation should provide both the action and exact version when a version is required. `-Yes` and `--yes` are confirmation controls, not selection controls.
+Automation should provide both the action and exact version when a version is required. `Verify <exact-version>` / `verify <exact-version>` is always one-shot and never enters the persistent Main menu. `-Yes` and `--yes` are confirmation controls, not selection controls.
 
 For example, `Install <exact-version> -Yes` / `install <exact-version> --yes` can run without the normally-installed-SDK confirmation. `Install -Yes` / `install --yes` still needs interactive selection because no version has been resolved. If that input cannot be obtained, the command fails rather than guessing or silently cancelling.
 

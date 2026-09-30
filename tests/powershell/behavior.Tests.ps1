@@ -191,7 +191,7 @@ Describe 'PowerShell process-level behavior' {
         $failureOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List -Version 99.0.100 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
-        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Version.*supported only with.*Install or Remove'
+        ($failureOutput -join [Environment]::NewLine) | Should -Match 'Version.*supported only with.*Install, Remove, or Verify'
         ($failureOutput -join [Environment]::NewLine) | Should -Not -Match 'Isolated SDKs under'
     }
 }

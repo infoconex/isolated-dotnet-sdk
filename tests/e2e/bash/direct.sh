@@ -40,6 +40,13 @@ if [[ "$actual_version" != "$sdk_version" ]]; then
   exit 1
 fi
 
+verify_output="$(bash "$saved_tool" verify "$sdk_version")"
+printf '%s\n' "$verify_output"
+if ! grep -Fq "Isolated SDK $sdk_version is healthy." <<<"$verify_output"; then
+  printf 'Verify output did not report SDK %s healthy.\n' "$sdk_version" >&2
+  exit 1
+fi
+
 list_output="$(bash "$saved_tool" list)"
 printf '%s\n' "$list_output"
 if ! grep -Fq "$sdk_version" <<<"$list_output"; then

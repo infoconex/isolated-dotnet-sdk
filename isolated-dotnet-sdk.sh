@@ -1074,6 +1074,42 @@ install_isolated_sdk() {
     tool_info "Location: $install_dir"
 }
 
+verify_isolated_sdk() {
+    [[ -n "$VERSION" ]] || tool_fail "An exact SDK version is required with verify."
+    validate_version
+
+    local install_dir="$SDK_ROOT/$VERSION"
+    local isolated_dotnet="$install_dir/dotnet"
+    local isolated_sdks=""
+    local status=0
+
+    if [[ ! -d "$install_dir" ]]; then
+        tool_fail "Isolated SDK $VERSION is not installed under $SDK_ROOT."
+    fi
+
+    if [[ ! -e "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
+        tool_fail "Isolated SDK $VERSION is incomplete: expected dotnet host was not found at $isolated_dotnet."
+    fi
+
+    if [[ ! -x "$isolated_dotnet" ]]; then
+        tool_fail "Isolated SDK $VERSION host is not executable: $isolated_dotnet"
+    fi
+
+    if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+        :
+    else
+        status=$?
+        tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
+    fi
+
+    if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+        tool_fail "Isolated SDK $VERSION failed verification: the host did not report SDK $VERSION."
+    fi
+
+    tool_success "Isolated SDK $VERSION is healthy."
+    tool_info "Location: $install_dir"
+}
+
 remove_isolated_sdk() {
     resolve_remove_version || return 0
 
@@ -1120,6 +1156,9 @@ run_selected_action() {
         list)
             list_isolated_sdks
             ;;
+        verify)
+            verify_isolated_sdk
+            ;;
         *)
             tool_fail "Unknown action: $ACTION"
             ;;
@@ -1140,6 +1179,7 @@ Usage:
   isolated-dotnet-sdk.sh install [version] [--yes|-y]
   isolated-dotnet-sdk.sh remove [version] [--yes|-y]
   isolated-dotnet-sdk.sh list
+  isolated-dotnet-sdk.sh verify <version>
   isolated-dotnet-sdk.sh [version] [--yes|-y]
   isolated-dotnet-sdk.sh --help|-h
 
@@ -1147,6 +1187,7 @@ Commands:
   install [version]  Install an isolated SDK. Without a version, show the SDK picker.
   remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
   list               List isolated SDKs under ~/dotnet-sdks. A version is invalid with list.
+  verify <version>   Read-only health check for one exact installed isolated SDK.
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
@@ -1156,6 +1197,7 @@ Behavior:
   No command         Start a persistent interactive session that returns to Main after normal operations.
   Bare version       Treat the version as a one-shot install request.
   Explicit actions   Run once and exit without entering the persistent Main loop.
+  Verify <version>   Requires one exact version and checks only the existing isolated installation.
   Exact-version installs bypass release-metadata discovery.
   Interactive install selection uses Microsoft's published release metadata.
   Required interactive input that is unavailable is an operational failure.
@@ -1188,7 +1230,7 @@ EXIT_REQUESTED="false"
 
 if [[ $# -gt 0 ]]; then
     case "$1" in
-        install|remove|list)
+        install|remove|list|verify)
             ACTION="$1"
             shift
             ;;

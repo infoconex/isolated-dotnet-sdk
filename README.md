@@ -41,7 +41,7 @@ Stable installation is explicitly version-pinned and integrity-checked. Choose a
 
 `v0.1.0` predates this integrity policy and does not have a `SHA256SUMS` release asset. It remains available as legacy history but is not compatible with the checksum-verifying stable bootstrap.
 
-The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then starts a persistent interactive session. Successful operations and normal cancellations return to the main menu until you explicitly exit. Explicit Install, List, Remove, or exact-version invocations remain one-shot for automation and scripting.
+The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then starts a persistent interactive session. Successful operations and normal cancellations return to the main menu until you explicitly exit. Explicit Install, List, Remove, Verify, or exact-version invocations remain one-shot for automation and scripting.
 
 ```text
 isolated-dotnet-sdk: What would you like to do?
@@ -252,6 +252,28 @@ Bash:
 ```
 
 An explicit List action does not accept a version. Supplying one is treated as invalid input rather than silently ignoring it. A bare version with no action is still the Install convenience form shown above.
+
+## Verify an Isolated SDK
+
+`Verify` / `verify` is a direct-command-only, read-only health check for one exact installed isolated SDK. It is intentionally not on the persistent Main menu.
+
+PowerShell:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
+    -Action Verify `
+    -Version '10.0.401'
+```
+
+Bash:
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" verify 10.0.401
+```
+
+A healthy result means the selected version directory exists, its platform-specific `dotnet` host is present and launchable/executable, `dotnet --list-sdks` succeeds, and that host reports the requested exact SDK version. Healthy verification returns zero. A missing installation or host, a non-runnable host, native host failure, or exact-version mismatch returns nonzero with operation-specific context.
+
+Verification does not repair, reinstall, upgrade, delete, or otherwise mutate the isolated SDK. It does not change the normal `PATH` or system `dotnet` installation, does not re-hash every installed SDK file, and does not check or update helper/tool freshness in this initial contract.
 
 ## Use an Isolated SDK
 

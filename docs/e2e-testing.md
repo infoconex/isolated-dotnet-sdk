@@ -39,9 +39,10 @@ The direct scenario uses the checked-out repository tool and real Microsoft infr
 1. bootstrap the tool into the job-local home;
 2. install the configured exact SDK;
 3. execute that isolated SDK and require its reported version to equal the configured version;
-4. list isolated SDKs and require the configured version to appear;
-5. remove the configured SDK;
-6. require the isolated SDK directory to be absent afterward.
+4. run the public standalone Verify action and require a healthy result;
+5. list isolated SDKs and require the configured version to appear;
+6. remove the configured SDK;
+7. require the isolated SDK directory to be absent afterward.
 
 Exact-version installation intentionally bypasses release-metadata selection, but installer acquisition and SDK payload download remain real.
 
