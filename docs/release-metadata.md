@@ -4,9 +4,11 @@ This document records the release-metadata discovery contract shared by the Powe
 
 ## Scope
 
-Interactive SDK installation uses Microsoft's release index to choose a .NET channel and then uses that channel's release metadata to enumerate exact SDK versions. An install that already supplies an exact SDK version does not need release-metadata discovery.
+Interactive SDK version selection uses Microsoft's release index to choose a .NET channel and then uses that channel's release metadata to enumerate exact SDK versions. An install that already supplies an exact SDK version bypasses that release-index/channel discovery path.
 
-This contract covers discovery only. It does not define retry/backoff, stable bootstrap source policy, or transaction/rollback behavior for the later SDK installer.
+Once an exact SDK version has been resolved, installation separately retrieves Microsoft's exact-version release metadata to identify the supported platform archive and its published SHA-512. Supplying an exact version therefore bypasses interactive discovery, not the metadata required for payload acquisition and integrity verification.
+
+This contract covers interactive version discovery only. It does not define retry/backoff, stable bootstrap source policy, or the later transactional SDK payload acquisition, verification, extraction, staging, and promotion behavior.
 
 ## Release index
 
@@ -32,7 +34,7 @@ Duplicate SDK versions are removed while preserving first-seen order. PowerShell
 
 ## Explicit-version installs
 
-When the caller supplies an exact SDK version, release-index and selected-channel discovery are bypassed. A later failure to download or run the SDK installer belongs to the installation boundary rather than being reported as a release-metadata discovery failure.
+When the caller supplies an exact SDK version, release-index and selected-channel discovery are bypassed. Installation still retrieves the exact version's Microsoft release metadata to resolve the supported platform archive and SHA-512. Failure to retrieve or validate that required artifact metadata, download the payload, or verify its checksum belongs to the installation/payload-integrity boundary rather than being reported as an interactive release-metadata discovery failure.
 
 ## Filesystem safety
 
@@ -47,4 +49,4 @@ PowerShell and Bash may parse and retrieve metadata differently, but their obser
 - failed discovery is never followed by success output;
 - unusable empty selections are rejected;
 - optional display metadata does not become an accidental hard requirement;
-- exact-version installation remains independent from release metadata.
+- exact-version installation remains independent from release-index/channel discovery while still using exact-version release metadata for payload integrity.
