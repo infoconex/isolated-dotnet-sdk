@@ -134,7 +134,8 @@ try {
     $requiredFragments = @(
         'Back to .NET channels',
         'Isolated SDK installation completed successfully.',
-        'Isolated SDKs under',
+        'Isolated SDKs:',
+        'System SDKs:',
         $sdkVersion,
         'was removed.',
         'Exiting.'

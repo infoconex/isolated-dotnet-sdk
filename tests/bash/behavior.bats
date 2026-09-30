@@ -48,7 +48,7 @@ bootstrap_tool() {
   run env HOME="$test_home" "$tool_path" list
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Isolated SDKs under"* ]]
+  [[ "$output" == *"Installed .NET SDKs"* ]]
 }
 
 @test "invalid SDK version is rejected" {

@@ -17,7 +17,8 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | `-Yes` / `--yes` | Bypass supported confirmation prompts only. It does not invent a version or bypass an unresolved selection prompt. |
 | Required interactive input unavailable | Fail nonzero with repository-owned `Interactive input is unavailable.` context rather than looping or treating EOF as cancellation. |
 | Explicit interactive no/blank/q cancellation | Return success with no state change where that response is part of the prompt's normal cancellation contract. |
-| List | Report the isolated SDK root and recognized installed version directories; report `None` when empty. |
+| List | Report two ordered ownership groups: recognized isolated SDKs under the isolated root first, then read-only SDKs returned by the normally resolved `dotnet --list-sdks` host. Preserve same-version overlap across groups and report `None` for each empty group. |
+| Existing SDK detection | Distinguish SDKs already available from the system `dotnet` host from SDKs already present under the isolated root. An unavailable normal host is an empty system inventory; a resolved host whose `--list-sdks` command fails is an operational failure. |
 | Explicit List plus Version | Reject the version instead of silently ignoring it. |
 | Verify with an exact version | Run a direct-command-only, read-only health check against that version directory under the isolated SDK root. Require the platform host to be present/runnable, require `--list-sdks` to succeed, and require the host to report the requested exact SDK version. |
 | Unhealthy Verify result | Return nonzero with repository-owned context for not-installed, missing/non-runnable host, native host failure, or exact-version mismatch. Verification never repairs or mutates the installation. |
