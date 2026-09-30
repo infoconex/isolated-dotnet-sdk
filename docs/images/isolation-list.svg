@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1050" height="360" viewBox="0 0 1050 360" role="img" aria-labelledby="title desc">
   <title id="title">Linux Bash installed SDK ownership example</title>
-  <desc id="desc">Representative list output showing .NET SDK 10.0.100 in both the isolated SDK root and the normal system dotnet host inventory.</desc>
+  <desc id="desc">Representative list output showing .NET SDK 10.0.100 in both the isolated SDK root and the normally resolved system dotnet host inventory.</desc>
   <rect width="1050" height="360" rx="10" fill="#14161a"/>
   <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#e2e4e8">
     <text x="28" y="46" font-size="24" font-weight="700">Linux/Bash — representative ownership view</text>
