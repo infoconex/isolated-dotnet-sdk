@@ -21,19 +21,23 @@ else
 fi
 
 tool_info() {
-    printf "%b%s%b %s\n" "$CYAN" "isolated-dotnet-sdk:" "$RESET" "$1"
+    printf "%s\n" "$1"
+}
+
+tool_heading() {
+    printf "%b%s%b\n" "$CYAN" "$1" "$RESET"
 }
 
 tool_warn() {
-    printf "%b%s%b %s\n" "$YELLOW" "isolated-dotnet-sdk:" "$RESET" "$1"
+    printf "%b%s%b\n" "$YELLOW" "$1" "$RESET"
 }
 
 tool_success() {
-    printf "%b%s%b %s\n" "$GREEN" "isolated-dotnet-sdk:" "$RESET" "$1"
+    printf "%b%s%b\n" "$GREEN" "$1" "$RESET"
 }
 
 tool_fail() {
-    printf "%s %s\n" "isolated-dotnet-sdk:" "$1" >&2
+    printf "%s\n" "$1" >&2
     exit 1
 }
 
@@ -126,7 +130,7 @@ confirm_action() {
         return 0
     fi
 
-    read_tool_input "isolated-dotnet-sdk: $prompt [y/N] "
+    read_tool_input "$prompt [y/N] "
     response="$TOOL_INPUT"
     [[ "$response" =~ ^[Yy]$ ]]
 }
@@ -333,7 +337,7 @@ select_action() {
     local selection=""
 
     while true; do
-        tool_info "What would you like to do?"
+        tool_heading "What would you like to do?"
         echo
         echo "  1. Install an SDK"
         echo "  2. Remove an isolated SDK"
@@ -392,9 +396,9 @@ select_install_version() {
     while true; do
         echo
         if [[ "$show_archived" == "true" ]]; then
-            tool_info "Select an end-of-life .NET channel:"
+            tool_heading "Select an end-of-life .NET channel:"
         else
-            tool_info "Select a supported or development .NET channel:"
+            tool_heading "Select a supported or development .NET channel:"
         fi
         echo
 
@@ -458,7 +462,7 @@ select_install_version() {
 
         case "$selection" in
             [mM])
-                read_tool_input "isolated-dotnet-sdk: .NET SDK version: "
+                read_tool_input ".NET SDK version: "
                 VERSION="$TOOL_INPUT"
                 [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                 validate_version
@@ -544,7 +548,7 @@ select_install_version() {
 
         while true; do
             echo
-            tool_info "Available .NET $channel SDKs:"
+            tool_heading "Available .NET $channel SDKs:"
             echo
 
             if [[ "$show_all_versions" == "true" ]]; then
@@ -612,7 +616,7 @@ select_install_version() {
                     fi
                     ;;
                 [mM])
-                    read_tool_input "isolated-dotnet-sdk: .NET SDK version: "
+                    read_tool_input ".NET SDK version: "
                     VERSION="$TOOL_INPUT"
                     [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                     validate_version
@@ -664,7 +668,7 @@ select_remove_version() {
     done <<< "$versions"
 
     while true; do
-        tool_info "Select an isolated SDK to remove:"
+        tool_heading "Select an isolated SDK to remove:"
         echo
 
         for ((i=0; i<${#sdk_versions[@]}; i++)); do
@@ -771,9 +775,9 @@ list_installed_sdks() {
     isolated_versions="$(get_isolated_sdk_versions)"
     system_inventory="$(get_system_sdk_inventory)"
 
-    tool_info "Installed .NET SDKs"
+    tool_heading "Installed .NET SDKs"
     echo
-    echo "Isolated SDKs:"
+    tool_heading "Isolated SDKs:"
 
     if [[ -z "$isolated_versions" ]]; then
         printf "  %s\n" "None"
@@ -784,7 +788,7 @@ list_installed_sdks() {
     fi
 
     echo
-    echo "System SDKs:"
+    tool_heading "System SDKs:"
 
     if [[ -z "$system_inventory" ]]; then
         printf "  %s\n" "None"

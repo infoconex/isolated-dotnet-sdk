@@ -60,6 +60,7 @@ The Bash suites cover, among other focused reliability cases:
 - isolated temporary `HOME` handling;
 - file-based bootstrap source preservation, child-status propagation, and bootstrap filesystem/final-replacement failures;
 - `list` behavior and non-SDK artifact filtering, including rejection of an explicit list-version argument;
+- prefix-free CLI presentation, explicit semantic heading roles, ANSI-free captured output, and preserved failure routing;
 - bare-version install resolution, removal picker cancellation/no-installed behavior, and unavailable required picker input;
 - rejection of an invalid SDK version;
 - release-metadata transport/shape failures, required selection fields, no-SDK channel data, first-seen duplicate ordering, and exact-version metadata independence;
@@ -95,8 +96,9 @@ The PowerShell behavioral coverage includes:
 - the `List` action and non-SDK artifact filtering, including rejection of explicit List plus Version;
 - Version-without-Action install resolution, removal picker cancellation/no-installed behavior, and unavailable required picker input;
 - information-stream versus success-stream separation;
-- ANSI informational and success presentation colors;
+- prefix-free presentation with explicit cyan heading and green success roles while ordinary values remain neutral;
 - ANSI-free redirected output and `NO_COLOR` behavior;
+- warning/error stream preservation and prefix-free failure presentation;
 - rejection of an invalid SDK version;
 - release-metadata transport/shape behavior, required selection fields, no-SDK channel data, duplicate normalization, and exact-version metadata independence;
 - repository-owned unavailable-interactive-input context;

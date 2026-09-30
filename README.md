@@ -44,7 +44,7 @@ Stable installation is explicitly version-pinned and integrity-checked. Choose a
 The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then starts a persistent interactive session. Successful operations and normal cancellations return to the main menu until you explicitly exit. Explicit Install, List, Remove, Verify, or exact-version invocations remain one-shot for automation and scripting.
 
 ```text
-isolated-dotnet-sdk: What would you like to do?
+What would you like to do?
 
   1. Install an SDK
   2. Remove an isolated SDK
@@ -136,7 +136,7 @@ Choosing **Install an SDK**, or explicitly running the `install` action without 
 A channel menu looks similar to:
 
 ```text
-isolated-dotnet-sdk: Select a supported or development .NET channel:
+Select a supported or development .NET channel:
 
   1. .NET 11.0  STS  Go Live      latest SDK 11.0.100-rc.1.26425.128
   2. .NET 10.0  LTS  Active       latest SDK 10.0.401
