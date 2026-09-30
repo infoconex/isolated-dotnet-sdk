@@ -28,7 +28,7 @@ write_fake_system_dotnet() {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' 'if [[ "${1:-}" != "--list-sdks" ]]; then exit 97; fi'
     for line in "$@"; do
-      printf 'printf %q\\n %q\n' '%s' "$line"
+      printf 'printf "%%s\\n" %q\n' "$line"
     done
   } > "$fake_bin/dotnet"
   chmod +x "$fake_bin/dotnet"
