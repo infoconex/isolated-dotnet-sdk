@@ -1,0 +1,115 @@
+name: Apply Issue 82 implementation patch
+
+on:
+  push:
+    branches:
+      - release/issue-82-s-channel-toggle
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore: stage issue 82 implementation patch'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: release/issue-82-s-channel-toggle
+
+      - name: Apply symmetric channel toggle
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          bash_path = Path('isolated-dotnet-sdk.sh')
+          bash_text = bash_path.read_text()
+          old_bash_menu = '''        if [[ "$show_archived" == "true" ]]; then
+              echo "  S. Show supported/development channels"
+          else
+              echo "  A. Show end-of-life channels"
+          fi
+          '''
+          new_bash_menu = '''        if [[ "$show_archived" == "true" ]]; then
+              echo "  S. Show supported/development channels"
+          else
+              echo "  S. Show end-of-life channels"
+          fi
+          '''
+          old_bash_input = '''            [aA])
+                  if [[ "$show_archived" == "false" ]]; then
+                      show_archived="true"
+                      continue
+                  fi
+                  ;;
+              [sS])
+                  if [[ "$show_archived" == "true" ]]; then
+                      show_archived="false"
+                      continue
+                  fi
+                  ;;
+          '''
+          new_bash_input = '''            [sS])
+                  if [[ "$show_archived" == "true" ]]; then
+                      show_archived="false"
+                  else
+                      show_archived="true"
+                  fi
+                  continue
+                  ;;
+          '''
+          assert bash_text.count(old_bash_menu) == 1
+          assert bash_text.count(old_bash_input) == 1
+          bash_text = bash_text.replace(old_bash_menu, new_bash_menu).replace(old_bash_input, new_bash_input)
+          bash_path.write_text(bash_text)
+
+          ps_path = Path('isolated-dotnet-sdk.ps1')
+          ps_text = ps_path.read_text()
+          old_ps_menu = '''        if ($ShowArchived) {
+              Write-ToolDisplay '  S. Show supported/development channels'
+          }
+          else {
+              Write-ToolDisplay '  A. Show end-of-life channels'
+          }
+          '''
+          new_ps_menu = '''        if ($ShowArchived) {
+              Write-ToolDisplay '  S. Show supported/development channels'
+          }
+          else {
+              Write-ToolDisplay '  S. Show end-of-life channels'
+          }
+          '''
+          old_ps_input = '''        if ($Selection -match '^[Aa]$' -and -not $ShowArchived) {
+              $ShowArchived = $true
+              continue
+          }
+
+          if ($Selection -match '^[Ss]$' -and $ShowArchived) {
+              $ShowArchived = $false
+              continue
+          }
+          '''
+          new_ps_input = '''        if ($Selection -match '^[Ss]$') {
+              $ShowArchived = -not $ShowArchived
+              continue
+          }
+          '''
+          assert ps_text.count(old_ps_menu) == 1
+          assert ps_text.count(old_ps_input) == 1
+          ps_text = ps_text.replace(old_ps_menu, new_ps_menu).replace(old_ps_input, new_ps_input)
+          ps_path.write_text(ps_text)
+          PY
+
+          git diff --check
+          git diff -- isolated-dotnet-sdk.sh isolated-dotnet-sdk.ps1
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add isolated-dotnet-sdk.sh isolated-dotnet-sdk.ps1
+          git commit -m 'fix: use S for channel view toggle'
+          git push origin HEAD:release/issue-82-s-channel-toggle
