@@ -24,7 +24,7 @@ Release-index and channel-metadata transport/shape failures for interactive disc
 
 Filesystem ownership, bootstrap staging cleanup, and removal safety are governed by Issue #15. Native-command hardening must not widen the set of paths the tool may remove.
 
-Issue #18 owns installer rollback/recovery semantics: each install uses operation-owned metadata, payload, and staging state; verifies the archive before extraction; verifies the staged host before promotion; preserves pre-existing destinations; cleans transaction-owned state when possible; and supports deterministic retry after a clean-start failure. Acquisition, hashing, extraction, or verification failure must preserve that transaction contract rather than writing directly into or replacing the final destination.
+Issue #18 owns installation rollback/recovery semantics: each install uses operation-owned metadata, payload, and staging state; verifies the archive before extraction; verifies the staged host before promotion; preserves pre-existing destinations; cleans transaction-owned state when possible; and supports deterministic retry after a clean-start failure. Acquisition, hashing, extraction, or verification failure must preserve that transaction contract rather than writing directly into or replacing the final destination.
 
 Cross-shell observable behavior and intentional runtime differences are specified in [`behavioral-parity.md`](behavioral-parity.md).
 

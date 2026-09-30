@@ -44,7 +44,7 @@ The direct scenario uses the checked-out repository tool and real Microsoft infr
 6. remove the configured SDK;
 7. require the isolated SDK directory to be absent afterward.
 
-Exact-version installation intentionally bypasses release-metadata selection, but installer acquisition and SDK payload download remain real.
+Exact-version installation intentionally bypasses release-index/channel selection, but exact-version Microsoft release-metadata lookup, SDK payload download, SHA-512 verification, extraction, and staged-host verification remain real.
 
 ### Interactive scenario
 
