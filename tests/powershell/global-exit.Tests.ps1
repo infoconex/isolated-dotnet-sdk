@@ -131,7 +131,7 @@ function Invoke-RestMethod {
 
     It 'exits the persistent session directly from the end-of-life channel view' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', 'a', 'e') `
+            -InputLines @('1', 's', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
@@ -140,6 +140,31 @@ function Invoke-RestMethod {
         $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match 'Installation cancelled\.'
         $result.Output | Should -Match 'Exiting\.'
+    }
+
+    It 'uses S to toggle the channel view in both directions' {
+        $result = Invoke-GlobalExitToolProcess `
+            -InputLines @('1', 's', 's', 'e') `
+            -Command $script:ReleaseIndexCommand
+
+        $result.ExitCode | Should -Be 0
+        (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
+        ([regex]::Matches($result.Output, 'Select a supported or development \.NET channel:')).Count | Should -Be 2
+        ([regex]::Matches($result.Output, 'Select an end-of-life \.NET channel:')).Count | Should -Be 1
+        $result.Output | Should -Match 'S\. Show end-of-life channels'
+        $result.Output | Should -Match 'S\. Show supported/development channels'
+    }
+
+    It 'rejects A instead of toggling the channel view' {
+        $result = Invoke-GlobalExitToolProcess `
+            -InputLines @('1', 'a', 'e') `
+            -Command $script:ReleaseIndexCommand
+
+        $result.ExitCode | Should -Be 0
+        (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
+        ([regex]::Matches($result.Output, 'Select a supported or development \.NET channel:')).Count | Should -Be 2
+        $result.Output | Should -Match 'Invalid selection\.'
+        $result.Output | Should -Not -Match 'Select an end-of-life \.NET channel:'
     }
 
     It 'exits the persistent session directly from SDK version selection' {

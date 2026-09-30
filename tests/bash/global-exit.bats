@@ -128,7 +128,7 @@ EOF
   fake_bin="$test_root/eol-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\na\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "1\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -137,6 +137,37 @@ EOF
   [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"Installation cancelled."* ]]
   [[ "$output" == *"Exiting."* ]]
+}
+
+@test "S toggles the channel view in both directions" {
+  bootstrap_tool
+  fake_bin="$test_root/toggle-fake-bin"
+  write_global_exit_fake_curl "$fake_bin"
+
+  run bash -c 'printf "1\ns\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [ "$(count_main_prompts "$output")" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Select a supported or development \.NET channel:' || true)" -eq 2 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Select an end-of-life \.NET channel:' || true)" -eq 1 ]
+  [[ "$output" == *"S. Show end-of-life channels"* ]]
+  [[ "$output" == *"S. Show supported/development channels"* ]]
+}
+
+@test "A is rejected instead of toggling the channel view" {
+  bootstrap_tool
+  fake_bin="$test_root/reject-a-fake-bin"
+  write_global_exit_fake_curl "$fake_bin"
+
+  run bash -c 'printf "1\na\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [ "$(count_main_prompts "$output")" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Select a supported or development \.NET channel:' || true)" -eq 2 ]
+  [[ "$output" == *"Invalid selection."* ]]
+  [[ "$output" != *"Select an end-of-life .NET channel:"* ]]
 }
 
 @test "E exits persistent session directly from SDK version selection" {

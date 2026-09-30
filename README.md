@@ -141,7 +141,7 @@ isolated-dotnet-sdk: Select a supported or development .NET channel:
   3. .NET 9.0   STS  Maintenance  latest SDK 9.0.318
   4. .NET 8.0   LTS  Maintenance  latest SDK 8.0.425
 
-  A. Show end-of-life channels
+  S. Show end-of-life channels
   B. Back to Main
   M. Enter an exact SDK version manually
   E. Exit
