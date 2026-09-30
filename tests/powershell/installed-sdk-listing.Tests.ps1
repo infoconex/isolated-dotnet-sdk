@@ -16,7 +16,7 @@ Describe 'PowerShell installed SDK listing' {
             $LASTEXITCODE | Should -Be 0
         }
 
-        function New-SystemDotNetStub {
+        function Write-SystemDotNetStub {
             param(
                 [string]$Directory,
                 [string[]]$InventoryLines = @(),
@@ -64,7 +64,7 @@ Describe 'PowerShell installed SDK listing' {
         }
 
         $fakeBin = Join-Path $script:TestRoot 'system-bin'
-        New-SystemDotNetStub `
+        Write-SystemDotNetStub `
             -Directory $fakeBin `
             -InventoryLines @(
                 '10.0.401 [C:\Program Files\dotnet\sdk]',
@@ -91,7 +91,7 @@ Describe 'PowerShell installed SDK listing' {
     It 'shows None for both empty ownership groups' {
         Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'empty-system-bin'
-        New-SystemDotNetStub -Directory $fakeBin
+        Write-SystemDotNetStub -Directory $fakeBin
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
@@ -121,7 +121,7 @@ Describe 'PowerShell installed SDK listing' {
     It 'fails when the resolved system dotnet inventory exits nonzero' {
         Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'failing-system-bin'
-        New-SystemDotNetStub -Directory $fakeBin -ExitCode 71
+        Write-SystemDotNetStub -Directory $fakeBin -ExitCode 71
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
@@ -136,7 +136,7 @@ Describe 'PowerShell installed SDK listing' {
     It 'does not make a system-only SDK removable' {
         Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'system-only-bin'
-        New-SystemDotNetStub -Directory $fakeBin -InventoryLines @('10.0.401 [C:\Program Files\dotnet\sdk]')
+        Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @('10.0.401 [C:\Program Files\dotnet\sdk]')
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
