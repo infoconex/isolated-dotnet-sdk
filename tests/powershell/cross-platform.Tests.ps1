@@ -38,8 +38,10 @@ Describe 'PowerShell cross-platform path behavior' {
         Test-Path -LiteralPath $toolPath -PathType Leaf | Should -BeTrue
         Select-String -LiteralPath $toolPath -Pattern '# cross-platform-source-marker' -SimpleMatch -Quiet |
             Should -BeTrue
-        ($output -join [Environment]::NewLine) |
-            Should -Match ([regex]::Escape("Isolated SDKs under ${toolRoot}:"))
-        ($output -join [Environment]::NewLine) | Should -Match 'None'
+        $text = $output -join [Environment]::NewLine
+        $text | Should -Match 'Installed \.NET SDKs'
+        $text | Should -Match '(?m)^Isolated SDKs:\r?$'
+        $text | Should -Match '(?m)^System SDKs:\r?$'
+        $text | Should -Match 'None'
     }
 }
