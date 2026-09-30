@@ -72,7 +72,7 @@ Bash on Linux or macOS:
 "$HOME/dotnet-sdks/10.0.401/dotnet" build
 ```
 
-The .NET SDK muxer searches for `global.json` starting from the current working directory and walking up ancestor directories. The file constrains SDK resolution for the host that was launched; it does not choose that executable for you.
+For `dotnet` CLI commands, the .NET SDK muxer searches for `global.json` starting from the current working directory and walking up ancestor directories. During builds, the MSBuild project SDK resolver has its own documented search start based on the solution/project location. In either case, `global.json` constrains SDK resolution; it does not choose the `dotnet` executable for you.
 
 ### Repositories that already contain `global.json`
 
@@ -133,6 +133,7 @@ macOS:
 Use this deliberately:
 
 - `paths` requires a .NET 10 or later host. Older hosts ignore the property and fall back to their normal SDK discovery behavior.
+- `paths` affects commands that engage SDK resolution, such as `dotnet build`, `dotnet run`, and `dotnet test`; it does not redirect native app hosts or framework-dependent execution such as `dotnet app.dll`.
 - Absolute home-directory paths are user- and machine-specific. Avoid committing them to a shared repository unless that is an intentional team convention.
 - The path names an SDK installation root, not the `dotnet` executable itself.
 - Direct invocation of `~/dotnet-sdks/<version>/dotnet` (or `dotnet.exe` on Windows) remains the most explicit and broadly compatible way to guarantee which isolated host is used.
