@@ -42,6 +42,7 @@ jobs:
           mkdir -p .pages-source/docs .pages-source/.config
           cp README.md CHANGELOG.md LICENSE .pages-source/
           cp .config/test-frameworks.json .config/static-analysis.json .pages-source/.config/
+          printf 'include:\n  - .config\n' > .pages-source/_config.yml
 
           while IFS= read -r -d '' file; do
             destination=".pages-source/$file"
@@ -73,6 +74,7 @@ jobs:
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ./_site
+          include-hidden-files: true
 
   deploy:
     name: Deploy Pages site
