@@ -16,7 +16,7 @@ Run the saved tool without an action or exact SDK version when you want to work 
 
 A no-action invocation stays in one interactive session. After a successful Install, List, or Remove operation, the tool returns to Main. Normal cancellation or a no-change result also returns to Main. `E`/`e` is the global persistent-session Exit command and is available from Main and each persistent selection menu, so you do not need to navigate back to Main before exiting. Main no longer exposes a numeric `4. Exit` action, and `4` is not retained as an undocumented Exit alias.
 
-A genuine operational failure is different from navigation or cancellation. Metadata, filesystem, installer, native-command, verification, cleanup, and other correctness-significant failures terminate the process nonzero immediately. The session does not return to Main after such a failure, so a later Exit cannot hide it.
+A genuine operational failure is different from navigation or cancellation. Metadata, filesystem, payload acquisition/checksum/extraction, native-command, verification, cleanup, and other correctness-significant failures terminate the process nonzero immediately. The session does not return to Main after such a failure, so a later Exit cannot hide it.
 
 ## One-shot commands
 
@@ -34,7 +34,7 @@ Explicit commands remain automation-friendly and do not enter the persistent Mai
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" remove 10.0.401 --yes
 ```
 
-The bare-version Install convenience form is also one-shot. Exact-version installation continues to bypass Microsoft release-metadata discovery.
+The bare-version Install convenience form is also one-shot. Exact-version installation bypasses Microsoft release-index/channel discovery but still retrieves the exact version's release metadata to resolve and verify the platform SDK archive.
 
 ## Back, Exit, and cancellation
 
