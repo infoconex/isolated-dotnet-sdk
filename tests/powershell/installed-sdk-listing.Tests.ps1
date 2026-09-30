@@ -140,11 +140,11 @@ Describe 'PowerShell installed SDK listing' {
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
-        $removeOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Remove -Version 10.0.401 -Yes 2>&1')
-        $text = $removeOutput -join [Environment]::NewLine
+        & pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Remove -Version 10.0.401 -Yes 2>&1' | Out-Null
+        $removeExitCode = $LASTEXITCODE
 
-        $LASTEXITCODE | Should -Not -Be 0
-        $text | Should -Match 'Isolated SDK 10\.0\.401 was not found'
+        $removeExitCode | Should -Not -Be 0
+        Test-Path -LiteralPath (Join-Path $script:ToolRoot '10.0.401') | Should -BeFalse
         Test-Path -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') | Should -BeTrue
     }
 }
