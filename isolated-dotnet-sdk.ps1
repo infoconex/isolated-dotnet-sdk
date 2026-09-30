@@ -9,7 +9,7 @@ Supported product actions are Install, Remove, List, and Verify. When Action and
 
 Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
 
-Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata.
+Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata. List reports recognized isolated SDKs first and then the read-only SDK inventory returned by the normally resolved dotnet --list-sdks host. System SDK discovery is supplemental rather than an exhaustive filesystem inventory, and system SDKs are never managed by Remove.
 
 .PARAMETER Action
 Specifies the operation to perform: Install, Remove, List, or Verify. When omitted, the script starts the persistent interactive session unless Version is supplied, in which case Install is selected.
@@ -23,7 +23,7 @@ Skips confirmation prompts that support automatic confirmation. It does not supp
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action List
 
-Lists SDKs installed in the isolated SDK directory once and exits.
+Lists recognized isolated SDKs and SDKs reported by the normally resolved system dotnet host once and exits.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Install -Version 10.0.100
@@ -270,7 +270,7 @@ function Get-IsolatedDotNetPath {
     return Join-Path (Join-Path $SdkRoot $SdkVersion) 'dotnet.exe'
 }
 
-function Get-SystemSdkVersion {
+function Get-SystemSdkInventory {
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         return @()
     }
@@ -281,7 +281,36 @@ function Get-SystemSdkVersion {
         throw "Unable to list SDKs through the system dotnet host with exit code $ExitCode."
     }
 
-    return @($InstalledSdks | ForEach-Object { ($_ -split '\s+')[0] })
+    return @(
+        $InstalledSdks |
+            ForEach-Object {
+                $Line = [string]$_
+                if ([string]::IsNullOrWhiteSpace($Line)) {
+                    return
+                }
+
+                $Match = [regex]::Match($Line, '^(?<Version>\S+)\s+\[(?<Path>.*)\]$')
+                if ($Match.Success) {
+                    [pscustomobject]@{
+                        Version = $Match.Groups['Version'].Value
+                        Path = $Match.Groups['Path'].Value
+                    }
+                }
+                else {
+                    [pscustomobject]@{
+                        Version = ($Line -split '\s+')[0]
+                        Path = ''
+                    }
+                }
+            }
+    )
+}
+
+function Get-SystemSdkVersion {
+    return @(
+        Get-SystemSdkInventory |
+            ForEach-Object { $_.Version }
+    )
 }
 
 function Get-IsolatedSdkVersion {
@@ -295,17 +324,38 @@ function Get-IsolatedSdkVersion {
     return @($SdkDirectories | ForEach-Object { $_.Name })
 }
 
-function Show-IsolatedSdk {
-    Write-ToolInfo "Isolated SDKs under ${SdkRoot}:"
-    $Versions = @(Get-IsolatedSdkVersion)
+function Show-InstalledSdk {
+    $IsolatedVersions = @(Get-IsolatedSdkVersion)
+    $SystemSdks = @(Get-SystemSdkInventory)
 
-    if (-not $Versions) {
+    Write-ToolInfo 'Installed .NET SDKs'
+    Write-ToolDisplay
+    Write-ToolDisplay 'Isolated SDKs:'
+
+    if (-not $IsolatedVersions) {
+        Write-ToolDisplay '  None'
+    }
+    else {
+        foreach ($SdkVersion in $IsolatedVersions) {
+            Write-ToolDisplay "  $SdkVersion  $(Join-Path $SdkRoot $SdkVersion)"
+        }
+    }
+
+    Write-ToolDisplay
+    Write-ToolDisplay 'System SDKs:'
+
+    if (-not $SystemSdks) {
         Write-ToolDisplay '  None'
         return
     }
 
-    foreach ($SdkVersion in $Versions) {
-        Write-ToolDisplay "  $SdkVersion"
+    foreach ($Sdk in $SystemSdks) {
+        if ([string]::IsNullOrWhiteSpace($Sdk.Path)) {
+            Write-ToolDisplay "  $($Sdk.Version)"
+        }
+        else {
+            Write-ToolDisplay "  $($Sdk.Version)  $($Sdk.Path)"
+        }
     }
 }
 
@@ -442,7 +492,7 @@ function Select-Action {
         Write-ToolDisplay
         Write-ToolDisplay '  1. Install an SDK'
         Write-ToolDisplay '  2. Remove an isolated SDK'
-        Write-ToolDisplay '  3. List isolated SDKs'
+        Write-ToolDisplay '  3. List installed SDKs'
         Write-ToolDisplay
         Write-ToolDisplay '  E. Exit'
         Write-ToolDisplay
@@ -1264,7 +1314,7 @@ function Invoke-SelectedAction {
 
             Remove-IsolatedSdk @RemoveArguments
         }
-        'List' { Show-IsolatedSdk }
+        'List' { Show-InstalledSdk }
         'Verify' { Test-IsolatedSdk }
     }
 }

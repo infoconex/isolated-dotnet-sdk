@@ -97,9 +97,8 @@ EOF
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
-  [[ "$output" == *"Isolated SDKs under"* ]]
-  [[ "$output" == *$'  None\n\nisolated-dotnet-sdk: What would you like to do?'* ]]
-  [[ "$output" != *$'  None\n\n\nisolated-dotnet-sdk: What would you like to do?'* ]]
+  [[ "$output" == *"Isolated SDKs:"* ]]
+  [[ "$output" == *"System SDKs:"* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
@@ -121,7 +120,7 @@ EOF
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 0 ]
-  [[ "$output" == *"Isolated SDKs under"* ]]
+  [[ "$output" == *"Installed .NET SDKs"* ]]
 }
 
 @test "interactive operational failure is not masked by later Exit input" {

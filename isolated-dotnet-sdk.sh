@@ -142,16 +142,22 @@ contains_line() {
     printf "%s\n" "$lines" | grep -Fxq "$expected"
 }
 
-get_system_sdk_versions() {
+get_system_sdk_inventory() {
     if command -v dotnet >/dev/null 2>&1; then
         local sdk_output=""
         if sdk_output="$(dotnet --list-sdks)"; then
-            printf "%s\n" "$sdk_output" | awk '{print $1}'
+            [[ -n "$sdk_output" ]] && printf "%s\n" "$sdk_output"
         else
             local status=$?
             tool_fail "Unable to list SDKs through the system dotnet host with exit code $status."
         fi
     fi
+}
+
+get_system_sdk_versions() {
+    local sdk_output=""
+    sdk_output="$(get_system_sdk_inventory)"
+    [[ -n "$sdk_output" ]] && printf "%s\n" "$sdk_output" | awk '{print $1}'
 }
 
 get_isolated_sdk_versions() {
@@ -325,7 +331,7 @@ select_action() {
         echo
         echo "  1. Install an SDK"
         echo "  2. Remove an isolated SDK"
-        echo "  3. List isolated SDKs"
+        echo "  3. List installed SDKs"
         echo
         echo "  E. Exit"
         echo
@@ -749,21 +755,46 @@ resolve_remove_version() {
     return 1
 }
 
-list_isolated_sdks() {
-    local versions
-    local line
-    versions="$(get_isolated_sdk_versions)"
+list_installed_sdks() {
+    local isolated_versions=""
+    local system_inventory=""
+    local line=""
+    local version=""
+    local sdk_path=""
 
-    tool_info "Isolated SDKs under $SDK_ROOT:"
+    isolated_versions="$(get_isolated_sdk_versions)"
+    system_inventory="$(get_system_sdk_inventory)"
 
-    if [[ -z "$versions" ]]; then
+    tool_info "Installed .NET SDKs"
+    echo
+    echo "Isolated SDKs:"
+
+    if [[ -z "$isolated_versions" ]]; then
+        printf "  %s\n" "None"
+    else
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && printf "  %s  %s\n" "$line" "$SDK_ROOT/$line"
+        done <<< "$isolated_versions"
+    fi
+
+    echo
+    echo "System SDKs:"
+
+    if [[ -z "$system_inventory" ]]; then
         printf "  %s\n" "None"
         return
     fi
 
     while IFS= read -r line; do
-        [[ -n "$line" ]] && printf "  %s\n" "$line"
-    done <<< "$versions"
+        [[ -n "$line" ]] || continue
+        if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+\[(.*)\]$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            sdk_path="${BASH_REMATCH[2]}"
+            printf "  %s  %s\n" "$version" "$sdk_path"
+        else
+            printf "  %s\n" "$line"
+        fi
+    done <<< "$system_inventory"
 }
 
 cleanup_install_transaction() {
@@ -1150,7 +1181,7 @@ run_selected_action() {
             remove_isolated_sdk
             ;;
         list)
-            list_isolated_sdks
+            list_installed_sdks
             ;;
         verify)
             verify_isolated_sdk
@@ -1182,7 +1213,7 @@ Usage:
 Commands:
   install [version]  Install an isolated SDK. Without a version, show the SDK picker.
   remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
-  list               List isolated SDKs under ~/dotnet-sdks. A version is invalid with list.
+  list               List isolated SDKs and SDKs visible through the normal dotnet host. A version is invalid with list.
   verify <version>   Read-only health check for one exact installed isolated SDK.
 
 Options:
@@ -1193,6 +1224,7 @@ Behavior:
   No command         Start a persistent interactive session that returns to Main after normal operations.
   Bare version       Treat the version as a one-shot install request.
   Explicit actions   Run once and exit without entering the persistent Main loop.
+  List               Shows isolated ownership first, then read-only SDKs reported by the normal dotnet --list-sdks host.
   Verify <version>   Requires one exact version and checks only the existing isolated installation.
   Exact-version installs bypass release-metadata discovery.
   Interactive install selection uses Microsoft's published release metadata.

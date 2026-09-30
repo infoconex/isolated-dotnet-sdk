@@ -29,7 +29,8 @@ prepare_source() {
   [ "$status" -eq 0 ]
   [ -f "$tool_path" ]
   grep -Fq '# cross-platform-source-marker' "$tool_path"
-  [[ "$output" == *"Isolated SDKs under $tool_root:"* ]]
+  [[ "$output" == *"Isolated SDKs:"* ]]
+  [[ "$output" == *"System SDKs:"* ]]
   [[ "$output" == *"None"* ]]
 }
 
@@ -48,7 +49,7 @@ prepare_source() {
   run env HOME="$test_home" "$tool_path" list
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Isolated SDKs under $tool_root:"* ]]
+  [[ "$output" == *"Isolated SDKs:"* ]]
 }
 
 @test "captured non-TTY output contains no ANSI escape sequences" {

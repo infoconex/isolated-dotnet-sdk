@@ -79,7 +79,8 @@ fi
 required_fragments=(
   "Back to .NET channels"
   "Isolated SDK installation completed successfully."
-  "Isolated SDKs under"
+  "Isolated SDKs:"
+  "System SDKs:"
   "$sdk_version"
   "was removed."
   "Exiting."

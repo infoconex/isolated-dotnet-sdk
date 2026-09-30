@@ -83,7 +83,7 @@ Describe 'PowerShell process-level behavior' {
         $listOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List 2>&1)
 
         $LASTEXITCODE | Should -Be 0
-        ($listOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDKs under'
+        ($listOutput -join [Environment]::NewLine) | Should -Match 'Installed \.NET SDKs'
     }
 
     It 'keeps presentation output off the success stream and ANSI out of redirected information output' {
@@ -106,7 +106,8 @@ Describe 'PowerShell process-level behavior' {
         [string]::IsNullOrWhiteSpace($listSuccessOutput) | Should -BeTrue
 
         $listInformationOutput = Get-Content -LiteralPath $listInformationOutputPath -Raw
-        $listInformationOutput | Should -Match 'Isolated SDKs under'
+        $listInformationOutput | Should -Match 'Isolated SDKs:'
+        $listInformationOutput | Should -Match 'System SDKs:'
         $listInformationOutput | Should -Match 'None'
         $listInformationOutput.Contains([char]27) | Should -BeFalse
     }
