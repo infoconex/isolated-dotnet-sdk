@@ -6,7 +6,7 @@ The execution lifecycle is defined in [`issue-workflow.md`](issue-workflow.md).
 
 ## Terminology
 
-- A **Task** is a meaningful implementation deliverable within an issue. Tasks should be scoped so they can be implemented, validated, committed, and reported independently where practical.
+- A **Task** is a meaningful implementation deliverable within an issue. Tasks should be scoped so they can be implemented, validated, committed, and reported independently where practical, but routine coherent work does not require a separate issue comment for every Task.
 - A GitHub **Milestone** is a release or planning grouping. Do not use milestone as a synonym for a Task.
 - Use **defect** rather than bug in repository discussions.
 
@@ -36,47 +36,49 @@ Issue and pull-request references remain appropriate when repository history is 
 
 Task and acceptance-criteria checkboxes are live lifecycle state, not static planning text.
 
-- Keep Task numbering stable across the issue body, implementation plan, and completion comments so `Task N` always identifies the same deliverable.
-- When a Task is completed, add `## Task N complete — <concise task/capability>` and check the matching Task checkbox as part of the same completion step.
-- Check an acceptance criterion as soon as durable evidence establishes it. Leave it unchecked only when its requirement genuinely depends on a later lifecycle event such as exact-head PR validation or merge.
+- Keep Task numbering stable across the issue body, implementation plan, and evidence so `Task N` always identifies the same deliverable.
+- For routine coherent work, completed Tasks and already-established acceptance criteria may be reconciled together at the next meaningful lifecycle boundary rather than mutated after every small step. They must be synchronized no later than before Draft PR creation.
+- For long-running, risky, interrupted, independently reviewable, or multi-contributor work, update a Task checkbox and add `## Task N complete — <concise task/capability>` as soon as that checkpoint is complete when the incremental record adds value.
+- Check acceptance criteria as soon as the chosen lifecycle reconciliation establishes them. Leave a criterion unchecked only when its requirement genuinely depends on a later lifecycle event such as exact-head PR validation or merge.
 - Reconcile Task and acceptance-criteria checkbox state at the lifecycle gates defined in [`issue-workflow.md`](issue-workflow.md), including before Draft PR creation, after exact-head validation, and after merge.
 
-A completed Task or satisfied acceptance criterion left unchecked is stale issue state and should be corrected before proceeding through the applicable lifecycle gate.
+A completed Task or satisfied acceptance criterion left unchecked at a lifecycle gate is stale issue state and should be corrected before proceeding.
 
 ## Issue comment headings
 
 Use Markdown level-2 headings (`##`) as the first line of substantive issue comments so the history is easy to scan.
 
-Use these default patterns:
+Use these default patterns when the corresponding evidence is useful:
 
 1. `## Kickoff — requirements review`
 2. `## Implementation plan — planned tasks`
-3. `## Task N complete — <concise task/capability>`
-4. `## Task N supplemental — <finding>` when new evidence extends an existing Task record.
-5. `## Task N remediation complete — <finding>` when a Task required correction after new evidence.
-6. `## Manual validation — <behavior>` only when manual validation is genuinely required.
-7. `## Full review — implementation complete` for the comprehensive branch/diff review after implementation and validation are complete.
-8. `## Draft PR opened` after the implementation/validation/full-review quality threshold is met, when recording the PR link, reviewed head, and Draft status adds useful traceability.
-9. `## Final review — completion evidence` for the final exact-head PR CI/review/follow-up summary before the user decides readiness or merge.
-10. `## Post-merge verification` for final closure evidence after merge.
+3. `## Task reconciliation — implementation complete` for the normal consolidated completion record on coherent work.
+4. `## Task N complete — <concise task/capability>` when incremental Task-level checkpoints add value.
+5. `## Task N supplemental — <finding>` when new evidence extends an existing Task record.
+6. `## Task N remediation complete — <finding>` when a Task required correction after new evidence.
+7. `## Manual validation — <behavior>` only when manual validation is genuinely required.
+8. `## Full review — implementation complete` for a distinct comprehensive branch/diff review record when it is not already clear in the consolidated reconciliation.
+9. `## Draft PR opened` after the implementation/targeted-validation/full-review quality threshold is met, when recording the PR link, reviewed head, and Draft status adds useful traceability.
+10. `## Final review — completion evidence` for the final exact-head PR CI/review/follow-up summary before the user decides readiness or merge.
+11. `## Post-merge verification` for final closure evidence after merge.
 
 Keep text after the em dash concise and specific. Exceptional comments may use the same grammar with a precise qualifier. The heading should identify the lifecycle event and, for Task comments, the relevant Task.
 
 ## Issue comment content
 
-Use comments sparingly and intentionally. The expected sequence is:
+Use comments sparingly and intentionally. The normal concise sequence is:
 
 1. **Requirements review / kickoff** — understanding, assumptions, ambiguities, and confirmed scope.
 2. **Implementation plan** — planned Tasks, likely commit boundaries, scope, validation approach, and initial test-list behaviors for behavioral work.
-3. **Task completion** — one comment for each meaningful Task completed, including commit(s), changes, TDD evidence where applicable, validation, follow-up findings, and synchronized Task/acceptance checkbox state.
-4. **Supplemental/remediation evidence** — only when new findings materially change or extend a Task record.
+3. **Consolidated implementation reconciliation** — for coherent work, one deliberate record mapping completed Tasks to commits/changes/tests/validation and synchronizing Task/acceptance checkbox state before the Draft PR.
+4. **Incremental Task evidence** — optional checkpoints for long-running, risky, interrupted, independently reviewable, or multi-contributor work; use supplemental/remediation comments only when new findings materially change the record.
 5. **Manual evidence** — only when automation cannot reliably establish the behavior.
-6. **Full review** — comprehensive branch/diff review result after implementation and validation are complete.
-7. **Draft PR opening** — only after implementation, repository validation, full review, and linked-issue state reconciliation are complete with no known blocking findings.
-8. **Final completion evidence** — exact reviewed PR head, final PR CI evidence, final review result, reconciled acceptance criteria, and intentional follow-ups.
+6. **Full review** — record separately when useful; otherwise it may be summarized in the consolidated implementation evidence if the comprehensive review result remains explicit.
+7. **Draft PR opening** — only after implementation, appropriate targeted pre-PR validation, full diff review, and linked-issue state reconciliation are complete with no known blocking findings.
+8. **Final completion evidence** — exact reviewed PR head, authoritative full PR Validate evidence, final review result, reconciled acceptance criteria, and intentional follow-ups.
 9. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, roadmap status, and final issue checkbox reconciliation.
 
-Do not add generic comments for every tool call, commit, or routine status change.
+Do not add generic comments for every tool call, commit, routine status change, or small Task when a consolidated lifecycle-boundary record carries the same evidence more clearly.
 
 ## Pull request description
 
@@ -86,7 +88,7 @@ A useful PR description normally includes:
 - behavioral or technical contract being implemented;
 - test-list and RED → GREEN → REFACTOR evidence when applicable;
 - implementation summary;
-- validation evidence;
+- targeted pre-PR validation plus authoritative exact-head PR validation evidence as it becomes available;
 - manual validation evidence when applicable;
 - final review status;
 - focused review areas.
