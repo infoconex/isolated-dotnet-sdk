@@ -32,7 +32,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 
 ## Transactional installation baseline
 
-Issue #18 established the installation ownership and recovery baseline for both shells. Behavioral parity work must preserve these rules:
+The transactional installation contract defines the installation ownership and recovery baseline for both shells. Behavioral parity work must preserve these rules:
 
 - each new install uses operation-owned Microsoft release metadata and SDK payload archive state;
 - installation occurs in an operation-owned staging directory rather than directly in the final version directory;
@@ -101,12 +101,8 @@ The following differences are intentional and are not parity defects:
 
 ## Deferred boundaries
 
-This parity contract deliberately does not absorb later roadmap work:
-
-- broad failure and boundary coverage consolidation remains Issue #20;
-- stable-release bootstrap, development-source selection, and self-update policy remain Issue #21;
-- general CLI/help redesign, formatting cleanup, and source-structure normalization are not parity requirements.
+This parity contract deliberately does not absorb broader failure/boundary coverage consolidation or the stable-release bootstrap, development-source-selection, and self-update policy. Those remain separate repository contracts; stable release behavior is documented in [`release-bootstrap.md`](release-bootstrap.md). General CLI/help redesign, formatting cleanup, and source-structure normalization are also not parity requirements.
 
 ## Regression protection
 
-The repository's Pester and Bats suites protect the focused shared behaviors, while the existing transactional-install suites protect the Issue #18 baseline. See [testing.md](testing.md) for the repository-owned validation commands and CI matrix, [cross-platform-support.md](cross-platform-support.md) for supported platform/runtime mechanics, and [native-command-failures.md](native-command-failures.md) for correctness-significant native command boundaries.
+The repository's Pester and Bats suites protect the focused shared behaviors, while the existing transactional-install suites protect the transactional installation baseline above. See [testing.md](testing.md) for the repository-owned validation commands and CI matrix, [cross-platform-support.md](cross-platform-support.md) for supported platform/runtime mechanics, and [native-command-failures.md](native-command-failures.md) for correctness-significant native command boundaries.
