@@ -950,61 +950,61 @@ install_isolated_sdk() {
     echo
 
     tool_info "Checking existing installations..."
-echo
+    echo
 
-installed_sdks="$(get_system_sdk_inventory)"
-if [[ -n "$installed_sdks" ]]; then
-    system_sdk_line="$(printf "%s\n" "$installed_sdks" | awk -v version="$VERSION" '$1 == version { print; exit }')"
-    if [[ "$system_sdk_line" =~ ^[^[:space:]]+[[:space:]]+\[(.*)\]$ ]]; then
-        system_sdk_path="${BASH_REMATCH[1]}"
+    installed_sdks="$(get_system_sdk_inventory)"
+    if [[ -n "$installed_sdks" ]]; then
+        system_sdk_line="$(printf "%s\n" "$installed_sdks" | awk -v version="$VERSION" '$1 == version { print; exit }')"
+        if [[ "$system_sdk_line" =~ ^[^[:space:]]+[[:space:]]+\[(.*)\]$ ]]; then
+            system_sdk_path="${BASH_REMATCH[1]}"
+        fi
     fi
-fi
 
-if [[ -x "$isolated_dotnet" ]]; then
-    if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
-        :
+    if [[ -x "$isolated_dotnet" ]]; then
+        if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+            :
+        else
+            status=$?
+            tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
+        fi
+
+        if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+            isolated_installed="true"
+        fi
+    fi
+
+    if [[ -n "$system_sdk_line" ]]; then
+        tool_info "System SDK: Already installed"
+        if [[ -n "$system_sdk_path" ]]; then
+            tool_info "Location: $system_sdk_path"
+        fi
     else
-        status=$?
-        tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
+        tool_info "System SDK: Not installed"
     fi
 
-    if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        isolated_installed="true"
-    fi
-fi
-
-if [[ -n "$system_sdk_line" ]]; then
-    tool_info "System SDK: Already installed"
-    if [[ -n "$system_sdk_path" ]]; then
-        tool_info "Location: $system_sdk_path"
-    fi
-else
-    tool_info "System SDK: Not installed"
-fi
-
-if [[ "$isolated_installed" == "true" ]]; then
-    tool_info "Isolated SDK: Already installed"
-    tool_info "Location: $install_dir"
-else
-    tool_info "Isolated SDK: Not installed"
-fi
-echo
-
-if [[ "$isolated_installed" == "true" ]]; then
-    return
-fi
-
-if [[ -e "$install_dir" || -L "$install_dir" ]]; then
-    tool_fail "Isolated SDK destination already exists and cannot be replaced: $install_dir"
-fi
-
-if [[ -n "$system_sdk_line" ]]; then
-    if ! confirm_action "Install an isolated copy in addition to the System SDK?"; then
-        tool_info "Installation cancelled."
-        return
+    if [[ "$isolated_installed" == "true" ]]; then
+        tool_info "Isolated SDK: Already installed"
+        tool_info "Location: $install_dir"
+    else
+        tool_info "Isolated SDK: Not installed"
     fi
     echo
-fi
+
+    if [[ "$isolated_installed" == "true" ]]; then
+        return
+    fi
+
+    if [[ -e "$install_dir" || -L "$install_dir" ]]; then
+        tool_fail "Isolated SDK destination already exists and cannot be replaced: $install_dir"
+    fi
+
+    if [[ -n "$system_sdk_line" ]]; then
+        if ! confirm_action "Install an isolated copy in addition to the System SDK?"; then
+            tool_info "Installation cancelled."
+            return
+        fi
+        echo
+    fi
 
     channel="$(get_sdk_channel)"
     rid="$(get_sdk_rid)"

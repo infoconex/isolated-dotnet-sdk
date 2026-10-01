@@ -1006,60 +1006,60 @@ function Install-IsolatedSdk {
     Write-ToolDisplay
 
     Write-ToolInfo 'Checking existing installations...'
-Write-ToolDisplay
+    Write-ToolDisplay
 
-$SystemSdks = @(Get-SystemSdkInventory)
-$SystemSdk = $SystemSdks |
-    Where-Object { $_.Version -eq $Version } |
-    Select-Object -First 1
+    $SystemSdks = @(Get-SystemSdkInventory)
+    $SystemSdk = $SystemSdks |
+        Where-Object { $_.Version -eq $Version } |
+        Select-Object -First 1
 
-$IsolatedInstalled = $false
-if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
-    $IsolatedSdks = & $IsolatedDotNet --list-sdks
-    $ExitCode = $LASTEXITCODE
-    if ($ExitCode -ne 0) {
-        throw "Unable to inspect existing isolated SDK $Version with exit code $ExitCode."
+    $IsolatedInstalled = $false
+    if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
+        $IsolatedSdks = & $IsolatedDotNet --list-sdks
+        $ExitCode = $LASTEXITCODE
+        if ($ExitCode -ne 0) {
+            throw "Unable to inspect existing isolated SDK $Version with exit code $ExitCode."
+        }
+
+        $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+        $IsolatedInstalled = $IsolatedVersions -contains $Version
     }
 
-    $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-    $IsolatedInstalled = $IsolatedVersions -contains $Version
-}
-
-if ($SystemSdk) {
-    Write-ToolInfo 'System SDK: Already installed'
-    if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
-        Write-ToolInfo "Location: $($SystemSdk.Path)"
+    if ($SystemSdk) {
+        Write-ToolInfo 'System SDK: Already installed'
+        if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
+            Write-ToolInfo "Location: $($SystemSdk.Path)"
+        }
     }
-}
-else {
-    Write-ToolInfo 'System SDK: Not installed'
-}
+    else {
+        Write-ToolInfo 'System SDK: Not installed'
+    }
 
-if ($IsolatedInstalled) {
-    Write-ToolInfo 'Isolated SDK: Already installed'
-    Write-ToolInfo "Location: $InstallDir"
-}
-else {
-    Write-ToolInfo 'Isolated SDK: Not installed'
-}
-Write-ToolDisplay
+    if ($IsolatedInstalled) {
+        Write-ToolInfo 'Isolated SDK: Already installed'
+        Write-ToolInfo "Location: $InstallDir"
+    }
+    else {
+        Write-ToolInfo 'Isolated SDK: Not installed'
+    }
+    Write-ToolDisplay
 
-if ($IsolatedInstalled) {
-    return
-}
-
-if (Test-Path -LiteralPath $InstallDir) {
-    throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
-}
-
-if ($SystemSdk) {
-    if (-not (Confirm-Action -Prompt 'Install an isolated copy in addition to the System SDK?')) {
-        Write-ToolInfo 'Installation cancelled.'
+    if ($IsolatedInstalled) {
         return
     }
 
-    Write-ToolDisplay
-}
+    if (Test-Path -LiteralPath $InstallDir) {
+        throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
+    }
+
+    if ($SystemSdk) {
+        if (-not (Confirm-Action -Prompt 'Install an isolated copy in addition to the System SDK?')) {
+            Write-ToolInfo 'Installation cancelled.'
+            return
+        }
+
+        Write-ToolDisplay
+    }
 
     $Channel = Get-SdkChannel
     $Rid = Get-SdkRid
