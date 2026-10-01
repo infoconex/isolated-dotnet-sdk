@@ -48,9 +48,13 @@ teardown() {
   status=$?
 
   [ "$status" -eq 0 ]
-  output="$(cat "$raw_output")"
-  [[ "$output" == $'\nInstalling tool to '* ]]
-  [[ "$output" == *$'Tool installed.\n\nInstalled .NET SDKs'* ]]
+  [ -z "$(sed -n '1p' "$raw_output")" ]
+  [[ "$(sed -n '2p' "$raw_output")" == "Installing tool to "* ]]
+
+  tool_installed_line="$(grep -nFx 'Tool installed.' "$raw_output" | cut -d: -f1)"
+  [ -n "$tool_installed_line" ]
+  [ -z "$(sed -n "$((tool_installed_line + 1))p" "$raw_output")" ]
+  [ "$(sed -n "$((tool_installed_line + 2))p" "$raw_output")" = 'Installed .NET SDKs' ]
 }
 
 @test "presentation source defines semantic accent and stderr-aware error roles" {
