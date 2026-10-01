@@ -1261,7 +1261,9 @@ remove_isolated_sdk() {
         tool_fail "Isolated SDK $VERSION was not found at $install_dir"
     fi
 
+    echo
     tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
+    echo
 
     if ! confirm_action "Continue?"; then
         tool_info "Removal cancelled."
@@ -1269,7 +1271,10 @@ remove_isolated_sdk() {
     fi
 
     tool_info "Shutting down build servers for SDK $VERSION..."
-    if "$isolated_dotnet" build-server shutdown; then
+    if DOTNET_NOLOGO=true \
+       DOTNET_GENERATE_ASPNET_CERTIFICATE=false \
+       DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false \
+       "$isolated_dotnet" build-server shutdown >/dev/null; then
         :
     else
         status=$?

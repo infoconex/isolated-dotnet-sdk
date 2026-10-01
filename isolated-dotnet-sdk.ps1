@@ -1337,9 +1337,30 @@ function Invoke-IsolatedSdkBuildServerShutdown {
         [string]$SdkVersion
     )
 
-    & $DotNetPath build-server shutdown
-    if ($LASTEXITCODE -ne 0) {
-        throw "Build-server shutdown failed for SDK $SdkVersion with exit code $LASTEXITCODE."
+    $EnvironmentOverrides = @{
+        DOTNET_NOLOGO                       = 'true'
+        DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
+        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH    = 'false'
+    }
+    $PreviousEnvironment = @{}
+
+    try {
+        foreach ($Name in $EnvironmentOverrides.Keys) {
+            $PreviousEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process')
+            [Environment]::SetEnvironmentVariable($Name, $EnvironmentOverrides[$Name], 'Process')
+        }
+
+        $null = & $DotNetPath build-server shutdown
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        foreach ($Name in $EnvironmentOverrides.Keys) {
+            [Environment]::SetEnvironmentVariable($Name, $PreviousEnvironment[$Name], 'Process')
+        }
+    }
+
+    if ($ExitCode -ne 0) {
+        throw "Build-server shutdown failed for SDK $SdkVersion with exit code $ExitCode."
     }
 }
 
@@ -1374,7 +1395,9 @@ function Remove-IsolatedSdk {
         throw "Isolated SDK $Version was not found at $InstallDir"
     }
 
+    Write-ToolDisplay
     Write-ToolWarning "Isolated SDK $Version will be removed from $InstallDir"
+    Write-ToolDisplay
 
     $ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
     if (-not $PSCmdlet.ShouldProcess($InstallDir, "Remove isolated .NET SDK $Version")) {
