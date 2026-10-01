@@ -36,8 +36,8 @@ jobs:
           ps = Path('isolated-dotnet-sdk.ps1')
           text = ps.read_text()
           old = "Write-ToolInfo 'Exiting.'"
-          if text.count(old) != 4:
-              raise SystemExit(f'PowerShell: expected 4 exit writes, found {text.count(old)}')
+          if text.count(old) != 5:
+              raise SystemExit(f'PowerShell: expected 5 exit writes, found {text.count(old)}')
           text = text.replace(old, 'Write-ToolExit')
           marker = "function Write-ToolInfo {\n    param([string]$Message)\n    Write-ToolDisplay $Message\n}\n"
           helper = marker + "\nfunction Write-ToolExit {\n    Write-ToolDisplay\n    Write-ToolInfo 'Exiting.'\n    Write-ToolDisplay\n}\n"
@@ -48,8 +48,8 @@ jobs:
           sh = Path('isolated-dotnet-sdk.sh')
           text = sh.read_text()
           old = 'tool_info "Exiting."'
-          if text.count(old) != 4:
-              raise SystemExit(f'Bash: expected 4 exit writes, found {text.count(old)}')
+          if text.count(old) != 5:
+              raise SystemExit(f'Bash: expected 5 exit writes, found {text.count(old)}')
           text = text.replace(old, 'tool_exit')
           marker = 'tool_info() {\n    printf "%s\\n" "$1"\n}\n'
           helper = marker + '\ntool_exit() {\n    echo\n    tool_info "Exiting."\n    echo\n}\n'
