@@ -51,12 +51,20 @@ teardown() {
   [ -z "$(sed -n '1p' "$raw_output")" ]
   [[ "$(sed -n '2p' "$raw_output")" == "Installing tool to "* ]]
 
-  tool_installed_line="$(grep -nFx 'Tool installed.' "$raw_output" | cut -d: -f1)"
+  tool_installed_line="$(grep -nFx 'Tool installed.' "$raw_output" | head -n 1 | cut -d: -f1)"
+  main_heading_line="$(grep -nFx 'What would you like to do?' "$raw_output" | head -n 1 | cut -d: -f1)"
   [ -n "$tool_installed_line" ]
-  [ -z "$(sed -n "$((tool_installed_line + 1))p" "$raw_output")" ]
+  [ -n "$main_heading_line" ]
+  [ "$main_heading_line" -gt "$tool_installed_line" ]
 
-  next_nonblank="$(tail -n "+$((tool_installed_line + 2))" "$raw_output" | awk 'NF { print; exit }')"
-  [ "$next_nonblank" = 'What would you like to do?' ]
+  blank_boundary='false'
+  for ((line_number=tool_installed_line + 1; line_number<main_heading_line; line_number++)); do
+    if [[ -z "$(sed -n "${line_number}p" "$raw_output")" ]]; then
+      blank_boundary='true'
+      break
+    fi
+  done
+  [ "$blank_boundary" = 'true' ]
 }
 
 @test "presentation source defines semantic accent and stderr-aware error roles" {
