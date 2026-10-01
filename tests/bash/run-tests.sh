@@ -19,6 +19,7 @@ fi
 bats \
   "$repo_root/tests/bash/help.bats" \
   "$repo_root/tests/bash/behavior.bats" \
+  "$repo_root/tests/bash/install-status.bats" \
   "$repo_root/tests/bash/installed-sdk-listing.bats" \
   "$repo_root/tests/bash/verify.bats" \
   "$repo_root/tests/bash/interactive-lifecycle.bats" \
