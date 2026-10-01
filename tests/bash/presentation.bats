@@ -41,10 +41,10 @@ teardown() {
   grep -Fq 'tool_label_value "Target SDK:" "$VERSION"' "$repo_root/isolated-dotnet-sdk.sh"
 }
 
-@test "bootstrap output is separated from invocation and saved-tool output" {
+@test "bootstrap output is separated from invocation and the first Main menu" {
   raw_output="$test_root/bootstrap-output.txt"
 
-  env HOME="$test_home" "$source_copy" list >"$raw_output" 2>&1
+  printf 'e\n' | env HOME="$test_home" "$source_copy" >"$raw_output" 2>&1
   status=$?
 
   [ "$status" -eq 0 ]
@@ -53,22 +53,10 @@ teardown() {
 
   tool_installed_line="$(grep -nFx 'Tool installed.' "$raw_output" | cut -d: -f1)"
   [ -n "$tool_installed_line" ]
+  [ -z "$(sed -n "$((tool_installed_line + 1))p" "$raw_output")" ]
 
-  blank_boundary='false'
-  next_nonblank=''
-  line_number=$((tool_installed_line + 1))
-  while IFS= read -r line; do
-    if [[ -z "$line" ]]; then
-      blank_boundary='true'
-      line_number=$((line_number + 1))
-      continue
-    fi
-    next_nonblank="$line"
-    break
-  done < <(tail -n "+$line_number" "$raw_output")
-
-  [ "$blank_boundary" = 'true' ]
-  [ "$next_nonblank" = 'Installed .NET SDKs' ]
+  next_nonblank="$(tail -n "+$((tool_installed_line + 2))" "$raw_output" | awk 'NF { print; exit }')"
+  [ "$next_nonblank" = 'What would you like to do?' ]
 }
 
 @test "presentation source defines semantic accent and stderr-aware error roles" {
