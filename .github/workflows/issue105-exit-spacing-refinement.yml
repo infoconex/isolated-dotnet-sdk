@@ -48,8 +48,8 @@ jobs:
           sh = Path('isolated-dotnet-sdk.sh')
           text = sh.read_text()
           old = 'tool_info "Exiting."'
-          if text.count(old) != 5:
-              raise SystemExit(f'Bash: expected 5 exit writes, found {text.count(old)}')
+          if text.count(old) != 4:
+              raise SystemExit(f'Bash: expected 4 exit writes, found {text.count(old)}')
           text = text.replace(old, 'tool_exit')
           marker = 'tool_info() {\n    printf "%s\\n" "$1"\n}\n'
           helper = marker + '\ntool_exit() {\n    echo\n    tool_info "Exiting."\n    echo\n}\n'
