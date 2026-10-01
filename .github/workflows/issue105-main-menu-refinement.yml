@@ -1,0 +1,44 @@
+name: Issue 105 main menu refinement
+
+on:
+  push:
+    branches:
+      - release/issue-105-cli-presentation
+    paths:
+      - .github/issue105-main-menu-patch.py
+      - .github/workflows/issue105-main-menu-refinement.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/issue-105-cli-presentation
+          fetch-depth: 0
+
+      - name: Apply refinement
+        run: python3 .github/issue105-main-menu-patch.py
+
+      - name: Check syntax and diff
+        shell: bash
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          bash -n tests/e2e/bash/interactive.sh
+          pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "isolated-dotnet-sdk.ps1"), [ref]$tokens, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }'
+          pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "tests/e2e/powershell/interactive.ps1"), [ref]$tokens, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }'
+          git diff --check
+
+      - name: Commit refinement and remove harness
+        shell: bash
+        run: |
+          rm .github/issue105-main-menu-patch.py
+          rm .github/workflows/issue105-main-menu-refinement.yml
+          git config user.name "Jim Scott"
+          git config user.email "jscott@infoconex.com"
+          git add -A
+          git commit -m "feat: use mnemonic main menu commands"
+          git push origin HEAD:release/issue-105-cli-presentation
