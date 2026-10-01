@@ -1,0 +1,232 @@
+name: Issue 103 implementation patch
+
+on:
+  push:
+    branches:
+      - release/issue-103-target-sdk-status
+    paths:
+      - .github/workflows/issue-103-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Apply target-focused install status changes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              file_path = Path(path)
+              text = file_path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact match, found {count}")
+              file_path.write_text(text.replace(old, new, 1))
+
+          ps_path = Path('isolated-dotnet-sdk.ps1')
+          ps_text = ps_path.read_text()
+          ps_pattern = re.compile(
+              r"    Write-ToolInfo 'Checking SDKs installed through the normal dotnet host\.\.\.'\n.*?(?=    \$Channel = Get-SdkChannel\n)",
+              re.S,
+          )
+          ps_replacement = r"""    Write-ToolInfo 'Checking existing installations...'
+          Write-ToolDisplay
+
+          $SystemSdks = @(Get-SystemSdkInventory)
+          $SystemSdk = $SystemSdks |
+              Where-Object { $_.Version -eq $Version } |
+              Select-Object -First 1
+
+          $IsolatedInstalled = $false
+          if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
+              $IsolatedSdks = & $IsolatedDotNet --list-sdks
+              $ExitCode = $LASTEXITCODE
+              if ($ExitCode -ne 0) {
+                  throw "Unable to inspect existing isolated SDK $Version with exit code $ExitCode."
+              }
+
+              $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+              $IsolatedInstalled = $IsolatedVersions -contains $Version
+          }
+
+          if ($SystemSdk) {
+              Write-ToolInfo 'System SDK: Already installed'
+              if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
+                  Write-ToolInfo "Location: $($SystemSdk.Path)"
+              }
+          }
+          else {
+              Write-ToolInfo 'System SDK: Not installed'
+          }
+
+          if ($IsolatedInstalled) {
+              Write-ToolInfo 'Isolated SDK: Already installed'
+              Write-ToolInfo "Location: $InstallDir"
+          }
+          else {
+              Write-ToolInfo 'Isolated SDK: Not installed'
+          }
+          Write-ToolDisplay
+
+          if ($IsolatedInstalled) {
+              return
+          }
+
+          if (Test-Path -LiteralPath $InstallDir) {
+              throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
+          }
+
+          if ($SystemSdk) {
+              if (-not (Confirm-Action -Prompt 'Install an isolated copy in addition to the System SDK?')) {
+                  Write-ToolInfo 'Installation cancelled.'
+                  return
+              }
+
+              Write-ToolDisplay
+          }
+
+          """
+          ps_text, count = ps_pattern.subn(lambda _: ps_replacement, ps_text)
+          if count != 1:
+              raise SystemExit(f"isolated-dotnet-sdk.ps1: expected one install-status block, found {count}")
+          ps_path.write_text(ps_text)
+
+          sh_path = Path('isolated-dotnet-sdk.sh')
+          sh_text = sh_path.read_text()
+          old_locals = '''    local installed_sdks=""
+              local installed_versions=""
+              local isolated_sdks=""'''
+          new_locals = '''    local installed_sdks=""
+              local system_sdk_line=""
+              local system_sdk_path=""
+              local isolated_sdks=""
+              local isolated_installed="false"'''
+          if sh_text.count(old_locals) != 1:
+              raise SystemExit('isolated-dotnet-sdk.sh: install local declaration block was not unique')
+          sh_text = sh_text.replace(old_locals, new_locals, 1)
+
+          sh_pattern = re.compile(
+              r'    tool_info "Checking SDKs installed through the normal dotnet host\.\.\."\n.*?(?=    channel="\$\(get_sdk_channel\)"\n)',
+              re.S,
+          )
+          sh_replacement = r'''    tool_info "Checking existing installations..."
+          echo
+
+          installed_sdks="$(get_system_sdk_inventory)"
+          if [[ -n "$installed_sdks" ]]; then
+              system_sdk_line="$(printf "%s\n" "$installed_sdks" | awk -v version="$VERSION" '$1 == version { print; exit }')"
+              if [[ "$system_sdk_line" =~ ^[^[:space:]]+[[:space:]]+\[(.*)\]$ ]]; then
+                  system_sdk_path="${BASH_REMATCH[1]}"
+              fi
+          fi
+
+          if [[ -x "$isolated_dotnet" ]]; then
+              if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+                  :
+              else
+                  status=$?
+                  tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
+              fi
+
+              if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+                  isolated_installed="true"
+              fi
+          fi
+
+          if [[ -n "$system_sdk_line" ]]; then
+              tool_info "System SDK: Already installed"
+              if [[ -n "$system_sdk_path" ]]; then
+                  tool_info "Location: $system_sdk_path"
+              fi
+          else
+              tool_info "System SDK: Not installed"
+          fi
+
+          if [[ "$isolated_installed" == "true" ]]; then
+              tool_info "Isolated SDK: Already installed"
+              tool_info "Location: $install_dir"
+          else
+              tool_info "Isolated SDK: Not installed"
+          fi
+          echo
+
+          if [[ "$isolated_installed" == "true" ]]; then
+              return
+          fi
+
+          if [[ -e "$install_dir" || -L "$install_dir" ]]; then
+              tool_fail "Isolated SDK destination already exists and cannot be replaced: $install_dir"
+          fi
+
+          if [[ -n "$system_sdk_line" ]]; then
+              if ! confirm_action "Install an isolated copy in addition to the System SDK?"; then
+                  tool_info "Installation cancelled."
+                  return
+              fi
+              echo
+          fi
+
+          '''
+          sh_text, count = sh_pattern.subn(lambda _: sh_replacement, sh_text)
+          if count != 1:
+              raise SystemExit(f"isolated-dotnet-sdk.sh: expected one install-status block, found {count}")
+          sh_path.write_text(sh_text)
+
+          replace_once(
+              'tests/powershell/transactional-install.Tests.ps1',
+              "        ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 99\\.0\\.100 is already installed\\.'",
+              "        ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK: Already installed'",
+          )
+          replace_once(
+              'tests/bash/transactional-regressions.bats',
+              '  [[ "$output" == *"Isolated SDK $version is already installed."* ]]',
+              '  [[ "$output" == *"Isolated SDK: Already installed"* ]]',
+          )
+          replace_once(
+              'tests/bash/interactive-lifecycle.bats',
+              '  [[ "$output" == *"Isolated SDK $version is already installed."* ]]',
+              '  [[ "$output" == *"Isolated SDK: Already installed"* ]]',
+          )
+          replace_once(
+              'README.md',
+              '- `system` - already installed through the normal system `dotnet` host;',
+              '- `system` - already installed as a **System SDK** through the normally resolved `dotnet` host;',
+          )
+          replace_once(
+              'README.md',
+              'If you select an SDK that is already installed normally, the existing confirmation still applies before creating an isolated copy.',
+              'If you select an SDK that is already installed as a **System SDK**, the existing confirmation still applies before creating an isolated copy.',
+          )
+          replace_once(
+              'README.md',
+              'If the exact SDK is already installed through the normal system `dotnet` host, the tool asks before creating a second isolated copy.',
+              'If the exact SDK is already installed as a **System SDK**, the tool asks before creating a second isolated copy.',
+          )
+          PY
+
+          rm .github/workflows/issue-103-apply.yml
+          bash -n isolated-dotnet-sdk.sh
+          pwsh -NoProfile -Command '$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "isolated-dotnet-sdk.ps1"), [ref]$null, [ref]$errors) | Out-Null; if ($errors.Count -ne 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }'
+          git diff --check
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add isolated-dotnet-sdk.ps1 isolated-dotnet-sdk.sh README.md tests/powershell/transactional-install.Tests.ps1 tests/bash/transactional-regressions.bats tests/bash/interactive-lifecycle.bats .github/workflows/issue-103-apply.yml
+          git commit -m "feat: make install status target-focused"
+          git push origin HEAD:release/issue-103-target-sdk-status
