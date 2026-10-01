@@ -115,7 +115,9 @@ EOF
   [[ "$output" == *"Invalid selection: 3. Choose I, R, L, or E."* ]]
   [[ "$output" == *"Invalid selection: 4. Choose I, R, L, or E."* ]]
   [[ "$output" == *"Exiting."* ]]
-  [[ "$output" == *$'\n\nExiting.\n\n'* ]]
+
+  exit_helper="$(sed -n '/^tool_exit() {/,/^}/p' "$repo_root/isolated-dotnet-sdk.sh")"
+  [[ "$exit_helper" == *$'tool_exit() {\n    echo\n    tool_info "Exiting."\n    echo\n}'* ]]
 }
 
 @test "E exits persistent session directly from supported channel selection" {
