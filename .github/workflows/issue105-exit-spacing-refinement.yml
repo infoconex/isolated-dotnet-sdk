@@ -1,0 +1,116 @@
+name: Issue 105 exit spacing refinement
+
+on:
+  push:
+    branches:
+      - release/issue-105-cli-presentation
+    paths:
+      - .github/workflows/issue105-exit-spacing-refinement.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/issue-105-cli-presentation
+          fetch-depth: 0
+
+      - name: Apply exit spacing and stale assertion fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f'{path}: expected {count} occurrences of {old!r}, found {actual}')
+              p.write_text(text.replace(old, new))
+
+          ps = Path('isolated-dotnet-sdk.ps1')
+          text = ps.read_text()
+          old = "Write-ToolInfo 'Exiting.'"
+          if text.count(old) != 4:
+              raise SystemExit(f'PowerShell: expected 4 exit writes, found {text.count(old)}')
+          text = text.replace(old, 'Write-ToolExit')
+          marker = "function Write-ToolInfo {\n    param([string]$Message)\n    Write-ToolDisplay $Message\n}\n"
+          helper = marker + "\nfunction Write-ToolExit {\n    Write-ToolDisplay\n    Write-ToolInfo 'Exiting.'\n    Write-ToolDisplay\n}\n"
+          if text.count(marker) != 1:
+              raise SystemExit('PowerShell Write-ToolInfo marker not found exactly once')
+          ps.write_text(text.replace(marker, helper, 1))
+
+          sh = Path('isolated-dotnet-sdk.sh')
+          text = sh.read_text()
+          old = 'tool_info "Exiting."'
+          if text.count(old) != 4:
+              raise SystemExit(f'Bash: expected 4 exit writes, found {text.count(old)}')
+          text = text.replace(old, 'tool_exit')
+          marker = 'tool_info() {\n    printf "%s\\n" "$1"\n}\n'
+          helper = marker + '\ntool_exit() {\n    echo\n    tool_info "Exiting."\n    echo\n}\n'
+          if text.count(marker) != 1:
+              raise SystemExit('Bash tool_info marker not found exactly once')
+          sh.write_text(text.replace(marker, helper, 1))
+
+          replace_exact(
+              'tests/bash/installed-sdk-listing.bats',
+              '[[ "$output" == *"3. List installed SDKs"* ]]',
+              '[[ "$output" == *"L. List installed SDKs"* ]]')
+          replace_exact(
+              'tests/bash/installed-sdk-listing.bats',
+              '[[ "$output" != *"3. List isolated SDKs"* ]]',
+              '[[ "$output" != *"L. List isolated SDKs"* ]]')
+
+          path = Path('tests/bash/global-exit.bats')
+          text = path.read_text()
+          marker = '  [[ "$output" == *"Exiting."* ]]\n}'
+          addition = '  [[ "$output" == *"Exiting."* ]]\n  [[ "$output" == *$\'\\n\\nExiting.\\n\\n\'* ]]\n}'
+          if text.count(marker) < 1:
+              raise SystemExit('Bash global-exit assertion marker not found')
+          path.write_text(text.replace(marker, addition, 1))
+
+          path = Path('tests/powershell/global-exit.Tests.ps1')
+          text = path.read_text()
+          marker = "        $result.Output | Should -Match 'Exiting\\.'\n    }"
+          addition = "        $result.Output | Should -Match 'Exiting\\.'\n        $result.Output | Should -Match '\\r?\\n\\r?\\nExiting\\.\\r?\\n\\r?\\n'\n    }"
+          if text.count(marker) < 1:
+              raise SystemExit('PowerShell global-exit assertion marker not found')
+          path.write_text(text.replace(marker, addition, 1))
+
+          stale = []
+          for root in (Path('tests/bash'), Path('tests/powershell'), Path('tests/e2e')):
+              for p in root.rglob('*'):
+                  if not p.is_file():
+                      continue
+                  try:
+                      content = p.read_text()
+                  except UnicodeDecodeError:
+                      continue
+                  for token in ('1. Install an SDK', '2. Remove an isolated SDK', '3. List installed SDKs'):
+                      if token in content:
+                          stale.append(f'{p}: {token}')
+          if stale:
+              raise SystemExit('stale numeric Main menu assertions remain:\n' + '\n'.join(stale))
+          PY
+
+      - name: Check syntax and diff
+        shell: bash
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "isolated-dotnet-sdk.ps1"), [ref]$tokens, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }'
+          git diff --check
+
+      - name: Commit refinement and remove harness
+        shell: bash
+        run: |
+          rm .github/workflows/issue105-exit-spacing-refinement.yml
+          git config user.name "Jim Scott"
+          git config user.email "jscott@infoconex.com"
+          git add -A
+          git commit -m "fix: space interactive exit presentation"
+          git push origin HEAD:release/issue-105-cli-presentation
