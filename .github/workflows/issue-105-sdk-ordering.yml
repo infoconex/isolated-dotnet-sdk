@@ -1,0 +1,79 @@
+name: Issue 105 isolated-first SDK status ordering
+
+on:
+  push:
+    branches:
+      - release/issue-105-cli-presentation
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: release/issue-105-cli-presentation
+
+      - name: Apply ordering refinement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'isolated-dotnet-sdk.ps1',
+              "    if ($SystemSdk) {\n        Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed'\n        if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {\n            Write-ToolLabelValue -Label 'Location:' -Value (Join-Path $SystemSdk.Path $SystemSdk.Version)\n        }\n    }\n    else {\n        Write-ToolLabelValue -Label 'System SDK:' -Value 'Not installed'\n    }\n\n    Write-ToolDisplay\n\n    if ($IsolatedInstalled) {\n        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'\n        Write-ToolLabelValue -Label 'Location:' -Value $InstallDir\n    }\n    else {\n        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Not installed'\n    }\n    Write-ToolDisplay\n",
+              "    if ($IsolatedInstalled) {\n        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'\n        Write-ToolLabelValue -Label 'Location:' -Value $InstallDir\n    }\n    else {\n        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Not installed'\n    }\n\n    Write-ToolDisplay\n\n    if ($SystemSdk) {\n        Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed'\n        if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {\n            Write-ToolLabelValue -Label 'Location:' -Value (Join-Path $SystemSdk.Path $SystemSdk.Version)\n        }\n    }\n    else {\n        Write-ToolLabelValue -Label 'System SDK:' -Value 'Not installed'\n    }\n    Write-ToolDisplay\n")
+
+          replace_once(
+              'isolated-dotnet-sdk.sh',
+              "    if [[ -n \"$system_sdk_line\" ]]; then\n        tool_label_value \"System SDK:\" \"Already installed\"\n        if [[ -n \"$system_sdk_path\" ]]; then\n            tool_label_value \"Location:\" \"$system_sdk_path\"\n        fi\n    else\n        tool_label_value \"System SDK:\" \"Not installed\"\n    fi\n\n    echo\n\n    if [[ \"$isolated_installed\" == \"true\" ]]; then\n        tool_label_value \"Isolated SDK:\" \"Already installed\"\n        tool_label_value \"Location:\" \"$install_dir\"\n    else\n        tool_label_value \"Isolated SDK:\" \"Not installed\"\n    fi\n    echo\n",
+              "    if [[ \"$isolated_installed\" == \"true\" ]]; then\n        tool_label_value \"Isolated SDK:\" \"Already installed\"\n        tool_label_value \"Location:\" \"$install_dir\"\n    else\n        tool_label_value \"Isolated SDK:\" \"Not installed\"\n    fi\n\n    echo\n\n    if [[ -n \"$system_sdk_line\" ]]; then\n        tool_label_value \"System SDK:\" \"Already installed\"\n        if [[ -n \"$system_sdk_path\" ]]; then\n            tool_label_value \"Location:\" \"$system_sdk_path\"\n        fi\n    else\n        tool_label_value \"System SDK:\" \"Not installed\"\n    fi\n    echo\n")
+
+          p = Path('tests/powershell/install-status.Tests.ps1')
+          text = p.read_text()
+          text = text.replace("'Location: C:\\\\system\\\\sdk\\\\99\\.0\\.100\\r?\\n\\r?\\nIsolated SDK: Not installed'", "'Isolated SDK: Not installed\\r?\\n\\r?\\nSystem SDK: Already installed'")
+          text = text.replace("'System SDK: Not installed\\r?\\n\\r?\\nIsolated SDK: Already installed'", "([regex]::Escape(\"Location: $($script:InstallDir)\") + '\\r?\\n\\r?\\nSystem SDK: Not installed')")
+          text = text.replace("'Location: C:\\\\system\\\\sdk\\\\99\\.0\\.100\\r?\\n\\r?\\nIsolated SDK: Already installed'", "([regex]::Escape(\"Location: $($script:InstallDir)\") + '\\r?\\n\\r?\\nSystem SDK: Already installed')")
+          text = text.replace("'System SDK: Not installed\\r?\\n\\r?\\nIsolated SDK: Not installed'", "'Isolated SDK: Not installed\\r?\\n\\r?\\nSystem SDK: Not installed'")
+          p.write_text(text)
+
+          p = Path('tests/bash/install-status.bats')
+          text = p.read_text()
+          text = text.replace("$'Location: /system/sdk/99.0.100\\n\\nIsolated SDK: Not installed'", "$'Isolated SDK: Not installed\\n\\nSystem SDK: Already installed'")
+          text = text.replace("$'System SDK: Not installed\\n\\nIsolated SDK: Already installed'", '"Location: $tool_root/$version"*$\'\\n\\nSystem SDK: Not installed\'')
+          text = text.replace("$'Location: /system/sdk/99.0.100\\n\\nIsolated SDK: Already installed'", '"Location: $tool_root/$version"*$\'\\n\\nSystem SDK: Already installed\'')
+          text = text.replace("$'System SDK: Not installed\\n\\nIsolated SDK: Not installed'", "$'Isolated SDK: Not installed\\n\\nSystem SDK: Not installed'")
+          p.write_text(text)
+          PY
+
+      - name: Check syntax and whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n isolated-dotnet-sdk.sh
+          pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "./isolated-dotnet-sdk.ps1"), [ref]$tokens, [ref]$errors) > $null; if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }'
+          git diff --check
+
+      - name: Commit refinement and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/issue-105-sdk-ordering.yml
+          git config user.name 'Jim Scott'
+          git config user.email 'jscott@infoconex.com'
+          git add isolated-dotnet-sdk.ps1 isolated-dotnet-sdk.sh tests/powershell/install-status.Tests.ps1 tests/bash/install-status.bats .github/workflows/issue-105-sdk-ordering.yml
+          git commit -m 'fix: list isolated SDK status before System SDK'
+          git push origin HEAD:release/issue-105-cli-presentation
