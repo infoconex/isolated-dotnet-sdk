@@ -20,7 +20,7 @@ selection_block = '''selection_range() {
     fi
 }
 '''
-selection_with_join = selection_block + '''
+selection_with_join = selection_block + r'''
 join_sdk_inventory_path() {
     local sdk_root="$1"
     local version="$2"
