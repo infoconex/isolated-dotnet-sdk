@@ -100,7 +100,7 @@ function Write-ToolDisplay {
 
 function Format-ToolMessage {
     param(
-        [ValidateSet('Heading', 'Success')]
+        [ValidateSet('Heading', 'Accent', 'Success')]
         [string]$Kind,
         [string]$Message
     )
@@ -130,6 +130,63 @@ function Format-ToolMessage {
 function Write-ToolInfo {
     param([string]$Message)
     Write-ToolDisplay $Message
+}
+
+function Write-ToolLabelValue {
+    param(
+        [string]$Label,
+        [AllowEmptyString()]
+        [string]$Value = ''
+    )
+
+    $AccentLabel = Format-ToolMessage -Kind Accent -Message $Label
+    if ([string]::IsNullOrEmpty($Value)) {
+        Write-ToolDisplay $AccentLabel
+        return
+    }
+
+    Write-ToolDisplay "$AccentLabel $Value"
+}
+
+function Write-ToolMetadata {
+    param([string]$Message)
+    return (Format-ToolMessage -Kind Accent -Message $Message)
+}
+
+function Format-ToolInput {
+    param(
+        [AllowEmptyString()]
+        [string]$Value = ''
+    )
+
+    return [regex]::Replace($Value, '[^\x20-\x7E]', '?')
+}
+
+function Get-SelectionRange {
+    param([int]$Count)
+
+    if ($Count -le 1) {
+        return '1'
+    }
+
+    return "1-$Count"
+}
+
+function Write-InvalidSelection {
+    param(
+        [AllowEmptyString()]
+        [string]$Selection = '',
+        [string]$Choices
+    )
+
+    Write-ToolDisplay
+    if ([string]::IsNullOrWhiteSpace($Selection)) {
+        Write-ToolWarning "A selection is required. $Choices"
+        return
+    }
+
+    $SafeSelection = Format-ToolInput $Selection.Trim()
+    Write-ToolWarning "Invalid selection: $SafeSelection. $Choices"
 }
 
 function Write-ToolHeading {
@@ -205,6 +262,7 @@ function Install-ToolIfNeeded {
         throw "Tool path is a directory: $ToolPath"
     }
 
+    Write-ToolDisplay
     Write-ToolInfo "Installing tool to $ToolPath"
 
     $StagedToolPath = Join-Path `
@@ -244,6 +302,7 @@ function Install-ToolIfNeeded {
     }
 
     Write-ToolSuccess 'Tool installed.'
+    Write-ToolDisplay
 
     $Arguments = @{}
     if ($script:ActionWasSpecified) {
@@ -510,7 +569,10 @@ function Select-Action {
             '3' { $script:Action = 'List'; return $true }
             'e' { Write-ToolInfo 'Exiting.'; return $false }
             'E' { Write-ToolInfo 'Exiting.'; return $false }
-            default { Write-ToolWarning 'Please choose 1, 2, 3, or E.' }
+            default {
+                Write-InvalidSelection -Selection $Selection -Choices 'Choose 1, 2, 3, or E.'
+                Write-ToolDisplay
+            }
         }
     }
 }
@@ -695,7 +757,14 @@ function Select-InstallVersion {
         if (-not [int]::TryParse($Selection, [ref]$Number) -or
             $Number -lt 1 -or
             $Number -gt $Channels.Count) {
-            Write-ToolWarning 'Invalid selection.'
+            $SelectionRange = Get-SelectionRange -Count $Channels.Count
+            $Choices = if ($script:InteractiveSession) {
+                "Choose $SelectionRange, S, B, M, or E."
+            }
+            else {
+                "Choose $SelectionRange, S, M, or Q."
+            }
+            Write-InvalidSelection -Selection $Selection -Choices $Choices
             continue
         }
 
@@ -757,7 +826,8 @@ function Select-InstallVersion {
                 }
 
                 if ($Markers.Count -gt 0) {
-                    Write-ToolDisplay ("  {0}. {1} ({2})" -f ($Index + 1), $SdkVersion, ($Markers -join ', '))
+                    $Metadata = Write-ToolMetadata -Message ("({0})" -f ($Markers -join ', '))
+                    Write-ToolDisplay ("  {0}. {1} {2}" -f ($Index + 1), $SdkVersion, $Metadata)
                 }
                 else {
                     Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersion)
@@ -819,7 +889,25 @@ function Select-InstallVersion {
                 return $true
             }
 
-            Write-ToolWarning 'Invalid selection.'
+            $SelectionRange = Get-SelectionRange -Count $SdkVersions.Count
+            $HasViewToggle = $FeaturedSdkVersions.Count -lt $AllSdkVersions.Count
+            if ($script:InteractiveSession) {
+                $Choices = if ($HasViewToggle) {
+                    "Choose $SelectionRange, S, B, M, or E."
+                }
+                else {
+                    "Choose $SelectionRange, B, M, or E."
+                }
+            }
+            else {
+                $Choices = if ($HasViewToggle) {
+                    "Choose $SelectionRange, S, B, M, or Q."
+                }
+                else {
+                    "Choose $SelectionRange, B, M, or Q."
+                }
+            }
+            Write-InvalidSelection -Selection $Selection -Choices $Choices
         }
     }
 }
@@ -877,7 +965,15 @@ function Select-RemoveVersion {
             return $true
         }
 
-        Write-ToolWarning 'Invalid selection.'
+        $SelectionRange = Get-SelectionRange -Count $SdkVersions.Count
+        $Choices = if ($script:InteractiveSession) {
+            "Choose $SelectionRange, B, or E."
+        }
+        else {
+            "Choose $SelectionRange or Q."
+        }
+        Write-InvalidSelection -Selection $Selection -Choices $Choices
+        Write-ToolDisplay
     }
 }
 
@@ -1001,8 +1097,8 @@ function Install-IsolatedSdk {
     $InstallDir = Join-Path $SdkRoot $Version
     $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
 
-    Write-ToolInfo "Target SDK: $Version"
-    Write-ToolInfo "Isolated install directory: $InstallDir"
+    Write-ToolLabelValue -Label 'Target SDK:' -Value $Version
+    Write-ToolLabelValue -Label 'Isolated install directory:' -Value $InstallDir
     Write-ToolDisplay
 
     Write-ToolInfo 'Checking existing installations...'
@@ -1026,21 +1122,21 @@ function Install-IsolatedSdk {
     }
 
     if ($SystemSdk) {
-        Write-ToolInfo 'System SDK: Already installed'
+        Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed'
         if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
-            Write-ToolInfo "Location: $($SystemSdk.Path)"
+            Write-ToolLabelValue -Label 'Location:' -Value $SystemSdk.Path
         }
     }
     else {
-        Write-ToolInfo 'System SDK: Not installed'
+        Write-ToolLabelValue -Label 'System SDK:' -Value 'Not installed'
     }
 
     if ($IsolatedInstalled) {
-        Write-ToolInfo 'Isolated SDK: Already installed'
-        Write-ToolInfo "Location: $InstallDir"
+        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'
+        Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
     }
     else {
-        Write-ToolInfo 'Isolated SDK: Not installed'
+        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Not installed'
     }
     Write-ToolDisplay
 
@@ -1186,7 +1282,7 @@ function Install-IsolatedSdk {
 
     Write-ToolDisplay
     Write-ToolSuccess 'Isolated SDK installation completed successfully.'
-    Write-ToolInfo "Location: $InstallDir"
+    Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
 }
 
 function Test-IsolatedSdk {
@@ -1225,7 +1321,7 @@ function Test-IsolatedSdk {
     }
 
     Write-ToolSuccess "Isolated SDK $Version is healthy."
-    Write-ToolInfo "Location: $InstallDir"
+    Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
 }
 
 function Invoke-IsolatedSdkBuildServerShutdown {

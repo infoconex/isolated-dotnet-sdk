@@ -38,7 +38,7 @@ teardown() {
 @test "semantic headings use an explicit heading role rather than punctuation inference" {
   grep -Fq 'tool_heading() {' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq 'tool_heading "Installed .NET SDKs"' "$repo_root/isolated-dotnet-sdk.sh"
-  grep -Fq 'tool_info "Target SDK: $VERSION"' "$repo_root/isolated-dotnet-sdk.sh"
+  grep -Fq 'tool_label_value "Target SDK:" "$VERSION"' "$repo_root/isolated-dotnet-sdk.sh"
 }
 
 
@@ -55,4 +55,11 @@ teardown() {
   grep -Fq 'tool_metadata() {' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq 'if [[ -t 2 ]]; then' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq "RED='\\033[0;31m'" "$repo_root/isolated-dotnet-sdk.sh"
+}
+
+
+@test "invalid input formatting replaces terminal control characters" {
+  eval "$(sed -n '/^format_tool_input()/,/^}/p' "$repo_root/isolated-dotnet-sdk.sh")"
+  result="$(format_tool_input $'x\t')"
+  [ "$result" = 'x?' ]
 }

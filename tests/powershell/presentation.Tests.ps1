@@ -71,4 +71,10 @@ Describe 'PowerShell CLI presentation contract' {
         $source | Should -Match 'function Write-ToolMetadata'
     }
 
+
+    It 'replaces terminal control characters in invalid-input feedback values' {
+        $source = Get-Content -LiteralPath $script:SourceCopy -Raw
+        $source | Should -Match "\[regex\]::Replace\(\$Value, '\[\^\\x20-\\x7E\]', '\?'\)"
+    }
+
 }

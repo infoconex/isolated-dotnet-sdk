@@ -20,8 +20,55 @@ else
     RESET=''
 fi
 
+if [[ -t 2 ]]; then
+    RED='\033[0;31m'
+    ERROR_RESET='\033[0m'
+else
+    RED=''
+    ERROR_RESET=''
+fi
+
 tool_info() {
     printf "%s\n" "$1"
+}
+
+tool_label_value() {
+    local label="$1"
+    local value="$2"
+    printf "%b%s%b %s\n" "$CYAN" "$label" "$RESET" "$value"
+}
+
+tool_metadata() {
+    printf "%b%s%b" "$CYAN" "$1" "$RESET"
+}
+
+format_tool_input() {
+    local value="$1"
+    printf '%s' "$value" | LC_ALL=C tr -c '[:print:]' '?'
+}
+
+selection_range() {
+    local count="$1"
+    if (( count <= 1 )); then
+        printf '%s' '1'
+    else
+        printf '1-%d' "$count"
+    fi
+}
+
+warn_invalid_selection() {
+    local selection="$1"
+    local choices="$2"
+    local safe_selection=""
+
+    echo
+    if [[ "$selection" =~ ^[[:space:]]*$ ]]; then
+        tool_warn "A selection is required. $choices"
+        return
+    fi
+
+    safe_selection="$(format_tool_input "$selection")"
+    tool_warn "Invalid selection: $safe_selection. $choices"
 }
 
 tool_heading() {
@@ -37,7 +84,7 @@ tool_success() {
 }
 
 tool_fail() {
-    printf "%s\n" "$1" >&2
+    printf "%b%s%b\n" "$RED" "$1" "$ERROR_RESET" >&2
     exit 1
 }
 
@@ -74,6 +121,7 @@ bootstrap_if_needed() {
         tool_fail "Tool path is a directory: $TOOL_PATH"
     fi
 
+    echo
     tool_info "Installing tool to $TOOL_PATH"
     staged_path="$(mktemp "$SDK_ROOT/.${TOOL_NAME}.XXXXXX.tmp")"
 
@@ -114,6 +162,7 @@ bootstrap_if_needed() {
     fi
 
     tool_success "Tool installed."
+    echo
 
     if tty -s </dev/tty 2>/dev/null; then
         exec "$TOOL_PATH" "$@" </dev/tty
@@ -353,7 +402,10 @@ select_action() {
             2) ACTION="remove"; return 0 ;;
             3) ACTION="list"; return 0 ;;
             e|E) tool_info "Exiting."; return 1 ;;
-            *) tool_warn "Please choose 1, 2, 3, or E." ;;
+            *)
+                warn_invalid_selection "$selection" "Choose 1, 2, 3, or E."
+                echo
+                ;;
         esac
     done
 }
@@ -502,7 +554,15 @@ select_install_version() {
             latest_sdk="${latest_sdks[$i]}"
             releases_url="${release_urls[$i]}"
         else
-            tool_warn "Invalid selection."
+            local channel_range
+            local channel_choices
+            channel_range="$(selection_range "${#channels[@]}")"
+            if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                channel_choices="Choose $channel_range, S, B, M, or E."
+            else
+                channel_choices="Choose $channel_range, S, M, or Q."
+            fi
+            warn_invalid_selection "$selection" "$channel_choices"
             continue
         fi
 
@@ -578,7 +638,7 @@ select_install_version() {
                 fi
 
                 if [[ -n "$markers" ]]; then
-                    printf "  %d. %s (%s)\n" "$((i + 1))" "$line" "$markers"
+                    printf "  %d. %s %s\n" "$((i + 1))" "$line" "$(tool_metadata "($markers)")"
                 else
                     printf "  %d. %s\n" "$((i + 1))" "$line"
                 fi
@@ -643,7 +703,23 @@ select_install_version() {
                 return 0
             fi
 
-            tool_warn "Invalid selection."
+            local sdk_range
+            local sdk_choices
+            sdk_range="$(selection_range "${#sdk_versions[@]}")"
+            if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                if [[ "$compact_versions" != "$all_versions" ]]; then
+                    sdk_choices="Choose $sdk_range, S, B, M, or E."
+                else
+                    sdk_choices="Choose $sdk_range, B, M, or E."
+                fi
+            else
+                if [[ "$compact_versions" != "$all_versions" ]]; then
+                    sdk_choices="Choose $sdk_range, S, B, M, or Q."
+                else
+                    sdk_choices="Choose $sdk_range, B, M, or Q."
+                fi
+            fi
+            warn_invalid_selection "$selection" "$sdk_choices"
         done
     done
 }
@@ -713,7 +789,16 @@ select_remove_version() {
             return 0
         fi
 
-        tool_warn "Invalid selection."
+        local remove_range
+        local remove_choices
+        remove_range="$(selection_range "${#sdk_versions[@]}")"
+        if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+            remove_choices="Choose $remove_range, B, or E."
+        else
+            remove_choices="Choose $remove_range or Q."
+        fi
+        warn_invalid_selection "$selection" "$remove_choices"
+        echo
     done
 }
 
@@ -945,8 +1030,8 @@ install_isolated_sdk() {
     local actual_hash=""
     local status=0
 
-    tool_info "Target SDK: $VERSION"
-    tool_info "Isolated install directory: $install_dir"
+    tool_label_value "Target SDK:" "$VERSION"
+    tool_label_value "Isolated install directory:" "$install_dir"
     echo
 
     tool_info "Checking existing installations..."
@@ -974,19 +1059,19 @@ install_isolated_sdk() {
     fi
 
     if [[ -n "$system_sdk_line" ]]; then
-        tool_info "System SDK: Already installed"
+        tool_label_value "System SDK:" "Already installed"
         if [[ -n "$system_sdk_path" ]]; then
-            tool_info "Location: $system_sdk_path"
+            tool_label_value "Location:" "$system_sdk_path"
         fi
     else
-        tool_info "System SDK: Not installed"
+        tool_label_value "System SDK:" "Not installed"
     fi
 
     if [[ "$isolated_installed" == "true" ]]; then
-        tool_info "Isolated SDK: Already installed"
-        tool_info "Location: $install_dir"
+        tool_label_value "Isolated SDK:" "Already installed"
+        tool_label_value "Location:" "$install_dir"
     else
-        tool_info "Isolated SDK: Not installed"
+        tool_label_value "Isolated SDK:" "Not installed"
     fi
     echo
 
@@ -1114,7 +1199,7 @@ install_isolated_sdk() {
 
     echo
     tool_success "Isolated SDK installation completed successfully."
-    tool_info "Location: $install_dir"
+    tool_label_value "Location:" "$install_dir"
 }
 
 verify_isolated_sdk() {
@@ -1150,7 +1235,7 @@ verify_isolated_sdk() {
     fi
 
     tool_success "Isolated SDK $VERSION is healthy."
-    tool_info "Location: $install_dir"
+    tool_label_value "Location:" "$install_dir"
 }
 
 remove_isolated_sdk() {
