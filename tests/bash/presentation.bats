@@ -53,8 +53,22 @@ teardown() {
 
   tool_installed_line="$(grep -nFx 'Tool installed.' "$raw_output" | cut -d: -f1)"
   [ -n "$tool_installed_line" ]
-  [ -z "$(sed -n "$((tool_installed_line + 1))p" "$raw_output")" ]
-  [ "$(sed -n "$((tool_installed_line + 2))p" "$raw_output")" = 'Installed .NET SDKs' ]
+
+  blank_boundary='false'
+  next_nonblank=''
+  line_number=$((tool_installed_line + 1))
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then
+      blank_boundary='true'
+      line_number=$((line_number + 1))
+      continue
+    fi
+    next_nonblank="$line"
+    break
+  done < <(tail -n "+$line_number" "$raw_output")
+
+  [ "$blank_boundary" = 'true' ]
+  [ "$next_nonblank" = 'Installed .NET SDKs' ]
 }
 
 @test "presentation source defines semantic accent and stderr-aware error roles" {
