@@ -1129,7 +1129,7 @@ function Install-IsolatedSdk {
     if ($SystemSdk) {
         Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed'
         if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
-            Write-ToolLabelValue -Label 'Location:' -Value $SystemSdk.Path
+            Write-ToolLabelValue -Label 'Location:' -Value (Join-Path $SystemSdk.Path $SystemSdk.Version)
         }
     }
     else {

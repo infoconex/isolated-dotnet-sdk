@@ -1050,7 +1050,7 @@ install_isolated_sdk() {
     if [[ -n "$installed_sdks" ]]; then
         system_sdk_line="$(printf "%s\n" "$installed_sdks" | awk -v version="$VERSION" '$1 == version { print; exit }')"
         if [[ "$system_sdk_line" =~ ^[^[:space:]]+[[:space:]]+\[(.*)\]$ ]]; then
-            system_sdk_path="${BASH_REMATCH[1]}"
+            system_sdk_path="${BASH_REMATCH[1]%/}/$VERSION"
         fi
     fi
 
