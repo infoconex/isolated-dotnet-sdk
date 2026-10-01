@@ -37,24 +37,25 @@ Describe 'PowerShell install target status' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    function New-SystemDotNetStub {
+    function Initialize-SystemDotNetStub {
         param([switch]$IncludeTarget)
 
         $fakeBin = Join-Path $script:TestRoot 'system-bin'
         New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
-        $targetLine = if ($IncludeTarget) {
-            "echo $($script:Version) [C:\system\sdk]`r`n"
-        }
-        else {
-            ''
-        }
 
-        Set-Content -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') -Value (
-            "@echo off`r`n" +
-            "if not \"%1\"==\"--list-sdks\" exit /b 91`r`n" +
-            "echo $($script:UnrelatedVersion) [C:\system\sdk]`r`n" +
-            $targetLine +
-            "exit /b 0`r`n")
+        $batchLines = @(
+            '@echo off'
+            'if not "%1"=="--list-sdks" exit /b 91'
+            "echo $($script:UnrelatedVersion) [C:\system\sdk]"
+        )
+        if ($IncludeTarget) {
+            $batchLines += "echo $($script:Version) [C:\system\sdk]"
+        }
+        $batchLines += 'exit /b 0'
+
+        Set-Content `
+            -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') `
+            -Value ($batchLines -join "`r`n")
 
         $env:ISOLATED_DOTNET_SDK_TEST_PATH = "$fakeBin$([IO.Path]::PathSeparator)$env:PATH"
     }
@@ -69,7 +70,7 @@ Describe 'PowerShell install target status' {
     }
 
     It 'reports only the selected System SDK and preserves confirmation' {
-        New-SystemDotNetStub -IncludeTarget
+        Initialize-SystemDotNetStub -IncludeTarget
 
         $output = @(& pwsh -NoProfile -Command '
             $env:PATH = $env:ISOLATED_DOTNET_SDK_TEST_PATH
@@ -95,7 +96,7 @@ Describe 'PowerShell install target status' {
     }
 
     It 'reports an existing isolated target without unrelated System inventory' {
-        New-SystemDotNetStub
+        Initialize-SystemDotNetStub
         Install-IsolatedFakeHost
 
         $output = @(& pwsh -NoProfile -Command '
@@ -114,7 +115,7 @@ Describe 'PowerShell install target status' {
     }
 
     It 'reports both ownership states when the selected target exists in both' {
-        New-SystemDotNetStub -IncludeTarget
+        Initialize-SystemDotNetStub -IncludeTarget
         Install-IsolatedFakeHost
 
         $output = @(& pwsh -NoProfile -Command '
@@ -133,7 +134,7 @@ Describe 'PowerShell install target status' {
     }
 
     It 'reports neither ownership state before continuing to acquisition' {
-        New-SystemDotNetStub
+        Initialize-SystemDotNetStub
 
         $output = @(& pwsh -NoProfile -Command '
             $env:PATH = $env:ISOLATED_DOTNET_SDK_TEST_PATH
