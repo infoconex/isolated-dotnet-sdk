@@ -4,6 +4,38 @@ Describe 'PowerShell install target status' {
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
         $script:HomeVariableName = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
         $script:FakeHostOutput = $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT
+
+        function Initialize-SystemDotNetStub {
+            param([switch]$IncludeTarget)
+
+            $fakeBin = Join-Path $script:TestRoot 'system-bin'
+            New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
+
+            $batchLines = @(
+                '@echo off'
+                'if not "%1"=="--list-sdks" exit /b 91'
+                "echo $($script:UnrelatedVersion) [C:\system\sdk]"
+            )
+            if ($IncludeTarget) {
+                $batchLines += "echo $($script:Version) [C:\system\sdk]"
+            }
+            $batchLines += 'exit /b 0'
+
+            Set-Content `
+                -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') `
+                -Value ($batchLines -join "`r`n")
+
+            $env:ISOLATED_DOTNET_SDK_TEST_PATH = "$fakeBin$([IO.Path]::PathSeparator)$env:PATH"
+        }
+
+        function Install-IsolatedFakeHost {
+            New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
+            Copy-Item `
+                -Path (Join-Path $script:FakeHostOutput '*') `
+                -Destination $script:InstallDir `
+                -Recurse `
+                -Force
+        }
     }
 
     BeforeEach {
@@ -35,38 +67,6 @@ Describe 'PowerShell install target status' {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-
-    function Initialize-SystemDotNetStub {
-        param([switch]$IncludeTarget)
-
-        $fakeBin = Join-Path $script:TestRoot 'system-bin'
-        New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
-
-        $batchLines = @(
-            '@echo off'
-            'if not "%1"=="--list-sdks" exit /b 91'
-            "echo $($script:UnrelatedVersion) [C:\system\sdk]"
-        )
-        if ($IncludeTarget) {
-            $batchLines += "echo $($script:Version) [C:\system\sdk]"
-        }
-        $batchLines += 'exit /b 0'
-
-        Set-Content `
-            -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') `
-            -Value ($batchLines -join "`r`n")
-
-        $env:ISOLATED_DOTNET_SDK_TEST_PATH = "$fakeBin$([IO.Path]::PathSeparator)$env:PATH"
-    }
-
-    function Install-IsolatedFakeHost {
-        New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
-        Copy-Item `
-            -Path (Join-Path $script:FakeHostOutput '*') `
-            -Destination $script:InstallDir `
-            -Recurse `
-            -Force
     }
 
     It 'reports only the selected System SDK and preserves confirmation' {
