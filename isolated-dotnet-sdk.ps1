@@ -1005,61 +1005,61 @@ function Install-IsolatedSdk {
     Write-ToolInfo "Isolated install directory: $InstallDir"
     Write-ToolDisplay
 
-    Write-ToolInfo 'Checking SDKs installed through the normal dotnet host...'
+    Write-ToolInfo 'Checking existing installations...'
+Write-ToolDisplay
 
-    $InstalledVersions = @()
-    if (Get-Command dotnet -ErrorAction SilentlyContinue) {
-        $InstalledSdks = dotnet --list-sdks
-        $ExitCode = $LASTEXITCODE
-        if ($ExitCode -ne 0) {
-            throw "Unable to list SDKs through the system dotnet host with exit code $ExitCode."
-        }
+$SystemSdks = @(Get-SystemSdkInventory)
+$SystemSdk = $SystemSdks |
+    Where-Object { $_.Version -eq $Version } |
+    Select-Object -First 1
 
-        foreach ($InstalledSdk in $InstalledSdks) {
-            Write-ToolDisplay $InstalledSdk
-        }
-        Write-ToolDisplay
-        $InstalledVersions = @($InstalledSdks | ForEach-Object { ($_ -split '\s+')[0] })
-    }
-    else {
-        Write-ToolWarning 'No system dotnet installation was found.'
-        Write-ToolDisplay
+$IsolatedInstalled = $false
+if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
+    $IsolatedSdks = & $IsolatedDotNet --list-sdks
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -ne 0) {
+        throw "Unable to inspect existing isolated SDK $Version with exit code $ExitCode."
     }
 
-    Write-ToolInfo 'Checking for an existing isolated SDK...'
+    $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+    $IsolatedInstalled = $IsolatedVersions -contains $Version
+}
 
-    if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
-        $IsolatedSdks = & $IsolatedDotNet --list-sdks
-        $ExitCode = $LASTEXITCODE
-        if ($ExitCode -ne 0) {
-            throw "Unable to inspect existing isolated SDK $Version with exit code $ExitCode."
-        }
+if ($SystemSdk) {
+    Write-ToolInfo 'System SDK: Already installed'
+    if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
+        Write-ToolInfo "Location: $($SystemSdk.Path)"
+    }
+}
+else {
+    Write-ToolInfo 'System SDK: Not installed'
+}
 
-        $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-        if ($IsolatedVersions -contains $Version) {
-            Write-ToolSuccess "Isolated SDK $Version is already installed."
-            Write-ToolInfo "Location: $InstallDir"
-            return
-        }
+if ($IsolatedInstalled) {
+    Write-ToolInfo 'Isolated SDK: Already installed'
+    Write-ToolInfo "Location: $InstallDir"
+}
+else {
+    Write-ToolInfo 'Isolated SDK: Not installed'
+}
+Write-ToolDisplay
+
+if ($IsolatedInstalled) {
+    return
+}
+
+if (Test-Path -LiteralPath $InstallDir) {
+    throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
+}
+
+if ($SystemSdk) {
+    if (-not (Confirm-Action -Prompt 'Install an isolated copy in addition to the System SDK?')) {
+        Write-ToolInfo 'Installation cancelled.'
+        return
     }
 
-    if (Test-Path -LiteralPath $InstallDir) {
-        throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
-    }
-
-    Write-ToolInfo 'No existing isolated copy was found.'
     Write-ToolDisplay
-
-    if ($InstalledVersions -contains $Version) {
-        Write-ToolWarning ".NET SDK $Version is already installed normally."
-
-        if (-not (Confirm-Action -Prompt 'Install an isolated copy too?')) {
-            Write-ToolInfo 'Installation cancelled.'
-            return
-        }
-
-        Write-ToolDisplay
-    }
+}
 
     $Channel = Get-SdkChannel
     $Rid = Get-SdkRid

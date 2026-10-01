@@ -158,10 +158,10 @@ After selecting a channel, the tool starts with a compact SDK list: Microsoft's 
 The possible markers are:
 
 - `latest` - the latest SDK identified by Microsoft's release metadata;
-- `system` - already installed through the normal system `dotnet` host;
+- `system` - already installed as a **System SDK** through the normally resolved `dotnet` host;
 - `isolated` - already installed under `~/dotnet-sdks`.
 
-If you select an SDK that is already installed normally, the existing confirmation still applies before creating an isolated copy.
+If you select an SDK that is already installed as a **System SDK**, the existing confirmation still applies before creating an isolated copy.
 
 You can also choose manual entry at either picker when you already know the exact SDK version you want. See [`docs/interactive-sessions.md`](docs/interactive-sessions.md) for the full persistent-session and navigation contract.
 
@@ -215,7 +215,7 @@ Bash:
     11.0.100-rc.1.26425.128
 ```
 
-If the exact SDK is already installed through the normal system `dotnet` host, the tool asks before creating a second isolated copy.
+If the exact SDK is already installed as a **System SDK**, the tool asks before creating a second isolated copy.
 
 To intentionally create the isolated copy without a confirmation prompt, use the yes option.
 

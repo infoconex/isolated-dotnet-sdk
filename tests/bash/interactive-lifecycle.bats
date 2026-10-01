@@ -224,7 +224,7 @@ EOF
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 4 ]
-  [[ "$output" == *"Isolated SDK $version is already installed."* ]]
+  [[ "$output" == *"Isolated SDK: Already installed"* ]]
   [[ "$output" == *"Isolated SDK $version was removed."* ]]
   [[ "$output" == *"Exiting."* ]]
   [ ! -d "$install_dir" ]

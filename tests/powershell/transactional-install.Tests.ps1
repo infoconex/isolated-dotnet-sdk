@@ -46,7 +46,7 @@ Describe 'PowerShell transactional SDK installation' {
         Set-Content -LiteralPath $sentinel -Value 'preserve-existing'
         $successOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Be 0
-        ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 99\.0\.100 is already installed\.'
+        ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK: Already installed'
         ($successOutput -join [Environment]::NewLine) | Should -Not -Match 'continued-to-download'
         (Get-Content -LiteralPath $sentinel -Raw).Trim() | Should -Be 'preserve-existing'
     }

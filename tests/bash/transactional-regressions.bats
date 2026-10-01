@@ -30,6 +30,6 @@ EOF
   run_payload_install
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Isolated SDK $version is already installed."* ]]
+  [[ "$output" == *"Isolated SDK: Already installed"* ]]
   [ ! -e "$test_home/curl.log" ]
 }
