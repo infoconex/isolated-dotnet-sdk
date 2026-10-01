@@ -132,6 +132,12 @@ function Write-ToolInfo {
     Write-ToolDisplay $Message
 }
 
+function Write-ToolExit {
+    Write-ToolDisplay
+    Write-ToolInfo 'Exiting.'
+    Write-ToolDisplay
+}
+
 function Write-ToolLabelValue {
     param(
         [string]$Label,
@@ -570,8 +576,8 @@ function Select-Action {
             'R' { $script:Action = 'Remove'; return $true }
             'l' { $script:Action = 'List'; return $true }
             'L' { $script:Action = 'List'; return $true }
-            'e' { Write-ToolInfo 'Exiting.'; return $false }
-            'E' { Write-ToolInfo 'Exiting.'; return $false }
+            'e' { Write-ToolExit; return $false }
+            'E' { Write-ToolExit; return $false }
             default {
                 Write-InvalidSelection -Selection $Selection -Choices 'Choose I, R, L, or E.'
                 Write-ToolDisplay
@@ -738,7 +744,7 @@ function Select-InstallVersion {
 
         if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
             $script:ExitRequested = $true
-            Write-ToolInfo 'Exiting.'
+            Write-ToolExit
             return $false
         }
 
@@ -875,7 +881,7 @@ function Select-InstallVersion {
 
             if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
                 $script:ExitRequested = $true
-                Write-ToolInfo 'Exiting.'
+                Write-ToolExit
                 return $false
             }
 
@@ -951,7 +957,7 @@ function Select-RemoveVersion {
 
         if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
             $script:ExitRequested = $true
-            Write-ToolInfo 'Exiting.'
+            Write-ToolExit
             return $false
         }
 

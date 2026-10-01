@@ -32,6 +32,12 @@ tool_info() {
     printf "%s\n" "$1"
 }
 
+tool_exit() {
+    echo
+    tool_info "Exiting."
+    echo
+}
+
 tool_label_value() {
     local label="$1"
     local value="$2"
@@ -401,7 +407,7 @@ select_action() {
             i|I) ACTION="install"; return 0 ;;
             r|R) ACTION="remove"; return 0 ;;
             l|L) ACTION="list"; return 0 ;;
-            e|E) tool_info "Exiting."; return 1 ;;
+            e|E) tool_exit; return 1 ;;
             *)
                 warn_invalid_selection "$selection" "Choose I, R, L, or E."
                 echo
@@ -523,7 +529,7 @@ select_install_version() {
             [eE])
                 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
                     EXIT_REQUESTED="true"
-                    tool_info "Exiting."
+                    tool_exit
                     return 1
                 fi
                 ;;
@@ -685,7 +691,7 @@ select_install_version() {
                 [eE])
                     if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
                         EXIT_REQUESTED="true"
-                        tool_info "Exiting."
+                        tool_exit
                         return 1
                     fi
                     ;;
@@ -771,7 +777,7 @@ select_remove_version() {
             [eE])
                 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
                     EXIT_REQUESTED="true"
-                    tool_info "Exiting."
+                    tool_exit
                     return 1
                 fi
                 ;;

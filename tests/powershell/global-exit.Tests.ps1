@@ -124,6 +124,7 @@ function Invoke-RestMethod {
         $result.Output | Should -Match 'Invalid selection: 3\. Choose I, R, L, or E\.'
         $result.Output | Should -Match 'Invalid selection: 4\. Choose I, R, L, or E\.'
         $result.Output | Should -Match 'Exiting\.'
+        $result.Output | Should -Match '\r?\n\r?\nExiting\.\r?\n\r?\n'
     }
 
     It 'exits the persistent session directly from supported channel selection' {

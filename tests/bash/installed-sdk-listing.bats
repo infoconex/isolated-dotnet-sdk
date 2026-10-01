@@ -163,8 +163,8 @@ EOF
   run bash -c 'printf "e\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"3. List installed SDKs"* ]]
-  [[ "$output" != *"3. List isolated SDKs"* ]]
+  [[ "$output" == *"L. List installed SDKs"* ]]
+  [[ "$output" != *"L. List isolated SDKs"* ]]
 }
 
 @test "system-only SDKs do not become removable" {
