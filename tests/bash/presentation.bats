@@ -41,29 +41,16 @@ teardown() {
   grep -Fq 'tool_label_value "Target SDK:" "$VERSION"' "$repo_root/isolated-dotnet-sdk.sh"
 }
 
-
 @test "bootstrap output is separated from invocation and saved-tool output" {
-  run env HOME="$test_home" "$source_copy" list
+  raw_output="$test_root/bootstrap-output.txt"
+
+  env HOME="$test_home" "$source_copy" list >"$raw_output" 2>&1
+  status=$?
 
   [ "$status" -eq 0 ]
+  output="$(cat "$raw_output")"
   [[ "$output" == $'\nInstalling tool to '* ]]
-  tool_installed_line=-1
-  installed_heading_line=-1
-  for ((i=0; i<${#lines[@]}; i++)); do
-    [[ "${lines[$i]}" == "Tool installed." ]] && tool_installed_line=$i
-    [[ "${lines[$i]}" == "Installed .NET SDKs" ]] && installed_heading_line=$i
-  done
-  [ "$tool_installed_line" -ge 0 ]
-  [ "$installed_heading_line" -gt "$tool_installed_line" ]
-
-  blank_boundary='false'
-  for ((i=tool_installed_line + 1; i<installed_heading_line; i++)); do
-    if [[ -z "${lines[$i]}" ]]; then
-      blank_boundary='true'
-      break
-    fi
-  done
-  [ "$blank_boundary" = 'true' ]
+  [[ "$output" == *$'Tool installed.\n\nInstalled .NET SDKs'* ]]
 }
 
 @test "presentation source defines semantic accent and stderr-aware error roles" {
@@ -72,7 +59,6 @@ teardown() {
   grep -Fq 'if [[ -t 2 ]]; then' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq "RED='\\033[0;31m'" "$repo_root/isolated-dotnet-sdk.sh"
 }
-
 
 @test "invalid input formatting replaces terminal control characters" {
   eval "$(sed -n '/^format_tool_input()/,/^}/p' "$repo_root/isolated-dotnet-sdk.sh")"
