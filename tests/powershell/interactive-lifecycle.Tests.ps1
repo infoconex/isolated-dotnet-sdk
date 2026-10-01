@@ -230,4 +230,36 @@ function Invoke-RestMethod {
         ([regex]::Matches($result.Output, '10\.0\.400')).Count | Should -Be 1
         ([regex]::Matches($result.Output, '10\.0\.303')).Count | Should -Be 1
     }
+
+    It 'distinguishes blank and nonblank invalid Main selections' {
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('', '6', 'e') `
+            -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH *>&1'
+
+        $result.ExitCode | Should -Be 0
+        $result.Output | Should -Match 'A selection is required\. Choose 1, 2, 3, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, 2, 3, or E\.'
+        $result.Output | Should -Match 'A selection is required\. Choose 1, 2, 3, or E\.\r?\n\r?\nWhat would you like to do\?'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, 2, 3, or E\.\r?\n\r?\nWhat would you like to do\?'
+    }
+
+    It 'reports Remove choices and separates retry feedback from redraw' {
+        $version = '99.0.100'
+        $installDirectory = Join-Path $script:ToolRoot $version
+        New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
+
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('2', '', '6', 'b', 'e') `
+            -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH *>&1'
+
+        $result.ExitCode | Should -Be 0
+        $result.Output | Should -Match 'A selection is required\. Choose 1, B, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.'
+        $result.Output | Should -Match 'A selection is required\. Choose 1, B, or E\.\r?\n\r?\nSelect an isolated SDK to remove:'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.\r?\n\r?\nSelect an isolated SDK to remove:'
+    }
+
 }

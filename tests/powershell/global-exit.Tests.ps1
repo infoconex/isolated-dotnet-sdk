@@ -113,7 +113,7 @@ function Invoke-RestMethod {
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 2
         $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Not -Match '4\. Exit'
-        $result.Output | Should -Match 'Please choose 1, 2, 3, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 4\. Choose 1, 2, 3, or E\.'
         $result.Output | Should -Match 'Exiting\.'
     }
 
@@ -163,7 +163,7 @@ function Invoke-RestMethod {
         $result.ExitCode | Should -Be 0
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1
         ([regex]::Matches($result.Output, 'Select a supported or development \.NET channel:')).Count | Should -Be 2
-        $result.Output | Should -Match 'Invalid selection\.'
+        $result.Output | Should -Match 'Invalid selection: a\. Choose 1, S, B, M, or E\.'
         $result.Output | Should -Not -Match 'Select an end-of-life \.NET channel:'
     }
 

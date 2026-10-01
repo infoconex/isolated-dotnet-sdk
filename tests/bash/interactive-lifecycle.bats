@@ -229,3 +229,35 @@ EOF
   [[ "$output" == *"Exiting."* ]]
   [ ! -d "$install_dir" ]
 }
+
+
+@test "Main retry distinguishes blank and nonblank invalid selections" {
+  prepare_source
+
+  run bash -c 'printf "\n6\ne\n" | env HOME="$1" "$2" 2>&1' _ "$test_home" "$source_copy"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A selection is required. Choose 1, 2, 3, or E."* ]]
+  [[ "$output" == *"Invalid selection: 6. Choose 1, 2, 3, or E."* ]]
+  [[ "$output" == *$'A selection is required. Choose 1, 2, 3, or E.\n\nWhat would you like to do?'* ]]
+  [[ "$output" == *$'Invalid selection: 6. Choose 1, 2, 3, or E.\n\nWhat would you like to do?'* ]]
+}
+
+@test "Remove retry reports active choices and separates feedback from redraw" {
+  bootstrap_tool
+  version='99.0.100'
+  mkdir -p "$tool_root/$version"
+  cat > "$tool_root/$version/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$tool_root/$version/dotnet"
+
+  run bash -c 'printf "2\n\n6\nb\ne\n" | env HOME="$1" "$2" 2>&1' _ "$test_home" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A selection is required. Choose 1, B, or E."* ]]
+  [[ "$output" == *"Invalid selection: 6. Choose 1, B, or E."* ]]
+  [[ "$output" == *$'A selection is required. Choose 1, B, or E.\n\nSelect an isolated SDK to remove:'* ]]
+  [[ "$output" == *$'Invalid selection: 6. Choose 1, B, or E.\n\nSelect an isolated SDK to remove:'* ]]
+}

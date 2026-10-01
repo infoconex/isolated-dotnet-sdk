@@ -104,7 +104,7 @@ EOF
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [[ "$output" == *"E. Exit"* ]]
   [[ "$output" != *"4. Exit"* ]]
-  [[ "$output" == *"Please choose 1, 2, 3, or E."* ]]
+  [[ "$output" == *"Invalid selection: 4. Choose 1, 2, 3, or E."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
@@ -166,7 +166,7 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]
   [ "$(printf '%s\n' "$output" | grep -c 'Select a supported or development \.NET channel:' || true)" -eq 2 ]
-  [[ "$output" == *"Invalid selection."* ]]
+  [[ "$output" == *"Invalid selection: a. Choose 1, S, B, M, or E."* ]]
   [[ "$output" != *"Select an end-of-life .NET channel:"* ]]
 }
 

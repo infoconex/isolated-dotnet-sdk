@@ -53,4 +53,22 @@ Describe 'PowerShell CLI presentation contract' {
         ($failure -join [Environment]::NewLine) | Should -Match 'Invalid action: NotARealAction'
         ($failure -join [Environment]::NewLine) | Should -Not -Match 'isolated-dotnet-sdk:'
     }
+
+    It 'separates bootstrap output from invocation and saved-tool output' {
+        $output = @(& pwsh -NoProfile -File $script:SourceCopy -Action List 6>&1 | ForEach-Object { [string]$_ })
+
+        $LASTEXITCODE | Should -Be 0
+        $text = $output -join [Environment]::NewLine
+        $text | Should -Match '^\r?\nInstalling tool to '
+        $text | Should -Match 'Tool installed\.\r?\n\r?\nInstalled \.NET SDKs'
+    }
+
+    It 'defines a semantic accent role for labels and picker metadata' {
+        $source = Get-Content -LiteralPath $script:SourceCopy -Raw
+
+        $source | Should -Match "ValidateSet\('Heading', 'Accent', 'Success'\)"
+        $source | Should -Match 'function Write-ToolLabelValue'
+        $source | Should -Match 'function Write-ToolMetadata'
+    }
+
 }

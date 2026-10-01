@@ -40,3 +40,19 @@ teardown() {
   grep -Fq 'tool_heading "Installed .NET SDKs"' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq 'tool_info "Target SDK: $VERSION"' "$repo_root/isolated-dotnet-sdk.sh"
 }
+
+
+@test "bootstrap output is separated from invocation and saved-tool output" {
+  run env HOME="$test_home" "$source_copy" list
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == $'\nInstalling tool to '* ]]
+  [[ "$output" == *$'Tool installed.\n\nInstalled .NET SDKs'* ]]
+}
+
+@test "presentation source defines semantic accent and stderr-aware error roles" {
+  grep -Fq 'tool_label_value() {' "$repo_root/isolated-dotnet-sdk.sh"
+  grep -Fq 'tool_metadata() {' "$repo_root/isolated-dotnet-sdk.sh"
+  grep -Fq 'if [[ -t 2 ]]; then' "$repo_root/isolated-dotnet-sdk.sh"
+  grep -Fq "RED='\\033[0;31m'" "$repo_root/isolated-dotnet-sdk.sh"
+}
