@@ -31,7 +31,13 @@ The scripts also run from `dotnet-sdks` rather than from the repository where yo
 - SDK installation resolves the exact platform archive and SHA-512 from Microsoft release metadata, verifies the archive before extraction, and separately checks that the staged host reports the requested exact SDK version before promotion.
 - These controls still trust Microsoft's release-metadata and payload infrastructure, GitHub release/tag/raw-content hosting and repository administration, TLS, and the local platform tools used to download, hash, extract, and execute code.
 
-For the authoritative details, see [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md), [`docs/filesystem-safety.md`](docs/filesystem-safety.md), [`docs/release-bootstrap.md`](docs/release-bootstrap.md), [`docs/cross-platform-support.md`](docs/cross-platform-support.md), and [`docs/behavioral-parity.md`](docs/behavioral-parity.md).
+For the authoritative details, see:
+
+- [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md)
+- [`docs/filesystem-safety.md`](docs/filesystem-safety.md)
+- [`docs/release-bootstrap.md`](docs/release-bootstrap.md)
+- [`docs/cross-platform-support.md`](docs/cross-platform-support.md)
+- [`docs/behavioral-parity.md`](docs/behavioral-parity.md)
 
 ## Quick Start — Stable Release
 
