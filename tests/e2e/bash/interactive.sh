@@ -55,7 +55,7 @@ test -f "$saved_tool"
 
 # Main -> Install -> channel -> Back -> same discovered channel -> manual exact
 # version -> Main -> List -> Main -> Remove the only job-local SDK -> Main -> Exit.
-interactive_input="$(printf '1\n%s\nB\n%s\nM\n%s\n3\n2\n1\ne\n' \
+interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nl\nr\n1\ne\n' \
   "$channel_selection" "$channel_selection" "$sdk_version")"
 
 echo "E2E interactive: running persistent session for .NET SDK $sdk_version"

@@ -95,16 +95,25 @@ EOF
   chmod +x "$fake_bin/curl"
 }
 
-@test "Main advertises E Exit and rejects numeric 4 as an Exit alias" {
+@test "Main advertises mnemonic commands and rejects numeric aliases" {
   bootstrap_tool
 
-  run bash -c 'printf "4\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "1\n2\n3\n4\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
-  [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_main_prompts "$output")" -eq 5 ]
   [[ "$output" == *"E. Exit"* ]]
+  [[ "$output" == *"I. Install an SDK"* ]]
+  [[ "$output" == *"R. Remove an isolated SDK"* ]]
+  [[ "$output" == *"L. List installed SDKs"* ]]
+  [[ "$output" != *"1. Install an SDK"* ]]
+  [[ "$output" != *"2. Remove an isolated SDK"* ]]
+  [[ "$output" != *"3. List installed SDKs"* ]]
   [[ "$output" != *"4. Exit"* ]]
-  [[ "$output" == *"Invalid selection: 4. Choose 1, 2, 3, or E."* ]]
+  [[ "$output" == *"Invalid selection: 1. Choose I, R, L, or E."* ]]
+  [[ "$output" == *"Invalid selection: 2. Choose I, R, L, or E."* ]]
+  [[ "$output" == *"Invalid selection: 3. Choose I, R, L, or E."* ]]
+  [[ "$output" == *"Invalid selection: 4. Choose I, R, L, or E."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
@@ -113,7 +122,7 @@ EOF
   fake_bin="$test_root/supported-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -128,7 +137,7 @@ EOF
   fake_bin="$test_root/eol-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -144,7 +153,7 @@ EOF
   fake_bin="$test_root/toggle-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\ns\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\ns\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -160,7 +169,7 @@ EOF
   fake_bin="$test_root/reject-a-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\na\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\na\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -175,7 +184,7 @@ EOF
   fake_bin="$test_root/version-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\n1\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\n1\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -191,7 +200,7 @@ EOF
   fake_bin="$test_root/expanded-version-fake-bin"
   write_global_exit_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\n1\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\n1\ns\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -212,7 +221,7 @@ exit 0
 EOF
   chmod +x "$tool_root/$version/dotnet"
 
-  run bash -c 'printf "2\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "r\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]

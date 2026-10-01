@@ -106,20 +106,29 @@ function Invoke-RestMethod {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'advertises E Exit at Main and rejects numeric 4 as an Exit alias' {
-        $result = Invoke-GlobalExitToolProcess -InputLines @('4', 'e')
+    It 'advertises mnemonic Main commands and rejects numeric aliases' {
+        $result = Invoke-GlobalExitToolProcess -InputLines @('1', '2', '3', '4', 'e')
 
         $result.ExitCode | Should -Be 0
-        (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 2
+        (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 5
         $result.Output | Should -Match 'E\. Exit'
+        $result.Output | Should -Match 'I\. Install an SDK'
+        $result.Output | Should -Match 'R\. Remove an isolated SDK'
+        $result.Output | Should -Match 'L\. List installed SDKs'
+        $result.Output | Should -Not -Match '1\. Install an SDK'
+        $result.Output | Should -Not -Match '2\. Remove an isolated SDK'
+        $result.Output | Should -Not -Match '3\. List installed SDKs'
         $result.Output | Should -Not -Match '4\. Exit'
-        $result.Output | Should -Match 'Invalid selection: 4\. Choose 1, 2, 3, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 1\. Choose I, R, L, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 2\. Choose I, R, L, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 3\. Choose I, R, L, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 4\. Choose I, R, L, or E\.'
         $result.Output | Should -Match 'Exiting\.'
     }
 
     It 'exits the persistent session directly from supported channel selection' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', 'e') `
+            -InputLines @('i', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
@@ -131,7 +140,7 @@ function Invoke-RestMethod {
 
     It 'exits the persistent session directly from the end-of-life channel view' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', 's', 'e') `
+            -InputLines @('i', 's', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
@@ -144,7 +153,7 @@ function Invoke-RestMethod {
 
     It 'uses S to toggle the channel view in both directions' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', 's', 's', 'e') `
+            -InputLines @('i', 's', 's', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
@@ -157,7 +166,7 @@ function Invoke-RestMethod {
 
     It 'rejects A instead of toggling the channel view' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', 'a', 'e') `
+            -InputLines @('i', 'a', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
@@ -169,7 +178,7 @@ function Invoke-RestMethod {
 
     It 'exits the persistent session directly from SDK version selection' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', '1', 'e') `
+            -InputLines @('i', '1', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
@@ -182,7 +191,7 @@ function Invoke-RestMethod {
 
     It 'exits the persistent session directly from expanded SDK version selection' {
         $result = Invoke-GlobalExitToolProcess `
-            -InputLines @('1', '1', 's', 'e') `
+            -InputLines @('i', '1', 's', 'e') `
             -Command $script:ReleaseIndexCommand
 
         $result.ExitCode | Should -Be 0
@@ -199,7 +208,7 @@ function Invoke-RestMethod {
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
         New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
 
-        $result = Invoke-GlobalExitToolProcess -InputLines @('2', 'e')
+        $result = Invoke-GlobalExitToolProcess -InputLines @('r', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-GlobalExitMainPromptCount $result.Output) | Should -Be 1

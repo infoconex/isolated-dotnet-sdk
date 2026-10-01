@@ -388,9 +388,9 @@ select_action() {
     while true; do
         tool_heading "What would you like to do?"
         echo
-        echo "  1. Install an SDK"
-        echo "  2. Remove an isolated SDK"
-        echo "  3. List installed SDKs"
+        echo "  I. Install an SDK"
+        echo "  R. Remove an isolated SDK"
+        echo "  L. List installed SDKs"
         echo
         echo "  E. Exit"
         echo
@@ -398,12 +398,12 @@ select_action() {
         selection="$TOOL_INPUT"
 
         case "$selection" in
-            1) ACTION="install"; return 0 ;;
-            2) ACTION="remove"; return 0 ;;
-            3) ACTION="list"; return 0 ;;
+            i|I) ACTION="install"; return 0 ;;
+            r|R) ACTION="remove"; return 0 ;;
+            l|L) ACTION="list"; return 0 ;;
             e|E) tool_info "Exiting."; return 1 ;;
             *)
-                warn_invalid_selection "$selection" "Choose 1, 2, 3, or E."
+                warn_invalid_selection "$selection" "Choose I, R, L, or E."
                 echo
                 ;;
         esac

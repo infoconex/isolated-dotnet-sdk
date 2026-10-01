@@ -44,9 +44,9 @@ The first verified run creates `~/dotnet-sdks` if needed, saves the platform-spe
 ```text
 What would you like to do?
 
-  1. Install an SDK
-  2. Remove an isolated SDK
-  3. List installed SDKs
+  I. Install an SDK
+  R. Remove an isolated SDK
+  L. List installed SDKs
 
   E. Exit
 

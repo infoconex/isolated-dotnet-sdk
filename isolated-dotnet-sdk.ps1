@@ -554,9 +554,9 @@ function Select-Action {
     while ($true) {
         Write-ToolHeading 'What would you like to do?'
         Write-ToolDisplay
-        Write-ToolDisplay '  1. Install an SDK'
-        Write-ToolDisplay '  2. Remove an isolated SDK'
-        Write-ToolDisplay '  3. List installed SDKs'
+        Write-ToolDisplay '  I. Install an SDK'
+        Write-ToolDisplay '  R. Remove an isolated SDK'
+        Write-ToolDisplay '  L. List installed SDKs'
         Write-ToolDisplay
         Write-ToolDisplay '  E. Exit'
         Write-ToolDisplay
@@ -564,13 +564,16 @@ function Select-Action {
         $Selection = Read-ToolInput 'Selection'
 
         switch ($Selection) {
-            '1' { $script:Action = 'Install'; return $true }
-            '2' { $script:Action = 'Remove'; return $true }
-            '3' { $script:Action = 'List'; return $true }
+            'i' { $script:Action = 'Install'; return $true }
+            'I' { $script:Action = 'Install'; return $true }
+            'r' { $script:Action = 'Remove'; return $true }
+            'R' { $script:Action = 'Remove'; return $true }
+            'l' { $script:Action = 'List'; return $true }
+            'L' { $script:Action = 'List'; return $true }
             'e' { Write-ToolInfo 'Exiting.'; return $false }
             'E' { Write-ToolInfo 'Exiting.'; return $false }
             default {
-                Write-InvalidSelection -Selection $Selection -Choices 'Choose 1, 2, 3, or E.'
+                Write-InvalidSelection -Selection $Selection -Choices 'Choose I, R, L, or E.'
                 Write-ToolDisplay
             }
         }
