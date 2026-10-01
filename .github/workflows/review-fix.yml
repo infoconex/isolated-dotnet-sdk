@@ -1,0 +1,71 @@
+name: Review parity fix
+
+on:
+  push:
+    branches:
+      - release/issue-105-cli-presentation
+    paths:
+      - .github/workflows/review-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/issue-105-cli-presentation
+
+      - name: Apply reviewed parity fix
+        run: python .github/review-fix.py
+
+      - name: Verify Bash syntax and Windows-style path rendering
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n isolated-dotnet-sdk.sh
+          git diff --check
+
+          test_root="$(mktemp -d)"
+          trap 'rm -rf "$test_root"' EXIT
+          test_home="$test_root/home"
+          fake_bin="$test_root/bin"
+          mkdir -p "$test_home" "$fake_bin"
+          cat > "$fake_bin/dotnet" <<'EOF'
+          #!/usr/bin/env bash
+          if [[ "${1:-}" == "--list-sdks" ]]; then
+            printf '%s\n' '10.0.401 [C:\Program Files\dotnet\sdk]'
+            exit 0
+          fi
+          exit 91
+          EOF
+          chmod +x "$fake_bin/dotnet"
+
+          list_output="$(env HOME="$test_home" PATH="$fake_bin:$PATH" ./isolated-dotnet-sdk.sh list)"
+          printf '%s\n' "$list_output" | grep -F '10.0.401  C:\Program Files\dotnet\sdk\10.0.401'
+          if printf '%s\n' "$list_output" | grep -Fq 'C:\Program Files\dotnet\sdk/10.0.401'; then
+            echo 'mixed path separator remained in List output' >&2
+            exit 1
+          fi
+
+          tool_path="$test_home/dotnet-sdks/isolated-dotnet-sdk.sh"
+          install_output="$(printf '\n' | env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" install 10.0.401)"
+          printf '%s\n' "$install_output" | grep -F 'Location: C:\Program Files\dotnet\sdk\10.0.401'
+          if printf '%s\n' "$install_output" | grep -Fq 'C:\Program Files\dotnet\sdk/10.0.401'; then
+            echo 'mixed path separator remained in install status' >&2
+            exit 1
+          fi
+
+      - name: Commit product and regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/review-fix.yml .github/review-fix.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: preserve system SDK path style in Bash'
+          git push origin HEAD:release/issue-105-cli-presentation
