@@ -1,0 +1,68 @@
+name: Issue 103 formatting cleanup
+
+on:
+  push:
+    branches:
+      - release/issue-103-target-sdk-status
+    paths:
+      - .github/workflows/issue-103-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Restore function-level indentation
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def indent_between(path, start, end, expected_first):
+              file_path = Path(path)
+              text = file_path.read_text()
+              start_pos = text.index(start) + len(start)
+              end_pos = text.index(end, start_pos)
+              middle = text[start_pos:end_pos]
+              if not middle.startswith(expected_first):
+                  raise SystemExit(f"{path}: unexpected block shape before indentation fix")
+              lines = middle.splitlines(keepends=True)
+              middle = ''.join(('    ' + line) if line.strip() else line for line in lines)
+              file_path.write_text(text[:start_pos] + middle + text[end_pos:])
+
+          indent_between(
+              'isolated-dotnet-sdk.ps1',
+              "    Write-ToolInfo 'Checking existing installations...'\n",
+              '    $Channel = Get-SdkChannel\n',
+              'Write-ToolDisplay\n',
+          )
+          indent_between(
+              'isolated-dotnet-sdk.sh',
+              '    tool_info "Checking existing installations..."\n',
+              '    channel="$(get_sdk_channel)"\n',
+              'echo\n',
+          )
+          PY
+
+          rm .github/workflows/issue-103-format.yml
+          bash -n isolated-dotnet-sdk.sh
+          pwsh -NoProfile -Command '$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "isolated-dotnet-sdk.ps1"), [ref]$null, [ref]$errors) | Out-Null; if ($errors.Count -ne 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }'
+          git diff --check
+
+      - name: Commit formatting cleanup
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add isolated-dotnet-sdk.ps1 isolated-dotnet-sdk.sh .github/workflows/issue-103-format.yml
+          git commit -m "style: normalize install status formatting"
+          git push origin HEAD:release/issue-103-target-sdk-status
