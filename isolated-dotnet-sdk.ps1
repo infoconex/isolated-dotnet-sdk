@@ -1338,7 +1338,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
     )
 
     $EnvironmentOverrides = @{
-        DOTNET_NOLOGO                       = 'true'
+        DOTNET_NOLOGO                      = 'true'
         DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
         DOTNET_ADD_GLOBAL_TOOLS_TO_PATH    = 'false'
     }
