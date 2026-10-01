@@ -1,4 +1,5 @@
 name: Review parity fix
+# rerun after correcting Bash backslash generation
 
 on:
   push:
