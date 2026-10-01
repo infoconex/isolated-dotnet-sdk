@@ -70,6 +70,8 @@ teardown() {
 @test "presentation source defines semantic accent and stderr-aware error roles" {
   grep -Fq 'tool_label_value() {' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq 'tool_metadata() {' "$repo_root/isolated-dotnet-sdk.sh"
+  grep -Fq 'selected_interactively="true"' "$repo_root/isolated-dotnet-sdk.sh"
+  grep -Fq 'if [[ "$selected_interactively" == "true" ]]; then' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq 'if [[ -t 2 ]]; then' "$repo_root/isolated-dotnet-sdk.sh"
   grep -Fq "RED='\\033[0;31m'" "$repo_root/isolated-dotnet-sdk.sh"
 }

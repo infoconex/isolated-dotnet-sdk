@@ -418,7 +418,7 @@ function Show-InstalledSdk {
             Write-ToolDisplay "  $($Sdk.Version)"
         }
         else {
-            Write-ToolDisplay "  $($Sdk.Version)  $($Sdk.Path)"
+            Write-ToolDisplay "  $($Sdk.Version)  $(Join-Path $Sdk.Path $Sdk.Version)"
         }
     }
 }
@@ -1090,8 +1090,13 @@ function Resolve-SdkArtifact {
 }
 
 function Install-IsolatedSdk {
+    $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:Version)
     if (-not (Resolve-InstallVersion)) {
         return
+    }
+
+    if ($SelectedInteractively) {
+        Write-ToolDisplay
     }
 
     $InstallDir = Join-Path $SdkRoot $Version
@@ -1130,6 +1135,8 @@ function Install-IsolatedSdk {
     else {
         Write-ToolLabelValue -Label 'System SDK:' -Value 'Not installed'
     }
+
+    Write-ToolDisplay
 
     if ($IsolatedInstalled) {
         Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'

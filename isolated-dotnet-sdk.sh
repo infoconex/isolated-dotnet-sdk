@@ -884,7 +884,7 @@ list_installed_sdks() {
         [[ -n "$line" ]] || continue
         if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+\[(.*)\]$ ]]; then
             version="${BASH_REMATCH[1]}"
-            sdk_path="${BASH_REMATCH[2]}"
+            sdk_path="${BASH_REMATCH[2]%/}/$version"
             printf "  %s  %s\n" "$version" "$sdk_path"
         else
             printf "  %s\n" "$line"
@@ -1006,7 +1006,16 @@ extract_sdk_artifact_metadata() {
 }
 
 install_isolated_sdk() {
+    local selected_interactively="false"
+    if [[ -z "$VERSION" ]]; then
+        selected_interactively="true"
+    fi
+
     resolve_install_version || return 0
+
+    if [[ "$selected_interactively" == "true" ]]; then
+        echo
+    fi
 
     local install_dir="$SDK_ROOT/$VERSION"
     local isolated_dotnet="$install_dir/dotnet"
@@ -1066,6 +1075,8 @@ install_isolated_sdk() {
     else
         tool_label_value "System SDK:" "Not installed"
     fi
+
+    echo
 
     if [[ "$isolated_installed" == "true" ]]; then
         tool_label_value "Isolated SDK:" "Already installed"

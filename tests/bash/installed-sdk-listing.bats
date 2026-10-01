@@ -78,7 +78,7 @@ EOF
   [ "$status" -eq 0 ]
   isolated_section="$(printf '%s\n' "$output" | sed -n '/^Isolated SDKs:$/,/^System SDKs:$/p')"
   [[ "$isolated_section" == *"  None"* ]]
-  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk"* ]]
+  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk/10.0.401"* ]]
 }
 
 @test "direct list shows isolated SDKs before system SDKs and preserves overlap" {
@@ -100,8 +100,8 @@ EOF
   [[ "$output" == *"System SDKs:"* ]]
   [[ "$output" == *"11.0.100-rc.1.26425.128  $tool_root/11.0.100-rc.1.26425.128"* ]]
   [[ "$output" == *"10.0.401  $tool_root/10.0.401"* ]]
-  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk"* ]]
-  [[ "$output" == *"9.0.318  /opt/dotnet sdk"* ]]
+  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk/10.0.401"* ]]
+  [[ "$output" == *"9.0.318  /opt/dotnet sdk/9.0.318"* ]]
   [ "$(printf '%s\n' "$output" | grep -c '10\.0\.401')" -eq 2 ]
 
   isolated_line="$(printf '%s\n' "$output" | grep -n -m1 '^Isolated SDKs:$' | cut -d: -f1)"

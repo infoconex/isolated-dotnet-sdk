@@ -69,6 +69,7 @@ Describe 'PowerShell CLI presentation contract' {
         $source | Should -Match "ValidateSet\('Heading', 'Accent', 'Success'\)"
         $source | Should -Match 'function Write-ToolLabelValue'
         $source | Should -Match 'function Format-ToolAccent'
+        $source | Should -Match '(?s)\$SelectedInteractively = \[string\]::IsNullOrWhiteSpace\(\$script:Version\).*?if \(\$SelectedInteractively\) \{\s*Write-ToolDisplay'
     }
 
     It 'replaces terminal control characters in invalid-input feedback values' {
