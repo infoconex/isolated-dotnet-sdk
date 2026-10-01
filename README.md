@@ -81,7 +81,7 @@ Rerunning either development command may refresh the saved tool from newer `main
 
 ## Visual Quick Start — Isolation in Practice
 
-The install and direct-host visuals below use the supported Linux/Bash mapping and current real-E2E behavior. CI-only home-directory prefixes and timestamps are normalized so the isolated root is readable as `~/dotnet-sdks`. The List visual is a representative ownership example because the SDKs visible through the normal system `dotnet` host vary by machine and runner image. Windows uses PowerShell and `dotnet.exe`, while macOS uses Bash. See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the supported platform mapping.
+The install and direct-host visuals below use the supported Linux/Bash mapping and are aligned with the current real-E2E flow. CI-only home-directory prefixes and timestamps are normalized so the isolated root is readable as `~/dotnet-sdks`. The List visual is a representative ownership example because the SDKs visible through the normal system `dotnet` host vary by machine and runner image. Windows uses PowerShell and `dotnet.exe`, while macOS uses Bash. See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the supported platform mapping.
 
 The fixed `10.0.100` shown here is the repository's reproducible real-E2E target, not a recommendation to prefer it over a newer serviced SDK. Substitute the exact supported SDK version appropriate to your project.
 
@@ -93,7 +93,7 @@ The fixed `10.0.100` shown here is the repository's reproducible real-E2E target
 
 `--yes` only bypasses supported confirmation prompts; the exact version and isolated destination are still explicit.
 
-![Linux Bash E2E-validated transcript showing .NET SDK 10.0.100 installed successfully under ~/dotnet-sdks/10.0.100.](docs/images/isolation-install.svg)
+![Representative Linux Bash install transcript aligned with the real E2E target, showing .NET SDK 10.0.100 installed successfully under ~/dotnet-sdks/10.0.100.](docs/images/isolation-install.svg)
 
 ### 2. List installed SDKs by ownership domain
 
@@ -103,7 +103,7 @@ The fixed `10.0.100` shown here is the repository's reproducible real-E2E target
 
 The List action shows recognized SDKs managed under the isolated root first, followed by read-only **System SDKs** reported by the normally resolved `dotnet --list-sdks` host. System SDK discovery is not an exhaustive filesystem scan and does not make those SDKs removable. If the same version exists in both domains, it appears in both groups; an unavailable normal `dotnet` host is shown as an empty System group, while a resolved host whose inventory command fails causes List to fail.
 
-![Representative Linux Bash installed-SDK listing showing isolated and system ownership groups, including the same SDK version in both domains.](docs/images/isolation-list.svg)
+![Representative Linux Bash installed-SDK listing showing Isolated and System ownership groups with concrete version directories, including the same SDK version in both domains.](docs/images/isolation-list.svg)
 
 ### 3. Invoke that version's host directly
 
@@ -243,7 +243,7 @@ Bash:
     --yes
 ```
 
-## List Isolated SDKs
+## List Installed SDKs
 
 PowerShell:
 
@@ -256,6 +256,8 @@ Bash:
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list
 ```
+
+The List action reports Isolated SDKs first, followed by System SDKs visible through the normally resolved `dotnet` host. Each listed SDK includes its concrete version directory; System entries remain read-only and are not removable through the tool.
 
 An explicit List action does not accept a version. Supplying one is treated as invalid input rather than silently ignoring it. A bare version with no action is still the Install convenience form shown above.
 
