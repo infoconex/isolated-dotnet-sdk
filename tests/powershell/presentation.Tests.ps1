@@ -68,7 +68,7 @@ Describe 'PowerShell CLI presentation contract' {
 
         $source | Should -Match "ValidateSet\('Heading', 'Accent', 'Success'\)"
         $source | Should -Match 'function Write-ToolLabelValue'
-        $source | Should -Match 'function Write-ToolMetadata'
+        $source | Should -Match 'function Format-ToolAccent'
     }
 
 

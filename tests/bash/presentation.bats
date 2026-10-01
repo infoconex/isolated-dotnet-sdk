@@ -47,7 +47,23 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [[ "$output" == $'\nInstalling tool to '* ]]
-  [[ "$output" == *$'Tool installed.\n\nInstalled .NET SDKs'* ]]
+  tool_installed_line=-1
+  installed_heading_line=-1
+  for ((i=0; i<${#lines[@]}; i++)); do
+    [[ "${lines[$i]}" == "Tool installed." ]] && tool_installed_line=$i
+    [[ "${lines[$i]}" == "Installed .NET SDKs" ]] && installed_heading_line=$i
+  done
+  [ "$tool_installed_line" -ge 0 ]
+  [ "$installed_heading_line" -gt "$tool_installed_line" ]
+
+  blank_boundary='false'
+  for ((i=tool_installed_line + 1; i<installed_heading_line; i++)); do
+    if [[ -z "${lines[$i]}" ]]; then
+      blank_boundary='true'
+      break
+    fi
+  done
+  [ "$blank_boundary" = 'true' ]
 }
 
 @test "presentation source defines semantic accent and stderr-aware error roles" {

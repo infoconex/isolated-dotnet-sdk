@@ -148,7 +148,7 @@ function Write-ToolLabelValue {
     Write-ToolDisplay "$AccentLabel $Value"
 }
 
-function Write-ToolMetadata {
+function Format-ToolAccent {
     param([string]$Message)
     return (Format-ToolMessage -Kind Accent -Message $Message)
 }
@@ -826,7 +826,7 @@ function Select-InstallVersion {
                 }
 
                 if ($Markers.Count -gt 0) {
-                    $Metadata = Write-ToolMetadata -Message ("({0})" -f ($Markers -join ', '))
+                    $Metadata = Format-ToolAccent -Message ("({0})" -f ($Markers -join ', '))
                     Write-ToolDisplay ("  {0}. {1} {2}" -f ($Index + 1), $SdkVersion, $Metadata)
                 }
                 else {
