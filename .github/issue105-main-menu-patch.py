@@ -60,7 +60,6 @@ for old, new in [
     ("-InputLines @('2', 'e')", "-InputLines @('r', 'e')"),
 ]:
     replace_once(path, old, new)
-replace_all(path, 'Choose 1, 2, 3, or E.', 'Choose I, R, L, or E.')
 
 # Bash global-exit coverage mirrors PowerShell.
 path = 'tests/bash/global-exit.bats'
@@ -79,7 +78,6 @@ for old, new in [
     ('printf "2\\ne\\n"', 'printf "r\\ne\\n"'),
 ]:
     replace_once(path, old, new)
-replace_all(path, 'Choose 1, 2, 3, or E.', 'Choose I, R, L, or E.')
 
 # Persistent lifecycle tests: only change inputs that address the Main menu.
 path = 'tests/powershell/interactive-lifecycle.Tests.ps1'
