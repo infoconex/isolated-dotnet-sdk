@@ -1126,6 +1126,16 @@ function Install-IsolatedSdk {
         $IsolatedInstalled = $IsolatedVersions -contains $Version
     }
 
+    if ($IsolatedInstalled) {
+        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'
+        Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
+    }
+    else {
+        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Not installed'
+    }
+
+    Write-ToolDisplay
+
     if ($SystemSdk) {
         Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed'
         if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
@@ -1134,16 +1144,6 @@ function Install-IsolatedSdk {
     }
     else {
         Write-ToolLabelValue -Label 'System SDK:' -Value 'Not installed'
-    }
-
-    Write-ToolDisplay
-
-    if ($IsolatedInstalled) {
-        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'
-        Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
-    }
-    else {
-        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Not installed'
     }
     Write-ToolDisplay
 

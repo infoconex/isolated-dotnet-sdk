@@ -88,7 +88,7 @@ Describe 'PowerShell install target status' {
         $text | Should -Match 'System SDK: Already installed'
         $text | Should -Match 'Location: C:\\system\\sdk\\99\.0\.100'
         $text | Should -Match 'Isolated SDK: Not installed'
-        $text | Should -Match 'Location: C:\\system\\sdk\\99\.0\.100\r?\n\r?\nIsolated SDK: Not installed'
+        $text | Should -Match 'Isolated SDK: Not installed\r?\n\r?\nSystem SDK: Already installed'
         $text | Should -Match 'Install an isolated copy in addition to the System SDK\?'
         $text | Should -Match 'Installation cancelled\.'
         $text | Should -Not -Match ([regex]::Escape($script:UnrelatedVersion))
@@ -109,7 +109,7 @@ Describe 'PowerShell install target status' {
         $text = $output -join [Environment]::NewLine
         $text | Should -Match 'Checking existing installations\.\.\.'
         $text | Should -Match 'System SDK: Not installed'
-        $text | Should -Match 'System SDK: Not installed\r?\n\r?\nIsolated SDK: Already installed'
+        $text | Should -Match ([regex]::Escape("Location: $($script:InstallDir)") + '\r?\n\r?\nSystem SDK: Not installed')
         $text | Should -Match 'Isolated SDK: Already installed'
         $text | Should -Match ([regex]::Escape("Location: $($script:InstallDir)"))
         $text | Should -Not -Match ([regex]::Escape($script:UnrelatedVersion))
@@ -129,7 +129,7 @@ Describe 'PowerShell install target status' {
         $text = $output -join [Environment]::NewLine
         $text | Should -Match 'System SDK: Already installed'
         $text | Should -Match 'Location: C:\\system\\sdk\\99\.0\.100'
-        $text | Should -Match 'Location: C:\\system\\sdk\\99\.0\.100\r?\n\r?\nIsolated SDK: Already installed'
+        $text | Should -Match ([regex]::Escape("Location: $($script:InstallDir)") + '\r?\n\r?\nSystem SDK: Already installed')
         $text | Should -Match 'Isolated SDK: Already installed'
         $text | Should -Match ([regex]::Escape("Location: $($script:InstallDir)"))
         $text | Should -Not -Match ([regex]::Escape($script:UnrelatedVersion))
@@ -149,7 +149,7 @@ Describe 'PowerShell install target status' {
         $text = $output -join [Environment]::NewLine
         $text | Should -Match 'Checking existing installations\.\.\.'
         $text | Should -Match 'System SDK: Not installed'
-        $text | Should -Match 'System SDK: Not installed\r?\n\r?\nIsolated SDK: Not installed'
+        $text | Should -Match 'Isolated SDK: Not installed\r?\n\r?\nSystem SDK: Not installed'
         $text | Should -Match 'Isolated SDK: Not installed'
         $text | Should -Not -Match ([regex]::Escape($script:UnrelatedVersion))
     }

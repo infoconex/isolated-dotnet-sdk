@@ -1067,6 +1067,15 @@ install_isolated_sdk() {
         fi
     fi
 
+    if [[ "$isolated_installed" == "true" ]]; then
+        tool_label_value "Isolated SDK:" "Already installed"
+        tool_label_value "Location:" "$install_dir"
+    else
+        tool_label_value "Isolated SDK:" "Not installed"
+    fi
+
+    echo
+
     if [[ -n "$system_sdk_line" ]]; then
         tool_label_value "System SDK:" "Already installed"
         if [[ -n "$system_sdk_path" ]]; then
@@ -1074,15 +1083,6 @@ install_isolated_sdk() {
         fi
     else
         tool_label_value "System SDK:" "Not installed"
-    fi
-
-    echo
-
-    if [[ "$isolated_installed" == "true" ]]; then
-        tool_label_value "Isolated SDK:" "Already installed"
-        tool_label_value "Location:" "$install_dir"
-    else
-        tool_label_value "Isolated SDK:" "Not installed"
     fi
     echo
 
