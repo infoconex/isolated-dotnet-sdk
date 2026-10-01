@@ -62,6 +62,19 @@ selection_range() {
     fi
 }
 
+join_sdk_inventory_path() {
+    local sdk_root="$1"
+    local version="$2"
+
+    if [[ "$sdk_root" == *\\* ]]; then
+        sdk_root="${sdk_root%\\}"
+        printf '%s\\%s' "$sdk_root" "$version"
+    else
+        sdk_root="${sdk_root%/}"
+        printf '%s/%s' "$sdk_root" "$version"
+    fi
+}
+
 warn_invalid_selection() {
     local selection="$1"
     local choices="$2"
@@ -890,7 +903,7 @@ list_installed_sdks() {
         [[ -n "$line" ]] || continue
         if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+\[(.*)\]$ ]]; then
             version="${BASH_REMATCH[1]}"
-            sdk_path="${BASH_REMATCH[2]%/}/$version"
+            sdk_path="$(join_sdk_inventory_path "${BASH_REMATCH[2]}" "$version")"
             printf "  %s  %s\n" "$version" "$sdk_path"
         else
             printf "  %s\n" "$line"
@@ -1056,7 +1069,7 @@ install_isolated_sdk() {
     if [[ -n "$installed_sdks" ]]; then
         system_sdk_line="$(printf "%s\n" "$installed_sdks" | awk -v version="$VERSION" '$1 == version { print; exit }')"
         if [[ "$system_sdk_line" =~ ^[^[:space:]]+[[:space:]]+\[(.*)\]$ ]]; then
-            system_sdk_path="${BASH_REMATCH[1]%/}/$VERSION"
+            system_sdk_path="$(join_sdk_inventory_path "${BASH_REMATCH[1]}" "$VERSION")"
         fi
     fi
 

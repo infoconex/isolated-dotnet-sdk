@@ -81,6 +81,18 @@ EOF
   [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk/10.0.401"* ]]
 }
 
+@test "direct list preserves Windows-style system SDK path separators" {
+  bootstrap_tool
+  fake_bin="$test_root/windows-system-bin"
+  write_fake_system_dotnet "$fake_bin" '10.0.401 [C:\Program Files\dotnet\sdk]'
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'10.0.401  C:\Program Files\dotnet\sdk\10.0.401'* ]]
+  [[ "$output" != *'C:\Program Files\dotnet\sdk/10.0.401'* ]]
+}
+
 @test "direct list shows isolated SDKs before system SDKs and preserves overlap" {
   bootstrap_tool
   create_isolated_sdk '11.0.100-rc.1.26425.128'
