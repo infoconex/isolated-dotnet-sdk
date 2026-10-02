@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/).
 
-## [0.2.0] - 2026-10-01
+## [0.2.0] - 2026-10-02
 
 ### Added
 
@@ -13,6 +13,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Installed-SDK listing that separates tool-managed **Isolated SDKs** from read-only **System SDKs** reported by the normally resolved `dotnet` host.
 - Persistent interactive sessions with Main, Back, global Exit, manual exact-version entry, compact SDK version selection, and access to older servicing versions on demand.
 - Cross-platform behavioral, boundary, integrity, static-analysis, and real end-to-end validation using Pester and Bats-core across the supported Windows, Linux, and macOS mappings.
+- A manually triggered, fail-closed stable-release workflow that verifies the exact release commit and checksums before creating and publishing a GitHub Release.
 - Documentation for project/editor usage, release/bootstrap policy, supply-chain trust boundaries, filesystem safety, behavioral parity, interactive sessions, validation, and operational troubleshooting.
 
 ### Changed
