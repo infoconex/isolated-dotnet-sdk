@@ -12,14 +12,14 @@ Development usage is separate and opt-in. Commands that execute the script direc
 
 ## Stable installation
 
-Choose an explicit published release tag from GitHub Releases. Stable releases that support checksum-verifying bootstrap include a `SHA256SUMS` release asset containing entries for both platform scripts.
+The current checksum-policy-compliant stable release is `v0.2.0`. The commands below explicitly select that tag and require its `SHA256SUMS` release asset before executing either platform script.
+
+To install another checksum-policy-compliant release, replace `v0.2.0` with that exact published tag. Stable version selection remains explicit; the tool does not resolve a moving latest-release alias.
 
 ### PowerShell
 
-Replace `<release-tag>` with the desired published tag:
-
 ```powershell
-$release = '<release-tag>'
+$release = 'v0.2.0'
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release.ps1")
 $checksums = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release-SHA256SUMS")
 try {
@@ -46,10 +46,8 @@ finally {
 
 ### Bash
 
-Replace `<release-tag>` with the desired published tag:
-
 ```bash
-release='<release-tag>'
+release='v0.2.0'
 temp="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.sh")"
 checksums="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
 trap 'rm -f "$temp" "$checksums"' EXIT
@@ -81,11 +79,11 @@ chmod +x "$temp"
 "$temp"
 ```
 
-These commands preserve the existing explicit-tag, file-based bootstrap semantics while adding a pre-execution integrity gate: the user explicitly chooses a published tag, the downloaded source must match the checksum material for that release, and file-based bootstrap then preserves the exact verified source.
+These commands preserve the existing explicit-tag, file-based bootstrap semantics while adding a pre-execution integrity gate: the user explicitly selects `v0.2.0`, the downloaded source must match the checksum material for that release, and file-based bootstrap then preserves the exact verified source.
 
 ### Legacy `v0.1.0`
 
-`v0.1.0` predates the checksum-verifying stable-release policy and has no `SHA256SUMS` release asset. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to releases published under the current policy.
+`v0.1.0` predates the checksum-verifying stable-release policy and has no `SHA256SUMS` release asset. Its historical release is not modified retroactively. The checksum-verifying stable-bootstrap commands above apply to `v0.2.0` and later releases published under the current policy.
 
 ## Updates
 
