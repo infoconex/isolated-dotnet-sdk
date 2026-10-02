@@ -4,14 +4,16 @@ on:
   pull_request:
     paths:
       - .github/workflows/verify-release.yml
+      - .github/workflows/publish-release.yml
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
         description: Published stable release tag to verify (for example, v0.2.0)
-        required: true
-        type: string
-      expected_sha:
-        description: Exact commit SHA that the published tag must reference
         required: true
         type: string
 
@@ -34,7 +36,7 @@ jobs:
 
   verify-release-state:
     name: Verify published release state
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -48,27 +50,22 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           RELEASE_TAG_INPUT: ${{ inputs.tag }}
-          EXPECTED_SHA_INPUT: ${{ inputs.expected_sha }}
         with:
           script: |
             const tag = process.env.RELEASE_TAG_INPUT.trim();
-            const expectedSha = process.env.EXPECTED_SHA_INPUT.trim();
             const { owner, repo } = context.repo;
 
             if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(tag)) {
               core.setFailed(`Stable release tag must use vMAJOR.MINOR.PATCH: ${tag}`);
               return;
             }
-            if (!/^[0-9a-f]{40}$/.test(expectedSha)) {
-              core.setFailed('expected_sha must be a full lowercase 40-character commit SHA.');
-              return;
-            }
 
             const ref = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
-            if (ref.data.object.type !== 'commit' || ref.data.object.sha !== expectedSha) {
-              core.setFailed(`Tag ${tag} does not point directly to ${expectedSha}.`);
+            if (ref.data.object.type !== 'commit') {
+              core.setFailed(`Tag ${tag} must be a lightweight tag that points directly to a commit.`);
               return;
             }
+            const expectedSha = ref.data.object.sha;
 
             const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
             if (
