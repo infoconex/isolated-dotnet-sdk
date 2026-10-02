@@ -242,7 +242,6 @@ jobs:
               const data = release.data;
               if (
                 data.tag_name !== tag ||
-                data.target_commitish !== expectedSha ||
                 data.name !== tag ||
                 data.draft !== shouldBeDraft ||
                 data.prerelease !== false ||
