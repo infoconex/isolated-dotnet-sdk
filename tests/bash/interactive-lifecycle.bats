@@ -93,7 +93,7 @@ EOF
 @test "no-action invocation returns to Main after List and exits explicitly" {
   prepare_source
 
-  run bash -c 'printf "3\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
+  run bash -c 'printf "l\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
@@ -105,7 +105,7 @@ EOF
 @test "normal interactive Remove no-change returns to Main" {
   prepare_source
 
-  run bash -c 'printf "2\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
+  run bash -c 'printf "r\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
@@ -133,7 +133,7 @@ exit 7
 EOF
   chmod +x "$fake_bin/curl"
 
-  run bash -c 'printf "1\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -ne 0 ]
@@ -147,7 +147,7 @@ EOF
   fake_bin="$test_root/channel-back-fake-bin"
   write_metadata_fake_curl "$fake_bin"
 
-  run bash -c 'printf "1\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -178,7 +178,7 @@ exit 0
 EOF
   chmod +x "$tool_root/$version/dotnet"
 
-  run bash -c 'printf "2\nb\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "r\nb\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
@@ -219,7 +219,7 @@ exit 0
 EOF
   chmod +x "$install_dir/dotnet"
 
-  run bash -c 'printf "1\n1\n1\n3\n2\n1\ny\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\n1\n1\nl\nr\n1\ny\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
@@ -228,4 +228,36 @@ EOF
   [[ "$output" == *"Isolated SDK $version was removed."* ]]
   [[ "$output" == *"Exiting."* ]]
   [ ! -d "$install_dir" ]
+}
+
+
+@test "Main retry distinguishes blank and nonblank invalid selections" {
+  prepare_source
+
+  run bash -c 'printf "\n6\ne\n" | env HOME="$1" "$2" 2>&1' _ "$test_home" "$source_copy"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A selection is required. Choose I, R, L, or E."* ]]
+  [[ "$output" == *"Invalid selection: 6. Choose I, R, L, or E."* ]]
+  [[ "$output" == *$'A selection is required. Choose I, R, L, or E.\n\nWhat would you like to do?'* ]]
+  [[ "$output" == *$'Invalid selection: 6. Choose I, R, L, or E.\n\nWhat would you like to do?'* ]]
+}
+
+@test "Remove retry reports active choices and separates feedback from redraw" {
+  bootstrap_tool
+  version='99.0.100'
+  mkdir -p "$tool_root/$version"
+  cat > "$tool_root/$version/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$tool_root/$version/dotnet"
+
+  run bash -c 'printf "r\n\n6\nb\ne\n" | env HOME="$1" "$2" 2>&1' _ "$test_home" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A selection is required. Choose 1, B, or E."* ]]
+  [[ "$output" == *"Invalid selection: 6. Choose 1, B, or E."* ]]
+  [[ "$output" == *$'A selection is required. Choose 1, B, or E.\n\nSelect an isolated SDK to remove:'* ]]
+  [[ "$output" == *$'Invalid selection: 6. Choose 1, B, or E.\n\nSelect an isolated SDK to remove:'* ]]
 }

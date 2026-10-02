@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - '**/*.md'
-      - 'docs/images/**'
       - 'LICENSE'
       - '.config/test-frameworks.json'
       - '.config/static-analysis.json'
@@ -49,11 +48,6 @@ jobs:
             mkdir -p "$(dirname "$destination")"
             cp "$file" "$destination"
           done < <(find docs -type f -name '*.md' -print0)
-
-          if [[ -d docs/images ]]; then
-            mkdir -p .pages-source/docs/images
-            cp -R docs/images/. .pages-source/docs/images/
-          fi
 
           test ! -e .pages-source/tests
           test ! -e .pages-source/scripts

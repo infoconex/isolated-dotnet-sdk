@@ -23,6 +23,22 @@ Each SDK is stored in its own version-specific directory and is not added to `PA
 
 The scripts also run from `dotnet-sdks` rather than from the repository where you invoked them. This prevents a repository-level `global.json` from unexpectedly influencing SDK operations performed by the tool.
 
+## Requirements
+
+The supported product mapping is:
+
+- Windows with PowerShell 7;
+- Linux with Bash;
+- macOS with Bash.
+
+PowerShell on Linux/macOS and Bash on Windows are not supported product combinations. A system-wide `dotnet` installation is not required.
+
+On Linux and macOS, normal product execution uses standard shell utilities including `curl`, `awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, and `rm`. SDK installation also requires an available SHA-512 utility (`sha512sum` where available or `shasum -a 512`) so the downloaded SDK archive can be verified before extraction.
+
+Network access is required when bootstrap or installation needs to download remote artifacts. Interactive install selection requires Microsoft's published release index and channel metadata. Supplying an exact SDK version bypasses interactive version discovery, but a new installation still retrieves Microsoft's exact-version release metadata to resolve the supported platform archive and published SHA-512 before downloading the SDK payload.
+
+See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the authoritative platform/runtime assumptions.
+
 ## Security and isolation at a glance
 
 - Isolated SDKs and the saved tool live under your user-owned `dotnet-sdks` directory, not in system-wide .NET locations. The tool does not permanently modify the normal `PATH`; you invoke an isolated SDK explicitly.
@@ -31,7 +47,13 @@ The scripts also run from `dotnet-sdks` rather than from the repository where yo
 - SDK installation resolves the exact platform archive and SHA-512 from Microsoft release metadata, verifies the archive before extraction, and separately checks that the staged host reports the requested exact SDK version before promotion.
 - These controls still trust Microsoft's release-metadata and payload infrastructure, GitHub release/tag/raw-content hosting and repository administration, TLS, and the local platform tools used to download, hash, extract, and execute code.
 
-For the authoritative details, see [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md), [`docs/filesystem-safety.md`](docs/filesystem-safety.md), [`docs/release-bootstrap.md`](docs/release-bootstrap.md), [`docs/cross-platform-support.md`](docs/cross-platform-support.md), and [`docs/behavioral-parity.md`](docs/behavioral-parity.md).
+For the authoritative details, see:
+
+- [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md)
+- [`docs/filesystem-safety.md`](docs/filesystem-safety.md)
+- [`docs/release-bootstrap.md`](docs/release-bootstrap.md)
+- [`docs/cross-platform-support.md`](docs/cross-platform-support.md)
+- [`docs/behavioral-parity.md`](docs/behavioral-parity.md)
 
 ## Quick Start — Stable Release
 
@@ -44,9 +66,9 @@ The first verified run creates `~/dotnet-sdks` if needed, saves the platform-spe
 ```text
 What would you like to do?
 
-  1. Install an SDK
-  2. Remove an isolated SDK
-  3. List installed SDKs
+  I. Install an SDK
+  R. Remove an isolated SDK
+  L. List installed SDKs
 
   E. Exit
 
@@ -73,9 +95,9 @@ curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/
 
 Rerunning either development command may refresh the saved tool from newer `main` source.
 
-## Visual Quick Start — Isolation in Practice
+## Isolation in Practice
 
-The install and direct-host visuals below use the supported Linux/Bash mapping and current real-E2E behavior. CI-only home-directory prefixes and timestamps are normalized so the isolated root is readable as `~/dotnet-sdks`. The List visual is a representative ownership example because the SDKs visible through the normal system `dotnet` host vary by machine and runner image. Windows uses PowerShell and `dotnet.exe`, while macOS uses Bash. See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the supported platform mapping.
+The examples below use the supported Linux/Bash mapping and are aligned with the current real-E2E flow. CI-only home-directory prefixes and timestamps are normalized so the isolated root is readable as `~/dotnet-sdks`. The List output is representative because the SDKs visible through the normal system `dotnet` host vary by machine and runner image. Windows uses PowerShell and `dotnet.exe`, while macOS uses Bash. See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the supported platform mapping.
 
 The fixed `10.0.100` shown here is the repository's reproducible real-E2E target, not a recommendation to prefer it over a newer serviced SDK. Substitute the exact supported SDK version appropriate to your project.
 
@@ -87,7 +109,27 @@ The fixed `10.0.100` shown here is the repository's reproducible real-E2E target
 
 `--yes` only bypasses supported confirmation prompts; the exact version and isolated destination are still explicit.
 
-![Linux Bash E2E-validated transcript showing .NET SDK 10.0.100 installed successfully under ~/dotnet-sdks/10.0.100.](docs/images/isolation-install.svg)
+Representative output:
+
+```text
+Target SDK: 10.0.100
+Isolated install directory: ~/dotnet-sdks/10.0.100
+
+Checking existing installations...
+
+Isolated SDK: Not installed
+
+System SDK: Not installed
+
+Loading Microsoft release metadata for SDK 10.0.100...
+Downloading .NET SDK 10.0.100 payload...
+Extracting verified .NET SDK 10.0.100 payload...
+
+Verifying the isolated SDK...
+
+Isolated SDK installation completed successfully.
+Location: ~/dotnet-sdks/10.0.100
+```
 
 ### 2. List installed SDKs by ownership domain
 
@@ -97,35 +139,33 @@ The fixed `10.0.100` shown here is the repository's reproducible real-E2E target
 
 The List action shows recognized SDKs managed under the isolated root first, followed by read-only **System SDKs** reported by the normally resolved `dotnet --list-sdks` host. System SDK discovery is not an exhaustive filesystem scan and does not make those SDKs removable. If the same version exists in both domains, it appears in both groups; an unavailable normal `dotnet` host is shown as an empty System group, while a resolved host whose inventory command fails causes List to fail.
 
-![Representative Linux Bash installed-SDK listing showing isolated and system ownership groups, including the same SDK version in both domains.](docs/images/isolation-list.svg)
+Representative output:
+
+```text
+Installed .NET SDKs
+
+Isolated SDKs:
+  10.0.100  ~/dotnet-sdks/10.0.100
+
+System SDKs:
+  10.0.100  /usr/share/dotnet/sdk/10.0.100
+```
 
 ### 3. Invoke that version's host directly
 
 ```bash
-"$HOME/dotnet-sdks/10.0.100/dotnet" --info
+"$HOME/dotnet-sdks/10.0.100/dotnet" --version
 ```
 
-The E2E check uses `--version` for a compact assertion that this exact version-specific host reports `10.0.100`; normal `dotnet` arguments such as `--info` work through the same host path.
+Expected output:
 
-![Linux Bash real E2E direct-host check showing ~/dotnet-sdks/10.0.100/dotnet reporting version 10.0.100.](docs/images/isolation-direct-host.svg)
+```text
+10.0.100
+```
+
+The E2E check uses `--version` for this compact assertion; normal `dotnet` arguments such as `--info` work through the same version-specific host path.
 
 Nothing in this flow adds the isolated SDK to `PATH` or replaces the normal system `dotnet` installation. The explicit version-specific host path is what selects the isolated SDK. This is installation isolation rather than a security sandbox; see [`docs/filesystem-safety.md`](docs/filesystem-safety.md) and [`docs/behavioral-parity.md`](docs/behavioral-parity.md) for the detailed contract.
-
-## Requirements
-
-The supported product mapping is:
-
-- Windows with PowerShell 7;
-- Linux with Bash;
-- macOS with Bash.
-
-PowerShell on Linux/macOS and Bash on Windows are not supported product combinations. A system-wide `dotnet` installation is not required.
-
-On Linux and macOS, normal product execution uses standard shell utilities including `curl`, `awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, and `rm`. SDK installation also requires an available SHA-512 utility (`sha512sum` where available or `shasum -a 512`) so the downloaded SDK archive can be verified before extraction.
-
-Network access is required when bootstrap or installation needs to download remote artifacts. Interactive install selection requires Microsoft's published release index and channel metadata. Supplying an exact SDK version bypasses interactive version discovery, but a new installation still retrieves Microsoft's exact-version release metadata to resolve the supported platform archive and published SHA-512 before downloading the SDK payload.
-
-See [`docs/cross-platform-support.md`](docs/cross-platform-support.md) for the authoritative platform/runtime assumptions.
 
 ## Interactive Install
 
@@ -237,7 +277,7 @@ Bash:
     --yes
 ```
 
-## List Isolated SDKs
+## List Installed SDKs
 
 PowerShell:
 
@@ -250,6 +290,8 @@ Bash:
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" list
 ```
+
+The List action reports Isolated SDKs first, followed by System SDKs visible through the normally resolved `dotnet` host. Each listed SDK includes its concrete version directory; System entries remain read-only and are not removable through the tool.
 
 An explicit List action does not accept a version. Supplying one is treated as invalid input rather than silently ignoring it. A bare version with no action is still the Install convenience form shown above.
 
@@ -401,14 +443,6 @@ dotnet-sdks/
 
 Only the tool file appropriate to the current platform will normally be present. During installation, exact-version Microsoft release metadata, the downloaded SDK archive, and the `.install-*` staging directory are operation-scoped transaction artifacts. Each attempt owns its temporary files/directories and normally removes them after success or failure; they are not persistent installation state.
 
-## Why This Exists
-
-Installing a preview or release-candidate SDK system-wide is not always necessary when evaluating a .NET upgrade.
-
-This tool provides a repeatable way to install an exact SDK version in a separate directory, invoke it explicitly, and remove it later without changing the SDKs exposed by the normal system `dotnet` installation.
-
-It is isolation of the SDK installation, not a full sandbox. The .NET CLI can still create normal per-user state during first-time use, such as development certificates or telemetry configuration.
-
 ## Microsoft Release Metadata
 
 The interactive install picker reads Microsoft's published .NET release metadata from:
@@ -436,10 +470,6 @@ The README and CLI help summarize supported workflows. These repository specific
 - [`dotnet build-server`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-build-server)
 - [`global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
 - [.NET release metadata](https://github.com/dotnet/core/tree/main/release-notes)
-
-## Security Note
-
-Stable bootstrap for releases that include the required `SHA256SUMS` asset verifies the explicitly tagged script against that release's checksum before execution. For SDK installation, the tool resolves the exact platform archive and SHA-512 from Microsoft's release metadata, downloads the archive into operation-owned state, and verifies the checksum before extraction. Exact-version staged-host verification remains a separate correctness check before promotion. Because Microsoft controls both the metadata/checksum and payload distribution, this improves integrity without claiming independent third-party publisher authentication. Development commands intentionally consume mutable `main` and do not receive the stable-release integrity guarantee. See [`docs/supply-chain-integrity.md`](docs/supply-chain-integrity.md) for the complete integrity model.
 
 ## License
 

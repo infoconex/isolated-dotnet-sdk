@@ -86,7 +86,7 @@ Describe 'PowerShell installed SDK listing' {
 
         $LASTEXITCODE | Should -Be 0
         $text | Should -Match '(?ms)^Isolated SDKs:\r?\n  None'
-        $text | Should -Match '10\.0\.401  C:\\Program Files\\dotnet\\sdk'
+        $text | Should -Match ([regex]::Escape('10.0.401  C:\Program Files\dotnet\sdk\10.0.401'))
     }
 
     It 'shows isolated SDKs before system SDKs and preserves same-version overlap' {
@@ -116,8 +116,8 @@ Describe 'PowerShell installed SDK listing' {
         $text | Should -Match '(?m)^System SDKs:\r?$'
         $text | Should -Match ([regex]::Escape("11.0.100-rc.1.26425.128  $(Join-Path $script:ToolRoot '11.0.100-rc.1.26425.128')"))
         $text | Should -Match ([regex]::Escape("10.0.401  $(Join-Path $script:ToolRoot '10.0.401')"))
-        $text | Should -Match '10\.0\.401  C:\\Program Files\\dotnet\\sdk'
-        $text | Should -Match '9\.0\.318  D:\\dotnet sdk'
+        $text | Should -Match ([regex]::Escape('10.0.401  C:\Program Files\dotnet\sdk\10.0.401'))
+        $text | Should -Match ([regex]::Escape('9.0.318  D:\dotnet sdk\9.0.318'))
         $text.IndexOf('Isolated SDKs:') | Should -BeLessThan $text.IndexOf('System SDKs:')
     }
 

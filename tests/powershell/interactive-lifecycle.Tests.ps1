@@ -75,18 +75,18 @@ Describe 'PowerShell interactive lifecycle' {
     }
 
     It 'returns to Main after interactive List and exits explicitly' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('3', 'e')
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
-        $result.Output | Should -Match '3\. List installed SDKs'
+        $result.Output | Should -Match 'L\. List installed SDKs'
         $result.Output | Should -Match 'Isolated SDKs:'
         $result.Output | Should -Match 'System SDKs:'
         $result.Output | Should -Match 'Exiting\.'
     }
 
     It 'returns to Main after normal interactive Remove no-change' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('2', 'e')
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
@@ -111,7 +111,7 @@ function Invoke-RestMethod { throw 'transport failure' }
 '@
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
-            -InputLines @('1', 'e') `
+            -InputLines @('i', 'e') `
             -Command $command
 
         $result.ExitCode | Should -Not -Be 0
@@ -136,7 +136,7 @@ function Invoke-RestMethod { return $releaseIndex }
 '@
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
-            -InputLines @('1', 'b', 'e') `
+            -InputLines @('i', 'b', 'e') `
             -Command $command
 
         $result.ExitCode | Should -Be 0
@@ -182,7 +182,7 @@ function Invoke-RestMethod {
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
         New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
 
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('2', 'b', 'e')
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', 'b', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
@@ -230,4 +230,36 @@ function Invoke-RestMethod {
         ([regex]::Matches($result.Output, '10\.0\.400')).Count | Should -Be 1
         ([regex]::Matches($result.Output, '10\.0\.303')).Count | Should -Be 1
     }
+
+    It 'distinguishes blank and nonblank invalid Main selections' {
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('', '6', 'e') `
+            -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH *>&1'
+
+        $result.ExitCode | Should -Be 0
+        $result.Output | Should -Match 'A selection is required\. Choose I, R, L, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose I, R, L, or E\.'
+        $result.Output | Should -Match 'A selection is required\. Choose I, R, L, or E\.\r?\n\r?\nWhat would you like to do\?'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose I, R, L, or E\.\r?\n\r?\nWhat would you like to do\?'
+    }
+
+    It 'reports Remove choices and separates retry feedback from redraw' {
+        $version = '99.0.100'
+        $installDirectory = Join-Path $script:ToolRoot $version
+        New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
+
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('r', '', '6', 'b', 'e') `
+            -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH *>&1'
+
+        $result.ExitCode | Should -Be 0
+        $result.Output | Should -Match 'A selection is required\. Choose 1, B, or E\.'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.'
+        $result.Output | Should -Match 'A selection is required\. Choose 1, B, or E\.\r?\n\r?\nSelect an isolated SDK to remove:'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.\r?\n\r?\nSelect an isolated SDK to remove:'
+    }
+
 }

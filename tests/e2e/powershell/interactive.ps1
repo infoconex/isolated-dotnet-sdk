@@ -106,14 +106,14 @@ try {
     }
 
     $inputLines = @(
-        '1',
+        'i',
         $channelSelection,
         'B',
         $channelSelection,
         'M',
         $sdkVersion,
-        '3',
-        '2',
+        'l',
+        'r',
         '1',
         'e'
     )

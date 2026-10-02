@@ -40,6 +40,20 @@ EOF
   chmod +x "$system_bin/dotnet"
 }
 
+make_windows_system_dotnet() {
+  system_bin="$test_root/windows-system-bin"
+  mkdir -p "$system_bin"
+
+  cat > "$system_bin/dotnet" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" != "--list-sdks" ]]; then
+  exit 91
+fi
+printf '%s\n' '$version [C:\Program Files\dotnet\sdk]'
+EOF
+  chmod +x "$system_bin/dotnet"
+}
+
 make_isolated_dotnet() {
   local install_dir="$tool_root/$version"
   mkdir -p "$install_dir"
@@ -63,13 +77,26 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"Checking existing installations..."* ]]
   [[ "$output" == *"System SDK: Already installed"* ]]
-  [[ "$output" == *"Location: /system/sdk"* ]]
+  [[ "$output" == *"Location: /system/sdk/$version"* ]]
   [[ "$output" == *"Isolated SDK: Not installed"* ]]
+  [[ "$output" == *$'Isolated SDK: Not installed\n\nSystem SDK: Already installed'* ]]
   [[ "$output" == *"Installation cancelled."* ]]
   [[ "$output" != *"Loading Microsoft release metadata"* ]]
   [[ "$output" != *"$unrelated_version"* ]]
   [[ "$output" != *"normal dotnet host"* ]]
   [[ "$output" != *"installed normally"* ]]
+}
+
+@test "install status preserves Windows-style system SDK path separators" {
+  make_windows_system_dotnet
+
+  run bash -c 'printf "\n" | env HOME="$1" PATH="$2:$PATH" "$3" install "$4"' _ \
+    "$test_home" "$system_bin" "$tool_path" "$version"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Location: C:\Program Files\dotnet\sdk\99.0.100'* ]]
+  [[ "$output" != *'C:\Program Files\dotnet\sdk/99.0.100'* ]]
+  [[ "$output" == *"Installation cancelled."* ]]
 }
 
 @test "install reports an existing isolated target without unrelated System inventory" {
@@ -81,6 +108,7 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"Checking existing installations..."* ]]
   [[ "$output" == *"System SDK: Not installed"* ]]
+  [[ "$output" == *"Location: $tool_root/$version"*$'\n\nSystem SDK: Not installed'* ]]
   [[ "$output" == *"Isolated SDK: Already installed"* ]]
   [[ "$output" == *"Location: $tool_root/$version"* ]]
   [[ "$output" != *"$unrelated_version"* ]]
@@ -95,7 +123,8 @@ EOF
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"System SDK: Already installed"* ]]
-  [[ "$output" == *"Location: /system/sdk"* ]]
+  [[ "$output" == *"Location: /system/sdk/$version"* ]]
+  [[ "$output" == *"Location: $tool_root/$version"*$'\n\nSystem SDK: Already installed'* ]]
   [[ "$output" == *"Isolated SDK: Already installed"* ]]
   [[ "$output" == *"Location: $tool_root/$version"* ]]
   [[ "$output" != *"$unrelated_version"* ]]
@@ -115,6 +144,7 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"Checking existing installations..."* ]]
   [[ "$output" == *"System SDK: Not installed"* ]]
+  [[ "$output" == *$'Isolated SDK: Not installed\n\nSystem SDK: Not installed'* ]]
   [[ "$output" == *"Isolated SDK: Not installed"* ]]
   [[ "$output" != *"$unrelated_version"* ]]
 }

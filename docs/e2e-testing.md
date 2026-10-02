@@ -40,7 +40,7 @@ The direct scenario uses the checked-out repository tool and real Microsoft infr
 2. install the configured exact SDK;
 3. execute that isolated SDK and require its reported version to equal the configured version;
 4. run the public standalone Verify action and require a healthy result;
-5. list isolated SDKs and require the configured version to appear;
+5. run List and require the configured isolated version to appear in the installed-SDK output;
 6. remove the configured SDK;
 7. require the isolated SDK directory to be absent afterward.
 
@@ -52,15 +52,15 @@ The interactive scenario also uses live Microsoft release metadata. Before the p
 
 The persistent session then:
 
-1. enters Install;
+1. enters Install with the Main menu's `I` command;
 2. selects the discovered channel;
 3. exercises `Back to .NET channels`;
 4. selects the discovered channel again;
 5. uses the picker’s semantic manual-version option to enter the configured fixed SDK version;
 6. verifies return to Main after installation;
-7. runs List and verifies the installed SDK is displayed;
-8. runs Remove for the single job-local isolated SDK and verifies return to Main;
-9. exits explicitly and requires a successful process result;
+7. runs List with `L` and verifies the installed SDK is displayed;
+8. runs Remove with `R` for the single job-local isolated SDK and verifies return to Main;
+9. exits explicitly with `E` and requires a successful process result;
 10. verifies the SDK is absent afterward.
 
 The E2E driver may use the tool’s `-Yes` / `--yes` confirmation control so hosted-runner system SDK inventory cannot introduce an extra confirmation-input branch. `-Yes` / `--yes` does not choose menu items and does not replace the persistent interactive session.
@@ -69,7 +69,7 @@ The E2E driver may use the tool’s `-Yes` / `--yes` confirmation control so hos
 
 The automatic `push: main` trigger proves the exact code that actually landed on the default branch against live Microsoft/.NET infrastructure. `workflow_dispatch` remains available when a maintainer needs to rerun the same live suite without creating another commit.
 
-E2E is intentionally not triggered on pull requests and is not a required merge check yet. Issue #60 owns future organization-backed merge-queue enforcement and required merge-candidate E2E gating. Until that protection exists and is demonstrated, deterministic `push: main` Validate remains enabled as the normal post-merge deterministic signal.
+E2E is intentionally not triggered on pull requests and is not a required merge check yet. Future organization-backed merge-queue work may promote E2E into required merge-candidate gating. Until that protection exists and is demonstrated, deterministic `push: main` Validate remains enabled as the normal post-merge deterministic signal.
 
 ## What E2E does not own
 

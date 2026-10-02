@@ -102,6 +102,7 @@ Describe 'PowerShell bootstrap filesystem behavior' {
         New-Item -ItemType Directory -Path $script:SdkRoot -Force | Out-Null
         Set-Content -LiteralPath $script:ToolPath -Value '# existing saved tool'
 
+        Set-Item -Path Function:script:Write-ToolDisplay -Value { param([string]$Message = '') $null = $Message }
         Set-Item -Path Function:script:Write-ToolInfo -Value { param([string]$Message) $null = $Message }
         Set-Item -Path Function:script:Write-ToolSuccess -Value { param([string]$Message) throw "unexpected success: $Message" }
         Set-Item -Path Function:script:Invoke-WebRequest -Value {

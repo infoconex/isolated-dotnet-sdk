@@ -78,7 +78,19 @@ EOF
   [ "$status" -eq 0 ]
   isolated_section="$(printf '%s\n' "$output" | sed -n '/^Isolated SDKs:$/,/^System SDKs:$/p')"
   [[ "$isolated_section" == *"  None"* ]]
-  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk"* ]]
+  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk/10.0.401"* ]]
+}
+
+@test "direct list preserves Windows-style system SDK path separators" {
+  bootstrap_tool
+  fake_bin="$test_root/windows-system-bin"
+  write_fake_system_dotnet "$fake_bin" '10.0.401 [C:\Program Files\dotnet\sdk]'
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'10.0.401  C:\Program Files\dotnet\sdk\10.0.401'* ]]
+  [[ "$output" != *'C:\Program Files\dotnet\sdk/10.0.401'* ]]
 }
 
 @test "direct list shows isolated SDKs before system SDKs and preserves overlap" {
@@ -100,8 +112,8 @@ EOF
   [[ "$output" == *"System SDKs:"* ]]
   [[ "$output" == *"11.0.100-rc.1.26425.128  $tool_root/11.0.100-rc.1.26425.128"* ]]
   [[ "$output" == *"10.0.401  $tool_root/10.0.401"* ]]
-  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk"* ]]
-  [[ "$output" == *"9.0.318  /opt/dotnet sdk"* ]]
+  [[ "$output" == *"10.0.401  /usr/share/dotnet/sdk/10.0.401"* ]]
+  [[ "$output" == *"9.0.318  /opt/dotnet sdk/9.0.318"* ]]
   [ "$(printf '%s\n' "$output" | grep -c '10\.0\.401')" -eq 2 ]
 
   isolated_line="$(printf '%s\n' "$output" | grep -n -m1 '^Isolated SDKs:$' | cut -d: -f1)"
@@ -163,8 +175,8 @@ EOF
   run bash -c 'printf "e\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"3. List installed SDKs"* ]]
-  [[ "$output" != *"3. List isolated SDKs"* ]]
+  [[ "$output" == *"L. List installed SDKs"* ]]
+  [[ "$output" != *"L. List isolated SDKs"* ]]
 }
 
 @test "system-only SDKs do not become removable" {
