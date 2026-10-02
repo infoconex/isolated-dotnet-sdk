@@ -138,15 +138,31 @@ Shell-native temporary-file and SHA-256 mechanics may differ.
 
 ## Release-maintenance contract
 
-For checksum-policy-compliant stable releases, a version becomes available for stable installation only when all of the following are true:
+Checksum-policy-compliant stable releases are published through the manually triggered [`Publish Release`](../.github/workflows/publish-release.yml) workflow. Release publication is never triggered automatically by a push or merge to `main`; starting that workflow is the maintainer's intentional publication action.
 
-1. the intended release commit has passed repository validation;
-2. a Git tag for the release version points to that reviewed release commit;
-3. `pwsh -NoProfile -File ./scripts/New-ReleaseChecksums.ps1 -OutputPath <path>/SHA256SUMS` is run against that exact release tree;
-4. the generated `SHA256SUMS` contains SHA-256 entries for `isolated-dotnet-sdk.ps1` and `isolated-dotnet-sdk.sh` and is retained unchanged for publication;
-5. a GitHub Release is created as a **draft** for that tag;
-6. `SHA256SUMS` and every other intended release asset are attached while the release is still a draft; and
-7. the draft, tag target, checksum file, and intended assets are reviewed before publication.
+Before dispatching the workflow:
+
+1. the complete intended release state, including `.github/release-notes/<tag>.md`, must already be merged to `main`;
+2. the exact intended `main` commit must have successful post-merge Validate and E2E push runs;
+3. when a Pages push run exists for that exact commit, it must also be successful; and
+4. the intended stable tag and GitHub Release must not already exist.
+
+Dispatch `Publish Release` from `main` with both the explicit stable tag and the full expected release commit SHA. The workflow then fails closed unless all of the following remain true:
+
+1. the dispatch SHA, checked-out SHA, supplied expected SHA, and current `main` tip are identical;
+2. the supplied tag uses stable `vMAJOR.MINOR.PATCH` form;
+3. the version-controlled release-notes file exists and is non-empty;
+4. the required landed-state Validate/E2E evidence is green, with Pages also green when a Pages run exists;
+5. `scripts/New-ReleaseChecksums.ps1` generates exactly the two expected checksum entries from that exact release tree;
+6. an independent SHA-256 calculation matches both generated script entries and the manifest has the expected deterministic text format;
+7. a lightweight Git tag points directly to the expected release commit;
+8. a GitHub Release is created as a **draft**, with the version-controlled notes as its exact body and only the intended `SHA256SUMS` asset;
+9. the draft tag target, release metadata, asset set, and uploaded checksum bytes all match the reviewed local state; and
+10. only after those draft checks pass, the workflow publishes the release and reads the public release, tag, and checksum asset back again to verify they are unchanged.
+
+If the workflow fails before publication, it removes only the incomplete draft/tag state created by that run when it can establish that doing so is safe. Once a release has become public, automated cleanup is intentionally disabled; later verification failures are reported for maintainer review rather than deleting public release state.
+
+The workflow records the published release URL, exact commit SHA, checksum-manifest SHA-256, both script SHA-256 values, and the final manifest in the workflow summary. That evidence should be retained as the publication record.
 
 Repository-level immutable releases are intentionally not part of this policy. Maintainers may retire/delete prior releases according to normal GitHub administration needs. That flexibility means GitHub release/tag/asset administration remains an accepted trust boundary: the `SHA256SUMS` manifest detects mismatched or corrupted acquired bytes, but it is not an independent signature and cannot protect against an authorized administrator deliberately replacing both the tagged source and matching checksum material.
 
