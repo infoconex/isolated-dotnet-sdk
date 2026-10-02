@@ -57,9 +57,9 @@ For the authoritative details, see:
 
 ## Quick Start — Stable Release
 
-Stable installation is explicitly version-pinned and integrity-checked. Choose a published release that includes the required `SHA256SUMS` asset for checksum-verifying bootstrap, substitute its tag for `<release-tag>`, and use the commands in [`docs/release-bootstrap.md`](docs/release-bootstrap.md). Those commands download both the explicitly tagged platform script and that release's `SHA256SUMS`, verify the script's SHA-256 before execution, and then execute the verified temporary file so file-based bootstrap preserves those exact bytes under `~/dotnet-sdks`.
+The current checksum-policy-compliant stable release is `v0.2.0`. Use the copy/paste PowerShell or Bash command in [`docs/release-bootstrap.md`](docs/release-bootstrap.md#stable-installation); those commands explicitly select `v0.2.0`, download both the tagged platform script and the release's `SHA256SUMS`, verify the script's SHA-256 before execution, and then execute the verified temporary file so file-based bootstrap preserves those exact bytes under `~/dotnet-sdks`.
 
-`v0.1.0` predates this integrity policy and does not have a `SHA256SUMS` release asset. It remains available as legacy history but is not compatible with the checksum-verifying stable bootstrap.
+`v0.2.0` is the first stable release published under this integrity policy. `v0.1.0` predates the policy and has no `SHA256SUMS` release asset; it remains available as legacy history but is not compatible with the checksum-verifying stable bootstrap.
 
 The first verified run creates `~/dotnet-sdks` if needed, saves the platform-specific tool there for future use, and then starts a persistent interactive session. Successful operations and normal cancellations return to the main menu until you explicitly exit. Explicit Install, List, Remove, Verify, or exact-version invocations remain one-shot for automation and scripting.
 
