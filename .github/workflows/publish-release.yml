@@ -1,0 +1,531 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag to publish (for example, v0.2.0)
+        required: true
+        type: string
+      expected_sha:
+        description: Exact current main commit SHA to publish
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish stable release
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    outputs:
+      release_url: ${{ steps.release.outputs.release_url }}
+      release_id: ${{ steps.release.outputs.release_id }}
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      RELEASE_NOTES_PATH: .github/release-notes/${{ inputs.tag }}.md
+      CHECKSUM_PATH: ${{ runner.temp }}/SHA256SUMS
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify local release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            printf 'Stable release tag must use vMAJOR.MINOR.PATCH: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          }
+
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'expected_sha must be a full lowercase 40-character commit SHA.\n' >&2
+            exit 1
+          }
+
+          [[ "${{ github.ref }}" == 'refs/heads/main' ]] || {
+            printf 'Release publication must be dispatched from main, not %s.\n' '${{ github.ref }}' >&2
+            exit 1
+          }
+
+          [[ "${{ github.sha }}" == "$EXPECTED_SHA" ]] || {
+            printf 'The workflow dispatch SHA %s does not match expected_sha %s.\n' '${{ github.sha }}' "$EXPECTED_SHA" >&2
+            exit 1
+          }
+
+          checkout_sha="$(git rev-parse HEAD)"
+          [[ "$checkout_sha" == "$EXPECTED_SHA" ]] || {
+            printf 'Checked-out SHA %s does not match expected_sha %s.\n' "$checkout_sha" "$EXPECTED_SHA" >&2
+            exit 1
+          }
+
+          [[ -s "$RELEASE_NOTES_PATH" ]] || {
+            printf 'Release notes were not found or are empty: %s\n' "$RELEASE_NOTES_PATH" >&2
+            exit 1
+          }
+
+      - name: Verify landed release state
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            const expectedSha = process.env.EXPECTED_SHA;
+            const { owner, repo } = context.repo;
+
+            const mainRef = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            if (mainRef.data.object.sha !== expectedSha) {
+              core.setFailed(`Current main SHA ${mainRef.data.object.sha} does not match expected SHA ${expectedSha}.`);
+              return;
+            }
+
+            try {
+              await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              core.setFailed(`Tag ${tag} already exists; refusing to replace release state.`);
+              return;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100
+            });
+            if (releases.some((release) => release.tag_name === tag)) {
+              core.setFailed(`A GitHub Release for ${tag} already exists; refusing to replace release state.`);
+              return;
+            }
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              head_sha: expectedSha,
+              per_page: 100
+            });
+
+            const latestPushRun = (name) => runs
+              .filter((run) => run.name === name && run.event === 'push')
+              .sort((left, right) => right.run_number - left.run_number)[0];
+
+            for (const workflowName of ['Validate', 'E2E']) {
+              const run = latestPushRun(workflowName);
+              if (!run || run.status !== 'completed' || run.conclusion !== 'success') {
+                const state = run ? `${run.status}/${run.conclusion ?? ''} ${run.html_url}` : 'no push run found';
+                core.setFailed(`${workflowName} must have a successful completed push run for ${expectedSha}: ${state}`);
+                return;
+              }
+              core.info(`${workflowName}: ${run.html_url}`);
+            }
+
+            const pagesRun = latestPushRun('Pages');
+            if (pagesRun) {
+              if (pagesRun.status !== 'completed' || pagesRun.conclusion !== 'success') {
+                core.setFailed(`Pages has a run for ${expectedSha} but it is not successful: ${pagesRun.status}/${pagesRun.conclusion ?? ''} ${pagesRun.html_url}`);
+                return;
+              }
+              core.info(`Pages: ${pagesRun.html_url}`);
+            } else {
+              core.info('Pages: no run exists for this SHA, so Pages is not required for publication.');
+            }
+
+      - name: Generate deterministic release checksums
+        shell: pwsh
+        run: |
+          & ./scripts/New-ReleaseChecksums.ps1 `
+              -RepositoryRoot $env:GITHUB_WORKSPACE `
+              -OutputPath $env:CHECKSUM_PATH | Out-Null
+
+      - name: Independently verify release checksums
+        id: checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t checksum_lines < "$CHECKSUM_PATH"
+          [[ "${#checksum_lines[@]}" -eq 2 ]] || {
+            printf 'SHA256SUMS must contain exactly two lines.\n' >&2
+            exit 1
+          }
+
+          ps_hash="$(sha256sum isolated-dotnet-sdk.ps1 | awk '{print tolower($1)}')"
+          sh_hash="$(sha256sum isolated-dotnet-sdk.sh | awk '{print tolower($1)}')"
+
+          [[ "${checksum_lines[0]}" == "$ps_hash  isolated-dotnet-sdk.ps1" ]] || {
+            printf 'PowerShell checksum entry does not match the checked-out release script.\n' >&2
+            exit 1
+          }
+          [[ "${checksum_lines[1]}" == "$sh_hash  isolated-dotnet-sdk.sh" ]] || {
+            printf 'Bash checksum entry does not match the checked-out release script.\n' >&2
+            exit 1
+          }
+
+          [[ "$(wc -l < "$CHECKSUM_PATH" | tr -d '[:space:]')" == '2' ]] || {
+            printf 'SHA256SUMS must contain exactly two newline-terminated entries.\n' >&2
+            exit 1
+          }
+
+          prefix="$(od -An -tx1 -N3 "$CHECKSUM_PATH" | tr -d '[:space:]')"
+          [[ "$prefix" != 'efbbbf' ]] || {
+            printf 'SHA256SUMS must not contain a UTF-8 BOM.\n' >&2
+            exit 1
+          }
+
+          manifest_hash="$(sha256sum "$CHECKSUM_PATH" | awk '{print tolower($1)}')"
+          printf 'manifest_sha256=%s\n' "$manifest_hash" >> "$GITHUB_OUTPUT"
+          printf 'powershell_sha256=%s\n' "$ps_hash" >> "$GITHUB_OUTPUT"
+          printf 'bash_sha256=%s\n' "$sh_hash" >> "$GITHUB_OUTPUT"
+
+      - name: Create, verify, and publish release
+        id: release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RELEASE_NOTES_PATH: ${{ env.RELEASE_NOTES_PATH }}
+          CHECKSUM_PATH: ${{ env.CHECKSUM_PATH }}
+          MANIFEST_SHA256: ${{ steps.checksums.outputs.manifest_sha256 }}
+          POWERSHELL_SHA256: ${{ steps.checksums.outputs.powershell_sha256 }}
+          BASH_SHA256: ${{ steps.checksums.outputs.bash_sha256 }}
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+
+            const tag = process.env.RELEASE_TAG;
+            const expectedSha = process.env.EXPECTED_SHA;
+            const releaseNotesPath = process.env.RELEASE_NOTES_PATH;
+            const checksumPath = process.env.CHECKSUM_PATH;
+            const { owner, repo } = context.repo;
+            const releaseBody = fs.readFileSync(releaseNotesPath, 'utf8');
+            const checksumBytes = fs.readFileSync(checksumPath);
+
+            let tagCreated = false;
+            let releaseId = null;
+            let published = false;
+
+            const bufferFromResponse = (data) => {
+              if (Buffer.isBuffer(data)) return data;
+              if (data instanceof ArrayBuffer) return Buffer.from(data);
+              if (ArrayBuffer.isView(data)) {
+                return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+              }
+              if (typeof data === 'string') return Buffer.from(data);
+              throw new Error('GitHub did not return release asset bytes.');
+            };
+
+            const verifyTag = async () => {
+              const ref = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              if (ref.data.object.type !== 'commit' || ref.data.object.sha !== expectedSha) {
+                throw new Error(`Tag ${tag} does not point directly to ${expectedSha}.`);
+              }
+            };
+
+            const verifyRelease = async (shouldBeDraft) => {
+              const release = await github.rest.repos.getRelease({ owner, repo, release_id: releaseId });
+              const data = release.data;
+              if (
+                data.tag_name !== tag ||
+                data.name !== tag ||
+                data.draft !== shouldBeDraft ||
+                data.prerelease !== false ||
+                data.body !== releaseBody
+              ) {
+                throw new Error(`Release metadata verification failed for ${tag}.`);
+              }
+              if (!shouldBeDraft && !data.published_at) {
+                throw new Error(`Published release ${tag} is missing published_at.`);
+              }
+
+              const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+                owner,
+                repo,
+                release_id: releaseId,
+                per_page: 100
+              });
+              if (assets.length !== 1 || assets[0].name !== 'SHA256SUMS' || assets[0].state !== 'uploaded') {
+                throw new Error(`Release ${tag} must contain exactly one uploaded SHA256SUMS asset.`);
+              }
+
+              const downloaded = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+                owner,
+                repo,
+                asset_id: assets[0].id,
+                headers: { accept: 'application/octet-stream' }
+              });
+              const downloadedBytes = bufferFromResponse(downloaded.data);
+              if (!checksumBytes.equals(downloadedBytes)) {
+                throw new Error(`Uploaded SHA256SUMS bytes do not match the generated manifest for ${tag}.`);
+              }
+
+              return data;
+            };
+
+            const cleanupBeforePublication = async () => {
+              let publicReleaseExists = false;
+              const releases = await github.paginate(github.rest.repos.listReleases, {
+                owner,
+                repo,
+                per_page: 100
+              });
+              const matches = releases.filter((release) => release.tag_name === tag);
+
+              for (const release of matches) {
+                if (release.draft) {
+                  core.warning(`Deleting incomplete draft release ${release.id}.`);
+                  await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
+                } else {
+                  publicReleaseExists = true;
+                  core.warning(`A public ${tag} release exists; cleanup will not delete the release or tag.`);
+                }
+              }
+
+              if (tagCreated && !publicReleaseExists) {
+                try {
+                  core.warning(`Deleting incomplete tag ${tag}.`);
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` });
+                } catch (error) {
+                  if (error.status !== 404) throw error;
+                }
+              }
+            };
+
+            try {
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/tags/${tag}`,
+                sha: expectedSha
+              });
+              tagCreated = true;
+              await verifyTag();
+
+              const created = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                target_commitish: expectedSha,
+                name: tag,
+                body: releaseBody,
+                draft: true,
+                prerelease: false
+              });
+              releaseId = created.data.id;
+
+              const upload = await github.rest.repos.uploadReleaseAsset({
+                owner,
+                repo,
+                release_id: releaseId,
+                name: 'SHA256SUMS',
+                data: checksumBytes,
+                headers: {
+                  'content-type': 'application/octet-stream',
+                  'content-length': checksumBytes.length
+                }
+              });
+              if (upload.data.name !== 'SHA256SUMS' || upload.data.state !== 'uploaded') {
+                throw new Error(`GitHub did not confirm the SHA256SUMS upload for ${tag}.`);
+              }
+
+              await verifyTag();
+              await verifyRelease(true);
+
+              const updated = await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: releaseId,
+                draft: false,
+                make_latest: 'true'
+              });
+              if (updated.data.draft !== false || updated.data.prerelease !== false || !updated.data.published_at) {
+                throw new Error(`GitHub did not confirm publication of ${tag}.`);
+              }
+              published = true;
+
+              await verifyTag();
+              const finalRelease = await verifyRelease(false);
+
+              const byTag = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              if (byTag.data.id !== releaseId) {
+                throw new Error(`Release lookup by tag does not resolve to the published ${tag} release.`);
+              }
+
+              const latest = await github.rest.repos.getLatestRelease({ owner, repo });
+              if (latest.data.id !== releaseId) {
+                throw new Error(`Published ${tag} is not the repository's latest release.`);
+              }
+
+              const localManifestHash = crypto.createHash('sha256').update(checksumBytes).digest('hex');
+              if (localManifestHash !== process.env.MANIFEST_SHA256) {
+                throw new Error('Workflow checksum output changed before publication summary generation.');
+              }
+
+              core.setOutput('release_url', finalRelease.html_url);
+              core.setOutput('release_id', String(releaseId));
+
+              await core.summary
+                .addHeading(`Published ${tag}`)
+                .addList([
+                  `Release: ${finalRelease.html_url}`,
+                  `Commit: ${expectedSha}`,
+                  `SHA256SUMS SHA-256: ${process.env.MANIFEST_SHA256}`,
+                  `PowerShell script SHA-256: ${process.env.POWERSHELL_SHA256}`,
+                  `Bash script SHA-256: ${process.env.BASH_SHA256}`
+                ])
+                .addCodeBlock(checksumBytes.toString('utf8'), 'text')
+                .write();
+            } catch (error) {
+              if (!published) {
+                try {
+                  await cleanupBeforePublication();
+                } catch (cleanupError) {
+                  core.warning(`Pre-publication cleanup also failed: ${cleanupError.message}`);
+                }
+              } else {
+                core.warning('The release is already public; automatic cleanup is intentionally disabled after publication.');
+              }
+              throw error;
+            }
+
+  verify-powershell-bootstrap:
+    name: Verify stable bootstrap (windows-2025 / PowerShell)
+    needs: publish
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify published PowerShell stable bootstrap
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = $env:RELEASE_TAG
+          $temp = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release.ps1"
+          $checksums = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release-SHA256SUMS"
+          $savedTool = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
+
+          try {
+              Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
+              Invoke-WebRequest "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -OutFile $checksums
+
+              $checksumMatches = @(Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$')
+              if ($checksumMatches.Count -ne 1) {
+                  throw 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.ps1 entry.'
+              }
+
+              $expected = $checksumMatches[0].Matches[0].Groups[1].Value
+              $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
+              if ($actual -ine $expected) {
+                  throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
+              }
+
+              $checkoutHash = (Get-FileHash -LiteralPath './isolated-dotnet-sdk.ps1' -Algorithm SHA256).Hash
+              if ($actual -ine $checkoutHash) {
+                  throw 'Published tagged PowerShell source does not match the expected release checkout.'
+              }
+
+              & $temp -Action List
+
+              if (-not (Test-Path -LiteralPath $savedTool -PathType Leaf)) {
+                  throw "Stable bootstrap did not save the tool at $savedTool."
+              }
+
+              $savedHash = (Get-FileHash -LiteralPath $savedTool -Algorithm SHA256).Hash
+              if ($savedHash -ine $actual) {
+                  throw 'Saved PowerShell tool bytes do not match the verified tagged source.'
+              }
+          }
+          finally {
+              Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
+              Remove-Item -LiteralPath (Join-Path $HOME 'dotnet-sdks') -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+  verify-bash-bootstrap:
+    name: Verify stable bootstrap (ubuntu-24.04 / Bash)
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify published Bash stable bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release="$RELEASE_TAG"
+          temp="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.sh")"
+          checksums="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
+          saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+          trap 'rm -f "$temp" "$checksums"; rm -rf "$HOME/dotnet-sdks"' EXIT
+
+          curl -fsSL "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" -o "$temp"
+          curl -fsSL "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -o "$checksums"
+
+          expected="$(awk '$2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums")"
+          [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
+            printf '%s\n' 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.sh entry.' >&2
+            exit 1
+          }
+
+          actual="$(sha256sum "$temp" | awk '{print tolower($1)}')"
+          [[ "$actual" == "$expected" ]] || {
+            printf 'Checksum verification failed for isolated-dotnet-sdk.sh. Expected %s, got %s.\n' "$expected" "$actual" >&2
+            exit 1
+          }
+
+          checkout_hash="$(sha256sum ./isolated-dotnet-sdk.sh | awk '{print tolower($1)}')"
+          [[ "$actual" == "$checkout_hash" ]] || {
+            printf '%s\n' 'Published tagged Bash source does not match the expected release checkout.' >&2
+            exit 1
+          }
+
+          chmod +x "$temp"
+          "$temp" list
+
+          [[ -x "$saved_tool" ]] || {
+            printf 'Stable bootstrap did not save an executable tool at %s.\n' "$saved_tool" >&2
+            exit 1
+          }
+
+          saved_hash="$(sha256sum "$saved_tool" | awk '{print tolower($1)}')"
+          [[ "$saved_hash" == "$actual" ]] || {
+            printf '%s\n' 'Saved Bash tool bytes do not match the verified tagged source.' >&2
+            exit 1
+          }
