@@ -12,9 +12,7 @@ on:
         required: true
         type: string
 
-permissions:
-  actions: read
-  contents: write
+permissions: {}
 
 concurrency:
   group: publish-release
@@ -24,6 +22,12 @@ jobs:
   publish:
     name: Publish stable release
     runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    outputs:
+      release_url: ${{ steps.release.outputs.release_url }}
+      release_id: ${{ steps.release.outputs.release_id }}
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -363,6 +367,11 @@ jobs:
                 throw new Error(`Release lookup by tag does not resolve to the published ${tag} release.`);
               }
 
+              const latest = await github.rest.repos.getLatestRelease({ owner, repo });
+              if (latest.data.id !== releaseId) {
+                throw new Error(`Published ${tag} is not the repository's latest release.`);
+              }
+
               const localManifestHash = crypto.createHash('sha256').update(checksumBytes).digest('hex');
               if (localManifestHash !== process.env.MANIFEST_SHA256) {
                 throw new Error('Workflow checksum output changed before publication summary generation.');
@@ -394,3 +403,130 @@ jobs:
               }
               throw error;
             }
+
+  verify-powershell-bootstrap:
+    name: Verify stable bootstrap (windows-2025 / PowerShell)
+    needs: publish
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify published PowerShell stable bootstrap
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = $env:RELEASE_TAG
+          $temp = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release.ps1"
+          $checksums = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release-SHA256SUMS"
+          $savedTool = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
+
+          try {
+              Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
+              Invoke-WebRequest "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -OutFile $checksums
+
+              $checksumMatches = @(Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$')
+              if ($checksumMatches.Count -ne 1) {
+                  throw 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.ps1 entry.'
+              }
+
+              $expected = $checksumMatches[0].Matches[0].Groups[1].Value
+              $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
+              if ($actual -ine $expected) {
+                  throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
+              }
+
+              $checkoutHash = (Get-FileHash -LiteralPath './isolated-dotnet-sdk.ps1' -Algorithm SHA256).Hash
+              if ($actual -ine $checkoutHash) {
+                  throw 'Published tagged PowerShell source does not match the expected release checkout.'
+              }
+
+              & $temp -Action List
+
+              if (-not (Test-Path -LiteralPath $savedTool -PathType Leaf)) {
+                  throw "Stable bootstrap did not save the tool at $savedTool."
+              }
+
+              $savedHash = (Get-FileHash -LiteralPath $savedTool -Algorithm SHA256).Hash
+              if ($savedHash -ine $actual) {
+                  throw 'Saved PowerShell tool bytes do not match the verified tagged source.'
+              }
+          }
+          finally {
+              Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
+              Remove-Item -LiteralPath (Join-Path $HOME 'dotnet-sdks') -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+  verify-bash-bootstrap:
+    name: Verify stable bootstrap (ubuntu-24.04 / Bash)
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify published Bash stable bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release="$RELEASE_TAG"
+          temp="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.sh")"
+          checksums="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
+          saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+          trap 'rm -f "$temp" "$checksums"; rm -rf "$HOME/dotnet-sdks"' EXIT
+
+          curl -fsSL "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" -o "$temp"
+          curl -fsSL "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -o "$checksums"
+
+          expected="$(awk '$2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums")"
+          [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
+            printf '%s\n' 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.sh entry.' >&2
+            exit 1
+          }
+
+          actual="$(sha256sum "$temp" | awk '{print tolower($1)}')"
+          [[ "$actual" == "$expected" ]] || {
+            printf 'Checksum verification failed for isolated-dotnet-sdk.sh. Expected %s, got %s.\n' "$expected" "$actual" >&2
+            exit 1
+          }
+
+          checkout_hash="$(sha256sum ./isolated-dotnet-sdk.sh | awk '{print tolower($1)}')"
+          [[ "$actual" == "$checkout_hash" ]] || {
+            printf '%s\n' 'Published tagged Bash source does not match the expected release checkout.' >&2
+            exit 1
+          }
+
+          chmod +x "$temp"
+          "$temp" list
+
+          [[ -x "$saved_tool" ]] || {
+            printf 'Stable bootstrap did not save an executable tool at %s.\n' "$saved_tool" >&2
+            exit 1
+          }
+
+          saved_hash="$(sha256sum "$saved_tool" | awk '{print tolower($1)}')"
+          [[ "$saved_hash" == "$actual" ]] || {
+            printf '%s\n' 'Saved Bash tool bytes do not match the verified tagged source.' >&2
+            exit 1
+          }
