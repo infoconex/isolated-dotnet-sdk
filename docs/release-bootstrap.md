@@ -162,6 +162,8 @@ Dispatch `Publish Release` from `main` with both the explicit stable tag and the
 
 If the workflow fails before publication, it removes only the incomplete draft/tag state created by that run when it can establish that doing so is safe. Once a release has become public, automated cleanup is intentionally disabled; later verification failures are reported for maintainer review rather than deleting public release state.
 
+After publication, the same workflow runs supported Windows/PowerShell and Linux/Bash bootstrap verification jobs against the public tagged source and public `SHA256SUMS` asset. Those jobs use the stable checksum gate, invoke the verified tool with the one-shot List action, and confirm that the saved tool bytes exactly match the verified tagged source.
+
 The workflow records the published release URL, exact commit SHA, checksum-manifest SHA-256, both script SHA-256 values, and the final manifest in the workflow summary. That evidence should be retained as the publication record.
 
 Repository-level immutable releases are intentionally not part of this policy. Maintainers may retire/delete prior releases according to normal GitHub administration needs. That flexibility means GitHub release/tag/asset administration remains an accepted trust boundary: the `SHA256SUMS` manifest detects mismatched or corrupted acquired bytes, but it is not an independent signature and cannot protect against an authorized administrator deliberately replacing both the tagged source and matching checksum material.
