@@ -1,0 +1,216 @@
+name: Verify Release
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/verify-release.yml
+      - .github/workflows/publish-release.yml
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag to verify (for example, v0.2.0)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: verify-release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-definition:
+    name: Validate release verification workflow definition
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Confirm verification path is inactive
+        shell: bash
+        run: |
+          printf '%s\n' 'Release verification workflow parsed successfully; public release checks are disabled for pull_request events.'
+
+  verify-release-state:
+    name: Verify published release state
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      expected_sha: ${{ steps.release.outputs.expected_sha }}
+
+    steps:
+      - name: Verify tag and release binding
+        id: release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.tag }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG_INPUT.trim();
+            const { owner, repo } = context.repo;
+
+            if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(tag)) {
+              core.setFailed(`Stable release tag must use vMAJOR.MINOR.PATCH: ${tag}`);
+              return;
+            }
+
+            const ref = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+            if (ref.data.object.type !== 'commit') {
+              core.setFailed(`Tag ${tag} must be a lightweight tag that points directly to a commit.`);
+              return;
+            }
+            const expectedSha = ref.data.object.sha;
+
+            const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            if (
+              release.data.tag_name !== tag ||
+              release.data.name !== tag ||
+              release.data.draft ||
+              release.data.prerelease ||
+              !release.data.published_at
+            ) {
+              core.setFailed(`Published release metadata verification failed for ${tag}.`);
+              return;
+            }
+
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: release.data.id,
+              per_page: 100
+            });
+            if (assets.length !== 1 || assets[0].name !== 'SHA256SUMS' || assets[0].state !== 'uploaded') {
+              core.setFailed(`Release ${tag} must contain exactly one uploaded SHA256SUMS asset.`);
+              return;
+            }
+
+            core.setOutput('tag', tag);
+            core.setOutput('expected_sha', expectedSha);
+            core.info(`Verified ${tag} -> ${expectedSha}`);
+            core.info(`Release: ${release.data.html_url}`);
+
+  verify-powershell-bootstrap:
+    name: Verify stable bootstrap (windows-2025 / PowerShell)
+    needs: verify-release-state
+    if: needs.verify-release-state.result == 'success'
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ needs.verify-release-state.outputs.tag }}
+
+    steps:
+      - name: Verify published PowerShell stable bootstrap
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = $env:RELEASE_TAG
+          $temp = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release.ps1"
+          $checksums = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release-SHA256SUMS"
+          $savedTool = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
+
+          function Invoke-ReleaseDownload {
+              param([string]$Uri, [string]$OutFile)
+              for ($attempt = 1; $attempt -le 5; $attempt++) {
+                  try {
+                      Invoke-WebRequest $Uri -OutFile $OutFile
+                      return
+                  }
+                  catch {
+                      if ($attempt -eq 5) { throw }
+                      Start-Sleep -Seconds 2
+                  }
+              }
+          }
+
+          try {
+              Invoke-ReleaseDownload "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" $temp
+              Invoke-ReleaseDownload "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" $checksums
+
+              $checksumMatches = @(Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$')
+              if ($checksumMatches.Count -ne 1) {
+                  throw 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.ps1 entry.'
+              }
+
+              $expected = $checksumMatches[0].Matches[0].Groups[1].Value
+              $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
+              if ($actual -ine $expected) {
+                  throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
+              }
+
+              & $temp -Action List
+
+              if (-not (Test-Path -LiteralPath $savedTool -PathType Leaf)) {
+                  throw "Stable bootstrap did not save the tool at $savedTool."
+              }
+
+              $savedHash = (Get-FileHash -LiteralPath $savedTool -Algorithm SHA256).Hash
+              if ($savedHash -ine $actual) {
+                  throw 'Saved PowerShell tool bytes do not match the verified tagged source.'
+              }
+          }
+          finally {
+              Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
+              Remove-Item -LiteralPath (Join-Path $HOME 'dotnet-sdks') -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+  verify-bash-bootstrap:
+    name: Verify stable bootstrap (ubuntu-24.04 / Bash)
+    needs: verify-release-state
+    if: needs.verify-release-state.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ needs.verify-release-state.outputs.tag }}
+
+    steps:
+      - name: Verify published Bash stable bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release="$RELEASE_TAG"
+          temp="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.sh")"
+          checksums="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
+          saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+          trap 'rm -f "$temp" "$checksums"; rm -rf "$HOME/dotnet-sdks"' EXIT
+
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+            "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" \
+            -o "$temp"
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+            "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" \
+            -o "$checksums"
+
+          expected="$(awk '$2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums")"
+          [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
+            printf '%s\n' 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.sh entry.' >&2
+            exit 1
+          }
+
+          actual="$(sha256sum "$temp" | awk '{print tolower($1)}')"
+          [[ "$actual" == "$expected" ]] || {
+            printf 'Checksum verification failed for isolated-dotnet-sdk.sh. Expected %s, got %s.\n' "$expected" "$actual" >&2
+            exit 1
+          }
+
+          chmod +x "$temp"
+          "$temp" list
+
+          [[ -x "$saved_tool" ]] || {
+            printf 'Stable bootstrap did not save an executable tool at %s.\n' "$saved_tool" >&2
+            exit 1
+          }
+
+          saved_hash="$(sha256sum "$saved_tool" | awk '{print tolower($1)}')"
+          [[ "$saved_hash" == "$actual" ]] || {
+            printf '%s\n' 'Saved Bash tool bytes do not match the verified tagged source.' >&2
+            exit 1
+          }

@@ -147,24 +147,24 @@ Before dispatching the workflow:
 3. when a Pages push run exists for that exact commit, it must also be successful; and
 4. the intended stable tag and GitHub Release must not already exist.
 
-Dispatch `Publish Release` from `main` with both the explicit stable tag and the full expected release commit SHA. The workflow then fails closed unless all of the following remain true:
+Dispatch `Publish Release` from `main` with the explicit stable tag. The workflow derives the release commit from the exact `main` commit selected by the manual dispatch and then fails closed unless all of the following remain true:
 
-1. the dispatch SHA, checked-out SHA, supplied expected SHA, and current `main` tip are identical;
+1. the dispatch SHA, checked-out SHA, and current `main` tip are identical;
 2. the supplied tag uses stable `vMAJOR.MINOR.PATCH` form;
 3. the version-controlled release-notes file exists and is non-empty;
-4. the required landed-state Validate/E2E evidence is green, with Pages also green when a Pages run exists;
+4. the required landed-state Validate/E2E evidence is green for that exact commit, with Pages also green when a Pages run exists;
 5. `scripts/New-ReleaseChecksums.ps1` generates exactly the two expected checksum entries from that exact release tree;
 6. an independent SHA-256 calculation matches both generated script entries and the manifest has the expected deterministic text format;
-7. a lightweight Git tag points directly to the expected release commit;
+7. a lightweight Git tag points directly to the derived release commit;
 8. a GitHub Release is created as a **draft**, with the version-controlled notes as its exact body and only the intended `SHA256SUMS` asset;
 9. the draft tag target, release metadata, asset set, and uploaded checksum bytes all match the reviewed local state; and
 10. only after those draft checks pass, the workflow publishes the release and reads the public release, tag, and checksum asset back again to verify they are unchanged.
 
 If the workflow fails before publication, it removes only the incomplete draft/tag state created by that run when it can establish that doing so is safe. Once a release has become public, automated cleanup is intentionally disabled; later verification failures are reported for maintainer review rather than deleting public release state.
 
-After publication, the same workflow runs supported Windows/PowerShell and Linux/Bash bootstrap verification jobs against the public tagged source and public `SHA256SUMS` asset. Those jobs use the stable checksum gate, invoke the verified tool with the one-shot List action, and confirm that the saved tool bytes exactly match the verified tagged source.
+After publication, `Publish Release` invokes the read-only [`Verify Release`](../.github/workflows/verify-release.yml) workflow. `Verify Release` can also be manually dispatched later with only the published stable tag; it resolves the commit directly from that lightweight tag, verifies the public release metadata and checksum asset, runs the supported Windows/PowerShell and Linux/Bash stable bootstrap paths, and confirms that each saved tool is byte-identical to the checksum-verified tagged source. This makes post-release verification independently rerunnable without asking maintainers to duplicate the tag-to-commit mapping by hand.
 
-The workflow records the published release URL, exact commit SHA, checksum-manifest SHA-256, both script SHA-256 values, and the final manifest in the workflow summary. That evidence should be retained as the publication record.
+The publication workflow records the published release URL, exact commit SHA, checksum-manifest SHA-256, both script SHA-256 values, and the final manifest in the workflow summary. That evidence should be retained as the publication record.
 
 Repository-level immutable releases are intentionally not part of this policy. Maintainers may retire/delete prior releases according to normal GitHub administration needs. That flexibility means GitHub release/tag/asset administration remains an accepted trust boundary: the `SHA256SUMS` manifest detects mismatched or corrupted acquired bytes, but it is not an independent signature and cannot protect against an authorized administrator deliberately replacing both the tagged source and matching checksum material.
 

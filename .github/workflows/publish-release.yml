@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/publish-release.yml
+      - .github/workflows/verify-release.yml
       - .github/scripts/publish-release.js
       - .github/release-notes/**
       - scripts/New-ReleaseChecksums.ps1
@@ -11,10 +12,6 @@ on:
     inputs:
       tag:
         description: Stable release tag to publish (for example, v0.2.0)
-        required: true
-        type: string
-      expected_sha:
-        description: Exact current main commit SHA to publish
         required: true
         type: string
 
@@ -45,31 +42,37 @@ jobs:
     outputs:
       release_url: ${{ steps.release.outputs.release_url }}
       release_id: ${{ steps.release.outputs.release_id }}
+      release_tag: ${{ steps.inputs.outputs.release_tag }}
+      expected_sha: ${{ steps.inputs.outputs.expected_sha }}
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
-      RELEASE_NOTES_PATH: .github/release-notes/${{ inputs.tag }}.md
+      RELEASE_TAG_INPUT: ${{ inputs.tag }}
+      EXPECTED_SHA: ${{ github.sha }}
 
     steps:
-      - name: Check out exact release commit
+      - name: Check out dispatch commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Verify local release inputs
+      - name: Resolve and verify local release inputs
+        id: inputs
         shell: bash
         run: |
           set -euo pipefail
 
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            printf 'Stable release tag must use vMAJOR.MINOR.PATCH: %s\n' "$RELEASE_TAG" >&2
+          release_tag="$RELEASE_TAG_INPUT"
+          release_tag="${release_tag#"${release_tag%%[![:space:]]*}"}"
+          release_tag="${release_tag%"${release_tag##*[![:space:]]}"}"
+
+          [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            printf 'Stable release tag must use vMAJOR.MINOR.PATCH: %s\n' "$release_tag" >&2
             exit 1
           }
 
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
-            printf 'expected_sha must be a full lowercase 40-character commit SHA.\n' >&2
+            printf 'The workflow dispatch commit must be a full lowercase 40-character SHA.\n' >&2
             exit 1
           }
 
@@ -78,27 +81,25 @@ jobs:
             exit 1
           }
 
-          [[ "${{ github.sha }}" == "$EXPECTED_SHA" ]] || {
-            printf 'The workflow dispatch SHA %s does not match expected_sha %s.\n' '${{ github.sha }}' "$EXPECTED_SHA" >&2
-            exit 1
-          }
-
           checkout_sha="$(git rev-parse HEAD)"
           [[ "$checkout_sha" == "$EXPECTED_SHA" ]] || {
-            printf 'Checked-out SHA %s does not match expected_sha %s.\n' "$checkout_sha" "$EXPECTED_SHA" >&2
+            printf 'Checked-out SHA %s does not match dispatch SHA %s.\n' "$checkout_sha" "$EXPECTED_SHA" >&2
             exit 1
           }
 
-          [[ -s "$RELEASE_NOTES_PATH" ]] || {
-            printf 'Release notes were not found or are empty: %s\n' "$RELEASE_NOTES_PATH" >&2
+          release_notes_path=".github/release-notes/${release_tag}.md"
+          [[ -s "$release_notes_path" ]] || {
+            printf 'Release notes were not found or are empty: %s\n' "$release_notes_path" >&2
             exit 1
           }
+
+          printf 'RELEASE_TAG=%s\n' "$release_tag" >> "$GITHUB_ENV"
+          printf 'RELEASE_NOTES_PATH=%s\n' "$release_notes_path" >> "$GITHUB_ENV"
+          printf 'release_tag=%s\n' "$release_tag" >> "$GITHUB_OUTPUT"
+          printf 'expected_sha=%s\n' "$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Verify landed release state
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
         with:
           script: |
             const tag = process.env.RELEASE_TAG;
@@ -107,7 +108,7 @@ jobs:
 
             const mainRef = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
             if (mainRef.data.object.sha !== expectedSha) {
-              core.setFailed(`Current main SHA ${mainRef.data.object.sha} does not match expected SHA ${expectedSha}.`);
+              core.setFailed(`Current main SHA ${mainRef.data.object.sha} does not match dispatch SHA ${expectedSha}.`);
               return;
             }
 
@@ -225,149 +226,12 @@ jobs:
             const publishRelease = require('./.github/scripts/publish-release.js');
             await publishRelease({ github, context, core });
 
-  verify-powershell-bootstrap:
-    name: Verify stable bootstrap (windows-2025 / PowerShell)
+  verify-public-release:
+    name: Verify published stable release
     if: github.event_name == 'workflow_dispatch' && needs.publish.result == 'success'
     needs: publish
-    runs-on: windows-2025
     permissions:
       contents: read
-    env:
-      RELEASE_TAG: ${{ inputs.tag }}
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
-
-    steps:
-      - name: Check out exact release commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.expected_sha }}
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Verify published PowerShell stable bootstrap
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $release = $env:RELEASE_TAG
-          $temp = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release.ps1"
-          $checksums = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release-SHA256SUMS"
-          $savedTool = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
-
-          function Invoke-ReleaseDownload {
-              param([string]$Uri, [string]$OutFile)
-              for ($attempt = 1; $attempt -le 5; $attempt++) {
-                  try {
-                      Invoke-WebRequest $Uri -OutFile $OutFile
-                      return
-                  }
-                  catch {
-                      if ($attempt -eq 5) { throw }
-                      Start-Sleep -Seconds 2
-                  }
-              }
-          }
-
-          try {
-              Invoke-ReleaseDownload "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" $temp
-              Invoke-ReleaseDownload "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" $checksums
-
-              $checksumMatches = @(Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$')
-              if ($checksumMatches.Count -ne 1) {
-                  throw 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.ps1 entry.'
-              }
-
-              $expected = $checksumMatches[0].Matches[0].Groups[1].Value
-              $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
-              if ($actual -ine $expected) {
-                  throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
-              }
-
-              $checkoutHash = (Get-FileHash -LiteralPath './isolated-dotnet-sdk.ps1' -Algorithm SHA256).Hash
-              if ($actual -ine $checkoutHash) {
-                  throw 'Published tagged PowerShell source does not match the expected release checkout.'
-              }
-
-              & $temp -Action List
-
-              if (-not (Test-Path -LiteralPath $savedTool -PathType Leaf)) {
-                  throw "Stable bootstrap did not save the tool at $savedTool."
-              }
-
-              $savedHash = (Get-FileHash -LiteralPath $savedTool -Algorithm SHA256).Hash
-              if ($savedHash -ine $actual) {
-                  throw 'Saved PowerShell tool bytes do not match the verified tagged source.'
-              }
-          }
-          finally {
-              Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
-              Remove-Item -LiteralPath (Join-Path $HOME 'dotnet-sdks') -Recurse -Force -ErrorAction SilentlyContinue
-          }
-
-  verify-bash-bootstrap:
-    name: Verify stable bootstrap (ubuntu-24.04 / Bash)
-    if: github.event_name == 'workflow_dispatch' && needs.publish.result == 'success'
-    needs: publish
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    env:
-      RELEASE_TAG: ${{ inputs.tag }}
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
-
-    steps:
-      - name: Check out exact release commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.expected_sha }}
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Verify published Bash stable bootstrap
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          release="$RELEASE_TAG"
-          temp="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.sh")"
-          checksums="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
-          saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
-          trap 'rm -f "$temp" "$checksums"; rm -rf "$HOME/dotnet-sdks"' EXIT
-
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
-            "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" \
-            -o "$temp"
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
-            "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" \
-            -o "$checksums"
-
-          expected="$(awk '$2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums")"
-          [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
-            printf '%s\n' 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.sh entry.' >&2
-            exit 1
-          }
-
-          actual="$(sha256sum "$temp" | awk '{print tolower($1)}')"
-          [[ "$actual" == "$expected" ]] || {
-            printf 'Checksum verification failed for isolated-dotnet-sdk.sh. Expected %s, got %s.\n' "$expected" "$actual" >&2
-            exit 1
-          }
-
-          checkout_hash="$(sha256sum ./isolated-dotnet-sdk.sh | awk '{print tolower($1)}')"
-          [[ "$actual" == "$checkout_hash" ]] || {
-            printf '%s\n' 'Published tagged Bash source does not match the expected release checkout.' >&2
-            exit 1
-          }
-
-          chmod +x "$temp"
-          "$temp" list
-
-          [[ -x "$saved_tool" ]] || {
-            printf 'Stable bootstrap did not save an executable tool at %s.\n' "$saved_tool" >&2
-            exit 1
-          }
-
-          saved_hash="$(sha256sum "$saved_tool" | awk '{print tolower($1)}')"
-          [[ "$saved_hash" == "$actual" ]] || {
-            printf '%s\n' 'Saved Bash tool bytes do not match the verified tagged source.' >&2
-            exit 1
-          }
+    uses: ./.github/workflows/verify-release.yml
+    with:
+      tag: ${{ needs.publish.outputs.release_tag }}
