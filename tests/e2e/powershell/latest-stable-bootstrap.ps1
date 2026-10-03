@@ -69,6 +69,10 @@ try {
         Accept = 'application/vnd.github+json'
         'X-GitHub-Api-Version' = '2022-11-28'
     }
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+        $headers.Authorization = "Bearer $($env:GITHUB_TOKEN)"
+    }
+
     $release = Invoke-RestMethod `
         -Uri "https://api.github.com/repos/$repository/releases/latest" `
         -Headers $headers
