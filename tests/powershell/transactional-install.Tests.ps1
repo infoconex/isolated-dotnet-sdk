@@ -44,7 +44,7 @@ Describe 'PowerShell transactional SDK installation' {
         Copy-Item -Path (Join-Path $script:FakeHostOutput '*') -Destination $script:InstallDir -Recurse -Force
         $sentinel = Join-Path $script:InstallDir 'sentinel.txt'
         Set-Content -LiteralPath $sentinel -Value 'preserve-existing'
-        $successOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $successOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Be 0
         ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK: Already installed'
         ($successOutput -join [Environment]::NewLine) | Should -Not -Match 'continued-to-download'
@@ -53,7 +53,7 @@ Describe 'PowerShell transactional SDK installation' {
 
     It 'uses operation-scoped metadata state on download failure' {
         $env:SDK_TEST_METADATA_FAILURE = 'metadata-download-failed'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $downloadTarget = (Get-Content -LiteralPath $script:DownloadTargetPath -Raw).Trim()
         $downloadTarget | Should -Match ([regex]::Escape($script:ToolRoot) + '[\\/]\.release-metadata-99\.0\.100-[^\\/]+\.json$')
@@ -65,7 +65,7 @@ Describe 'PowerShell transactional SDK installation' {
         New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
         $sentinel = Join-Path $script:InstallDir 'sentinel.txt'
         Set-Content -LiteralPath $sentinel -Value 'preserve-me'
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'destination already exists'
@@ -75,7 +75,7 @@ Describe 'PowerShell transactional SDK installation' {
 
     It 'uses staging for extraction failure and cleans the failed attempt' {
         $env:SDK_TEST_EXTRACT_FAILURE = 'extract-failed'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'Unable to extract the verified \.NET SDK 99\.0\.100 payload'
@@ -87,7 +87,7 @@ Describe 'PowerShell transactional SDK installation' {
     It 'reports cleanup failure without masking extraction failure' {
         $env:SDK_TEST_EXTRACT_FAILURE = 'extract-failed'
         $env:SDK_TEST_CLEANUP_PATTERN = '.sdk-payload-'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 6>&1 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 6>&1 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'Unable to extract the verified \.NET SDK 99\.0\.100 payload'
@@ -98,7 +98,7 @@ Describe 'PowerShell transactional SDK installation' {
 
     It 'cleans staging when extraction does not produce a host' {
         $env:SDK_TEST_MISSING_HOST = '1'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'isolated dotnet executable was not found'
         $target = (Get-Content -LiteralPath $script:StagingTargetPath -Raw).Trim()
@@ -108,7 +108,7 @@ Describe 'PowerShell transactional SDK installation' {
 
     It 'blocks promotion when the staged host exits nonzero' {
         $env:FAKE_DOTNET_EXIT_CODE = '74'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code 74\.'
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
@@ -116,7 +116,7 @@ Describe 'PowerShell transactional SDK installation' {
 
     It 'blocks promotion when staged inventory omits the requested version' {
         $env:FAKE_DOTNET_SDK_VERSION = '98.0.100'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'SDK 99\.0\.100 was not found after installation\.'
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
@@ -124,14 +124,14 @@ Describe 'PowerShell transactional SDK installation' {
 
     It 'preserves a destination that appears before promotion' {
         $env:FAKE_DOTNET_CREATE_CONFLICT = $script:InstallDir
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'destination already exists'
         (Get-Content -LiteralPath (Join-Path $script:InstallDir 'sentinel.txt') -Raw).Trim() | Should -Be 'preserve-conflict'
     }
 
     It 'promotes only a verified staged installation' {
-        $successOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $successOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Be 0
         $text = $successOutput -join [Environment]::NewLine
         $text | Should -Match 'Extracting verified \.NET SDK 99\.0\.100 payload'
@@ -142,11 +142,11 @@ Describe 'PowerShell transactional SDK installation' {
 
     It 'retries deterministically after a failed clean-start attempt' {
         $env:SDK_TEST_EXTRACT_FAILURE = 'extract-failed'
-        @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1) | Out-Null
+        @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1) | Out-Null
         $LASTEXITCODE | Should -Not -Be 0
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
         Remove-Item Env:SDK_TEST_EXTRACT_FAILURE
-        $successOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $successOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Be 0
         ($successOutput -join [Environment]::NewLine) | Should -Match 'installation completed successfully'
         Test-Path -LiteralPath (Join-Path $script:InstallDir 'dotnet.exe') | Should -BeTrue

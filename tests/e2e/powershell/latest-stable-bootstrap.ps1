@@ -67,7 +67,7 @@ try {
     $repository = 'infoconex/isolated-dotnet-sdk'
     $headers = @{
         Accept = 'application/vnd.github+json'
-        'X-GitHub-Api-Version' = '2022-11-28'
+        'X-GitHub-Api-SdkVersion' = '2022-11-28'
     }
     if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
         $headers.Authorization = "Bearer $($env:GITHUB_TOKEN)"

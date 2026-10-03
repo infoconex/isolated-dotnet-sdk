@@ -83,7 +83,7 @@ try {
 
     $toolVersion = Invoke-E2EProcess `
         -FilePath 'pwsh' `
-        -Arguments @('-NoProfile', '-File', $sourceTool, '-ToolVersion')
+        -Arguments @('-NoProfile', '-File', $sourceTool, '-Version')
     Assert-Success -Result $toolVersion -Operation 'Tool version query'
     if ($toolVersion.Output.Trim() -ne 'isolated-dotnet-sdk development (main)') {
         throw "Expected development tool identity but received: $($toolVersion.Output.Trim())"
@@ -95,7 +95,7 @@ try {
     Write-Host "E2E direct: installing .NET SDK $sdkVersion into $sdkRoot"
     $install = Invoke-E2EProcess `
         -FilePath 'pwsh' `
-        -Arguments @('-NoProfile', '-File', $sourceTool, '-Action', 'Install', '-Version', $sdkVersion, '-Yes')
+        -Arguments @('-NoProfile', '-File', $sourceTool, '-Action', 'Install', '-SdkVersion', $sdkVersion, '-Yes')
     Assert-Success -Result $install -Operation 'Direct install'
     Write-Host $install.Output
 
@@ -108,7 +108,7 @@ try {
 
     $savedToolVersion = Invoke-E2EProcess `
         -FilePath 'pwsh' `
-        -Arguments @('-NoProfile', '-File', $savedTool, '-ToolVersion')
+        -Arguments @('-NoProfile', '-File', $savedTool, '-Version')
     Assert-Success -Result $savedToolVersion -Operation 'Saved tool version query'
     if ($savedToolVersion.Output.Trim() -ne 'isolated-dotnet-sdk development (main)') {
         throw "Expected saved development tool identity but received: $($savedToolVersion.Output.Trim())"
@@ -123,7 +123,7 @@ try {
 
     $verify = Invoke-E2EProcess `
         -FilePath 'pwsh' `
-        -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Verify', '-Version', $sdkVersion)
+        -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Verify', '-SdkVersion', $sdkVersion)
     Assert-Success -Result $verify -Operation 'Direct verify'
     Write-Host $verify.Output
     if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion is healthy.")) {
@@ -142,7 +142,7 @@ try {
     Write-Host "E2E direct: removing .NET SDK $sdkVersion"
     $remove = Invoke-E2EProcess `
         -FilePath 'pwsh' `
-        -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Remove', '-Version', $sdkVersion, '-Yes')
+        -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Remove', '-SdkVersion', $sdkVersion, '-Yes')
     Assert-Success -Result $remove -Operation 'Direct remove'
     Write-Host $remove.Output
 

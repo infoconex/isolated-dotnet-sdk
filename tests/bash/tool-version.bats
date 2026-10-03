@@ -62,6 +62,28 @@ teardown() {
   [[ "$output" == *"What would you like to do?"* ]]
 }
 
+@test "--sdk-version explicitly selects the SDK with the same semantics" {
+  tool_root="$test_home/dotnet-sdks"
+  saved_tool="$tool_root/isolated-dotnet-sdk.sh"
+  mkdir -p "$tool_root"
+  cp "$tool" "$saved_tool"
+  chmod +x "$saved_tool"
+
+  run env HOME="$test_home" "$saved_tool" --sdk-version 'bad/version'
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid SDK version: bad/version"* ]]
+  [[ "$output" != *"isolated-dotnet-sdk development (main)"* ]]
+}
+
+@test "--version cannot be combined with an SDK selector and remains side-effect free" {
+  run env HOME="$test_home" "$bash_path" "$tool" --version --sdk-version 10.0.100
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--version cannot be combined with other arguments."* ]]
+  [ ! -e "$test_home/dotnet-sdks" ]
+}
+
 @test "bare SDK version remains an install selector" {
   tool_root="$test_home/dotnet-sdks"
   saved_tool="$tool_root/isolated-dotnet-sdk.sh"

@@ -50,12 +50,12 @@ Describe 'PowerShell isolated SDK verification' {
 
     It 'reports a healthy exact isolated SDK without mutating it' {
         $version = '99.0.100'
-        $installDirectory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+        $installDirectory = Install-FakeIsolatedHost -SdkVersion $version -ReportedVersion $version
         $sentinelPath = Join-Path $installDirectory 'verify-sentinel.txt'
         Set-Content -LiteralPath $sentinelPath -Value 'preserve-me' -NoNewline
         $fileCountBefore = @(Get-ChildItem -LiteralPath $installDirectory -File -Recurse -Force).Count
 
-        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -Version $version 2>&1)
+        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -SdkVersion $version 2>&1)
 
         $LASTEXITCODE | Should -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
@@ -67,7 +67,7 @@ Describe 'PowerShell isolated SDK verification' {
     It 'fails clearly when the selected version is not installed' {
         $version = '99.0.100'
 
-        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -Version $version 2>&1)
+        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -SdkVersion $version 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match "Isolated SDK $([regex]::Escape($version)) is not installed under"
@@ -78,7 +78,7 @@ Describe 'PowerShell isolated SDK verification' {
         $installDirectory = Join-Path $script:ToolRoot $version
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 
-        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -Version $version 2>&1)
+        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -SdkVersion $version 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match 'expected dotnet host was not found'
@@ -92,7 +92,7 @@ Describe 'PowerShell isolated SDK verification' {
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
         Set-Content -LiteralPath $hostPath -Value 'not-a-windows-executable' -NoNewline
 
-        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -Version $version 2>&1)
+        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -SdkVersion $version 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match "Unable to launch isolated SDK $([regex]::Escape($version)) host"
@@ -101,10 +101,10 @@ Describe 'PowerShell isolated SDK verification' {
 
     It 'fails with the native exit code when the host reports execution failure' {
         $version = '99.0.100'
-        Install-FakeIsolatedHost -Version $version -ReportedVersion $version | Out-Null
+        Install-FakeIsolatedHost -SdkVersion $version -ReportedVersion $version | Out-Null
         $env:FAKE_DOTNET_EXIT_CODE = '73'
 
-        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -Version $version 2>&1)
+        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -SdkVersion $version 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match "Unable to verify isolated SDK $([regex]::Escape($version)) with exit code 73\."
@@ -112,9 +112,9 @@ Describe 'PowerShell isolated SDK verification' {
 
     It 'fails when the isolated host does not report the requested SDK version' {
         $version = '99.0.100'
-        Install-FakeIsolatedHost -Version $version -ReportedVersion '98.0.100' | Out-Null
+        Install-FakeIsolatedHost -SdkVersion $version -ReportedVersion '98.0.100' | Out-Null
 
-        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -Version $version 2>&1)
+        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -SdkVersion $version 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match "Isolated SDK $([regex]::Escape($version)) failed verification: the host did not report SDK $([regex]::Escape($version))\."
@@ -124,11 +124,11 @@ Describe 'PowerShell isolated SDK verification' {
         $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
-        ($verifyOutput -join [Environment]::NewLine) | Should -Match '-Version is required with -Action Verify\.'
+        ($verifyOutput -join [Environment]::NewLine) | Should -Match '-SdkVersion is required with -Action Verify\.'
     }
 
     It 'rejects invalid exact-version syntax for Verify' {
-        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -Version 'invalid/version' 2>&1)
+        $verifyOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action Verify -SdkVersion 'invalid/version' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Invalid SDK version: invalid/version'

@@ -70,7 +70,7 @@ Describe 'PowerShell tool version identity' {
     It 'reports development identity without bootstrap or operational dependencies' {
         $result = Invoke-ToolProcess `
             -ToolPath $script:ToolScript `
-            -Arguments @('-ToolVersion') `
+            -Arguments @('-Version') `
             -HomePath $script:TestHome
 
         $result.ExitCode | Should -Be 0
@@ -88,7 +88,7 @@ Describe 'PowerShell tool version identity' {
 
         $result = Invoke-ToolProcess `
             -ToolPath $stableTool `
-            -Arguments @('-ToolVersion') `
+            -Arguments @('-Version') `
             -HomePath $script:TestHome
 
         $result.ExitCode | Should -Be 0
@@ -112,7 +112,7 @@ Describe 'PowerShell tool version identity' {
         $result.Output | Should -Match 'What would you like to do\?'
     }
 
-    It 'preserves -Version as the SDK selector' {
+    It 'supports -SdkVersion as the explicit SDK selector' {
         $toolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $savedTool = Join-Path $toolRoot 'isolated-dotnet-sdk.ps1'
         New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
@@ -120,12 +120,39 @@ Describe 'PowerShell tool version identity' {
 
         $result = Invoke-ToolProcess `
             -ToolPath $savedTool `
-            -Arguments @('-Version', 'bad/version') `
+            -Arguments @('-SdkVersion', 'bad/version') `
             -HomePath $script:TestHome
 
         $result.ExitCode | Should -Not -Be 0
         $result.Output | Should -Match 'Invalid SDK version: bad/version'
         $result.Output | Should -Not -Match 'isolated-dotnet-sdk development \(main\)'
+    }
+
+    It 'supports a positional SDK version with the same semantics' {
+        $toolRoot = Join-Path $script:TestHome 'dotnet-sdks'
+        $savedTool = Join-Path $toolRoot 'isolated-dotnet-sdk.ps1'
+        New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+        Copy-Item -LiteralPath $script:ToolScript -Destination $savedTool -Force
+
+        $result = Invoke-ToolProcess `
+            -ToolPath $savedTool `
+            -Arguments @('bad/version') `
+            -HomePath $script:TestHome
+
+        $result.ExitCode | Should -Not -Be 0
+        $result.Output | Should -Match 'Invalid SDK version: bad/version'
+        $result.Output | Should -Not -Match 'isolated-dotnet-sdk development \(main\)'
+    }
+
+    It 'rejects combining the tool version query with an SDK selector without bootstrapping' {
+        $result = Invoke-ToolProcess `
+            -ToolPath $script:ToolScript `
+            -Arguments @('-Version', '-SdkVersion', '10.0.100') `
+            -HomePath $script:TestHome
+
+        $result.ExitCode | Should -Not -Be 0
+        $result.Output | Should -Match '-Version cannot be combined'
+        Test-Path -LiteralPath (Join-Path $script:TestHome 'dotnet-sdks') | Should -BeFalse
     }
 
     It 'stamps both product scripts from one stable tag' {
