@@ -142,11 +142,11 @@ The special `$host$` entry described by Microsoft refers to the SDK location ass
 
 ## VS Code with C# and C# Dev Kit
 
-Editor behavior is owned by the editor/extensions and can change independently of this repository. The guidance in this section was verified against the current VS Code .NET Install Tool and C# Dev Kit documentation in September 2026.
+Editor behavior is owned by the editor/extensions and can change independently of this repository. The guidance in this section was verified against the VS Code .NET Install Tool and C# Dev Kit documentation in September 2026.
 
 ### Point the .NET extensions at an existing isolated host
 
-The current .NET Install Tool supports `dotnetAcquisitionExtension.existingDotnetPath` for telling a requesting extension which existing `dotnet` executable should run that extension's .NET components.
+The .NET Install Tool supports `dotnetAcquisitionExtension.existingDotnetPath` for telling a requesting extension which existing `dotnet` executable should run that extension's .NET components.
 
 For the C# extension, the current extension ID is `ms-dotnettools.csharp`. For C# Dev Kit, it is `ms-dotnettools.csdevkit`. Add an entry for each extension you use.
 
@@ -235,7 +235,9 @@ The version-sensitive behavior in this guide is based on current upstream docume
 
 ## Related repository guidance
 
-- [`../README.md`](../README.md) — installation, listing, verification, and direct host usage
-- [`cross-platform-support.md`](cross-platform-support.md) — supported Windows/PowerShell, Linux/Bash, and macOS/Bash mappings
-- [`behavioral-parity.md`](behavioral-parity.md) — shared product behavior and no-PATH isolation contract
-- [`filesystem-safety.md`](filesystem-safety.md) — isolated-root ownership and filesystem safety
+- [Documentation index](../README.md)
+- [Windows / PowerShell getting started](../getting-started/windows-powershell.md)
+- [Linux and macOS / Bash getting started](../getting-started/linux-macos-bash.md)
+- [Cross-platform support](../concepts/cross-platform-support.md)
+- [PowerShell and Bash behavioral parity](../contracts/behavioral-parity.md)
+- [Filesystem safety](../concepts/filesystem-safety.md)
