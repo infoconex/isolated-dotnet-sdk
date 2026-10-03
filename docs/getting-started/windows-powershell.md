@@ -28,13 +28,23 @@ $HOME\dotnet-sdks\isolated-dotnet-sdk.ps1
 
 Normal execution of that saved tool does not auto-update. For an explicit pinned version, reproducible installation, or rollback, see [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md).
 
+## Identify the tool version
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -ToolVersion
+```
+
+Stable releases published with embedded identity report their exact release tag. Mutable `main` reports `isolated-dotnet-sdk development (main)` instead of claiming a stable version. The query exits without bootstrap, network access, SDK discovery, prompting, or mutation.
+
+`-ToolVersion` identifies the `isolated-dotnet-sdk` tool. The existing `-Version <sdk-version>` parameter remains the .NET SDK selector used by Install, Verify, and Remove. See [Tool version](../commands/tool-version.md).
+
 ## Start an interactive session
 
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1"
 ```
 
-The persistent session uses `I` for Install, `R` for Remove, `L` for List, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
+Main displays the same stable/development tool identity near the top. The persistent session uses `I` for Install, `R` for Remove, `L` for List, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
 
 ## Install an SDK
 
@@ -135,7 +145,7 @@ For explicit development testing only, mutable `main` can be piped into PowerShe
 irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1 | iex
 ```
 
-This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee.
+This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee. Once saved, that development copy reports `isolated-dotnet-sdk development (main)` through `-ToolVersion` and on Main.
 
 ## Next steps
 

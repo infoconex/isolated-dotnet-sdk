@@ -6,6 +6,7 @@ These pages define the product-level behavior of each operation. They intentiona
 - [List](list.md) — show Isolated SDKs and read-only System SDKs
 - [Verify](verify.md) — perform a read-only health check of one isolated SDK
 - [Remove](remove.md) — remove one SDK managed under the isolated SDK root
+- [Tool version](tool-version.md) — identify the running tool release or development source
 - [Interactive mode](interactive.md) — persistent sessions, navigation, and SDK selection
 
 For exact commands and copy/paste examples, use the supported platform guide:
@@ -16,6 +17,8 @@ For exact commands and copy/paste examples, use the supported platform guide:
 ## Shared command model
 
 Starting the tool without an action or exact version opens the persistent interactive session. Explicit actions and exact-version requests are one-shot and exit after the requested operation completes, is cancelled normally, or fails.
+
+The tool-version query is also one-shot, but it identifies `isolated-dotnet-sdk` itself rather than selecting a .NET SDK. It exits before bootstrap, SDK discovery, release-metadata access, prompting, or mutation. PowerShell keeps `-Version` exclusively for the existing SDK-selection behavior and uses `-ToolVersion` for tool identity; Bash uses `--version`.
 
 The tool owns SDKs only under the current user's `dotnet-sdks` directory. System SDKs are supplemental read-only inventory and never become removable merely because the tool can see them.
 

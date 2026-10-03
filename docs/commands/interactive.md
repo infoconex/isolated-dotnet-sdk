@@ -6,9 +6,11 @@ For the exact command that starts the tool on your platform, see [Windows / Powe
 
 ## Persistent Main session
 
-Starting the tool without an action or exact version opens Main:
+Starting the tool without an action or exact version opens Main and identifies the running tool before the action prompt. A stable release uses its exact release tag:
 
 ```text
+Isolated .NET SDK v1.2.3
+
 What would you like to do?
 
   I. Install an SDK
@@ -19,6 +21,14 @@ What would you like to do?
 
 Selection:
 ```
+
+Mutable `main` uses the same location but identifies itself as development source instead of claiming a stable release:
+
+```text
+Isolated .NET SDK development (main)
+```
+
+The identity heading is shown on Main, not repeated throughout nested Install or Remove menus. See [Tool version](tool-version.md) for the direct query and stable/development identity contract.
 
 Main commands are case-insensitive. `I`, `R`, `L`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
 
@@ -31,6 +41,8 @@ Supplying an explicit action or the supported bare-version Install form keeps ex
 An explicit Install or Remove may still need an interactive picker when no version was supplied. That does not convert the command into a persistent Main session.
 
 Verify is always direct-command-only and never appears on Main.
+
+The direct tool-version query is also one-shot and exits before bootstrap, network access, SDK discovery, prompting, or mutation. It identifies the tool itself; it does not select a .NET SDK.
 
 ## Back, Exit, and Cancel
 
@@ -83,6 +95,7 @@ An explicit user cancellation or default-no confirmation remains a successful no
 
 ## Related contracts
 
+- [Tool version](tool-version.md)
 - [Install](install.md)
 - [Remove](remove.md)
 - [SDK discovery and release metadata](../concepts/sdk-discovery.md)

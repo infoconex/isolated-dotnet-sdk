@@ -7,6 +7,8 @@ Stable use has two supported bootstrap modes:
 
 Both modes ultimately execute a tagged `isolated-dotnet-sdk` product script only after verifying it against that release's `SHA256SUMS`. Mutable `main` remains a separate development-only source.
 
+For releases published with embedded tool identity, the tagged script reports that exact tag through `-ToolVersion` on PowerShell or `--version` on Bash, and Main displays the same stable identity. Because file-based bootstrap preserves the verified tagged bytes, the saved tool keeps that same identity without querying GitHub later.
+
 ## Latest stable bootstrap
 
 Windows / PowerShell 7:
@@ -31,7 +33,7 @@ The small Pages-hosted bootstrap:
 6. verifies the downloaded product script's SHA-256; and
 7. executes only the verified temporary product script.
 
-The released product script then uses its existing file-based bootstrap behavior to preserve those exact verified bytes under `~/dotnet-sdks`.
+The released product script then uses its existing file-based bootstrap behavior to preserve those exact verified bytes under `~/dotnet-sdks`. For releases that include embedded identity, that same tagged identity therefore survives latest-stable handoff and later saved-tool execution without a second version lookup or source.
 
 ### Trust boundary for the short command
 
@@ -108,13 +110,15 @@ chmod +x "$temp"
 "$temp"
 ```
 
-Pinned bootstrap deliberately downloads a real tagged product-script file, verifies it before execution, and relies on file-based bootstrap to save those exact verified bytes.
+Pinned bootstrap deliberately downloads a real tagged product-script file, verifies it before execution, and relies on file-based bootstrap to save those exact verified bytes. For releases with embedded identity, pinning or rolling back to a tag also pins the tool-version value reported by that saved copy.
 
-## `v0.1.0` legacy boundary
+## Historical release boundaries
 
 `v0.1.0` predates the checksum-verifying stable-release policy and has no `SHA256SUMS` release asset. Its published history is retained rather than rewritten retroactively.
 
-The verified stable bootstrap contract applies to `v0.2.0` and later releases published under the current checksum policy.
+`v0.2.0` is checksum-policy-compliant but predates the embedded tool-version identity model. It also remains historically unchanged rather than being rewritten solely to add version metadata.
+
+The verified stable bootstrap contract applies to `v0.2.0` and later checksum-policy-compliant releases. Embedded stable identity applies to releases published after the tool-version model was introduced; the release verifier deliberately preserves compatibility with older published history.
 
 ## Updates
 
@@ -124,9 +128,13 @@ To explicitly update to the latest published stable release, rerun the short Pag
 
 To update to a specifically chosen release, use the pinned stable procedure with that exact policy-compliant tag.
 
+The tool-version query itself never checks for updates. It reports only the identity already embedded in the copy being executed.
+
 ## Rollback
 
 Rollback uses the pinned stable procedure with an older checksum-policy-compliant published tag. The selected tag is authoritative.
+
+If the selected release includes embedded tool identity, the rollback copy reports that selected tag when run later. No latest-release lookup is performed to reinterpret it.
 
 If release discovery, acquisition, checksum verification, staging, or final saved-tool replacement fails, unverified product source is not executed. Existing saved-tool state remains recovery state where the product's bootstrap replacement contract can preserve it.
 
@@ -134,10 +142,13 @@ If release discovery, acquisition, checksum verification, staging, or final save
 
 Mutable `main` is an explicit development source, not a stable channel. The getting-started guides show the corresponding development one-liner for each shell.
 
+Current `main` product scripts carry `development` source identity. Their direct tool-version query reports `isolated-dotnet-sdk development (main)`, and the persistent Main menu displays the development source rather than inventing or looking up a stable version.
+
 Rerunning a development command may refresh the saved tool from newer `main` source. It does not receive the stable-release checksum guarantee and must not be presented as stable installation or update behavior.
 
 ## Related documentation
 
+- [Tool version](../commands/tool-version.md)
 - [Bootstrap source preservation and reproducibility](../concepts/bootstrap-reproducibility.md)
 - [Supply-chain integrity and trust boundaries](../concepts/supply-chain-integrity.md)
 - [Stable release publication and verification](../maintainers/releases/release-process.md) — maintainer-only publication procedure
