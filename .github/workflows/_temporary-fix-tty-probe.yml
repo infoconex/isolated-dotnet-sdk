@@ -1,0 +1,40 @@
+name: Temporary tty probe fix
+
+on:
+  push:
+    branches:
+      - feat/114-tool-version-identity
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/114-tool-version-identity
+
+      - name: Apply tty probe fix and remove temporary workflow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('isolated-dotnet-sdk.sh')
+          text = path.read_text()
+          old = 'if tty -s </dev/tty 2>/dev/null; then'
+          new = 'if tty -s 2>/dev/null </dev/tty; then'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one tty probe, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+          PY
+
+          git rm .github/workflows/_temporary-fix-tty-probe.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add isolated-dotnet-sdk.sh
+          git commit -m 'fix: silence unavailable tty probe' -m 'Refs #114'
+          git push origin HEAD:feat/114-tool-version-identity
