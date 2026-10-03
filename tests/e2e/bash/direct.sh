@@ -27,11 +27,27 @@ saved_tool="$tool_root/isolated-dotnet-sdk.sh"
 sdk_root="$tool_root/$sdk_version"
 dotnet_host="$sdk_root/dotnet"
 
+version_output="$(bash "$source_tool" --version)"
+if [[ "$version_output" != 'isolated-dotnet-sdk development (main)' ]]; then
+  printf 'Expected development tool identity but received: %s\n' "$version_output" >&2
+  exit 1
+fi
+if [[ -e "$tool_root" ]]; then
+  printf 'Tool version query unexpectedly created SDK state at %s.\n' "$tool_root" >&2
+  exit 1
+fi
+
 echo "E2E direct: installing .NET SDK $sdk_version into $sdk_root"
 bash "$source_tool" install "$sdk_version" --yes
 
 test -f "$saved_tool"
 test -x "$dotnet_host"
+
+saved_version_output="$(bash "$saved_tool" --version)"
+if [[ "$saved_version_output" != 'isolated-dotnet-sdk development (main)' ]]; then
+  printf 'Expected saved development tool identity but received: %s\n' "$saved_version_output" >&2
+  exit 1
+fi
 
 actual_version="$("$dotnet_host" --version)"
 if [[ "$actual_version" != "$sdk_version" ]]; then

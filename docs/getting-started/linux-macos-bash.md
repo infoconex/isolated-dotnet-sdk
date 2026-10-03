@@ -31,13 +31,23 @@ $HOME/dotnet-sdks/isolated-dotnet-sdk.sh
 
 Normal execution of that saved tool does not auto-update. For an explicit pinned version, reproducible installation, or rollback, see [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md).
 
+## Identify the tool version
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version
+```
+
+Stable releases published with embedded identity report their exact release tag. Mutable `main` reports `isolated-dotnet-sdk development (main)` instead of claiming a stable version. The query exits without bootstrap, network access, SDK discovery, prompting, or mutation.
+
+This identifies the `isolated-dotnet-sdk` tool itself. `--sdk-version <sdk-version>` explicitly selects a .NET SDK, and a bare value such as `10.0.401` is the equivalent positional selector. See [Tool version](../commands/tool-version.md).
+
 ## Start an interactive session
 
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 ```
 
-The persistent session uses `I` for Install, `R` for Remove, `L` for List, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
+Main displays the same stable/development tool identity near the top. The persistent session uses `I` for Install, `R` for Remove, `L` for List, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
 
 ## Install an SDK
 
@@ -47,13 +57,19 @@ Open the interactive install picker once and exit when it completes:
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install
 ```
 
-Install a known exact version directly:
+Install a known exact version directly with the explicit SDK selector:
 
 ```bash
-"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install 10.0.401
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install --sdk-version 10.0.401
 ```
 
-A bare version is the Install convenience form:
+Without an explicit action, `--sdk-version` implies Install:
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --sdk-version 10.0.401
+```
+
+The equivalent positional convenience form is also supported:
 
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" 10.0.401
@@ -126,7 +142,7 @@ For explicit development testing only, mutable `main` can be piped into Bash:
 curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.sh | bash
 ```
 
-This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee.
+This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee. Once saved, that development copy reports `isolated-dotnet-sdk development (main)` through `--version` and on Main.
 
 ## Next steps
 

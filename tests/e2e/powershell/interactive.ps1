@@ -131,6 +131,13 @@ try {
         throw "Expected 4 Main prompts but observed $mainPromptCount."
     }
 
+    $identityCount = ([regex]::Matches(
+        $interactive.Output,
+        [regex]::Escape('Isolated .NET SDK development (main)'))).Count
+    if ($identityCount -ne $mainPromptCount) {
+        throw "Expected one development identity heading per Main prompt; observed $identityCount identities for $mainPromptCount prompts."
+    }
+
     $requiredFragments = @(
         'Back to .NET channels',
         'Isolated SDK installation completed successfully.',

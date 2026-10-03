@@ -79,7 +79,7 @@ Describe 'PowerShell install target status' {
                 Write-Information $Prompt -InformationAction Continue
                 return ""
             }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version $env:ISOLATED_DOTNET_SDK_TEST_VERSION
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion $env:ISOLATED_DOTNET_SDK_TEST_VERSION
         ' 6>&1 2>&1)
 
         $LASTEXITCODE | Should -Be 0
@@ -102,7 +102,7 @@ Describe 'PowerShell install target status' {
 
         $output = @(& pwsh -NoProfile -Command '
             $env:PATH = $env:ISOLATED_DOTNET_SDK_TEST_PATH
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version $env:ISOLATED_DOTNET_SDK_TEST_VERSION -Yes
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion $env:ISOLATED_DOTNET_SDK_TEST_VERSION -Yes
         ' 6>&1 2>&1)
 
         $LASTEXITCODE | Should -Be 0
@@ -122,7 +122,7 @@ Describe 'PowerShell install target status' {
 
         $output = @(& pwsh -NoProfile -Command '
             $env:PATH = $env:ISOLATED_DOTNET_SDK_TEST_PATH
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version $env:ISOLATED_DOTNET_SDK_TEST_VERSION -Yes
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion $env:ISOLATED_DOTNET_SDK_TEST_VERSION -Yes
         ' 6>&1 2>&1)
 
         $LASTEXITCODE | Should -Be 0
@@ -142,7 +142,7 @@ Describe 'PowerShell install target status' {
         $output = @(& pwsh -NoProfile -Command '
             $env:PATH = $env:ISOLATED_DOTNET_SDK_TEST_PATH
             function Invoke-WebRequest { throw "stop-after-status" }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version $env:ISOLATED_DOTNET_SDK_TEST_VERSION -Yes
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion $env:ISOLATED_DOTNET_SDK_TEST_VERSION -Yes
         ' 6>&1 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0

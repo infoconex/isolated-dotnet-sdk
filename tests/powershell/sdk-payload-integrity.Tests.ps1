@@ -46,7 +46,7 @@ function Expand-Archive {
     param($LiteralPath, $DestinationPath, [switch]$Force)
     Set-Content -LiteralPath $env:ISOLATED_DOTNET_SDK_EXPAND_MARKER -Value called
 }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes
 ' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
@@ -69,7 +69,7 @@ function Invoke-WebRequest {
             ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutFile
     }
 }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes
 ' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
@@ -87,7 +87,7 @@ function Invoke-WebRequest {
             ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutFile
     }
 }
-& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes
 ' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0

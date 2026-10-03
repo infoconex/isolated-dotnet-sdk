@@ -4,6 +4,7 @@ set -euo pipefail
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
 TOOL_NAME="isolated-dotnet-sdk.sh"
+TOOL_RELEASE_IDENTITY="development"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
 TOOL_INPUT=""
@@ -27,6 +28,36 @@ else
     RED=''
     ERROR_RESET=''
 fi
+
+tool_version_text() {
+    if [[ "$TOOL_RELEASE_IDENTITY" == "development" ]]; then
+        printf '%s' 'isolated-dotnet-sdk development (main)'
+        return
+    fi
+
+    if [[ "$TOOL_RELEASE_IDENTITY" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf 'isolated-dotnet-sdk %s' "$TOOL_RELEASE_IDENTITY"
+        return
+    fi
+
+    printf 'Invalid tool release identity: %s\n' "$TOOL_RELEASE_IDENTITY" >&2
+    return 1
+}
+
+tool_menu_identity() {
+    if [[ "$TOOL_RELEASE_IDENTITY" == "development" ]]; then
+        printf '%s' 'Isolated .NET SDK development (main)'
+        return
+    fi
+
+    if [[ "$TOOL_RELEASE_IDENTITY" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf 'Isolated .NET SDK %s' "$TOOL_RELEASE_IDENTITY"
+        return
+    fi
+
+    printf 'Invalid tool release identity: %s\n' "$TOOL_RELEASE_IDENTITY" >&2
+    return 1
+}
 
 tool_info() {
     printf "%s\n" "$1"
@@ -183,7 +214,7 @@ bootstrap_if_needed() {
     tool_success "Tool installed."
     echo
 
-    if tty -s </dev/tty 2>/dev/null; then
+    if tty -s 2>/dev/null </dev/tty; then
         exec "$TOOL_PATH" "$@" </dev/tty
     fi
 
@@ -405,6 +436,8 @@ select_action() {
     local selection=""
 
     while true; do
+        tool_heading "$(tool_menu_identity)"
+        echo
         tool_heading "What would you like to do?"
         echo
         echo "  I. Install an SDK"
@@ -1343,7 +1376,9 @@ Usage:
   isolated-dotnet-sdk.sh remove [version] [--yes|-y]
   isolated-dotnet-sdk.sh list
   isolated-dotnet-sdk.sh verify <version>
+  isolated-dotnet-sdk.sh --sdk-version <version> [--yes|-y]
   isolated-dotnet-sdk.sh [version] [--yes|-y]
+  isolated-dotnet-sdk.sh --version
   isolated-dotnet-sdk.sh --help|-h
 
 Commands:
@@ -1354,11 +1389,14 @@ Commands:
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
+  --sdk-version <v>  Select the exact .NET SDK version. Without an action, Install is selected.
+  --version          Show the tool release/source identity and exit.
   --help, -h         Show this help text.
 
 Behavior:
   No command         Start a persistent interactive session that returns to Main after normal operations.
-  Bare version       Treat the version as a one-shot install request.
+  SDK version        --sdk-version <version> and a bare positional version select the same exact SDK.
+  Bare version       Treat the positional version as a one-shot install request.
   Explicit actions   Run once and exit without entering the persistent Main loop.
   List               Shows isolated ownership first, then read-only SDKs reported by the normal dotnet --list-sdks host.
   Verify <version>   Requires one exact version and checks only the existing isolated installation.
@@ -1379,6 +1417,18 @@ Documentation:
 USAGE
 }
 
+for argument in "$@"; do
+    if [[ "$argument" == "--version" ]]; then
+        if [[ $# -ne 1 ]]; then
+            printf '%s\n' '--version cannot be combined with other arguments.' >&2
+            exit 1
+        fi
+        tool_version_text
+        printf '\n'
+        exit 0
+    fi
+done
+
 bootstrap_if_needed "$@"
 
 mkdir -p "$SDK_ROOT"
@@ -1392,28 +1442,24 @@ YES="false"
 INTERACTIVE_SESSION="false"
 EXIT_REQUESTED="false"
 
-if [[ $# -gt 0 ]]; then
-    case "$1" in
-        install|remove|list|verify)
-            ACTION="$1"
-            shift
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        --yes|-y)
-            ;;
-        *)
-            ACTION="install"
-            VERSION="$1"
-            shift
-            ;;
-    esac
-fi
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        install|remove|list|verify)
+            if [[ -n "$ACTION" ]]; then
+                tool_fail "Only one action may be specified."
+            fi
+            ACTION="$1"
+            ;;
+        --sdk-version)
+            shift
+            if [[ $# -eq 0 ]]; then
+                tool_fail "--sdk-version requires an exact SDK version."
+            fi
+            if [[ -n "$VERSION" ]]; then
+                tool_fail "Only one SDK version may be specified."
+            fi
+            VERSION="$1"
+            ;;
         --yes|-y)
             YES="true"
             ;;
@@ -1421,16 +1467,29 @@ while [[ $# -gt 0 ]]; do
             usage
             exit 0
             ;;
+        --version)
+            tool_fail "--version cannot be combined with other arguments."
+            ;;
+        --*)
+            tool_fail "Unknown argument: $1"
+            ;;
         *)
-            if [[ "$ACTION" != "list" && -z "$VERSION" ]]; then
-                VERSION="$1"
-            else
-                tool_fail "Unknown argument: $1"
+            if [[ -n "$VERSION" ]]; then
+                tool_fail "Only one SDK version may be specified."
             fi
+            VERSION="$1"
             ;;
     esac
     shift
 done
+
+if [[ "$ACTION" == "list" && -n "$VERSION" ]]; then
+    tool_fail "An SDK version cannot be combined with list."
+fi
+
+if [[ -z "$ACTION" && -n "$VERSION" ]]; then
+    ACTION="install"
+fi
 
 if [[ -z "$ACTION" && -z "$VERSION" ]]; then
     INTERACTIVE_SESSION="true"

@@ -20,9 +20,16 @@ repository='infoconex/isolated-dotnet-sdk'
 latest_release_url="https://api.github.com/repos/$repository/releases/latest"
 release_download_base_url="https://github.com/$repository/releases/download"
 
+github_api_args=(
+  -H 'Accept: application/vnd.github+json'
+  -H 'X-GitHub-Api-Version: 2022-11-28'
+)
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  github_api_args+=(-H "Authorization: Bearer $GITHUB_TOKEN")
+fi
+
 release_json="$(curl -fsSL \
-  -H 'Accept: application/vnd.github+json' \
-  -H 'X-GitHub-Api-Version: 2022-11-28' \
+  "${github_api_args[@]}" \
   "$latest_release_url")"
 release_tag="$(jq -er '
   select(.draft == false and .prerelease == false)
@@ -42,7 +49,14 @@ if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
 fi
 
 printf 'E\n' | bash "$repo_root/install.sh" > "$output" 2>&1
-cat "$output"
+
+# v0.2.0 predates the silent controlling-terminal probe. Keep its immutable release
+# bytes under test while omitting that known macOS shell diagnostic from CI output.
+if [[ "$release_tag" == 'v0.2.0' ]]; then
+  sed '/\/dev\/tty: Device not configured$/d' "$output"
+else
+  cat "$output"
+fi
 
 saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 if [[ ! -f "$saved_tool" ]]; then

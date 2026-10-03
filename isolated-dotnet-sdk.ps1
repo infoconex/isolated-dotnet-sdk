@@ -5,20 +5,28 @@ Installs and manages isolated .NET SDK versions on Windows with PowerShell 7.
 .DESCRIPTION
 Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. Isolated SDKs remain under that user-owned root and are not added to PATH.
 
-Supported product actions are Install, Remove, List, and Verify. When Action and Version are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and Version is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with Version is invalid. Verify requires an exact Version and remains direct-command-only; it does not appear on the persistent Main menu. Install or Remove without a resolved version may require interactive selection.
+Supported product actions are Install, Remove, List, and Verify. When Action and SdkVersion are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and SdkVersion is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with SdkVersion is invalid. Verify requires an exact SdkVersion and remains direct-command-only; it does not appear on the persistent Main menu. Install or Remove without a resolved version may require interactive selection.
 
 Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
 
 Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata. List reports recognized isolated SDKs first and then the read-only SDK inventory returned by the normally resolved dotnet --list-sdks host. System SDK discovery is supplemental rather than an exhaustive filesystem inventory, and system SDKs are never managed by Remove.
 
 .PARAMETER Action
-Specifies the operation to perform: Install, Remove, List, or Verify. When omitted, the script starts the persistent interactive session unless Version is supplied, in which case Install is selected.
+Specifies the operation to perform: Install, Remove, List, or Verify. When omitted, the script starts the persistent interactive session unless SdkVersion is supplied, in which case Install is selected.
 
-.PARAMETER Version
-Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Verify requires Version. Version is invalid with an explicit List action.
+.PARAMETER SdkVersion
+Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Verify requires SdkVersion. SdkVersion is invalid with an explicit List action. The parameter is positional, so a bare exact SDK version has the same meaning as -SdkVersion.
 
 .PARAMETER Yes
 Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
+
+.PARAMETER Version
+Shows the isolated-dotnet-sdk release/source identity and exits without bootstrap, network access, SDK discovery, prompting, or mutation. This is distinct from SdkVersion, which selects the .NET SDK to install, verify, or remove.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Version
+
+Shows the tool release/source identity and exits.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action List
@@ -26,22 +34,22 @@ Skips confirmation prompts that support automatic confirmation. It does not supp
 Lists recognized isolated SDKs and SDKs reported by the normally resolved system dotnet host once and exits.
 
 .EXAMPLE
-.\isolated-dotnet-sdk.ps1 -Action Install -Version 10.0.100
+.\isolated-dotnet-sdk.ps1 -Action Install -SdkVersion 10.0.100
 
 Installs .NET SDK 10.0.100 in an isolated directory.
 
 .EXAMPLE
-.\isolated-dotnet-sdk.ps1 -Action Verify -Version 10.0.100
+.\isolated-dotnet-sdk.ps1 -Action Verify -SdkVersion 10.0.100
 
 Verifies that the existing isolated .NET SDK 10.0.100 has a launchable host that reports the requested exact version.
 
 .EXAMPLE
-.\isolated-dotnet-sdk.ps1 -Action Remove -Version 10.0.100 -Yes
+.\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 10.0.100 -Yes
 
 Removes the isolated .NET SDK 10.0.100 without the tool-owned confirmation prompt.
 
 .EXAMPLE
-.\isolated-dotnet-sdk.ps1 -Action Remove -Version 10.0.100 -WhatIf
+.\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 10.0.100 -WhatIf
 
 Previews removal without shutting down build servers or deleting the isolated SDK.
 
@@ -64,11 +72,13 @@ https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/behavioral-parit
 .LINK
 https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/cross-platform-support.md
 #>
-[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium', PositionalBinding = $false)]
 param(
     [string]$Action,
-    [string]$Version,
-    [switch]$Yes
+    [Parameter(Position = 0)]
+    [string]$SdkVersion,
+    [switch]$Yes,
+    [switch]$Version
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,18 +86,43 @@ $ErrorActionPreference = 'Stop'
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
 $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
 $ToolName = 'isolated-dotnet-sdk.ps1'
+$ToolReleaseIdentity = 'development'
 $SdkRoot = Join-Path $HOME 'dotnet-sdks'
 $ToolPath = Join-Path $SdkRoot $ToolName
 $script:Bootstrapped = $false
 $script:ActionWasSpecified = $PSBoundParameters.ContainsKey('Action')
-$script:VersionWasSpecified = $PSBoundParameters.ContainsKey('Version')
-$script:InteractiveSession = -not $script:ActionWasSpecified -and -not $script:VersionWasSpecified
+$script:SdkVersionWasSpecified = $PSBoundParameters.ContainsKey('SdkVersion')
+$script:InteractiveSession = -not $script:ActionWasSpecified -and -not $script:SdkVersionWasSpecified
 $script:BackToMain = $false
 $script:ExitRequested = $false
 $script:ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
 $script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParameters['Confirm'] } else { $false }
 $script:WhatIfWasSpecified = $PSBoundParameters.ContainsKey('WhatIf')
 $script:WhatIfValue = if ($script:WhatIfWasSpecified) { [bool]$PSBoundParameters['WhatIf'] } else { $false }
+
+function Get-ToolVersionText {
+    if ($ToolReleaseIdentity -eq 'development') {
+        return 'isolated-dotnet-sdk development (main)'
+    }
+
+    if ($ToolReleaseIdentity -match '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+        return "isolated-dotnet-sdk $ToolReleaseIdentity"
+    }
+
+    throw "Invalid tool release identity: $ToolReleaseIdentity"
+}
+
+function Get-ToolMenuIdentity {
+    if ($ToolReleaseIdentity -eq 'development') {
+        return 'Isolated .NET SDK development (main)'
+    }
+
+    if ($ToolReleaseIdentity -match '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+        return "Isolated .NET SDK $ToolReleaseIdentity"
+    }
+
+    throw "Invalid tool release identity: $ToolReleaseIdentity"
+}
 
 function Write-ToolDisplay {
     param(
@@ -220,9 +255,9 @@ function Assert-ValidAction {
     }
 }
 
-function Assert-ValidVersion {
-    if ($script:Version -notmatch '^[0-9A-Za-z][0-9A-Za-z.+-]*$') {
-        throw "Invalid SDK version: $script:Version"
+function Assert-ValidSdkVersion {
+    if ($script:SdkVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z.+-]*$') {
+        throw "Invalid SDK version: $script:SdkVersion"
     }
 }
 
@@ -314,8 +349,8 @@ function Install-ToolIfNeeded {
     if ($script:ActionWasSpecified) {
         $Arguments.Action = $Action
     }
-    if ($script:VersionWasSpecified) {
-        $Arguments.Version = $Version
+    if ($script:SdkVersionWasSpecified) {
+        $Arguments.SdkVersion = $SdkVersion
     }
     if ($Yes) {
         $Arguments.Yes = $true
@@ -552,12 +587,14 @@ function Select-Action {
         return $true
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($script:Version)) {
+    if (-not [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
         $script:Action = 'Install'
         return $true
     }
 
     while ($true) {
+        Write-ToolHeading (Get-ToolMenuIdentity)
+        Write-ToolDisplay
         Write-ToolHeading 'What would you like to do?'
         Write-ToolDisplay
         Write-ToolDisplay '  I. Install an SDK'
@@ -587,12 +624,12 @@ function Select-Action {
 }
 
 function Assert-ActionParameterUsage {
-    if ($script:Action -eq 'List' -and $script:VersionWasSpecified) {
-        throw '-Version is supported only with -Action Install, Remove, or Verify.'
+    if ($script:Action -eq 'List' -and $script:SdkVersionWasSpecified) {
+        throw '-SdkVersion is supported only with -Action Install, Remove, or Verify.'
     }
 
-    if ($script:Action -eq 'Verify' -and [string]::IsNullOrWhiteSpace($script:Version)) {
-        throw '-Version is required with -Action Verify.'
+    if ($script:Action -eq 'Verify' -and [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+        throw '-SdkVersion is required with -Action Verify.'
     }
 
     if ($script:Action -eq 'Remove') {
@@ -652,12 +689,12 @@ function Get-ChannelSdkVersion {
 }
 
 function Read-ManualVersion {
-    $script:Version = Read-ToolInput '.NET SDK version'
-    if ([string]::IsNullOrWhiteSpace($script:Version)) {
+    $script:SdkVersion = Read-ToolInput '.NET SDK version'
+    if ([string]::IsNullOrWhiteSpace($script:SdkVersion)) {
         throw 'An SDK version is required.'
     }
 
-    Assert-ValidVersion
+    Assert-ValidSdkVersion
 }
 
 # Select from Microsoft's release index when no exact SDK version was supplied.
@@ -893,8 +930,8 @@ function Select-InstallVersion {
             if ([int]::TryParse($Selection, [ref]$Number) -and
                 $Number -ge 1 -and
                 $Number -le $SdkVersions.Count) {
-                $script:Version = $SdkVersions[$Number - 1]
-                Assert-ValidVersion
+                $script:SdkVersion = $SdkVersions[$Number - 1]
+                Assert-ValidSdkVersion
                 return $true
             }
 
@@ -969,8 +1006,8 @@ function Select-RemoveVersion {
         if ([int]::TryParse($Selection, [ref]$Number) -and
             $Number -ge 1 -and
             $Number -le $SdkVersions.Count) {
-            $script:Version = $SdkVersions[$Number - 1]
-            Assert-ValidVersion
+            $script:SdkVersion = $SdkVersions[$Number - 1]
+            Assert-ValidSdkVersion
             return $true
         }
 
@@ -987,8 +1024,8 @@ function Select-RemoveVersion {
 }
 
 function Resolve-InstallVersion {
-    if (-not [string]::IsNullOrWhiteSpace($script:Version)) {
-        Assert-ValidVersion
+    if (-not [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+        Assert-ValidSdkVersion
         return $true
     }
 
@@ -1003,8 +1040,8 @@ function Resolve-InstallVersion {
 }
 
 function Resolve-RemoveVersion {
-    if (-not [string]::IsNullOrWhiteSpace($script:Version)) {
-        Assert-ValidVersion
+    if (-not [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+        Assert-ValidSdkVersion
         return $true
     }
 
@@ -1019,8 +1056,8 @@ function Resolve-RemoveVersion {
 }
 
 function Get-SdkChannel {
-    if ($Version -notmatch '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.') {
-        throw "Unable to determine the .NET release channel for SDK $Version."
+    if ($SdkVersion -notmatch '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.') {
+        throw "Unable to determine the .NET release channel for SDK $SdkVersion."
     }
 
     return "$($Matches.major).$($Matches.minor)"
@@ -1099,7 +1136,7 @@ function Resolve-SdkArtifact {
 }
 
 function Install-IsolatedSdk {
-    $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:Version)
+    $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
     if (-not (Resolve-InstallVersion)) {
         return
     }
@@ -1108,10 +1145,10 @@ function Install-IsolatedSdk {
         Write-ToolDisplay
     }
 
-    $InstallDir = Join-Path $SdkRoot $Version
-    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
+    $InstallDir = Join-Path $SdkRoot $SdkVersion
+    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
 
-    Write-ToolLabelValue -Label 'Target SDK:' -Value $Version
+    Write-ToolLabelValue -Label 'Target SDK:' -Value $SdkVersion
     Write-ToolLabelValue -Label 'Isolated install directory:' -Value $InstallDir
     Write-ToolDisplay
 
@@ -1120,7 +1157,7 @@ function Install-IsolatedSdk {
 
     $SystemSdks = @(Get-SystemSdkInventory)
     $SystemSdk = $SystemSdks |
-        Where-Object { $_.Version -eq $Version } |
+        Where-Object { $_.Version -eq $SdkVersion } |
         Select-Object -First 1
 
     $IsolatedInstalled = $false
@@ -1128,11 +1165,11 @@ function Install-IsolatedSdk {
         $IsolatedSdks = & $IsolatedDotNet --list-sdks
         $ExitCode = $LASTEXITCODE
         if ($ExitCode -ne 0) {
-            throw "Unable to inspect existing isolated SDK $Version with exit code $ExitCode."
+            throw "Unable to inspect existing isolated SDK $SdkVersion with exit code $ExitCode."
         }
 
         $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-        $IsolatedInstalled = $IsolatedVersions -contains $Version
+        $IsolatedInstalled = $IsolatedVersions -contains $SdkVersion
     }
 
     if ($IsolatedInstalled) {
@@ -1176,15 +1213,15 @@ function Install-IsolatedSdk {
     $Channel = Get-SdkChannel
     $Rid = Get-SdkRid
     $MetadataUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/$Channel/releases.json"
-    $MetadataPath = Join-Path $SdkRoot ('.release-metadata-{0}-{1}.json' -f $Version, [guid]::NewGuid().ToString('N'))
-    $ArchivePath = Join-Path $SdkRoot ('.sdk-payload-{0}-{1}.zip' -f $Version, [guid]::NewGuid().ToString('N'))
-    $StagingDir = Join-Path $SdkRoot ('.install-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
+    $MetadataPath = Join-Path $SdkRoot ('.release-metadata-{0}-{1}.json' -f $SdkVersion, [guid]::NewGuid().ToString('N'))
+    $ArchivePath = Join-Path $SdkRoot ('.sdk-payload-{0}-{1}.zip' -f $SdkVersion, [guid]::NewGuid().ToString('N'))
+    $StagingDir = Join-Path $SdkRoot ('.install-{0}-{1}' -f $SdkVersion, [guid]::NewGuid().ToString('N'))
     $StagedDotNet = Join-Path $StagingDir 'dotnet.exe'
     $PrimaryFailure = $null
     $CleanupFailure = $null
 
     try {
-        Write-ToolInfo "Loading Microsoft release metadata for SDK $Version..."
+        Write-ToolInfo "Loading Microsoft release metadata for SDK $SdkVersion..."
         try {
             Invoke-WebRequest $MetadataUrl -OutFile $MetadataPath
             $Metadata = Get-Content -LiteralPath $MetadataPath -Raw | ConvertFrom-Json -ErrorAction Stop
@@ -1193,34 +1230,34 @@ function Install-IsolatedSdk {
             throw "Unable to load valid Microsoft release metadata for SDK ${Version}: $($_.Exception.Message)"
         }
 
-        $Artifact = Resolve-SdkArtifact -Metadata $Metadata -SdkVersion $Version -Rid $Rid
+        $Artifact = Resolve-SdkArtifact -Metadata $Metadata -SdkVersion $SdkVersion -Rid $Rid
 
-        Write-ToolInfo "Downloading .NET SDK $Version payload..."
+        Write-ToolInfo "Downloading .NET SDK $SdkVersion payload..."
         try {
             Invoke-WebRequest $Artifact.Url -OutFile $ArchivePath
         }
         catch {
-            throw "Unable to download the .NET SDK $Version payload: $($_.Exception.Message)"
+            throw "Unable to download the .NET SDK $SdkVersion payload: $($_.Exception.Message)"
         }
 
         try {
             $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA512).Hash.ToLowerInvariant()
         }
         catch {
-            throw "Unable to verify the .NET SDK $Version payload: $($_.Exception.Message)"
+            throw "Unable to verify the .NET SDK $SdkVersion payload: $($_.Exception.Message)"
         }
 
         if ($ActualHash -ne $Artifact.Hash) {
-            throw "Integrity verification failed for the .NET SDK $Version payload."
+            throw "Integrity verification failed for the .NET SDK $SdkVersion payload."
         }
 
         New-Item -ItemType Directory -Path $StagingDir -WhatIf:$false -Confirm:$false | Out-Null
-        Write-ToolInfo "Extracting verified .NET SDK $Version payload..."
+        Write-ToolInfo "Extracting verified .NET SDK $SdkVersion payload..."
         try {
             Expand-Archive -LiteralPath $ArchivePath -DestinationPath $StagingDir -Force
         }
         catch {
-            throw "Unable to extract the verified .NET SDK $Version payload: $($_.Exception.Message)"
+            throw "Unable to extract the verified .NET SDK $SdkVersion payload: $($_.Exception.Message)"
         }
 
         Write-ToolDisplay
@@ -1233,7 +1270,7 @@ function Install-IsolatedSdk {
         $IsolatedSdks = & $StagedDotNet --list-sdks
         $ExitCode = $LASTEXITCODE
         if ($ExitCode -ne 0) {
-            throw "Unable to verify isolated SDK $Version with exit code $ExitCode."
+            throw "Unable to verify isolated SDK $SdkVersion with exit code $ExitCode."
         }
 
         foreach ($IsolatedSdk in $IsolatedSdks) {
@@ -1241,8 +1278,8 @@ function Install-IsolatedSdk {
         }
 
         $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-        if ($IsolatedVersions -notcontains $Version) {
-            throw "SDK $Version was not found after installation."
+        if ($IsolatedVersions -notcontains $SdkVersion) {
+            throw "SDK $SdkVersion was not found after installation."
         }
 
         if (Test-Path -LiteralPath $InstallDir) {
@@ -1254,7 +1291,7 @@ function Install-IsolatedSdk {
             $StagingDir = $null
         }
         catch {
-            throw "Unable to promote isolated SDK $Version into ${InstallDir}: $($_.Exception.Message)"
+            throw "Unable to promote isolated SDK $SdkVersion into ${InstallDir}: $($_.Exception.Message)"
         }
     }
     catch {
@@ -1293,7 +1330,7 @@ function Install-IsolatedSdk {
     }
 
     if ($null -ne $CleanupFailure) {
-        throw "Isolated SDK $Version was installed, but transaction cleanup failed: $($CleanupFailure.Exception.Message)"
+        throw "Isolated SDK $SdkVersion was installed, but transaction cleanup failed: $($CleanupFailure.Exception.Message)"
     }
 
     Write-ToolDisplay
@@ -1302,21 +1339,21 @@ function Install-IsolatedSdk {
 }
 
 function Test-IsolatedSdk {
-    if ([string]::IsNullOrWhiteSpace($script:Version)) {
-        throw '-Version is required with -Action Verify.'
+    if ([string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+        throw '-SdkVersion is required with -Action Verify.'
     }
 
-    Assert-ValidVersion
+    Assert-ValidSdkVersion
 
-    $InstallDir = Join-Path $SdkRoot $Version
-    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
+    $InstallDir = Join-Path $SdkRoot $SdkVersion
+    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
 
     if (-not (Test-Path -LiteralPath $InstallDir -PathType Container)) {
-        throw "Isolated SDK $Version is not installed under $SdkRoot."
+        throw "Isolated SDK $SdkVersion is not installed under $SdkRoot."
     }
 
     if (-not (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf)) {
-        throw "Isolated SDK $Version is incomplete: expected dotnet host was not found at $IsolatedDotNet."
+        throw "Isolated SDK $SdkVersion is incomplete: expected dotnet host was not found at $IsolatedDotNet."
     }
 
     try {
@@ -1324,19 +1361,19 @@ function Test-IsolatedSdk {
         $ExitCode = $LASTEXITCODE
     }
     catch {
-        throw "Unable to launch isolated SDK $Version host at ${IsolatedDotNet}: $($_.Exception.Message)"
+        throw "Unable to launch isolated SDK $SdkVersion host at ${IsolatedDotNet}: $($_.Exception.Message)"
     }
 
     if ($ExitCode -ne 0) {
-        throw "Unable to verify isolated SDK $Version with exit code $ExitCode."
+        throw "Unable to verify isolated SDK $SdkVersion with exit code $ExitCode."
     }
 
     $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-    if ($IsolatedVersions -notcontains $Version) {
-        throw "Isolated SDK $Version failed verification: the host did not report SDK $Version."
+    if ($IsolatedVersions -notcontains $SdkVersion) {
+        throw "Isolated SDK $SdkVersion failed verification: the host did not report SDK $SdkVersion."
     }
 
-    Write-ToolSuccess "Isolated SDK $Version is healthy."
+    Write-ToolSuccess "Isolated SDK $SdkVersion is healthy."
     Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
 }
 
@@ -1397,19 +1434,19 @@ function Remove-IsolatedSdk {
         return
     }
 
-    $InstallDir = Join-Path $SdkRoot $Version
-    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $Version
+    $InstallDir = Join-Path $SdkRoot $SdkVersion
+    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
 
     if (-not (Test-Path $IsolatedDotNet)) {
-        throw "Isolated SDK $Version was not found at $InstallDir"
+        throw "Isolated SDK $SdkVersion was not found at $InstallDir"
     }
 
     Write-ToolDisplay
-    Write-ToolWarning "Isolated SDK $Version will be removed from $InstallDir"
+    Write-ToolWarning "Isolated SDK $SdkVersion will be removed from $InstallDir"
     Write-ToolDisplay
 
     $ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
-    if (-not $PSCmdlet.ShouldProcess($InstallDir, "Remove isolated .NET SDK $Version")) {
+    if (-not $PSCmdlet.ShouldProcess($InstallDir, "Remove isolated .NET SDK $SdkVersion")) {
         return
     }
 
@@ -1424,15 +1461,15 @@ function Remove-IsolatedSdk {
         return
     }
 
-    Write-ToolInfo "Shutting down build servers for SDK $Version..."
+    Write-ToolInfo "Shutting down build servers for SDK $SdkVersion..."
     Invoke-IsolatedSdkBuildServerShutdown `
         -DotNetPath $IsolatedDotNet `
-        -SdkVersion $Version
+        -SdkVersion $SdkVersion
 
     Write-ToolInfo "Removing $InstallDir..."
     Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $InstallDir
 
-    Write-ToolSuccess "Isolated SDK $Version was removed."
+    Write-ToolSuccess "Isolated SDK $SdkVersion was removed."
 }
 
 function Invoke-SelectedAction {
@@ -1459,6 +1496,20 @@ function Invoke-SelectedAction {
     }
 }
 
+if ($Version) {
+    if ($script:ActionWasSpecified -or
+        $script:SdkVersionWasSpecified -or
+        $Yes -or
+        $script:ConfirmWasSpecified -or
+        $script:WhatIfWasSpecified) {
+        Write-Error -Message '-Version cannot be combined with action, SDK-version, confirmation, or WhatIf parameters.' -ErrorAction Continue
+        exit 1
+    }
+
+    Write-Output (Get-ToolVersionText)
+    return
+}
+
 Install-ToolIfNeeded
 
 if ($script:Bootstrapped) {
@@ -1480,7 +1531,7 @@ try {
         if ($script:InteractiveSession) {
             while ($true) {
                 $script:Action = $null
-                $script:Version = $null
+                $script:SdkVersion = $null
                 $script:BackToMain = $false
                 $script:ExitRequested = $false
 

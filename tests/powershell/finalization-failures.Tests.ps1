@@ -36,7 +36,7 @@ Describe 'PowerShell installation finalization failures' {
 
     It 'cleans transaction state when promotion fails' {
         $env:SDK_TEST_PROMOTION_FAILURE = 'promotion-move-failed'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 6>&1 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 6>&1 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'Unable to promote isolated SDK 99\.0\.100 into'
@@ -49,7 +49,7 @@ Describe 'PowerShell installation finalization failures' {
 
     It 'fails after successful promotion when payload cleanup fails' {
         $env:SDK_TEST_CLEANUP_PATTERN = '.sdk-payload-'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 6>&1 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 6>&1 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'Unable to clean install transaction file'

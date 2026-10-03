@@ -173,7 +173,7 @@ Describe 'PowerShell installed SDK listing' {
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
 
-        & pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Remove -Version 10.0.401 -Yes 2>&1' | Out-Null
+        & pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Remove -SdkVersion 10.0.401 -Yes 2>&1' | Out-Null
         $removeExitCode = $LASTEXITCODE
 
         $removeExitCode | Should -Not -Be 0

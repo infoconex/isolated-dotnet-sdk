@@ -36,6 +36,8 @@ jobs:
 
       - name: Run latest-stable bootstrap real E2E
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bash tests/e2e/bash/latest-stable-bootstrap.sh
 
       - name: Run direct-command real E2E
@@ -81,6 +83,8 @@ jobs:
 
       - name: Run latest-stable bootstrap real E2E
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: ./tests/e2e/powershell/latest-stable-bootstrap.ps1
 
       - name: Run direct-command real E2E
