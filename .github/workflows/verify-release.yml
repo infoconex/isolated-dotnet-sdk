@@ -155,7 +155,7 @@ jobs:
               }
 
               if ($hasExpectedIdentity) {
-                  $reported = (& $temp -ToolVersion | Out-String).Trim()
+                  $reported = (& $temp -Version | Out-String).Trim()
                   if ($reported -ne "isolated-dotnet-sdk $release") {
                       throw "PowerShell tool-version query reported '$reported' instead of isolated-dotnet-sdk $release."
                   }
@@ -179,7 +179,7 @@ jobs:
               }
 
               if ($hasExpectedIdentity) {
-                  $savedReported = (& $savedTool -ToolVersion | Out-String).Trim()
+                  $savedReported = (& $savedTool -Version | Out-String).Trim()
                   if ($savedReported -ne "isolated-dotnet-sdk $release") {
                       throw "Saved PowerShell tool reported '$savedReported' instead of isolated-dotnet-sdk $release."
                   }
