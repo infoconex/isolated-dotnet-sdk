@@ -7,6 +7,7 @@ This guide contains the exact Bash syntax for the supported Linux/Bash and macOS
 - Linux or macOS
 - Bash
 - standard shell utilities used by the tool, including `curl`, `awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, `rm`, and `tar`
+- a SHA-256 utility for stable tool bootstrap: `sha256sum` where available or `shasum -a 256`
 - a SHA-512 utility for SDK payload verification: `sha512sum` where available or `shasum -a 512`
 - network access when bootstrap or SDK installation downloads remote artifacts
 

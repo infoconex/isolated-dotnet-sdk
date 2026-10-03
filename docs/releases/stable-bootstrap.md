@@ -48,7 +48,7 @@ Rerunning a development command may refresh the saved tool from newer `main` sou
 
 ## Version discovery
 
-Stable version discovery is intentionally outside the tool runtime. Choose the desired published release and use its exact tag.
+Stable version discovery is intentionally outside the tool runtime. Choose the desired published version from [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases) and use its exact tag.
 
 The tool does not follow a `latest` release alias or silently select a newer stable version.
 
