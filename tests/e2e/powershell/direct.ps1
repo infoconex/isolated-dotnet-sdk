@@ -81,6 +81,17 @@ try {
     $sdkRoot = Join-Path $toolRoot $sdkVersion
     $dotnetHost = Join-Path $sdkRoot 'dotnet.exe'
 
+    $toolVersion = Invoke-E2EProcess `
+        -FilePath 'pwsh' `
+        -Arguments @('-NoProfile', '-File', $sourceTool, '-ToolVersion')
+    Assert-Success -Result $toolVersion -Operation 'Tool version query'
+    if ($toolVersion.Output.Trim() -ne 'isolated-dotnet-sdk development (main)') {
+        throw "Expected development tool identity but received: $($toolVersion.Output.Trim())"
+    }
+    if (Test-Path -LiteralPath $toolRoot) {
+        throw "Tool version query unexpectedly created SDK state at $toolRoot."
+    }
+
     Write-Host "E2E direct: installing .NET SDK $sdkVersion into $sdkRoot"
     $install = Invoke-E2EProcess `
         -FilePath 'pwsh' `
@@ -93,6 +104,14 @@ try {
     }
     if (-not (Test-Path -LiteralPath $dotnetHost -PathType Leaf)) {
         throw "Isolated dotnet host was not found at $dotnetHost."
+    }
+
+    $savedToolVersion = Invoke-E2EProcess `
+        -FilePath 'pwsh' `
+        -Arguments @('-NoProfile', '-File', $savedTool, '-ToolVersion')
+    Assert-Success -Result $savedToolVersion -Operation 'Saved tool version query'
+    if ($savedToolVersion.Output.Trim() -ne 'isolated-dotnet-sdk development (main)') {
+        throw "Expected saved development tool identity but received: $($savedToolVersion.Output.Trim())"
     }
 
     $version = Invoke-E2EProcess -FilePath $dotnetHost -Arguments @('--version')
