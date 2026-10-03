@@ -2,10 +2,10 @@
 
 User-facing stable installation, update, and rollback policy is now documented in [Stable bootstrap, update, and rollback](releases/stable-bootstrap.md).
 
-For the exact verified bootstrap command, go directly to the guide for your supported platform:
+For the normal latest-stable bootstrap command, go directly to the guide for your supported platform:
 
-- [Windows / PowerShell 7](getting-started/windows-powershell.md#install-the-stable-tool)
-- [Linux or macOS / Bash](getting-started/linux-macos-bash.md#install-the-stable-tool)
+- [Windows / PowerShell 7](getting-started/windows-powershell.md#install-or-update-the-stable-tool)
+- [Linux or macOS / Bash](getting-started/linux-macos-bash.md#install-or-update-the-stable-tool)
 
 Maintainer publication and post-publication verification procedure is documented separately in [Stable release publication and verification](maintainers/releases/release-process.md).
 
