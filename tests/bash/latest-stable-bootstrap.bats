@@ -66,6 +66,9 @@ case "$url" in
       missing-checksum)
         exit 22
         ;;
+      missing-platform-entry)
+        printf '%s  isolated-dotnet-sdk.ps1\n' "$BOOTSTRAP_EXPECTED_HASH" > "$out"
+        ;;
       malformed-checksum)
         printf '%s\n' 'not-a-checksum  isolated-dotnet-sdk.sh' > "$out"
         ;;
@@ -171,7 +174,7 @@ run_bootstrap() {
 }
 
 @test "missing malformed and duplicate checksum data never executes the released tool" {
-  for scenario in missing-checksum malformed-checksum duplicate-checksum; do
+  for scenario in missing-checksum missing-platform-entry malformed-checksum duplicate-checksum; do
     rm -f "$execution_log"
     BOOTSTRAP_SCENARIO="$scenario"
     run_bootstrap

@@ -8,47 +8,53 @@ Describe 'PowerShell latest stable bootstrap' {
     BeforeEach {
         $script:TestRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-latest-bootstrap-{0}" -f [guid]::NewGuid())
         $script:ExecutionLog = Join-Path $script:TestRoot 'executions.log'
-        $script:Scenario = 'success'
-        $script:LatestTag = 'v1.0.0'
-        $script:ActualHash = $script:ExpectedHash
-        $script:ToolExitCode = 0
-        $script:RequestedUris = @()
+        $script:RequestLog = Join-Path $script:TestRoot 'requests.log'
+
         $script:OriginalExecutionLog = $env:BOOTSTRAP_EXECUTION_LOG
         $script:OriginalToolExit = $env:BOOTSTRAP_TOOL_EXIT
+        $script:OriginalRequestLog = $env:BOOTSTRAP_REQUEST_LOG
+        $script:OriginalScenario = $env:BOOTSTRAP_TEST_SCENARIO
+        $script:OriginalLatestTag = $env:BOOTSTRAP_TEST_LATEST_TAG
+        $script:OriginalActualHash = $env:BOOTSTRAP_TEST_ACTUAL_HASH
 
         New-Item -ItemType Directory -Path $script:TestRoot -Force | Out-Null
         $env:BOOTSTRAP_EXECUTION_LOG = $script:ExecutionLog
-        $env:BOOTSTRAP_TOOL_EXIT = [string]$script:ToolExitCode
+        $env:BOOTSTRAP_TOOL_EXIT = '0'
+        $env:BOOTSTRAP_REQUEST_LOG = $script:RequestLog
+        $env:BOOTSTRAP_TEST_SCENARIO = 'success'
+        $env:BOOTSTRAP_TEST_LATEST_TAG = 'v1.0.0'
+        $env:BOOTSTRAP_TEST_ACTUAL_HASH = $script:ExpectedHash
 
         Mock Invoke-RestMethod {
-            if ($script:Scenario -eq 'discovery-failure') {
-                throw 'simulated release discovery failure'
-            }
-
-            if ($script:Scenario -eq 'malformed-release') {
-                return [pscustomobject]@{
-                    draft = $false
-                    prerelease = $false
+            switch ($env:BOOTSTRAP_TEST_SCENARIO) {
+                'discovery-failure' {
+                    throw 'simulated release discovery failure'
                 }
-            }
-
-            if ($script:Scenario -eq 'prerelease') {
-                return [pscustomobject]@{
-                    tag_name = 'v9.9.9'
-                    draft = $false
-                    prerelease = $true
+                'malformed-release' {
+                    return [pscustomobject]@{
+                        draft = $false
+                        prerelease = $false
+                    }
                 }
-            }
-
-            return [pscustomobject]@{
-                tag_name = $script:LatestTag
-                draft = $false
-                prerelease = $false
+                'prerelease' {
+                    return [pscustomobject]@{
+                        tag_name = 'v9.9.9'
+                        draft = $false
+                        prerelease = $true
+                    }
+                }
+                default {
+                    return [pscustomobject]@{
+                        tag_name = $env:BOOTSTRAP_TEST_LATEST_TAG
+                        draft = $false
+                        prerelease = $false
+                    }
+                }
             }
         }
 
         Mock Invoke-WebRequest {
-            $script:RequestedUris += [string]$Uri
+            Add-Content -LiteralPath $env:BOOTSTRAP_REQUEST_LOG -Value ([string]$Uri)
 
             if ([string]$Uri -like '*/isolated-dotnet-sdk.ps1') {
                 @'
@@ -59,19 +65,26 @@ exit ([int]$env:BOOTSTRAP_TOOL_EXIT)
             }
 
             if ([string]$Uri -like '*/SHA256SUMS') {
-                switch ($script:Scenario) {
-                    'missing-checksum' { throw 'simulated checksum download failure' }
+                switch ($env:BOOTSTRAP_TEST_SCENARIO) {
+                    'missing-checksum' {
+                        throw 'simulated checksum download failure'
+                    }
+                    'missing-platform-entry' {
+                        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  isolated-dotnet-sdk.sh' |
+                            Set-Content -LiteralPath $OutFile
+                    }
                     'malformed-checksum' {
                         'not-a-checksum  isolated-dotnet-sdk.ps1' | Set-Content -LiteralPath $OutFile
                     }
                     'duplicate-checksum' {
                         @(
-                            "$($script:ExpectedHash)  isolated-dotnet-sdk.ps1",
-                            "$($script:ExpectedHash)  isolated-dotnet-sdk.ps1"
+                            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  isolated-dotnet-sdk.ps1',
+                            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  isolated-dotnet-sdk.ps1'
                         ) | Set-Content -LiteralPath $OutFile
                     }
                     default {
-                        "$($script:ExpectedHash)  isolated-dotnet-sdk.ps1" | Set-Content -LiteralPath $OutFile
+                        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  isolated-dotnet-sdk.ps1' |
+                            Set-Content -LiteralPath $OutFile
                     }
                 }
                 return
@@ -81,23 +94,27 @@ exit ([int]$env:BOOTSTRAP_TOOL_EXIT)
         }
 
         Mock Get-FileHash {
-            [pscustomobject]@{ Hash = $script:ActualHash }
+            [pscustomobject]@{ Hash = $env:BOOTSTRAP_TEST_ACTUAL_HASH }
         }
     }
 
     AfterEach {
-        if ($null -eq $script:OriginalExecutionLog) {
-            Remove-Item Env:BOOTSTRAP_EXECUTION_LOG -ErrorAction SilentlyContinue
-        }
-        else {
-            $env:BOOTSTRAP_EXECUTION_LOG = $script:OriginalExecutionLog
+        $environment = @{
+            BOOTSTRAP_EXECUTION_LOG = $script:OriginalExecutionLog
+            BOOTSTRAP_TOOL_EXIT = $script:OriginalToolExit
+            BOOTSTRAP_REQUEST_LOG = $script:OriginalRequestLog
+            BOOTSTRAP_TEST_SCENARIO = $script:OriginalScenario
+            BOOTSTRAP_TEST_LATEST_TAG = $script:OriginalLatestTag
+            BOOTSTRAP_TEST_ACTUAL_HASH = $script:OriginalActualHash
         }
 
-        if ($null -eq $script:OriginalToolExit) {
-            Remove-Item Env:BOOTSTRAP_TOOL_EXIT -ErrorAction SilentlyContinue
-        }
-        else {
-            $env:BOOTSTRAP_TOOL_EXIT = $script:OriginalToolExit
+        foreach ($entry in $environment.GetEnumerator()) {
+            if ($null -eq $entry.Value) {
+                Remove-Item "Env:$($entry.Key)" -ErrorAction SilentlyContinue
+            }
+            else {
+                Set-Item "Env:$($entry.Key)" -Value $entry.Value
+            }
         }
 
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -108,41 +125,47 @@ exit ([int]$env:BOOTSTRAP_TOOL_EXIT)
 
         Test-Path -LiteralPath $script:ExecutionLog | Should -BeTrue
         (Get-Content -LiteralPath $script:ExecutionLog).Count | Should -Be 1
-        ($script:RequestedUris -join "`n") | Should -Match '/v1\.0\.0/isolated-dotnet-sdk\.ps1'
-        ($script:RequestedUris -join "`n") | Should -Not -Match '/main/isolated-dotnet-sdk\.ps1'
+        $requests = Get-Content -LiteralPath $script:RequestLog
+        ($requests -join "`n") | Should -Match '/v1\.0\.0/isolated-dotnet-sdk\.ps1'
+        ($requests -join "`n") | Should -Not -Match '/main/isolated-dotnet-sdk\.ps1'
     }
 
     It 'follows future latest-stable movement without a bootstrap change' {
         & $script:BootstrapScript
 
-        $script:LatestTag = 'v2.0.0'
+        $env:BOOTSTRAP_TEST_LATEST_TAG = 'v2.0.0'
         & $script:BootstrapScript
 
-        ($script:RequestedUris -join "`n") | Should -Match '/v1\.0\.0/isolated-dotnet-sdk\.ps1'
-        ($script:RequestedUris -join "`n") | Should -Match '/v2\.0\.0/isolated-dotnet-sdk\.ps1'
+        $requests = Get-Content -LiteralPath $script:RequestLog
+        ($requests -join "`n") | Should -Match '/v1\.0\.0/isolated-dotnet-sdk\.ps1'
+        ($requests -join "`n") | Should -Match '/v2\.0\.0/isolated-dotnet-sdk\.ps1'
     }
 
     It 'fails closed when release discovery fails' {
-        $script:Scenario = 'discovery-failure'
+        $env:BOOTSTRAP_TEST_SCENARIO = 'discovery-failure'
 
         { & $script:BootstrapScript } | Should -Throw
         Test-Path -LiteralPath $script:ExecutionLog | Should -BeFalse
     }
 
     It 'fails closed for malformed or prerelease metadata' {
-        $script:Scenario = 'malformed-release'
+        $env:BOOTSTRAP_TEST_SCENARIO = 'malformed-release'
         { & $script:BootstrapScript } | Should -Throw
         Test-Path -LiteralPath $script:ExecutionLog | Should -BeFalse
 
-        $script:Scenario = 'prerelease'
+        $env:BOOTSTRAP_TEST_SCENARIO = 'prerelease'
         { & $script:BootstrapScript } | Should -Throw
         Test-Path -LiteralPath $script:ExecutionLog | Should -BeFalse
     }
 
     It 'never executes the released tool for missing malformed or duplicate checksum data' {
-        foreach ($scenario in @('missing-checksum', 'malformed-checksum', 'duplicate-checksum')) {
+        foreach ($scenario in @(
+                'missing-checksum',
+                'missing-platform-entry',
+                'malformed-checksum',
+                'duplicate-checksum')) {
             Remove-Item -LiteralPath $script:ExecutionLog -Force -ErrorAction SilentlyContinue
-            $script:Scenario = $scenario
+            $env:BOOTSTRAP_TEST_SCENARIO = $scenario
 
             { & $script:BootstrapScript } | Should -Throw
             Test-Path -LiteralPath $script:ExecutionLog | Should -BeFalse
@@ -150,15 +173,14 @@ exit ([int]$env:BOOTSTRAP_TOOL_EXIT)
     }
 
     It 'never executes the released tool after a checksum mismatch' {
-        $script:ActualHash = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+        $env:BOOTSTRAP_TEST_ACTUAL_HASH = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 
         { & $script:BootstrapScript } | Should -Throw
         Test-Path -LiteralPath $script:ExecutionLog | Should -BeFalse
     }
 
     It 'does not report success when the released tool fails' {
-        $script:ToolExitCode = 7
-        $env:BOOTSTRAP_TOOL_EXIT = [string]$script:ToolExitCode
+        $env:BOOTSTRAP_TOOL_EXIT = '7'
 
         { & $script:BootstrapScript } | Should -Throw '*exit code 7*'
         Test-Path -LiteralPath $script:ExecutionLog | Should -BeTrue
