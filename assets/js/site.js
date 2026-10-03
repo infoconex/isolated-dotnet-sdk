@@ -34,6 +34,11 @@
   }
 
   const isCompactNavigation = () => window.matchMedia('(max-width: 980px)').matches;
+  const getNavigationFocusables = () => {
+    if (!navToggle || !sidebar) return [];
+    const sidebarFocusables = Array.from(sidebar.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    return [navToggle, ...sidebarFocusables].filter((element) => !element.hidden && element.getClientRects().length > 0);
+  };
   const closeNavigation = (restoreFocus = false) => {
     const wasOpen = body.classList.contains('nav-open');
     body.classList.remove('nav-open');
@@ -188,6 +193,21 @@
     if (event.key === 'Escape') {
       closeNavigation(body.classList.contains('nav-open'));
       closeSearch();
+      return;
+    }
+    if (event.key === 'Tab' && body.classList.contains('nav-open') && isCompactNavigation()) {
+      const focusables = getNavigationFocusables();
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !focusables.includes(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   });
 
@@ -239,7 +259,12 @@
           if (heading.getBoundingClientRect().top <= offset) active = heading;
           else break;
         }
-        links.forEach((link) => link.classList.toggle('is-active', link.dataset.targetId === active.id));
+        links.forEach((link) => {
+          const isActive = link.dataset.targetId === active.id;
+          link.classList.toggle('is-active', isActive);
+          if (isActive) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
       };
       window.addEventListener('scroll', updateActiveLink, { passive: true });
       window.addEventListener('resize', updateActiveLink);

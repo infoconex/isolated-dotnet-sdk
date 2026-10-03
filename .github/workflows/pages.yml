@@ -83,6 +83,8 @@ jobs:
             stage_markdown "$file"
           done < <(find docs -type f -name '*.md' -print0)
 
+          node --check .pages-source/assets/js/site.js
+
           test ! -e .pages-source/tests
           test ! -e .pages-source/scripts
           test ! -e .pages-source/dotnet-install.sh
@@ -114,11 +116,36 @@ jobs:
           test -f _site/assets/css/site.css
           test -f _site/assets/js/site.js
 
+          python -m json.tool _site/assets/search-index.json >/dev/null
+
           grep -q 'class="docs-nav"' _site/index.html
           grep -q 'Search documentation' _site/index.html
           grep -q 'Getting Started' _site/index.html
           grep -q 'docs/commands/install.html' _site/index.html
+          grep -q 'aria-current="page"' _site/docs/commands/install.html
           grep -q '"title": "Install"' _site/assets/search-index.json
+
+          while IFS= read -r path; do
+            case "$path" in
+              README.md)
+                generated="_site/index.html"
+                ;;
+              */README.md)
+                generated="_site/${path%README.md}index.html"
+                ;;
+              *.md)
+                generated="_site/${path%.md}.html"
+                ;;
+              *)
+                generated="_site/$path"
+                ;;
+            esac
+
+            if [[ ! -f "$generated" ]]; then
+              printf 'Navigation target did not generate: %s -> %s\n' "$path" "$generated" >&2
+              exit 1
+            fi
+          done < <(awk '/^[[:space:]]+path:/ { print $2 }' _data/navigation.yml)
 
           test ! -e _site/tests
           test ! -e _site/scripts
