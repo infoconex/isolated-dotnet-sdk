@@ -1,56 +1,140 @@
 # Stable bootstrap, update, and rollback
 
-Stable use of `isolated-dotnet-sdk` is explicitly version-pinned. The current checksum-policy-compliant stable release is `v0.2.0`.
+Stable use has two supported bootstrap modes:
 
-This document defines the stable-source policy. For the exact copy/paste bootstrap command, use the guide for your supported platform:
+- **latest stable** — the normal installation/update path, which resolves the latest published stable release at bootstrap time;
+- **pinned stable** — an explicit release tag used for reproducibility, controlled rollout, or rollback.
 
-- [Windows / PowerShell 7](../getting-started/windows-powershell.md#install-the-stable-tool)
-- [Linux or macOS / Bash](../getting-started/linux-macos-bash.md#install-the-stable-tool)
+Both modes ultimately execute a tagged `isolated-dotnet-sdk` product script only after verifying it against that release's `SHA256SUMS`. Mutable `main` remains a separate development-only source.
 
-## Stable bootstrap
+## Latest stable bootstrap
 
-A stable bootstrap:
+Windows / PowerShell 7:
 
-1. selects an explicit published release tag;
-2. downloads that tag's platform script;
-3. downloads the same release's `SHA256SUMS` asset;
-4. requires exactly one valid checksum entry for the selected platform script;
-5. verifies the downloaded script before execution; and
-6. executes the verified temporary file so file-based bootstrap saves those exact verified bytes under `~/dotnet-sdks`.
+```powershell
+irm https://infoconex.github.io/isolated-dotnet-sdk/install.ps1 | iex
+```
 
-Stable bootstrap intentionally executes a downloaded file rather than piping released source. Piped execution has no source file path to preserve and belongs to the development `main` path instead.
+Linux or macOS / Bash:
 
-The checksum and script are both distributed through GitHub. The checksum detects corruption and mismatched acquired bytes within that trust domain; it is not an independent publisher signature.
+```bash
+curl -fsSL https://infoconex.github.io/isolated-dotnet-sdk/install.sh | bash
+```
+
+The small Pages-hosted bootstrap:
+
+1. queries GitHub for the latest published, non-prerelease release;
+2. validates the resolved stable release tag;
+3. downloads that tag's platform-specific product script;
+4. downloads the same release's `SHA256SUMS` asset;
+5. requires exactly one valid checksum entry for the selected platform script;
+6. verifies the downloaded product script's SHA-256; and
+7. executes only the verified temporary product script.
+
+The released product script then uses its existing file-based bootstrap behavior to preserve those exact verified bytes under `~/dotnet-sdks`.
+
+### Trust boundary for the short command
+
+A command piped directly from the project Pages site necessarily begins executing before it can verify its own bytes. The Pages-hosted `install.ps1` / `install.sh` bootstrap is therefore trusted through HTTPS delivery from `infoconex.github.io` plus the project/repository administration and Pages publication path.
+
+The bootstrap does **not** claim to verify itself. Its checksum guarantee starts at the released product script it downloads: that tagged script must match the selected release's `SHA256SUMS` entry before the product script executes.
+
+The checksum and tagged product script are both distributed through the project's GitHub trust domain. The checksum detects corruption and mismatched acquired bytes; it is not an independent publisher signature.
+
+## Pinned stable bootstrap
+
+Use a pinned release when the exact product version must be explicit rather than resolved through latest stable. The current checksum-policy-compliant stable release is `v0.2.0`.
+
+### Windows / PowerShell 7
+
+```powershell
+$release = 'v0.2.0'
+$temp = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release.ps1")
+$checksums = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release-SHA256SUMS")
+try {
+    Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
+    Invoke-WebRequest "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -OutFile $checksums
+
+    $checksumMatches = @(Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$')
+    if ($checksumMatches.Count -ne 1) {
+        throw 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.ps1 entry.'
+    }
+
+    $expected = $checksumMatches[0].Matches[0].Groups[1].Value
+    $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
+    if ($actual -ine $expected) {
+        throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
+    }
+
+    & $temp
+}
+finally {
+    Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
+}
+```
+
+### Linux or macOS / Bash
+
+```bash
+release='v0.2.0'
+temp="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.sh")"
+checksums="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
+trap 'rm -f "$temp" "$checksums"' EXIT
+
+curl -fsSL "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" -o "$temp"
+curl -fsSL "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -o "$checksums"
+
+expected="$(awk '$2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums")"
+[[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
+    printf '%s\n' 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.sh entry.' >&2
+    exit 1
+}
+
+if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$temp" | awk '{print tolower($1)}')"
+elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$temp" | awk '{print tolower($1)}')"
+else
+    printf '%s\n' 'SHA-256 verification requires sha256sum or shasum.' >&2
+    exit 1
+fi
+
+[[ "$actual" == "$expected" ]] || {
+    printf 'Checksum verification failed for isolated-dotnet-sdk.sh. Expected %s, got %s.\n' "$expected" "$actual" >&2
+    exit 1
+}
+
+chmod +x "$temp"
+"$temp"
+```
+
+Pinned bootstrap deliberately downloads a real tagged product-script file, verifies it before execution, and relies on file-based bootstrap to save those exact verified bytes.
 
 ## `v0.1.0` legacy boundary
 
 `v0.1.0` predates the checksum-verifying stable-release policy and has no `SHA256SUMS` release asset. Its published history is retained rather than rewritten retroactively.
 
-The stable bootstrap contract above applies to `v0.2.0` and later releases published under the current checksum policy.
+The verified stable bootstrap contract applies to `v0.2.0` and later releases published under the current checksum policy.
 
 ## Updates
 
-Normal execution of the saved tool does not query GitHub for updates, replace itself, or resolve a moving latest-stable alias.
+Normal execution of the saved tool does not query GitHub for updates, replace itself, or resolve a moving latest-stable release.
 
-To update, deliberately choose a newer checksum-policy-compliant published tag and run that tag through the same verified stable bootstrap for your platform. File-based bootstrap stages replacement of the saved tool and preserves the newly verified tagged source.
+To explicitly update to the latest published stable release, rerun the short Pages bootstrap command for your platform. The latest-stable lookup happens only during that bootstrap operation.
+
+To update to a specifically chosen release, use the pinned stable procedure with that exact policy-compliant tag.
 
 ## Rollback
 
-Rollback is the same explicit operation with an older checksum-policy-compliant published tag. The tool does not distinguish update from rollback by policy; the selected tag is authoritative.
+Rollback uses the pinned stable procedure with an older checksum-policy-compliant published tag. The selected tag is authoritative.
 
-If acquisition, checksum verification, staging, or final saved-tool replacement fails, unverified source is not executed and the existing saved tool remains recovery state where the bootstrap replacement contract can preserve it.
+If release discovery, acquisition, checksum verification, staging, or final saved-tool replacement fails, unverified product source is not executed. Existing saved-tool state remains recovery state where the product's bootstrap replacement contract can preserve it.
 
 ## Development `main`
 
 Mutable `main` is an explicit development source, not a stable channel. The getting-started guides show the corresponding development one-liner for each shell.
 
 Rerunning a development command may refresh the saved tool from newer `main` source. It does not receive the stable-release checksum guarantee and must not be presented as stable installation or update behavior.
-
-## Version discovery
-
-Stable version discovery is intentionally outside the tool runtime. Choose the desired published version from [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases) and use its exact tag.
-
-The tool does not follow a `latest` release alias or silently select a newer stable version.
 
 ## Related documentation
 

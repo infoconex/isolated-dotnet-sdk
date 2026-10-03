@@ -1,13 +1,21 @@
 # Releases
 
-## Current stable release
+## Stable bootstrap
 
-The current checksum-policy-compliant stable release is `v0.2.0`.
+The normal stable installation/update path resolves the latest published stable release at bootstrap time:
 
-Use [Stable bootstrap, update, and rollback](stable-bootstrap.md) for the user-facing stable-source policy. Exact bootstrap commands live in the supported platform guides:
+```powershell
+irm https://infoconex.github.io/isolated-dotnet-sdk/install.ps1 | iex
+```
 
-- [Windows / PowerShell 7](../getting-started/windows-powershell.md#install-the-stable-tool)
-- [Linux or macOS / Bash](../getting-started/linux-macos-bash.md#install-the-stable-tool)
+```bash
+curl -fsSL https://infoconex.github.io/isolated-dotnet-sdk/install.sh | bash
+```
+
+Use [Stable bootstrap, update, and rollback](stable-bootstrap.md) for the trust model, explicit pinned-version procedure, update behavior, and rollback guidance. Platform-specific usage continues in:
+
+- [Windows / PowerShell 7](../getting-started/windows-powershell.md#install-or-update-the-stable-tool)
+- [Linux or macOS / Bash](../getting-started/linux-macos-bash.md#install-or-update-the-stable-tool)
 
 ## Historical release material
 

@@ -13,50 +13,23 @@ This guide contains the exact Bash syntax for the supported Linux/Bash and macOS
 
 A system-wide `dotnet` installation is not required.
 
-## Install the stable tool
+## Install or update the stable tool
 
-The current checksum-policy-compliant stable release is `v0.2.0`. Stable bootstrap explicitly downloads the tagged Bash source and the release's `SHA256SUMS`, verifies the script's SHA-256, and executes only the verified temporary file.
+Install the latest published stable release, or rerun the same command later to explicitly update to the latest stable release:
 
 ```bash
-release='v0.2.0'
-temp="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.sh")"
-checksums="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
-trap 'rm -f "$temp" "$checksums"' EXIT
-
-curl -fsSL "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" -o "$temp"
-curl -fsSL "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -o "$checksums"
-
-expected="$(awk '$2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums")"
-[[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
-    printf '%s\n' 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.sh entry.' >&2
-    exit 1
-}
-
-if command -v sha256sum >/dev/null 2>&1; then
-    actual="$(sha256sum "$temp" | awk '{print tolower($1)}')"
-elif command -v shasum >/dev/null 2>&1; then
-    actual="$(shasum -a 256 "$temp" | awk '{print tolower($1)}')"
-else
-    printf '%s\n' 'SHA-256 verification requires sha256sum or shasum.' >&2
-    exit 1
-fi
-
-[[ "$actual" == "$expected" ]] || {
-    printf 'Checksum verification failed for isolated-dotnet-sdk.sh. Expected %s, got %s.\n' "$expected" "$actual" >&2
-    exit 1
-}
-
-chmod +x "$temp"
-"$temp"
+curl -fsSL https://infoconex.github.io/isolated-dotnet-sdk/install.sh | bash
 ```
 
-The verified file is saved as:
+The Pages-hosted bootstrap resolves the latest published stable GitHub Release, downloads that release's tagged `isolated-dotnet-sdk.sh` and `SHA256SUMS`, verifies the released script's SHA-256, and executes only the verified released script. The piped bootstrap itself is trusted through HTTPS delivery from the project Pages site and cannot verify its own bytes before execution.
+
+The verified released file is saved as:
 
 ```text
 $HOME/dotnet-sdks/isolated-dotnet-sdk.sh
 ```
 
-Normal execution of that saved tool does not auto-update. See [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md) before changing release tags.
+Normal execution of that saved tool does not auto-update. For an explicit pinned version, reproducible installation, or rollback, see [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md).
 
 ## Start an interactive session
 

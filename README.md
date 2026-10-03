@@ -16,9 +16,23 @@ PowerShell on Linux/macOS and Bash on Windows are not supported product combinat
 
 ## Get started
 
-The current checksum-policy-compliant stable release is `v0.2.0`.
+Install or explicitly update to the latest published stable release with the command for your supported platform.
 
-Choose the guide for your supported platform; each guide contains the verified stable bootstrap command and normal usage examples:
+Windows / PowerShell 7:
+
+```powershell
+irm https://infoconex.github.io/isolated-dotnet-sdk/install.ps1 | iex
+```
+
+Linux or macOS / Bash:
+
+```bash
+curl -fsSL https://infoconex.github.io/isolated-dotnet-sdk/install.sh | bash
+```
+
+The small Pages-hosted bootstrap resolves the latest published stable GitHub Release, downloads that release's tagged platform script and `SHA256SUMS`, verifies the released script's SHA-256, and executes only the verified released tool. The piped bootstrap itself is trusted through HTTPS delivery from the project Pages site; it cannot verify its own bytes before execution.
+
+For platform requirements, normal usage, pinned installation, and development-source guidance, use the supported guide:
 
 - [Windows with PowerShell 7](docs/getting-started/windows-powershell.md)
 - [Linux or macOS with Bash](docs/getting-started/linux-macos-bash.md)
@@ -53,15 +67,18 @@ See the [command documentation](docs/commands/README.md) for the behavioral cont
 
 - Persistent tool and SDK state stays under the current user's `dotnet-sdks` directory rather than system-wide .NET locations.
 - Isolation describes SDK installation location; it is not a security sandbox. Tool and SDK code runs with the current user's permissions and may create ordinary per-user state.
-- Stable bootstrap downloads an explicitly tagged script and that release's `SHA256SUMS`, verifies the selected script before execution, and saves those verified bytes.
+- Latest-stable bootstrap trusts the small piped Pages entry point through HTTPS delivery, then verifies the resolved tagged release script against that release's `SHA256SUMS` before the product script executes.
+- Explicit pinned stable bootstrap remains available for reproducibility and rollback and performs the same released-script checksum verification.
 - SDK installation verifies the Microsoft-published SHA-512 for the exact platform archive before extraction, then separately verifies the staged host reports the requested SDK before promotion.
-- GitHub, Microsoft distribution infrastructure, TLS, repository administration, and local platform tools remain trust boundaries; same-publisher checksums are integrity controls, not independent publisher signatures.
+- GitHub, project Pages delivery, Microsoft distribution infrastructure, TLS, repository administration, and local platform tools remain trust boundaries; same-publisher checksums are integrity controls, not independent publisher signatures.
 
 For the full model, see [Supply-chain integrity](docs/concepts/supply-chain-integrity.md) and [Filesystem safety](docs/concepts/filesystem-safety.md).
 
 ## Stable and development sources
 
-Stable installation, update, and rollback are explicit, version-pinned operations. See [Stable bootstrap, update, and rollback](docs/releases/stable-bootstrap.md).
+The short Pages command selects the latest published stable release at bootstrap time. Rerunning it is the explicit update operation; the saved tool does not silently check for or install updates during normal execution.
+
+Explicit tag-pinned stable installation remains supported for reproducibility and rollback. See [Stable bootstrap, update, and rollback](docs/releases/stable-bootstrap.md).
 
 Mutable `main` remains available for explicit development testing, but it is not the stable installation channel and does not carry the stable-release checksum guarantee.
 

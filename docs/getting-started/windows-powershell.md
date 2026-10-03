@@ -10,43 +10,23 @@ This guide contains the exact PowerShell syntax for the supported Windows / Powe
 
 A system-wide `dotnet` installation is not required.
 
-## Install the stable tool
+## Install or update the stable tool
 
-The current checksum-policy-compliant stable release is `v0.2.0`. Stable bootstrap explicitly downloads the tagged PowerShell source and the release's `SHA256SUMS`, verifies the script's SHA-256, and executes only the verified temporary file.
+Install the latest published stable release, or rerun the same command later to explicitly update to the latest stable release:
 
 ```powershell
-$release = 'v0.2.0'
-$temp = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release.ps1")
-$checksums = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release-SHA256SUMS")
-try {
-    Invoke-WebRequest "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" -OutFile $temp
-    Invoke-WebRequest "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" -OutFile $checksums
-
-    $checksumMatches = @(Select-String -LiteralPath $checksums -Pattern '^([0-9a-fA-F]{64})  isolated-dotnet-sdk\.ps1$')
-    if ($checksumMatches.Count -ne 1) {
-        throw 'SHA256SUMS does not contain exactly one valid isolated-dotnet-sdk.ps1 entry.'
-    }
-
-    $expected = $checksumMatches[0].Matches[0].Groups[1].Value
-    $actual = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
-    if ($actual -ine $expected) {
-        throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
-    }
-
-    & $temp
-}
-finally {
-    Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
-}
+irm https://infoconex.github.io/isolated-dotnet-sdk/install.ps1 | iex
 ```
 
-The verified file is saved as:
+The Pages-hosted bootstrap resolves the latest published stable GitHub Release, downloads that release's tagged `isolated-dotnet-sdk.ps1` and `SHA256SUMS`, verifies the released script's SHA-256, and executes only the verified released script. The piped bootstrap itself is trusted through HTTPS delivery from the project Pages site and cannot verify its own bytes before execution.
+
+The verified released file is saved as:
 
 ```text
 $HOME\dotnet-sdks\isolated-dotnet-sdk.ps1
 ```
 
-Normal execution of that saved tool does not auto-update. See [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md) before changing release tags.
+Normal execution of that saved tool does not auto-update. For an explicit pinned version, reproducible installation, or rollback, see [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md).
 
 ## Start an interactive session
 
