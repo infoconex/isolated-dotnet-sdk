@@ -133,7 +133,7 @@ try {
 
     $identityCount = ([regex]::Matches(
         $interactive.Output,
-        '(?m)^Isolated \.NET SDK development \(main\)$')).Count
+        [regex]::Escape('Isolated .NET SDK development (main)'))).Count
     if ($identityCount -ne $mainPromptCount) {
         throw "Expected one development identity heading per Main prompt; observed $identityCount identities for $mainPromptCount prompts."
     }
