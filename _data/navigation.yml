@@ -1,0 +1,103 @@
+- title: Home
+  items:
+    - title: Overview
+      path: README.md
+    - title: Documentation
+      path: docs/README.md
+    - title: Changelog
+      path: CHANGELOG.md
+
+- title: Getting Started
+  items:
+    - title: Choose a Platform
+      path: docs/getting-started/README.md
+    - title: Windows / PowerShell
+      path: docs/getting-started/windows-powershell.md
+    - title: Linux / macOS / Bash
+      path: docs/getting-started/linux-macos-bash.md
+
+- title: Commands
+  items:
+    - title: Command Overview
+      path: docs/commands/README.md
+    - title: Install
+      path: docs/commands/install.md
+    - title: List
+      path: docs/commands/list.md
+    - title: Verify
+      path: docs/commands/verify.md
+    - title: Remove
+      path: docs/commands/remove.md
+    - title: Interactive Mode
+      path: docs/commands/interactive.md
+
+- title: Guides
+  items:
+    - title: Project & Editor Usage
+      path: docs/guides/project-editor-usage.md
+
+- title: Concepts
+  items:
+    - title: Overview
+      path: docs/concepts/README.md
+    - title: Cross-platform Support
+      path: docs/concepts/cross-platform-support.md
+    - title: SDK Discovery
+      path: docs/concepts/sdk-discovery.md
+    - title: Filesystem Safety
+      path: docs/concepts/filesystem-safety.md
+    - title: Bootstrap Reproducibility
+      path: docs/concepts/bootstrap-reproducibility.md
+    - title: Supply-chain Integrity
+      path: docs/concepts/supply-chain-integrity.md
+
+- title: Behavioral Contracts
+  items:
+    - title: Overview
+      path: docs/contracts/README.md
+    - title: Behavioral Parity
+      path: docs/contracts/behavioral-parity.md
+    - title: Native Command Failures
+      path: docs/contracts/native-command-failures.md
+    - title: PowerShell Removal
+      path: docs/contracts/powershell-removal.md
+
+- title: Releases
+  items:
+    - title: Overview
+      path: docs/releases/README.md
+    - title: Stable Bootstrap & Rollback
+      path: docs/releases/stable-bootstrap.md
+    - title: v0.1.0 History
+      path: docs/releases/history/v0.1.0.md
+    - title: v0.1.0 Checklist
+      path: docs/releases/history/v0.1.0-checklist.md
+
+- title: Maintainers
+  items:
+    - title: Maintainer Overview
+      path: docs/maintainers/README.md
+    - title: Testing Overview
+      path: docs/maintainers/testing/README.md
+    - title: Testing & Validation
+      path: docs/maintainers/testing/testing.md
+    - title: CI Validation
+      path: docs/maintainers/testing/ci-validation.md
+    - title: End-to-end Testing
+      path: docs/maintainers/testing/e2e-testing.md
+    - title: Interactive Testing
+      path: docs/maintainers/testing/interactive-testing.md
+    - title: Static Analysis
+      path: docs/maintainers/testing/static-analysis.md
+    - title: Coding Consistency
+      path: docs/maintainers/development/coding-consistency.md
+    - title: Source Formatting
+      path: docs/maintainers/development/source-formatting.md
+    - title: Dependency Monitoring
+      path: docs/maintainers/dependencies/dependency-update-monitoring.md
+    - title: Release Process
+      path: docs/maintainers/releases/release-process.md
+    - title: Issue Workflow
+      path: docs/maintainers/issues/issue-workflow.md
+    - title: Issue Conventions
+      path: docs/maintainers/issues/issue-conventions.md

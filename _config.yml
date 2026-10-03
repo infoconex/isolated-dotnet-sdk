@@ -1,0 +1,33 @@
+title: Isolated .NET SDK
+description: Install and manage exact .NET SDK versions in a user-owned isolated directory without changing the normal system-wide .NET installation.
+url: https://infoconex.github.io
+baseurl: /isolated-dotnet-sdk
+repository: infoconex/isolated-dotnet-sdk
+
+markdown: kramdown
+highlighter: rouge
+
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-relative-links
+  - jekyll-sitemap
+
+relative_links:
+  enabled: true
+  collections: true
+
+readme_index:
+  with_frontmatter: true
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+include:
+  - .config

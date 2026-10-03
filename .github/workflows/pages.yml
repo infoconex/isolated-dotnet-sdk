@@ -9,14 +9,31 @@ on:
       - 'LICENSE'
       - '.config/test-frameworks.json'
       - '.config/static-analysis.json'
+      - '_config.yml'
+      - '_data/**'
+      - '_layouts/**'
+      - 'assets/**'
+      - 'search-index.json'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.config/test-frameworks.json'
+      - '.config/static-analysis.json'
+      - '_config.yml'
+      - '_data/**'
+      - '_layouts/**'
+      - 'assets/**'
+      - 'search-index.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -39,20 +56,39 @@ jobs:
 
           rm -rf .pages-source _site
           mkdir -p .pages-source/docs .pages-source/.config
-          cp README.md CHANGELOG.md LICENSE .pages-source/
+
+          stage_markdown() {
+            source="$1"
+            destination=".pages-source/$source"
+            mkdir -p "$(dirname "$destination")"
+
+            if head -n 1 "$source" | grep -qx -- '---'; then
+              cp "$source" "$destination"
+            else
+              {
+                printf '%s\n' '---' 'layout: default' '---' ''
+                cat "$source"
+              } > "$destination"
+            fi
+          }
+
+          stage_markdown README.md
+          stage_markdown CHANGELOG.md
+          cp LICENSE .pages-source/
           cp .config/test-frameworks.json .config/static-analysis.json .pages-source/.config/
-          printf 'include:\n  - .config\n' > .pages-source/_config.yml
+          cp _config.yml search-index.json .pages-source/
+          cp -R _data _layouts assets .pages-source/
 
           while IFS= read -r -d '' file; do
-            destination=".pages-source/$file"
-            mkdir -p "$(dirname "$destination")"
-            cp "$file" "$destination"
+            stage_markdown "$file"
           done < <(find docs -type f -name '*.md' -print0)
 
           test ! -e .pages-source/tests
           test ! -e .pages-source/scripts
           test ! -e .pages-source/dotnet-install.sh
           test ! -e .pages-source/dotnet-install.ps1
+          test ! -e .pages-source/isolated-dotnet-sdk.sh
+          test ! -e .pages-source/isolated-dotnet-sdk.ps1
 
       - name: Configure Pages
         id: pages
@@ -64,7 +100,33 @@ jobs:
           source: ./.pages-source
           destination: ./_site
 
+      - name: Validate generated site
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f _site/index.html
+          test -f _site/docs/index.html
+          test -f _site/docs/commands/install.html
+          test -f _site/docs/getting-started/windows-powershell.html
+          test -f _site/docs/getting-started/linux-macos-bash.html
+          test -f _site/assets/search-index.json
+          test -f _site/assets/css/site.css
+          test -f _site/assets/js/site.js
+
+          grep -q 'class="docs-nav"' _site/index.html
+          grep -q 'Search documentation' _site/index.html
+          grep -q 'Getting Started' _site/index.html
+          grep -q 'docs/commands/install.html' _site/index.html
+          grep -q '"title": "Install"' _site/assets/search-index.json
+
+          test ! -e _site/tests
+          test ! -e _site/scripts
+          test ! -e _site/isolated-dotnet-sdk.sh
+          test ! -e _site/isolated-dotnet-sdk.ps1
+
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ./_site
@@ -72,6 +134,7 @@ jobs:
 
   deploy:
     name: Deploy Pages site
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-24.04
     permissions:
