@@ -1,0 +1,42 @@
+name: Issue 114 CLI contract migration
+
+on:
+  push:
+    branches:
+      - feat/114-tool-version-identity
+    paths:
+      - .github/workflows/issue-114-cli-contract-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/114-tool-version-identity
+          fetch-depth: 0
+
+      - name: Apply migration
+        run: python3 scripts/issue-114-cli-contract-migration.py
+
+      - name: Validate syntax and diff
+        shell: bash
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          pwsh -NoProfile -Command '$errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "isolated-dotnet-sdk.ps1"), [ref]$null, [ref]$errors); if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }'
+          git diff --check
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          rm scripts/issue-114-cli-contract-migration.py
+          rm .github/workflows/issue-114-cli-contract-migration.yml
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'refactor: align version CLI semantics' -m 'Refs #114'
+          git push origin HEAD:feat/114-tool-version-identity
