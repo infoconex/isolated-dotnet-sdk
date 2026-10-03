@@ -28,9 +28,9 @@ foreach ($target in $targets) {
     }
 
     $content = [System.IO.File]::ReadAllText($path)
-    $matches = [regex]::Matches($content, [regex]::Escape($target.DevelopmentMarker))
-    if ($matches.Count -ne 1) {
-        throw "Expected exactly one development identity marker in $($target.Path); found $($matches.Count)."
+    $markerMatches = [regex]::Matches($content, [regex]::Escape($target.DevelopmentMarker))
+    if ($markerMatches.Count -ne 1) {
+        throw "Expected exactly one development identity marker in $($target.Path); found $($markerMatches.Count)."
     }
 
     $stamped = $content.Replace($target.DevelopmentMarker, $target.ReleaseMarker)
