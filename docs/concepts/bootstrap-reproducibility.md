@@ -2,7 +2,7 @@
 
 This document describes how the product preserves the source identity of the tool script that is being installed under the current user's `dotnet-sdks` directory.
 
-The stable installation, update, and rollback policy is defined in [`release-bootstrap.md`](release-bootstrap.md). Stable users should follow that document's explicit-tag, checksum-verifying bootstrap instructions rather than execute mutable `main` as a stable installation source.
+The stable installation, update, and rollback policy is defined in [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md). Stable users should follow that document's explicit-tag, checksum-verifying bootstrap policy and the platform getting-started guide rather than execute mutable `main` as a stable installation source.
 
 ## File-based bootstrap
 
@@ -36,13 +36,13 @@ Stable update and rollback are explicit bootstrap operations, not runtime self-u
 - verify the selected script before execution; and
 - execute the verified file so file-based bootstrap replaces the saved copy with exactly that selected source.
 
-Choosing a newer tag performs an update. Choosing an older policy-compliant tag performs a rollback. See [`release-bootstrap.md`](release-bootstrap.md) for the copy/paste commands and release-maintenance contract.
+Choosing a newer tag performs an update. Choosing an older policy-compliant tag performs a rollback. See [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md) for the policy and the supported platform guides for copy/paste commands.
 
 ## Failure and recovery behavior
 
 Saved-tool replacement is staged under the isolated SDK root. Acquisition, staging, preparation, or final replacement failure must not deliberately remove an existing saved tool that is valid recovery state. Operation-owned candidates are cleaned where safe and practical.
 
-The detailed filesystem ownership and recovery contract is authoritative in [`filesystem-safety.md`](filesystem-safety.md). Platform-specific path, executable-bit, and argument-forwarding mechanics are documented in [`cross-platform-support.md`](cross-platform-support.md).
+The detailed filesystem ownership and recovery contract is authoritative in [Filesystem safety](filesystem-safety.md). Platform-specific path, executable-bit, and argument-forwarding mechanics are documented in [Cross-platform support](cross-platform-support.md).
 
 ## Integrity boundary
 
@@ -52,7 +52,7 @@ Source preservation and source integrity are related but distinct:
 - stable bootstrap verifies the explicitly tagged script against the release's `SHA256SUMS` before execution;
 - development `main` execution intentionally consumes mutable source and does not receive that stable guarantee.
 
-The complete remote-artifact and residual-trust model is documented in [`supply-chain-integrity.md`](supply-chain-integrity.md).
+The complete remote-artifact and residual-trust model is documented in [Supply-chain integrity and trust boundaries](supply-chain-integrity.md).
 
 ## Historical note
 
