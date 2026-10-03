@@ -113,7 +113,8 @@ jobs:
           $release = $env:RELEASE_TAG
           $temp = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release.ps1"
           $checksums = Join-Path $env:RUNNER_TEMP "isolated-dotnet-sdk-$release-SHA256SUMS"
-          $savedTool = Join-Path (Join-Path $HOME 'dotnet-sdks') 'isolated-dotnet-sdk.ps1'
+          $toolRoot = Join-Path $HOME 'dotnet-sdks'
+          $savedTool = Join-Path $toolRoot 'isolated-dotnet-sdk.ps1'
 
           function Invoke-ReleaseDownload {
               param([string]$Uri, [string]$OutFile)
@@ -130,6 +131,7 @@ jobs:
           }
 
           try {
+              Remove-Item -LiteralPath $toolRoot -Recurse -Force -ErrorAction SilentlyContinue
               Invoke-ReleaseDownload "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.ps1" $temp
               Invoke-ReleaseDownload "https://github.com/infoconex/isolated-dotnet-sdk/releases/download/$release/SHA256SUMS" $checksums
 
@@ -144,6 +146,27 @@ jobs:
                   throw "Checksum verification failed for isolated-dotnet-sdk.ps1. Expected $expected, got $actual."
               }
 
+              $sourceContent = Get-Content -LiteralPath $temp -Raw
+              $identityMarker = "`$ToolReleaseIdentity = '$release'"
+              $hasIdentityAssignment = $sourceContent -match '(?m)^\$ToolReleaseIdentity\s*='
+              $hasExpectedIdentity = $sourceContent.Contains($identityMarker)
+              if ($hasIdentityAssignment -and -not $hasExpectedIdentity) {
+                  throw "Tagged PowerShell source contains a tool identity that does not match $release."
+              }
+
+              if ($hasExpectedIdentity) {
+                  $reported = (& $temp -ToolVersion | Out-String).Trim()
+                  if ($reported -ne "isolated-dotnet-sdk $release") {
+                      throw "PowerShell tool-version query reported '$reported' instead of isolated-dotnet-sdk $release."
+                  }
+                  if (Test-Path -LiteralPath $toolRoot) {
+                      throw 'PowerShell tool-version query mutated the isolated SDK root.'
+                  }
+              }
+              else {
+                  Write-Host "Release $release predates embedded tool-version identity; historical verification continues without a version query."
+              }
+
               & $temp -Action List
 
               if (-not (Test-Path -LiteralPath $savedTool -PathType Leaf)) {
@@ -154,10 +177,17 @@ jobs:
               if ($savedHash -ine $actual) {
                   throw 'Saved PowerShell tool bytes do not match the verified tagged source.'
               }
+
+              if ($hasExpectedIdentity) {
+                  $savedReported = (& $savedTool -ToolVersion | Out-String).Trim()
+                  if ($savedReported -ne "isolated-dotnet-sdk $release") {
+                      throw "Saved PowerShell tool reported '$savedReported' instead of isolated-dotnet-sdk $release."
+                  }
+              }
           }
           finally {
               Remove-Item -LiteralPath $temp, $checksums -Force -ErrorAction SilentlyContinue
-              Remove-Item -LiteralPath (Join-Path $HOME 'dotnet-sdks') -Recurse -Force -ErrorAction SilentlyContinue
+              Remove-Item -LiteralPath $toolRoot -Recurse -Force -ErrorAction SilentlyContinue
           }
 
   verify-bash-bootstrap:
@@ -179,8 +209,10 @@ jobs:
           release="$RELEASE_TAG"
           temp="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.sh")"
           checksums="$(mktemp "${RUNNER_TEMP}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
-          saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
-          trap 'rm -f "$temp" "$checksums"; rm -rf "$HOME/dotnet-sdks"' EXIT
+          tool_root="$HOME/dotnet-sdks"
+          saved_tool="$tool_root/isolated-dotnet-sdk.sh"
+          trap 'rm -f "$temp" "$checksums"; rm -rf "$tool_root"' EXIT
+          rm -rf "$tool_root"
 
           curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
             "https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/$release/isolated-dotnet-sdk.sh" \
@@ -202,6 +234,34 @@ jobs:
           }
 
           chmod +x "$temp"
+
+          has_identity_assignment=false
+          if grep -Eq '^TOOL_RELEASE_IDENTITY=' "$temp"; then
+            has_identity_assignment=true
+          fi
+          has_expected_identity=false
+          if grep -Fqx "TOOL_RELEASE_IDENTITY=\"$release\"" "$temp"; then
+            has_expected_identity=true
+          fi
+          if [[ "$has_identity_assignment" == true && "$has_expected_identity" != true ]]; then
+            printf 'Tagged Bash source contains a tool identity that does not match %s.\n' "$release" >&2
+            exit 1
+          fi
+
+          if [[ "$has_expected_identity" == true ]]; then
+            reported="$("$temp" --version)"
+            [[ "$reported" == "isolated-dotnet-sdk $release" ]] || {
+              printf 'Bash tool-version query reported %s instead of isolated-dotnet-sdk %s.\n' "$reported" "$release" >&2
+              exit 1
+            }
+            [[ ! -e "$tool_root" ]] || {
+              printf '%s\n' 'Bash tool-version query mutated the isolated SDK root.' >&2
+              exit 1
+            }
+          else
+            printf 'Release %s predates embedded tool-version identity; historical verification continues without a version query.\n' "$release"
+          fi
+
           "$temp" list
 
           [[ -x "$saved_tool" ]] || {
@@ -214,3 +274,11 @@ jobs:
             printf '%s\n' 'Saved Bash tool bytes do not match the verified tagged source.' >&2
             exit 1
           }
+
+          if [[ "$has_expected_identity" == true ]]; then
+            saved_reported="$("$saved_tool" --version)"
+            [[ "$saved_reported" == "isolated-dotnet-sdk $release" ]] || {
+              printf 'Saved Bash tool reported %s instead of isolated-dotnet-sdk %s.\n' "$saved_reported" "$release" >&2
+              exit 1
+            }
+          fi
