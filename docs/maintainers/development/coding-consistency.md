@@ -38,12 +38,12 @@ Plural Bash helpers such as `get_system_sdk_versions` and `get_isolated_sdk_vers
 
 The two implementations do not need identical helper names, control-flow structure, stream mechanics, or casing. Use shared terminology when both sides represent the same product concept, but preserve language-native conventions when they improve readability.
 
-Behavioral parity remains governed by [`behavioral-parity.md`](behavioral-parity.md). Naming cleanup must not change CLI behavior, exit behavior, transaction semantics, confirmation semantics, or platform-specific capabilities.
+Behavioral parity remains governed by [PowerShell and Bash behavioral parity](../../contracts/behavioral-parity.md). Naming cleanup must not change CLI behavior, exit behavior, transaction semantics, confirmation semantics, or platform-specific capabilities.
 
 ## Tests, documentation, and enforcement
 
 Tests and user documentation should describe the stable public vocabulary unless a test intentionally targets an internal helper seam. Internal renames should update only those direct references and should not cause public help or documentation churn.
 
-PSScriptAnalyzer and ShellCheck remain the repository-owned static-analysis tools. PowerShell formatting remains governed by [`source-formatting.md`](source-formatting.md); no Bash formatter is added for naming consistency. Analyzer suppressions must not be introduced merely to preserve weak naming choices.
+PSScriptAnalyzer and ShellCheck remain the repository-owned static-analysis tools. PowerShell formatting remains governed by [Source formatting](source-formatting.md); no Bash formatter is added for naming consistency. Analyzer suppressions must not be introduced merely to preserve weak naming choices.
 
 When a difference is only aesthetic and does not materially improve readability, maintainability, parity, or review quality, leave it unchanged.

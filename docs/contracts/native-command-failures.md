@@ -20,13 +20,13 @@ Diagnostics at these boundaries identify the failed operation and, where applica
 
 ## Related product boundaries
 
-Release-index and channel-metadata transport/shape failures for interactive discovery follow the interactive discovery contract. Supplying an exact SDK version bypasses interactive version discovery, but installation still retrieves exact-version Microsoft release metadata to resolve the supported payload artifact and its checksum.
+Release-index and channel-metadata transport/shape failures for interactive discovery follow the [SDK discovery and release metadata](../concepts/sdk-discovery.md) contract. Supplying an exact SDK version bypasses interactive version discovery, but installation still retrieves exact-version Microsoft release metadata to resolve the supported payload artifact and its checksum.
 
-Filesystem ownership, bootstrap staging cleanup, and removal safety are specified in [`filesystem-safety.md`](filesystem-safety.md). Native-command hardening must not widen the set of paths the tool may remove.
+Filesystem ownership, bootstrap staging cleanup, and removal safety are specified in [Filesystem safety](../concepts/filesystem-safety.md). Native-command hardening must not widen the set of paths the tool may remove.
 
 The transactional installation contract requires each install to use operation-owned metadata, payload, and staging state; verify the archive before extraction; verify the staged host before promotion; preserve pre-existing destinations; clean transaction-owned state when possible; and support deterministic retry after a clean-start failure. Acquisition, hashing, extraction, or verification failure must preserve that transaction contract rather than writing directly into or replacing the final destination.
 
-Cross-shell observable behavior and intentional runtime differences are specified in [`behavioral-parity.md`](behavioral-parity.md).
+Cross-shell observable behavior and intentional runtime differences are specified in [PowerShell and Bash behavioral parity](behavioral-parity.md).
 
 ## Verification distinction
 

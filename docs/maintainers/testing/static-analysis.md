@@ -48,9 +48,9 @@ The PowerShell CLI does not suppress `PSAvoidUsingWriteHost`. User-facing displa
 
 Presentation color is selected by explicit semantic role at the call site rather than inferred from punctuation. Interactive/menu and section headings, short structural labels, and SDK-picker metadata use the same restrained cyan accent while their associated values remain neutral. Completed-success messages use green; ordinary informational/progress text, values, choices, shortcut keys, versions, and paths remain neutral. PowerShell warning and error colors remain owned by their semantic streams. Bash warnings retain their yellow warning presentation, while failures remain on stderr and use red only when stderr is attached to a terminal. `PlainText`/`NO_COLOR` PowerShell execution is not decorated, and redirected/captured output from both implementations must not contain ANSI escape sequences. Interactive retry flows, rather than generic warning helpers, own the blank-line separation around recoverable validation feedback.
 
-`Remove-IsolatedSdk` now implements native `ShouldProcess` semantics and no longer suppresses `PSUseShouldProcessForStateChangingFunctions`. Its `-WhatIf`, `-Confirm`, default confirmation, and `-Yes` behavior is specified in [`powershell-removal.md`](powershell-removal.md) and protected by the dedicated removal behavioral suite.
+`Remove-IsolatedSdk` implements native `ShouldProcess` semantics. Its `-WhatIf`, `-Confirm`, default confirmation, and `-Yes` behavior is specified in the [PowerShell removal contract](../../contracts/powershell-removal.md) and protected by the dedicated removal behavioral suite.
 
-PowerShell helper naming follows the conventions recorded in [`coding-consistency.md`](coding-consistency.md), including the deliberate use of analyzer-aligned singular nouns for collection-returning Verb-Noun functions.
+PowerShell helper naming follows the conventions recorded in [Coding and naming consistency](../development/coding-consistency.md), including the deliberate use of analyzer-aligned singular nouns for collection-returning Verb-Noun functions.
 
 ## CI execution
 

@@ -14,7 +14,7 @@ $availablePester = Get-Module -ListAvailable -Name Pester |
     Select-Object -First 1
 
 if ($null -eq $availablePester) {
-    throw "Pester $expectedVersion is required. See docs/testing.md."
+    throw "Pester $expectedVersion is required. See docs/maintainers/testing/testing.md."
 }
 
 Import-Module Pester -RequiredVersion $expectedVersion -Force

@@ -9,8 +9,8 @@ assignees: ""
 <!--
 Use this template for focused implementation work. Adapt or remove sections that genuinely do not apply.
 Authoritative guidance:
-- docs/issue-workflow.md
-- docs/issue-conventions.md
+- docs/maintainers/issues/issue-workflow.md
+- docs/maintainers/issues/issue-conventions.md
 -->
 
 ## Summary

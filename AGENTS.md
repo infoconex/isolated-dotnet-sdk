@@ -4,7 +4,7 @@ These instructions apply to AI/code agents working in this repository.
 
 ## Before issue work
 
-1. Read [`docs/issue-workflow.md`](docs/issue-workflow.md) and follow it as the authoritative issue lifecycle.
+1. Read [`docs/maintainers/issues/issue-workflow.md`](docs/maintainers/issues/issue-workflow.md) and follow it as the authoritative issue lifecycle.
 2. Read the exact current GitHub issue, including comments, dependencies, acceptance criteria, and non-goals.
 3. Inspect current `main`, relevant source/tests/docs, and latest repository validation. Review the current roadmap/tracker when one applies.
 
@@ -17,4 +17,4 @@ Repository documentation and the current issue define the working contract. Reso
 - Do not merge without explicit user approval.
 - After fully closing out an issue, stop and let the user decide when to begin the next one.
 
-Follow all detailed process requirements in `docs/issue-workflow.md`; they are intentionally not duplicated here.
+Follow all detailed process requirements in `docs/maintainers/issues/issue-workflow.md`; they are intentionally not duplicated here.

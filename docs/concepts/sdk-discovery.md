@@ -1,4 +1,4 @@
-# Release-metadata discovery
+# SDK discovery and release metadata
 
 This document records the release-metadata discovery contract shared by the PowerShell and Bash implementations.
 
@@ -38,7 +38,7 @@ When the caller supplies an exact SDK version, release-index and selected-channe
 
 ## Filesystem safety
 
-The filesystem ownership rules in [`filesystem-safety.md`](filesystem-safety.md) remain authoritative. In particular, Bash channel metadata uses an operation-owned temporary file under the isolated SDK root, removes that exact file after normal or failed processing, and does not broaden cleanup to similarly named pre-existing files.
+The filesystem ownership rules in [Filesystem safety](filesystem-safety.md) remain authoritative. In particular, Bash channel metadata uses an operation-owned temporary file under the isolated SDK root, removes that exact file after normal or failed processing, and does not broaden cleanup to similarly named pre-existing files.
 
 ## Cross-shell behavior
 
@@ -50,3 +50,5 @@ PowerShell and Bash may parse and retrieve metadata differently, but their obser
 - unusable empty selections are rejected;
 - optional display metadata does not become an accidental hard requirement;
 - exact-version installation remains independent from release-index/channel discovery while still using exact-version release metadata for payload integrity.
+
+For Microsoft's upstream release metadata and release-note structure, see [.NET release metadata](https://github.com/dotnet/core/tree/main/release-notes).

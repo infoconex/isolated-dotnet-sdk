@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1117">
+  <script>
+    (() => {
+      try {
+        const savedTheme = localStorage.getItem('isolated-dotnet-sdk-theme');
+        if (savedTheme && savedTheme !== 'light') document.documentElement.dataset.theme = savedTheme;
+      } catch {
+        // Local storage can be unavailable in hardened browser contexts.
+      }
+    })();
+  </script>
+  <title>{{ page.title | default: site.title | escape }}</title>
+  {% seo title=false %}
+  <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/assets/css/site-layout.css' | relative_url }}">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="site-sidebar">
+        <span></span><span></span><span></span>
+      </button>
+
+      <a class="brand" href="{{ '/' | relative_url }}" aria-label="Isolated .NET SDK home">
+        <span class="brand__mark" aria-hidden="true">.NET</span>
+        <span class="brand__text">
+          <strong>Isolated .NET SDK</strong>
+          <span>Exact SDKs without changing system .NET</span>
+        </span>
+      </a>
+
+      <div class="site-search" data-site-search data-search-index="{{ '/assets/search-index.json' | relative_url }}">
+        <label class="sr-only" for="site-search-input">Search documentation</label>
+        <input id="site-search-input" type="search" role="combobox" placeholder="Search documentation" autocomplete="off" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="site-search-results" aria-expanded="false">
+        <div class="site-search__results" id="site-search-results" role="listbox" aria-label="Search results" hidden></div>
+        <div class="sr-only" id="site-search-status" role="status" aria-live="polite"></div>
+      </div>
+
+      <nav class="header-actions" aria-label="Repository links">
+        <label class="theme-picker">
+          <span class="sr-only">Theme</span>
+          <select id="theme-picker" aria-label="Choose site theme">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="sepia">Sepia</option>
+          </select>
+        </label>
+        <a class="header-link" href="https://github.com/infoconex/isolated-dotnet-sdk">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="reading-progress" aria-hidden="true"><div class="reading-progress__bar"></div></div>
+
+  <div class="site-shell">
+    <aside class="sidebar" id="site-sidebar">
+      <div class="sidebar__inner">
+        <nav class="docs-nav" aria-label="Documentation navigation">
+          {% for section in site.data.navigation %}
+            <div class="nav-section" data-nav-group>
+              <span class="nav-section__title">{{ section.title }}</span>
+              {% if section.items %}
+                <ul>
+                  {% for item in section.items %}
+                    {% assign nav_page = site.pages | where: 'path', item.path | first %}
+                    {% if nav_page %}
+                      {% assign item_url = nav_page.url | relative_url %}
+                      <li data-nav-item>
+                        <a class="{% if page.url == nav_page.url %}is-active{% endif %}"{% if page.url == nav_page.url %} aria-current="page"{% endif %} href="{{ item_url }}">{{ item.title }}</a>
+                      </li>
+                    {% endif %}
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </nav>
+        <div class="sidebar-footer">Isolated location. Explicit selection. Verified installation.</div>
+      </div>
+    </aside>
+
+    <div class="sidebar-backdrop" data-nav-close></div>
+
+    <main class="content-wrap" id="main-content">
+      <article class="content-card"><div class="content-prose">{{ content }}</div></article>
+      <footer class="site-footer">
+        <span>Isolated .NET SDK</span><span aria-hidden="true">·</span>
+        <a href="https://github.com/infoconex/isolated-dotnet-sdk">View source on GitHub</a>
+      </footer>
+    </main>
+  </div>
+
+  <button class="back-to-top" type="button" aria-label="Back to top" title="Back to top" hidden>↑</button>
+  <script src="{{ '/assets/js/site.js' | relative_url }}" defer></script>
+</body>
+</html>

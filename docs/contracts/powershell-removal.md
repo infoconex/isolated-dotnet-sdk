@@ -127,10 +127,3 @@ Given approved removal, when build-server shutdown exits nonzero, removal fails 
 ### Deletion failure
 
 Given approved removal and successful shutdown, when directory deletion fails or the directory remains, removal fails and success is not reported.
-
-## Traceability
-
-- GitHub issue: #11
-- TDD RED evidence: Validate run #56 on test-only head `332844d`
-- implementation GREEN evidence: Validate run #61 on head `e61749b`
-- automated suite: `tests/powershell/run-removal-tests.ps1`

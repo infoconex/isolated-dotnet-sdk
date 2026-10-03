@@ -6,7 +6,7 @@ config="$repo_root/.config/test-frameworks.json"
 expected_version="$(jq -er '.batsVersion | select(type == "string" and length > 0)' "$config")"
 
 if ! command -v bats >/dev/null 2>&1; then
-  printf 'Bats %s is required. See docs/testing.md.\n' "$expected_version" >&2
+  printf 'Bats %s is required. See docs/maintainers/testing/testing.md.\n' "$expected_version" >&2
   exit 1
 fi
 
