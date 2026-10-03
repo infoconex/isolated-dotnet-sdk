@@ -1,20 +1,20 @@
-#!/usr/bin/env bats
+#!/usr/bin/env bash
+set -euo pipefail
 
-setup() {
-  repo_root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
-  bootstrap="$repo_root/install.sh"
-  test_root="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-latest-bootstrap.XXXXXX")"
-  fake_bin="$test_root/bin"
-  request_log="$test_root/requests.log"
-  execution_log="$test_root/executions.log"
-  expected_hash='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-  mkdir -p "$fake_bin"
+repo_root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
+bootstrap="$repo_root/install.sh"
+test_root="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-latest-bootstrap.XXXXXX")"
+fake_bin="$test_root/bin"
+request_log="$test_root/requests.log"
+execution_log="$test_root/executions.log"
+expected_hash='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+mkdir -p "$fake_bin"
 
-  for utility in bash awk grep sed mktemp chmod rm; do
-    ln -s "$(command -v "$utility")" "$fake_bin/$utility"
-  done
+for utility in bash awk grep sed mktemp chmod rm cat; do
+  ln -s "$(command -v "$utility")" "$fake_bin/$utility"
+done
 
-  cat > "$fake_bin/curl" <<'EOF'
+cat > "$fake_bin/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -90,16 +90,16 @@ PAYLOAD
     ;;
 esac
 EOF
-  chmod +x "$fake_bin/curl"
+chmod +x "$fake_bin/curl"
 
-  cat > "$fake_bin/sha256sum" <<'EOF'
+cat > "$fake_bin/sha256sum" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s  %s\n' "${BOOTSTRAP_ACTUAL_HASH:-$BOOTSTRAP_EXPECTED_HASH}" "${1:-}"
 EOF
-  chmod +x "$fake_bin/sha256sum"
+chmod +x "$fake_bin/sha256sum"
 
-  cat > "$fake_bin/shasum" <<'EOF'
+cat > "$fake_bin/shasum" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 last=''
@@ -108,7 +108,7 @@ for argument in "$@"; do
 done
 printf '%s  %s\n' "${BOOTSTRAP_ACTUAL_HASH:-$BOOTSTRAP_EXPECTED_HASH}" "$last"
 EOF
-  chmod +x "$fake_bin/shasum"
+chmod +x "$fake_bin/shasum"
 }
 
 teardown() {
