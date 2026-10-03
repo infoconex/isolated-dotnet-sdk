@@ -5,7 +5,7 @@ The repository uses established test frameworks for behavioral coverage:
 - **Pester** for PowerShell tests;
 - **Bats-core** for Bash tests.
 
-Exact framework versions are repository-owned in [`.config/test-frameworks.json`](../.config/test-frameworks.json). Bats is additionally pinned to the upstream commit behind the selected release tag. Local and CI runs must use those exact pins so diagnostics and behavior stay reproducible.
+Exact framework versions are repository-owned in [`.config/test-frameworks.json`](../../../.config/test-frameworks.json). Bats is additionally pinned to the upstream commit behind the selected release tag. Local and CI runs must use those exact pins so diagnostics and behavior stay reproducible.
 
 ## Test taxonomy
 
@@ -115,11 +115,11 @@ The PowerShell behavioral coverage includes:
 - deletion failure blocking success reporting;
 - transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
 
-The cross-shell product contract is documented in [`behavioral-parity.md`](behavioral-parity.md). The authoritative PowerShell-specific removal behavior specification is [`powershell-removal.md`](powershell-removal.md).
+The cross-shell product contract is documented in [PowerShell and Bash behavioral parity](../../contracts/behavioral-parity.md). The authoritative PowerShell-specific removal behavior specification is the [PowerShell removal contract](../../contracts/powershell-removal.md).
 
 ## Static analysis
 
-Static-analysis scope and version policy are documented in [`static-analysis.md`](static-analysis.md). The authoritative analyzer versions are defined in [`.config/static-analysis.json`](../.config/static-analysis.json).
+Static-analysis scope and version policy are documented in [Static analysis](static-analysis.md). The authoritative analyzer versions are defined in [`.config/static-analysis.json`](../../../.config/static-analysis.json).
 
 ### PowerShell
 
@@ -196,7 +196,7 @@ The deterministic behavioral checks do not install a real SDK or require live re
 
 ## Real end-to-end validation
 
-Real Microsoft/.NET ecosystem coverage is intentionally separate from the deterministic behavioral suites. The repository-owned fixed SDK target, direct and persistent-interactive scenarios, isolated job-state rules, automatic post-merge trigger, and manual rerun procedure are documented in [`e2e-testing.md`](e2e-testing.md).
+Real Microsoft/.NET ecosystem coverage is intentionally separate from the deterministic behavioral suites. The repository-owned fixed SDK target, direct and persistent-interactive scenarios, isolated job-state rules, automatic post-merge trigger, and manual rerun procedure are documented in [Real end-to-end validation](e2e-testing.md).
 
 `.github/workflows/e2e.yml` runs automatically on `push` to `main` and also supports `workflow_dispatch` for ad hoc reruns. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft release metadata and SDK payload acquisition, checksum verification, extraction, and staged-host verification. It is a post-merge confidence signal, not a required PR or merge check; required merge-candidate E2E remains tracked separately in Issue #60.
 
