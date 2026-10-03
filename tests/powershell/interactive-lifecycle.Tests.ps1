@@ -240,8 +240,8 @@ function Invoke-RestMethod {
         $result.ExitCode | Should -Be 0
         $result.Output | Should -Match 'A selection is required\. Choose I, R, L, or E\.'
         $result.Output | Should -Match 'Invalid selection: 6\. Choose I, R, L, or E\.'
-        $result.Output | Should -Match 'A selection is required\. Choose I, R, L, or E\.\r?\n\r?\nWhat would you like to do\?'
-        $result.Output | Should -Match 'Invalid selection: 6\. Choose I, R, L, or E\.\r?\n\r?\nWhat would you like to do\?'
+        $result.Output | Should -Match 'A selection is required\. Choose I, R, L, or E\.\r?\n\r?\nIsolated \.NET SDK development \(main\)\r?\n\r?\nWhat would you like to do\?'
+        $result.Output | Should -Match 'Invalid selection: 6\. Choose I, R, L, or E\.\r?\n\r?\nIsolated \.NET SDK development \(main\)\r?\n\r?\nWhat would you like to do\?'
     }
 
     It 'reports Remove choices and separates retry feedback from redraw' {
