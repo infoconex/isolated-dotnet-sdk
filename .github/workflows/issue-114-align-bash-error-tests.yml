@@ -1,0 +1,43 @@
+name: Issue 114 Bash selector error alignment
+
+on:
+  push:
+    branches:
+      - feat/114-tool-version-identity
+    paths:
+      - .github/workflows/issue-114-align-bash-error-tests.yml
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/114-tool-version-identity
+          fetch-depth: 0
+
+      - name: Align assertions
+        run: python3 scripts/issue-114-align-bash-error-tests.py
+
+      - name: Run focused Bash tests
+        shell: bash
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          if command -v bats >/dev/null 2>&1; then
+            bats tests/bash/tool-version.bats tests/bash/behavior.bats tests/bash/presentation.bats
+          fi
+          git diff --check
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          rm scripts/issue-114-align-bash-error-tests.py
+          git add tests/bash/behavior.bats tests/bash/presentation.bats scripts/issue-114-align-bash-error-tests.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test: align SDK selector rejection wording' -m 'Refs #114'
+          git push origin HEAD:feat/114-tool-version-identity
