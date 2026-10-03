@@ -23,6 +23,9 @@ jobs:
       - name: Apply migration
         run: python3 scripts/issue-114-cli-contract-migration.py
 
+      - name: Keep workflow changes out of the migration commit
+        run: git checkout -- .github
+
       - name: Validate syntax and diff
         shell: bash
         run: |
@@ -34,7 +37,6 @@ jobs:
         shell: bash
         run: |
           rm scripts/issue-114-cli-contract-migration.py
-          rm .github/workflows/issue-114-cli-contract-migration.yml
           git add -A
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
