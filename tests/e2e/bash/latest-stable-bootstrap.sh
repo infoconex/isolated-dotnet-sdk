@@ -20,9 +20,16 @@ repository='infoconex/isolated-dotnet-sdk'
 latest_release_url="https://api.github.com/repos/$repository/releases/latest"
 release_download_base_url="https://github.com/$repository/releases/download"
 
+github_api_args=(
+  -H 'Accept: application/vnd.github+json'
+  -H 'X-GitHub-Api-Version: 2022-11-28'
+)
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  github_api_args+=(-H "Authorization: Bearer $GITHUB_TOKEN")
+fi
+
 release_json="$(curl -fsSL \
-  -H 'Accept: application/vnd.github+json' \
-  -H 'X-GitHub-Api-Version: 2022-11-28' \
+  "${github_api_args[@]}" \
   "$latest_release_url")"
 release_tag="$(jq -er '
   select(.draft == false and .prerelease == false)
