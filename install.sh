@@ -31,7 +31,7 @@ trap 'rm -f "$tool_temp" "$checksums_temp"' EXIT
 curl -fsSL "$RAW_BASE_URL/$release_tag/$TOOL_NAME" -o "$tool_temp"
 curl -fsSL "$RELEASE_DOWNLOAD_BASE_URL/$release_tag/SHA256SUMS" -o "$checksums_temp"
 
-expected="$(awk -v name="$TOOL_NAME" '$2 == name && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums_temp")"
+expected="$(awk -v name="$TOOL_NAME" 'NF == 2 && $2 == name && $1 ~ /^[0-9a-fA-F]{64}$/ { print tolower($1) }' "$checksums_temp")"
 if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
   printf 'SHA256SUMS does not contain exactly one valid %s entry.\n' "$TOOL_NAME" >&2
   exit 1
