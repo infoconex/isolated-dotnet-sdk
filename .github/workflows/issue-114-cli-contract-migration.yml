@@ -1,0 +1,499 @@
+name: Temporary Issue 114 CLI contract migration
+
+on:
+  push:
+    branches:
+      - feat/114-tool-version-identity
+    paths:
+      - .github/workflows/issue-114-cli-contract-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/114-tool-version-identity
+          fetch-depth: 0
+
+      - name: Apply symmetric version CLI contract
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          def read(path):
+              return path.read_text(encoding='utf-8')
+
+          def write(path, text):
+              path.write_text(text, encoding='utf-8', newline='\n')
+
+          def require(text, needle, path):
+              if needle not in text:
+                  raise SystemExit(f"Expected pattern not found in {path}: {needle!r}")
+
+          # PowerShell product CLI: -Version is the tool query; -SdkVersion is the
+          # exact SDK selector and is also the sole positional parameter.
+          ps = root / 'isolated-dotnet-sdk.ps1'
+          text = read(ps)
+          require(text, '[string]$Version,', ps)
+          require(text, '[switch]$ToolVersion', ps)
+          require(text, 'if ($ToolVersion) {', ps)
+
+          text = text.replace('When Action and Version are both omitted', 'When Action and SdkVersion are both omitted')
+          text = text.replace('When Action is omitted and Version is supplied', 'When Action is omitted and SdkVersion is supplied')
+          text = text.replace('Explicit List with Version is invalid.', 'Explicit List with SdkVersion is invalid.')
+          text = text.replace('Verify requires an exact Version', 'Verify requires an exact SdkVersion')
+          text = text.replace('unless Version is supplied, in which case Install is selected.', 'unless SdkVersion is supplied, in which case Install is selected.')
+          text = text.replace('.PARAMETER Version\nSpecifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Verify requires Version. Version is invalid with an explicit List action.',
+                              '.PARAMETER SdkVersion\nSpecifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Verify requires SdkVersion. SdkVersion is invalid with an explicit List action. The parameter is positional, so a bare exact SDK version has the same meaning as -SdkVersion.')
+          text = text.replace('.PARAMETER ToolVersion\nShows the isolated-dotnet-sdk release/source identity and exits without bootstrap, network access, SDK discovery, prompting, or mutation. This is distinct from Version, which remains the .NET SDK selector.',
+                              '.PARAMETER Version\nShows the isolated-dotnet-sdk release/source identity and exits without bootstrap, network access, SDK discovery, prompting, or mutation. This is distinct from SdkVersion, which selects the .NET SDK to install, verify, or remove.')
+
+          # Existing -Version occurrences are SDK-selector uses. Rename them before
+          # promoting the previous -ToolVersion query to the canonical -Version switch.
+          text = text.replace('-Version', '-SdkVersion')
+          text = text.replace('-ToolVersion', '-Version')
+          text = text.replace('$script:VersionWasSpecified', '$script:SdkVersionWasSpecified')
+          text = text.replace('$script:Version', '$script:SdkVersion')
+          text = re.sub(r'(?<![A-Za-z0-9_:])\$Version\b', '$SdkVersion', text)
+          text = text.replace("$PSBoundParameters.ContainsKey('Version')", "$PSBoundParameters.ContainsKey('SdkVersion')")
+          text = text.replace('$Arguments.Version = $SdkVersion', '$Arguments.SdkVersion = $SdkVersion')
+          text = text.replace('Assert-ValidVersion', 'Assert-ValidSdkVersion')
+
+          old_param = """[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+          param(
+              [string]$Action,
+              [string]$SdkVersion,
+              [switch]$Yes,
+              [switch]$ToolVersion
+          )"""
+          new_param = """[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium', PositionalBinding = $false)]
+          param(
+              [string]$Action,
+              [Parameter(Position = 0)]
+              [string]$SdkVersion,
+              [switch]$Yes,
+              [switch]$Version
+          )"""
+          require(text, old_param, ps)
+          text = text.replace(old_param, new_param, 1)
+          text = text.replace('$ToolVersion', '$Version')
+          write(ps, text)
+
+          # PowerShell test and E2E invocations follow the new public contract.
+          powershell_test_paths = list((root / 'tests' / 'powershell').glob('*.ps1')) + list((root / 'tests' / 'e2e' / 'powershell').glob('*.ps1'))
+          for path in powershell_test_paths:
+              t = read(path)
+              t = t.replace('-Version', '-SdkVersion')
+              t = t.replace('-ToolVersion', '-Version')
+              write(path, t)
+
+          tool_tests = root / 'tests' / 'powershell' / 'tool-version.Tests.ps1'
+          t = read(tool_tests)
+          t = t.replace("It 'preserves -SdkVersion as the SDK selector'", "It 'supports -SdkVersion as the explicit SDK selector'")
+          marker = "    It 'stamps both product scripts from one stable tag' {"
+          require(t, marker, tool_tests)
+          positional_test = r'''    It 'supports a positional SDK version with the same semantics' {
+              $toolRoot = Join-Path $script:TestHome 'dotnet-sdks'
+              $savedTool = Join-Path $toolRoot 'isolated-dotnet-sdk.ps1'
+              New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+              Copy-Item -LiteralPath $script:ToolScript -Destination $savedTool -Force
+
+              $result = Invoke-ToolProcess `
+                  -ToolPath $savedTool `
+                  -Arguments @('bad/version') `
+                  -HomePath $script:TestHome
+
+              $result.ExitCode | Should -Not -Be 0
+              $result.Output | Should -Match 'Invalid SDK version: bad/version'
+              $result.Output | Should -Not -Match 'isolated-dotnet-sdk development \(main\)'
+          }
+
+          It 'rejects combining the tool version query with an SDK selector without bootstrapping' {
+              $result = Invoke-ToolProcess `
+                  -ToolPath $script:ToolScript `
+                  -Arguments @('-Version', '-SdkVersion', '10.0.100') `
+                  -HomePath $script:TestHome
+
+              $result.ExitCode | Should -Not -Be 0
+              $result.Output | Should -Match '-Version cannot be combined'
+              Test-Path -LiteralPath (Join-Path $script:TestHome 'dotnet-sdks') | Should -BeFalse
+          }
+
+          '''
+          t = t.replace(marker, positional_test + marker, 1)
+          write(tool_tests, t)
+
+          # Bash product CLI: --version is the tool query; --sdk-version explicitly
+          # selects an SDK; the existing positional SDK version remains supported.
+          sh = root / 'isolated-dotnet-sdk.sh'
+          b = read(sh)
+          require(b, '  isolated-dotnet-sdk.sh --version', sh)
+          require(b, 'if [[ "${1:-}" == "--version" ]]; then', sh)
+
+          b = b.replace('  isolated-dotnet-sdk.sh [version] [--yes|-y]\n  isolated-dotnet-sdk.sh --version',
+                        '  isolated-dotnet-sdk.sh --sdk-version <version> [--yes|-y]\n  isolated-dotnet-sdk.sh [version] [--yes|-y]\n  isolated-dotnet-sdk.sh --version')
+          b = b.replace('  --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.\n  --version          Show the tool release/source identity and exit.',
+                        '  --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.\n  --sdk-version <v> Select the exact .NET SDK version. Without an action, Install is selected.\n  --version          Show the tool release/source identity and exit.')
+          b = b.replace('  Bare version       Treat the version as a one-shot install request.',
+                        '  SDK version        --sdk-version <version> and a bare positional version select the same exact SDK.\n  Bare version       Treat the positional version as a one-shot install request.')
+
+          old_version_guard = '''if [[ "${1:-}" == "--version" ]]; then
+              if [[ $# -ne 1 ]]; then
+                  printf '%s\\n' '--version cannot be combined with other arguments.' >&2
+                  exit 1
+              fi
+              tool_version_text
+              printf '\\n'
+              exit 0
+          fi
+
+          bootstrap_if_needed "$@"'''
+          new_version_guard = '''for argument in "$@"; do
+              if [[ "$argument" == "--version" ]]; then
+                  if [[ $# -ne 1 ]]; then
+                      printf '%s\\n' '--version cannot be combined with other arguments.' >&2
+                      exit 1
+                  fi
+                  tool_version_text
+                  printf '\\n'
+                  exit 0
+              fi
+          done
+
+          bootstrap_if_needed "$@"'''
+          require(b, old_version_guard, sh)
+          b = b.replace(old_version_guard, new_version_guard, 1)
+
+          old_parser = '''ACTION=""
+          VERSION=""
+          YES="false"
+          INTERACTIVE_SESSION="false"
+          EXIT_REQUESTED="false"
+
+          if [[ $# -gt 0 ]]; then
+              case "$1" in
+                  install|remove|list|verify)
+                      ACTION="$1"
+                      shift
+                      ;;
+                  -h|--help)
+                      usage
+                      exit 0
+                      ;;
+                  --yes|-y)
+                      ;;
+                  *)
+                      ACTION="install"
+                      VERSION="$1"
+                      shift
+                      ;;
+              esac
+          fi
+
+          while [[ $# -gt 0 ]]; do
+              case "$1" in
+                  --yes|-y)
+                      YES="true"
+                      ;;
+                  -h|--help)
+                      usage
+                      exit 0
+                      ;;
+                  *)
+                      if [[ "$ACTION" != "list" && -z "$VERSION" ]]; then
+                          VERSION="$1"
+                      else
+                          tool_fail "Unknown argument: $1"
+                      fi
+                      ;;
+              esac
+              shift
+          done
+
+          if [[ -z "$ACTION" && -z "$VERSION" ]]; then
+              INTERACTIVE_SESSION="true"
+          fi'''
+          new_parser = '''ACTION=""
+          VERSION=""
+          YES="false"
+          INTERACTIVE_SESSION="false"
+          EXIT_REQUESTED="false"
+
+          while [[ $# -gt 0 ]]; do
+              case "$1" in
+                  install|remove|list|verify)
+                      if [[ -n "$ACTION" ]]; then
+                          tool_fail "Only one action may be specified."
+                      fi
+                      ACTION="$1"
+                      ;;
+                  --sdk-version)
+                      shift
+                      if [[ $# -eq 0 ]]; then
+                          tool_fail "--sdk-version requires an exact SDK version."
+                      fi
+                      if [[ -n "$VERSION" ]]; then
+                          tool_fail "Only one SDK version may be specified."
+                      fi
+                      VERSION="$1"
+                      ;;
+                  --yes|-y)
+                      YES="true"
+                      ;;
+                  -h|--help)
+                      usage
+                      exit 0
+                      ;;
+                  --version)
+                      tool_fail "--version cannot be combined with other arguments."
+                      ;;
+                  --*)
+                      tool_fail "Unknown argument: $1"
+                      ;;
+                  *)
+                      if [[ -n "$VERSION" ]]; then
+                          tool_fail "Only one SDK version may be specified."
+                      fi
+                      VERSION="$1"
+                      ;;
+              esac
+              shift
+          done
+
+          if [[ "$ACTION" == "list" && -n "$VERSION" ]]; then
+              tool_fail "An SDK version cannot be combined with list."
+          fi
+
+          if [[ -z "$ACTION" && -n "$VERSION" ]]; then
+              ACTION="install"
+          fi
+
+          if [[ -z "$ACTION" && -z "$VERSION" ]]; then
+              INTERACTIVE_SESSION="true"
+          fi'''
+          require(b, old_parser, sh)
+          b = b.replace(old_parser, new_parser, 1)
+          write(sh, b)
+
+          bash_tests = root / 'tests' / 'bash' / 'tool-version.bats'
+          t = read(bash_tests)
+          marker = '@test "bare SDK version remains an install selector" {'
+          require(t, marker, bash_tests)
+          explicit_test = r'''@test "--sdk-version explicitly selects the SDK with the same semantics" {
+            tool_root="$test_home/dotnet-sdks"
+            saved_tool="$tool_root/isolated-dotnet-sdk.sh"
+            mkdir -p "$tool_root"
+            cp "$tool" "$saved_tool"
+            chmod +x "$saved_tool"
+
+            run env HOME="$test_home" "$saved_tool" --sdk-version 'bad/version'
+
+            [ "$status" -ne 0 ]
+            [[ "$output" == *"Invalid SDK version: bad/version"* ]]
+            [[ "$output" != *"isolated-dotnet-sdk development (main)"* ]]
+          }
+
+          @test "--version cannot be combined with an SDK selector and remains side-effect free" {
+            run env HOME="$test_home" "$bash_path" "$tool" --version --sdk-version 10.0.100
+
+            [ "$status" -ne 0 ]
+            [[ "$output" == *"--version cannot be combined with other arguments."* ]]
+            [ ! -e "$test_home/dotnet-sdks" ]
+          }
+
+          '''
+          t = t.replace(marker, explicit_test + marker, 1)
+          write(bash_tests, t)
+
+          # User-facing docs: the old PowerShell -Version references are SDK selectors.
+          # Rename those first, then promote -ToolVersion to -Version.
+          doc_paths = [root / 'README.md']
+          doc_paths += list((root / 'docs' / 'commands').glob('*.md'))
+          doc_paths += list((root / 'docs' / 'getting-started').glob('*.md'))
+          doc_paths += [
+              root / 'docs' / 'contracts' / 'behavioral-parity.md',
+              root / 'docs' / 'releases' / 'stable-bootstrap.md',
+              root / 'docs' / 'maintainers' / 'releases' / 'release-process.md',
+          ]
+          for path in doc_paths:
+              if not path.exists():
+                  continue
+              d = read(path)
+              d = d.replace('-Version', '-SdkVersion')
+              d = d.replace('-ToolVersion', '-Version')
+              write(path, d)
+
+          tool_doc = root / 'docs' / 'commands' / 'tool-version.md'
+          write(tool_doc, '''# Tool version
+
+The tool exposes its own release/source identity separately from the .NET SDK versions it installs and manages.
+
+## Direct query
+
+Both supported shells use their native `version` switch for the tool itself:
+
+```powershell
+& "$HOME\\dotnet-sdks\\isolated-dotnet-sdk.ps1" -Version
+```
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version
+```
+
+A stable copy published with embedded identity reports its exact release tag, for example:
+
+```text
+isolated-dotnet-sdk v1.2.3
+```
+
+A copy sourced from mutable `main` reports development identity instead:
+
+```text
+isolated-dotnet-sdk development (main)
+```
+
+The version query exits successfully after printing that identity. It does not bootstrap or replace the saved tool, create the isolated SDK root, query release metadata, enumerate SDKs, prompt for input, or check whether a newer release exists.
+
+## Tool version versus SDK version
+
+The shells expose the same capabilities with native switch spelling:
+
+| Purpose | PowerShell | Bash |
+| --- | --- | --- |
+| Tool release/source identity | `-Version` | `--version` |
+| Explicit exact SDK selector | `-SdkVersion <version>` | `--sdk-version <version>` |
+| Positional exact SDK selector | `<version>` | `<version>` |
+
+The explicit and positional SDK forms are equivalent. With no explicit action, an SDK version is a one-shot Install request. With Install, Verify, or Remove, it selects the SDK for that action.
+
+`-Version` / `--version` never selects a .NET SDK. It identifies the `isolated-dotnet-sdk` tool itself.
+
+## Stable and development identity
+
+Stable releases published under this identity model embed the exact release tag into both supported product scripts during release publication. The checksum manifest is generated from those stamped release bytes, so tagged source, latest-stable bootstrap, pinned bootstrap/rollback, and the saved copy all retain the same identity.
+
+Mutable `main` carries an explicit development identity and never derives or claims the latest published stable version.
+
+Historical releases are not rewritten solely to add embedded identity metadata. A release published before this model remains historically unchanged.
+
+The persistent [Main menu](interactive.md) displays the same underlying identity in a friendlier heading.
+''')
+
+          commands_doc = root / 'docs' / 'commands' / 'README.md'
+          d = read(commands_doc)
+          old = 'PowerShell keeps `-SdkVersion` exclusively for the existing SDK-selection behavior and uses `-Version` for tool identity; Bash uses `--version`.'
+          new = 'PowerShell uses `-Version` and Bash uses `--version` for tool identity. Exact SDK selection is `-SdkVersion <version>` in PowerShell and `--sdk-version <version>` in Bash, and both shells also accept the exact SDK version positionally.'
+          require(d, old, commands_doc)
+          d = d.replace(old, new, 1)
+          write(commands_doc, d)
+
+          win_doc = root / 'docs' / 'getting-started' / 'windows-powershell.md'
+          d = read(win_doc)
+          d = d.replace('`-Version` identifies the `isolated-dotnet-sdk` tool. The existing `-SdkVersion <sdk-version>` parameter remains the .NET SDK selector used by Install, Verify, and Remove.',
+                        '`-Version` identifies the `isolated-dotnet-sdk` tool. `-SdkVersion <sdk-version>` explicitly selects the .NET SDK used by Install, Verify, and Remove.')
+          old = '''A version without `-Action` is the Install convenience form:
+
+          ```powershell
+          & "$HOME\\dotnet-sdks\\isolated-dotnet-sdk.ps1" -SdkVersion '10.0.401'
+          ```'''
+          new = '''The explicit SDK selector can also be used without `-Action`; Install is implied:
+
+          ```powershell
+          & "$HOME\\dotnet-sdks\\isolated-dotnet-sdk.ps1" -SdkVersion '10.0.401'
+          ```
+
+          Both supported shells also accept the exact SDK version positionally. In PowerShell the equivalent convenience form is:
+
+          ```powershell
+          & "$HOME\\dotnet-sdks\\isolated-dotnet-sdk.ps1" '10.0.401'
+          ```'''
+          require(d, old, win_doc)
+          d = d.replace(old, new, 1)
+          write(win_doc, d)
+
+          bash_doc = root / 'docs' / 'getting-started' / 'linux-macos-bash.md'
+          d = read(bash_doc)
+          d = d.replace('This identifies the `isolated-dotnet-sdk` tool itself. A bare value such as `10.0.401` remains the existing .NET SDK Install selector.',
+                        'This identifies the `isolated-dotnet-sdk` tool itself. `--sdk-version <sdk-version>` explicitly selects a .NET SDK, and a bare value such as `10.0.401` is the equivalent positional selector.')
+          old = '''Install a known exact version directly:
+
+          ```bash
+          "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install 10.0.401
+          ```
+
+          A bare version is the Install convenience form:
+
+          ```bash
+          "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" 10.0.401
+          ```'''
+          new = '''Install a known exact version directly with the explicit SDK selector:
+
+          ```bash
+          "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install --sdk-version 10.0.401
+          ```
+
+          Without an explicit action, `--sdk-version` implies Install:
+
+          ```bash
+          "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --sdk-version 10.0.401
+          ```
+
+          Both supported shells also accept the exact SDK version positionally. In Bash the equivalent convenience form is:
+
+          ```bash
+          "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" 10.0.401
+          ```'''
+          require(d, old, bash_doc)
+          d = d.replace(old, new, 1)
+          write(bash_doc, d)
+
+          # Release validation invokes the canonical PowerShell tool-version switch.
+          for path in list((root / '.github').rglob('*.yml')) + list((root / '.github').rglob('*.yaml')) + list((root / '.github').rglob('*.js')):
+              if path.name == 'issue-114-cli-contract-migration.yml':
+                  continue
+              x = read(path)
+              x = x.replace('-ToolVersion', '-Version')
+              write(path, x)
+
+          # The migration must leave no public -ToolVersion spelling behind.
+          stale = []
+          for path in root.rglob('*'):
+              if not path.is_file() or '.git' in path.parts or path.name == 'issue-114-cli-contract-migration.yml':
+                  continue
+              if path.suffix.lower() not in {'.ps1', '.sh', '.md', '.yml', '.yaml', '.js', '.bats'}:
+                  continue
+              try:
+                  x = read(path)
+              except UnicodeDecodeError:
+                  continue
+              if '-ToolVersion' in x:
+                  stale.append(str(path))
+          if stale:
+              raise SystemExit('Stale -ToolVersion references remain: ' + ', '.join(stale))
+          PY
+
+      - name: Validate changed shell syntax
+        shell: bash
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          pwsh -NoProfile -Command '$errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "isolated-dotnet-sdk.ps1"), [ref]$null, [ref]$errors); if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }'
+          git diff --check
+
+      - name: Commit contract correction and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/issue-114-cli-contract-migration.yml
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'refactor: align version CLI semantics' -m 'Refs #114'
+          git push origin HEAD:feat/114-tool-version-identity
