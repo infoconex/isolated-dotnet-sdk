@@ -1,8 +1,8 @@
 <!--
 Keep this description concise and evidence-focused.
 Authoritative guidance:
-- docs/issue-workflow.md
-- docs/issue-conventions.md
+- docs/maintainers/issues/issue-workflow.md
+- docs/maintainers/issues/issue-conventions.md
 Open this Draft PR only after implementation is believed complete, appropriate targeted pre-PR validation is green, the linked issue is reconciled, and the full branch diff has been reviewed with no known blocking findings.
 A full branch Validate run is optional when it serves a distinct purpose; the normal authoritative full pre-merge signal is Validate on the exact PR head.
 Before opening the Draft PR, reconcile the linked issue so completed Tasks are checked and acceptance criteria already established by durable evidence are checked; leave only criteria that genuinely depend on exact-head PR validation or merge open.
