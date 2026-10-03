@@ -365,5 +365,5 @@ EOF
   run env HOME="$test_home" "$tool_path" list 99.0.100
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"Unknown argument: 99.0.100"* ]]
+  [[ "$output" == *"An SDK version cannot be combined with list."* ]]
 }
