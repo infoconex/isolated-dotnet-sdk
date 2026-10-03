@@ -1,0 +1,41 @@
+name: Issue 114 CLI documentation reconciliation
+
+on:
+  push:
+    branches:
+      - feat/114-tool-version-identity
+    paths:
+      - .github/workflows/issue-114-cli-doc-reconcile.yml
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/114-tool-version-identity
+          fetch-depth: 0
+
+      - name: Apply documentation reconciliation
+        run: python3 scripts/issue-114-cli-doc-reconcile.py
+
+      - name: Validate changed content
+        shell: bash
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          pwsh -NoProfile -Command '$errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "isolated-dotnet-sdk.ps1"), [ref]$null, [ref]$errors); if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }'
+          git diff --check
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          rm scripts/issue-114-cli-doc-reconcile.py
+          git add -A ':!.github/workflows/issue-114-cli-doc-reconcile.yml'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: align version CLI semantics' -m 'Refs #114'
+          git push origin HEAD:feat/114-tool-version-identity
