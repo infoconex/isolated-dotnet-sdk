@@ -4,6 +4,7 @@ set -euo pipefail
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
 TOOL_NAME="isolated-dotnet-sdk.sh"
+TOOL_RELEASE_IDENTITY="development"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
 TOOL_INPUT=""
@@ -27,6 +28,36 @@ else
     RED=''
     ERROR_RESET=''
 fi
+
+tool_version_text() {
+    if [[ "$TOOL_RELEASE_IDENTITY" == "development" ]]; then
+        printf '%s' 'isolated-dotnet-sdk development (main)'
+        return
+    fi
+
+    if [[ "$TOOL_RELEASE_IDENTITY" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf 'isolated-dotnet-sdk %s' "$TOOL_RELEASE_IDENTITY"
+        return
+    fi
+
+    printf 'Invalid tool release identity: %s\n' "$TOOL_RELEASE_IDENTITY" >&2
+    return 1
+}
+
+tool_menu_identity() {
+    if [[ "$TOOL_RELEASE_IDENTITY" == "development" ]]; then
+        printf '%s' 'Isolated .NET SDK development (main)'
+        return
+    fi
+
+    if [[ "$TOOL_RELEASE_IDENTITY" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf 'Isolated .NET SDK %s' "$TOOL_RELEASE_IDENTITY"
+        return
+    fi
+
+    printf 'Invalid tool release identity: %s\n' "$TOOL_RELEASE_IDENTITY" >&2
+    return 1
+}
 
 tool_info() {
     printf "%s\n" "$1"
@@ -405,6 +436,8 @@ select_action() {
     local selection=""
 
     while true; do
+        tool_heading "$(tool_menu_identity)"
+        echo
         tool_heading "What would you like to do?"
         echo
         echo "  I. Install an SDK"
@@ -1344,6 +1377,7 @@ Usage:
   isolated-dotnet-sdk.sh list
   isolated-dotnet-sdk.sh verify <version>
   isolated-dotnet-sdk.sh [version] [--yes|-y]
+  isolated-dotnet-sdk.sh --version
   isolated-dotnet-sdk.sh --help|-h
 
 Commands:
@@ -1354,6 +1388,7 @@ Commands:
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
+  --version          Show the tool release/source identity and exit.
   --help, -h         Show this help text.
 
 Behavior:
@@ -1378,6 +1413,16 @@ Documentation:
   https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/cross-platform-support.md
 USAGE
 }
+
+if [[ "${1:-}" == "--version" ]]; then
+    if [[ $# -ne 1 ]]; then
+        printf '%s\n' '--version cannot be combined with other arguments.' >&2
+        exit 1
+    fi
+    tool_version_text
+    printf '\n'
+    exit 0
+fi
 
 bootstrap_if_needed "$@"
 

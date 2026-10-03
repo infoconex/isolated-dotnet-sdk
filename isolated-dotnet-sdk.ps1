@@ -20,6 +20,14 @@ Specifies an exact .NET SDK version. When omitted for Install or Remove, the scr
 .PARAMETER Yes
 Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
 
+.PARAMETER ToolVersion
+Shows the isolated-dotnet-sdk release/source identity and exits without bootstrap, network access, SDK discovery, prompting, or mutation. This is distinct from Version, which remains the .NET SDK selector.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -ToolVersion
+
+Shows the tool release/source identity and exits.
+
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action List
 
@@ -68,7 +76,8 @@ https://github.com/infoconex/isolated-dotnet-sdk/blob/main/docs/cross-platform-s
 param(
     [string]$Action,
     [string]$Version,
-    [switch]$Yes
+    [switch]$Yes,
+    [switch]$ToolVersion
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,6 +85,7 @@ $ErrorActionPreference = 'Stop'
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
 $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
 $ToolName = 'isolated-dotnet-sdk.ps1'
+$ToolReleaseIdentity = 'development'
 $SdkRoot = Join-Path $HOME 'dotnet-sdks'
 $ToolPath = Join-Path $SdkRoot $ToolName
 $script:Bootstrapped = $false
@@ -88,6 +98,30 @@ $script:ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
 $script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParameters['Confirm'] } else { $false }
 $script:WhatIfWasSpecified = $PSBoundParameters.ContainsKey('WhatIf')
 $script:WhatIfValue = if ($script:WhatIfWasSpecified) { [bool]$PSBoundParameters['WhatIf'] } else { $false }
+
+function Get-ToolVersionText {
+    if ($ToolReleaseIdentity -eq 'development') {
+        return 'isolated-dotnet-sdk development (main)'
+    }
+
+    if ($ToolReleaseIdentity -match '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+        return "isolated-dotnet-sdk $ToolReleaseIdentity"
+    }
+
+    throw "Invalid tool release identity: $ToolReleaseIdentity"
+}
+
+function Get-ToolMenuIdentity {
+    if ($ToolReleaseIdentity -eq 'development') {
+        return 'Isolated .NET SDK development (main)'
+    }
+
+    if ($ToolReleaseIdentity -match '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+        return "Isolated .NET SDK $ToolReleaseIdentity"
+    }
+
+    throw "Invalid tool release identity: $ToolReleaseIdentity"
+}
 
 function Write-ToolDisplay {
     param(
@@ -558,6 +592,8 @@ function Select-Action {
     }
 
     while ($true) {
+        Write-ToolHeading (Get-ToolMenuIdentity)
+        Write-ToolDisplay
         Write-ToolHeading 'What would you like to do?'
         Write-ToolDisplay
         Write-ToolDisplay '  I. Install an SDK'
@@ -1457,6 +1493,20 @@ function Invoke-SelectedAction {
         'List' { Show-InstalledSdk }
         'Verify' { Test-IsolatedSdk }
     }
+}
+
+if ($ToolVersion) {
+    if ($script:ActionWasSpecified -or
+        $script:VersionWasSpecified -or
+        $Yes -or
+        $script:ConfirmWasSpecified -or
+        $script:WhatIfWasSpecified) {
+        Write-Error -Message '-ToolVersion cannot be combined with action, SDK-version, confirmation, or WhatIf parameters.' -ErrorAction Continue
+        exit 1
+    }
+
+    Write-Output (Get-ToolVersionText)
+    return
 }
 
 Install-ToolIfNeeded
