@@ -49,7 +49,14 @@ if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
 fi
 
 printf 'E\n' | bash "$repo_root/install.sh" > "$output" 2>&1
-cat "$output"
+
+# v0.2.0 predates the silent controlling-terminal probe. Keep its immutable release
+# bytes under test while omitting that known macOS shell diagnostic from CI output.
+if [[ "$release_tag" == 'v0.2.0' ]]; then
+  sed '/\/dev\/tty: Device not configured$/d' "$output"
+else
+  cat "$output"
+fi
 
 saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 if [[ ! -f "$saved_tool" ]]; then
