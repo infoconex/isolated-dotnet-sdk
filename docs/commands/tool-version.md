@@ -4,13 +4,11 @@ The tool exposes its own release/source identity separately from the .NET SDK ve
 
 ## Direct query
 
-PowerShell uses a dedicated switch because `-Version` already selects a .NET SDK:
+Both supported shells use their native `version` switch for the tool itself:
 
 ```powershell
-& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -ToolVersion
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version
 ```
-
-Bash uses the conventional version option:
 
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version
@@ -32,12 +30,17 @@ The version query exits successfully after printing that identity. It does not b
 
 ## Tool version versus SDK version
 
-These are separate concepts:
+The supported shells expose the same version-selection capabilities with native switch spelling:
 
-- **tool version/source identity** identifies the `isolated-dotnet-sdk` script being executed;
-- **SDK version** identifies the .NET SDK selected for Install, Verify, or Remove.
+| Purpose | PowerShell | Bash |
+| --- | --- | --- |
+| Tool release/source identity | `-Version` | `--version` |
+| Explicit exact SDK selector | `-SdkVersion <version>` | `--sdk-version <version>` |
+| Positional exact SDK selector | `<version>` | `<version>` |
 
-PowerShell `-Version <sdk-version>` keeps its existing SDK-selection meaning. It is not an alias for `-ToolVersion`.
+The explicit and positional SDK forms are equivalent. With no explicit action, an SDK version is a one-shot Install request. With Install, Verify, or Remove, it selects the SDK for that action.
+
+`-Version` / `--version` never selects a .NET SDK. It identifies the `isolated-dotnet-sdk` tool itself.
 
 ## Stable and development identity
 

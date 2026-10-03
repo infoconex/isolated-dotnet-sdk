@@ -100,7 +100,7 @@ $script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParamete
 $script:WhatIfWasSpecified = $PSBoundParameters.ContainsKey('WhatIf')
 $script:WhatIfValue = if ($script:WhatIfWasSpecified) { [bool]$PSBoundParameters['WhatIf'] } else { $false }
 
-function Get-VersionText {
+function Get-ToolVersionText {
     if ($ToolReleaseIdentity -eq 'development') {
         return 'isolated-dotnet-sdk development (main)'
     }
@@ -1506,7 +1506,7 @@ if ($Version) {
         exit 1
     }
 
-    Write-Output (Get-VersionText)
+    Write-Output (Get-ToolVersionText)
     return
 }
 

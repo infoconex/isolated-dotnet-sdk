@@ -7,7 +7,7 @@ Stable use has two supported bootstrap modes:
 
 Both modes ultimately execute a tagged `isolated-dotnet-sdk` product script only after verifying it against that release's `SHA256SUMS`. Mutable `main` remains a separate development-only source.
 
-For releases published with embedded tool identity, the tagged script reports that exact tag through `-ToolVersion` on PowerShell or `--version` on Bash, and Main displays the same stable identity. Because file-based bootstrap preserves the verified tagged bytes, the saved tool keeps that same identity without querying GitHub later.
+For releases published with embedded tool identity, the tagged script reports that exact tag through `-Version` on PowerShell or `--version` on Bash, and Main displays the same stable identity. Because file-based bootstrap preserves the verified tagged bytes, the saved tool keeps that same identity without querying GitHub later.
 
 ## Latest stable bootstrap
 

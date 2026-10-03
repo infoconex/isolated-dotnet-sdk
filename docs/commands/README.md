@@ -18,7 +18,7 @@ For exact commands and copy/paste examples, use the supported platform guide:
 
 Starting the tool without an action or exact version opens the persistent interactive session. Explicit actions and exact-version requests are one-shot and exit after the requested operation completes, is cancelled normally, or fails.
 
-The tool-version query is also one-shot, but it identifies `isolated-dotnet-sdk` itself rather than selecting a .NET SDK. It exits before bootstrap, SDK discovery, release-metadata access, prompting, or mutation. PowerShell keeps `-Version` exclusively for the existing SDK-selection behavior and uses `-ToolVersion` for tool identity; Bash uses `--version`.
+The tool-version query is also one-shot, but it identifies `isolated-dotnet-sdk` itself rather than selecting a .NET SDK. It exits before bootstrap, SDK discovery, release-metadata access, prompting, or mutation. PowerShell uses `-Version` and Bash uses `--version` for tool identity. Exact SDK selection is `-SdkVersion <version>` in PowerShell and `--sdk-version <version>` in Bash, and both shells also accept the exact SDK version positionally.
 
 The tool owns SDKs only under the current user's `dotnet-sdks` directory. System SDKs are supplemental read-only inventory and never become removable merely because the tool can see them.
 

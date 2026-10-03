@@ -39,7 +39,7 @@ Normal execution of that saved tool does not auto-update. For an explicit pinned
 
 Stable releases published with embedded identity report their exact release tag. Mutable `main` reports `isolated-dotnet-sdk development (main)` instead of claiming a stable version. The query exits without bootstrap, network access, SDK discovery, prompting, or mutation.
 
-This identifies the `isolated-dotnet-sdk` tool itself. A bare value such as `10.0.401` remains the existing .NET SDK Install selector. See [Tool version](../commands/tool-version.md).
+This identifies the `isolated-dotnet-sdk` tool itself. `--sdk-version <sdk-version>` explicitly selects a .NET SDK, and a bare value such as `10.0.401` is the equivalent positional selector. See [Tool version](../commands/tool-version.md).
 
 ## Start an interactive session
 
@@ -57,13 +57,19 @@ Open the interactive install picker once and exit when it completes:
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install
 ```
 
-Install a known exact version directly:
+Install a known exact version directly with the explicit SDK selector:
 
 ```bash
-"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install 10.0.401
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" install --sdk-version 10.0.401
 ```
 
-A bare version is the Install convenience form:
+Without an explicit action, `--sdk-version` implies Install:
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --sdk-version 10.0.401
+```
+
+The equivalent positional convenience form is also supported:
 
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" 10.0.401

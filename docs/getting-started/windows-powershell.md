@@ -31,12 +31,12 @@ Normal execution of that saved tool does not auto-update. For an explicit pinned
 ## Identify the tool version
 
 ```powershell
-& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -ToolVersion
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version
 ```
 
 Stable releases published with embedded identity report their exact release tag. Mutable `main` reports `isolated-dotnet-sdk development (main)` instead of claiming a stable version. The query exits without bootstrap, network access, SDK discovery, prompting, or mutation.
 
-`-ToolVersion` identifies the `isolated-dotnet-sdk` tool. The existing `-Version <sdk-version>` parameter remains the .NET SDK selector used by Install, Verify, and Remove. See [Tool version](../commands/tool-version.md).
+`-Version` identifies the `isolated-dotnet-sdk` tool. `-SdkVersion <sdk-version>` explicitly selects the .NET SDK used by Install, Verify, and Remove, and the same exact SDK version can be supplied positionally. See [Tool version](../commands/tool-version.md).
 
 ## Start an interactive session
 
@@ -59,13 +59,19 @@ Install a known exact version directly:
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
     -Action Install `
-    -Version '10.0.401'
+    -SdkVersion '10.0.401'
 ```
 
-A version without `-Action` is the Install convenience form:
+Without `-Action`, the explicit SDK selector implies Install:
 
 ```powershell
-& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version '10.0.401'
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -SdkVersion '10.0.401'
+```
+
+The equivalent positional convenience form is also supported:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" '10.0.401'
 ```
 
 If a matching System SDK already exists, Install normally asks before creating an isolated copy. Use `-Yes` only when that confirmation should be approved automatically:
@@ -73,7 +79,7 @@ If a matching System SDK already exists, Install normally asks before creating a
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
     -Action Install `
-    -Version '10.0.401' `
+    -SdkVersion '10.0.401' `
     -Yes
 ```
 
@@ -92,7 +98,7 @@ List shows Isolated SDKs first and read-only System SDKs second. See [List](../c
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
     -Action Verify `
-    -Version '10.0.401'
+    -SdkVersion '10.0.401'
 ```
 
 Verify is read-only and direct-command-only. See [Verify](../commands/verify.md).
@@ -123,7 +129,7 @@ Remove one exact isolated SDK:
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
     -Action Remove `
-    -Version '10.0.401'
+    -SdkVersion '10.0.401'
 ```
 
 Preview the PowerShell removal operation without shutting down build servers or deleting the SDK:
@@ -131,7 +137,7 @@ Preview the PowerShell removal operation without shutting down build servers or 
 ```powershell
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" `
     -Action Remove `
-    -Version '10.0.401' `
+    -SdkVersion '10.0.401' `
     -WhatIf
 ```
 
@@ -145,7 +151,7 @@ For explicit development testing only, mutable `main` can be piped into PowerShe
 irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolated-dotnet-sdk.ps1 | iex
 ```
 
-This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee. Once saved, that development copy reports `isolated-dotnet-sdk development (main)` through `-ToolVersion` and on Main.
+This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee. Once saved, that development copy reports `isolated-dotnet-sdk development (main)` through `-Version` and on Main.
 
 ## Next steps
 

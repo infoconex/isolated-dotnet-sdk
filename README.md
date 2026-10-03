@@ -56,14 +56,14 @@ Selection:
 You can also query the tool identity directly without bootstrap, SDK discovery, network access, prompting, or mutation:
 
 ```powershell
-& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -ToolVersion
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version
 ```
 
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version
 ```
 
-PowerShell `-ToolVersion` identifies the tool itself; the existing `-Version <sdk-version>` parameter remains the .NET SDK selector. See [Tool version](docs/commands/tool-version.md).
+PowerShell `-Version` and Bash `--version` identify the tool itself. For explicit SDK selection, use PowerShell `-SdkVersion <sdk-version>` or Bash `--sdk-version <sdk-version>`; both shells also accept the exact SDK version positionally. See [Tool version](docs/commands/tool-version.md).
 
 Explicit Install, List, Verify, Remove, and exact-version invocations remain one-shot for scripting and automation.
 
