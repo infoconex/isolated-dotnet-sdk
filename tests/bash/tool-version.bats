@@ -3,6 +3,7 @@
 setup() {
   repo_root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   tool="$repo_root/isolated-dotnet-sdk.sh"
+  bash_path="$(command -v bash)"
   test_root="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-version.XXXXXX")"
   test_home="$test_root/home"
   mkdir -p "$test_home"
@@ -12,21 +13,35 @@ teardown() {
   rm -rf "$test_root"
 }
 
-@test "development tool version query is side-effect free" {
-  run env HOME="$test_home" "$tool" --version
+@test "development tool version query is side-effect free and needs no operational dependencies" {
+  run env \
+    HOME="$test_home" \
+    PATH='' \
+    http_proxy='http://127.0.0.1:1' \
+    https_proxy='http://127.0.0.1:1' \
+    HTTP_PROXY='http://127.0.0.1:1' \
+    HTTPS_PROXY='http://127.0.0.1:1' \
+    "$bash_path" "$tool" --version
 
   [ "$status" -eq 0 ]
   [ "$output" = "isolated-dotnet-sdk development (main)" ]
   [ ! -e "$test_home/dotnet-sdks" ]
 }
 
-@test "stable release marker reports the exact release identity" {
+@test "stable release marker reports the exact release identity without operational dependencies" {
   stable_tool="$test_root/isolated-dotnet-sdk.sh"
   sed 's/^TOOL_RELEASE_IDENTITY="development"$/TOOL_RELEASE_IDENTITY="v9.8.7"/' \
     "$tool" > "$stable_tool"
   chmod +x "$stable_tool"
 
-  run env HOME="$test_home" "$stable_tool" --version
+  run env \
+    HOME="$test_home" \
+    PATH='' \
+    http_proxy='http://127.0.0.1:1' \
+    https_proxy='http://127.0.0.1:1' \
+    HTTP_PROXY='http://127.0.0.1:1' \
+    HTTPS_PROXY='http://127.0.0.1:1' \
+    "$bash_path" "$stable_tool" --version
 
   [ "$status" -eq 0 ]
   [ "$output" = "isolated-dotnet-sdk v9.8.7" ]

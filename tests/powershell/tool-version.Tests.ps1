@@ -3,6 +3,7 @@ Describe 'PowerShell tool version identity' {
         $script:RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
         $script:StampScript = Join-Path $script:RepositoryRoot 'scripts/Set-ReleaseToolVersion.ps1'
+        $script:PowerShellPath = (Get-Process -Id $PID).Path
 
         function Invoke-ToolProcess {
             param(
@@ -13,7 +14,7 @@ Describe 'PowerShell tool version identity' {
             )
 
             $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-            $startInfo.FileName = 'pwsh'
+            $startInfo.FileName = $script:PowerShellPath
             $startInfo.UseShellExecute = $false
             $startInfo.RedirectStandardInput = $true
             $startInfo.RedirectStandardOutput = $true
@@ -26,6 +27,11 @@ Describe 'PowerShell tool version identity' {
             }
             $startInfo.Environment['HOME'] = $HomePath
             $startInfo.Environment['USERPROFILE'] = $HomePath
+            $startInfo.Environment['PATH'] = ''
+            $startInfo.Environment['HTTP_PROXY'] = 'http://127.0.0.1:1'
+            $startInfo.Environment['HTTPS_PROXY'] = 'http://127.0.0.1:1'
+            $startInfo.Environment['http_proxy'] = 'http://127.0.0.1:1'
+            $startInfo.Environment['https_proxy'] = 'http://127.0.0.1:1'
 
             $process = [System.Diagnostics.Process]::new()
             $process.StartInfo = $startInfo
@@ -40,11 +46,13 @@ Describe 'PowerShell tool version identity' {
             $stderrTask = $process.StandardError.ReadToEndAsync()
             $process.WaitForExit()
 
+            $stdout = $stdoutTask.GetAwaiter().GetResult()
+            $stderr = $stderrTask.GetAwaiter().GetResult()
             return [pscustomobject]@{
                 ExitCode = $process.ExitCode
-                StdOut   = $stdoutTask.GetAwaiter().GetResult()
-                StdErr   = $stderrTask.GetAwaiter().GetResult()
-                Output   = $stdoutTask.Result + $stderrTask.Result
+                StdOut   = $stdout
+                StdErr   = $stderr
+                Output   = $stdout + $stderr
             }
         }
     }
@@ -59,7 +67,7 @@ Describe 'PowerShell tool version identity' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'reports development identity without bootstrap or filesystem mutation' {
+    It 'reports development identity without bootstrap or operational dependencies' {
         $result = Invoke-ToolProcess `
             -ToolPath $script:ToolScript `
             -Arguments @('-ToolVersion') `
@@ -70,7 +78,7 @@ Describe 'PowerShell tool version identity' {
         Test-Path -LiteralPath (Join-Path $script:TestHome 'dotnet-sdks') | Should -BeFalse
     }
 
-    It 'reports an exact stable release marker without bootstrap' {
+    It 'reports an exact stable release marker without bootstrap or operational dependencies' {
         $stableTool = Join-Path $script:TestRoot 'isolated-dotnet-sdk.ps1'
         $content = Get-Content -LiteralPath $script:ToolScript -Raw
         $content = $content.Replace(
