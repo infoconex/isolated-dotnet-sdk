@@ -13,6 +13,8 @@ on:
       - '_data/**'
       - '_layouts/**'
       - 'assets/**'
+      - 'install.ps1'
+      - 'install.sh'
       - 'search-index.json'
       - '.github/workflows/pages.yml'
   pull_request:
@@ -25,6 +27,8 @@ on:
       - '_data/**'
       - '_layouts/**'
       - 'assets/**'
+      - 'install.ps1'
+      - 'install.sh'
       - 'search-index.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -77,6 +81,7 @@ jobs:
           cp LICENSE .pages-source/
           cp .config/test-frameworks.json .config/static-analysis.json .pages-source/.config/
           cp _config.yml search-index.json .pages-source/
+          cp install.ps1 install.sh .pages-source/
           cp -R _data _layouts assets .pages-source/
 
           while IFS= read -r -d '' file; do
@@ -85,6 +90,8 @@ jobs:
 
           node --check .pages-source/assets/js/site.js
 
+          test -f .pages-source/install.ps1
+          test -f .pages-source/install.sh
           test ! -e .pages-source/tests
           test ! -e .pages-source/scripts
           test ! -e .pages-source/dotnet-install.sh
@@ -115,7 +122,11 @@ jobs:
           test -f _site/assets/search-index.json
           test -f _site/assets/css/site.css
           test -f _site/assets/js/site.js
+          test -f _site/install.ps1
+          test -f _site/install.sh
 
+          cmp install.ps1 _site/install.ps1
+          cmp install.sh _site/install.sh
           python -m json.tool _site/assets/search-index.json >/dev/null
 
           grep -q 'class="docs-nav"' _site/index.html
