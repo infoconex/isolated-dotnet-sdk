@@ -138,9 +138,11 @@ Describe 'PowerShell tool version identity' {
 
         $powerShellContent = Get-Content -LiteralPath (Join-Path $releaseRoot 'isolated-dotnet-sdk.ps1') -Raw
         $bashContent = Get-Content -LiteralPath (Join-Path $releaseRoot 'isolated-dotnet-sdk.sh') -Raw
-        $powerShellContent | Should -Match [regex]::Escape('$ToolReleaseIdentity = ''v9.8.7''')
+        $stablePowerShellMarker = [regex]::Escape('$ToolReleaseIdentity = ''v9.8.7''')
+        $developmentPowerShellMarker = [regex]::Escape('$ToolReleaseIdentity = ''development''')
+        $powerShellContent | Should -Match $stablePowerShellMarker
         $bashContent | Should -Match 'TOOL_RELEASE_IDENTITY="v9\.8\.7"'
-        $powerShellContent | Should -Not -Match [regex]::Escape('$ToolReleaseIdentity = ''development''')
+        $powerShellContent | Should -Not -Match $developmentPowerShellMarker
         $bashContent | Should -Not -Match 'TOOL_RELEASE_IDENTITY="development"'
     }
 }
