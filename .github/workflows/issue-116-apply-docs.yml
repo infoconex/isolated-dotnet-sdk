@@ -30,13 +30,16 @@ jobs:
           python3 -m py_compile .github/scripts/issue-116-docs-and-coverage.py
       - name: Apply updates
         run: python3 .github/scripts/issue-116-docs-and-coverage.py
+      - name: Prepare Bash validation tooling
+        shell: bash
+        run: bash scripts/initialize-bash-validation.sh false false
       - name: Validate Bash
         shell: bash
         run: |
           set -euo pipefail
           bash -n isolated-dotnet-sdk.sh
           bash -n tests/e2e/bash/direct.sh
-          bash scripts/initialize-bash-validation.sh false false
+          bash -n tests/e2e/bash/interactive.sh
           bash scripts/run-shellcheck.sh
           bash tests/bash/run-tests.sh
           git diff --check
@@ -44,11 +47,16 @@ jobs:
         shell: pwsh
         run: |
           $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-              (Resolve-Path './tests/e2e/powershell/direct.ps1'),
-              [ref]$tokens,
-              [ref]$errors) | Out-Null
+          $errors = @()
+          foreach ($path in @('./tests/e2e/powershell/direct.ps1', './tests/e2e/powershell/interactive.ps1')) {
+              $fileTokens = $null
+              $fileErrors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                  (Resolve-Path $path),
+                  [ref]$fileTokens,
+                  [ref]$fileErrors) | Out-Null
+              $errors += $fileErrors
+          }
           if ($errors.Count -gt 0) {
               $errors | ForEach-Object { Write-Error $_.Message }
               exit 1
