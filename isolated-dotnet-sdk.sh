@@ -608,24 +608,24 @@ audit_installed_sdks() {
     local line=""
     local version=""
     local i=0
-    local isolated_versions=()
-    local system_versions=()
-    local isolated_statuses=()
-    local system_statuses=()
+    local audit_isolated_versions=()
+    local audit_system_versions=()
+    local audit_isolated_statuses=()
+    local audit_system_statuses=()
 
     isolated_output="$(get_isolated_sdk_versions)"
     system_output="$(get_system_sdk_inventory)"
 
     while IFS= read -r line; do
-        [[ -n "$line" ]] && isolated_versions+=("$line")
+        [[ -n "$line" ]] && audit_isolated_versions+=("$line")
     done <<< "$isolated_output"
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
         version="${line%%[[:space:]]*}"
-        system_versions+=("$version")
+        audit_system_versions+=("$version")
     done <<< "$system_output"
 
-    if (( ${#isolated_versions[@]} == 0 && ${#system_versions[@]} == 0 )); then
+    if (( ${#audit_isolated_versions[@]} == 0 && ${#audit_system_versions[@]} == 0 )); then
         tool_heading ".NET SDK audit"
         echo
         tool_heading "Isolated SDKs:"
@@ -647,33 +647,33 @@ audit_installed_sdks() {
 
     AUDIT_METADATA_CHANNELS=()
     AUDIT_METADATA_VALUES=()
-    for version in "${isolated_versions[@]}"; do
+    for version in "${audit_isolated_versions[@]+"${audit_isolated_versions[@]}"}"; do
         resolve_audit_status "$version" "$channel_data"
-        isolated_statuses+=("$AUDIT_STATUS")
+        audit_isolated_statuses+=("$AUDIT_STATUS")
     done
-    for version in "${system_versions[@]}"; do
+    for version in "${audit_system_versions[@]+"${audit_system_versions[@]}"}"; do
         resolve_audit_status "$version" "$channel_data"
-        system_statuses+=("$AUDIT_STATUS")
+        audit_system_statuses+=("$AUDIT_STATUS")
     done
 
     tool_heading ".NET SDK audit"
     echo
     tool_heading "Isolated SDKs:"
-    if (( ${#isolated_versions[@]} == 0 )); then
+    if (( ${#audit_isolated_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<${#isolated_versions[@]}; i++)); do
-            printf '  %s  %s\n' "${isolated_versions[$i]}" "${isolated_statuses[$i]}"
+        for ((i=0; i<${#audit_isolated_versions[@]}; i++)); do
+            printf '  %s  %s\n' "${audit_isolated_versions[$i]}" "${audit_isolated_statuses[$i]}"
         done
     fi
 
     echo
     tool_heading "System SDKs:"
-    if (( ${#system_versions[@]} == 0 )); then
+    if (( ${#audit_system_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<${#system_versions[@]}; i++)); do
-            printf '  %s  %s\n' "${system_versions[$i]}" "${system_statuses[$i]}"
+        for ((i=0; i<${#audit_system_versions[@]}; i++)); do
+            printf '  %s  %s\n' "${audit_system_versions[$i]}" "${audit_system_statuses[$i]}"
         done
     fi
 }
