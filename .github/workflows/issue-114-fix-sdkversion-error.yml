@@ -1,0 +1,51 @@
+name: Issue 114 SDK version error fix
+
+on:
+  push:
+    branches:
+      - feat/114-tool-version-identity
+    paths:
+      - .github/workflows/issue-114-fix-sdkversion-error.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/114-tool-version-identity
+          fetch-depth: 0
+
+      - name: Fix PowerShell SDK version error context
+        shell: pwsh
+        run: |
+          $path = 'isolated-dotnet-sdk.ps1'
+          $content = Get-Content -LiteralPath $path -Raw
+          $old = 'throw "Unable to load valid Microsoft release metadata for SDK ${Version}: $($_.Exception.Message)"'
+          $new = 'throw "Unable to load valid Microsoft release metadata for SDK ${SdkVersion}: $($_.Exception.Message)"'
+          if (([regex]::Matches($content, [regex]::Escape($old))).Count -ne 1) {
+              throw 'Expected exactly one stale release-metadata error interpolation.'
+          }
+          $content = $content.Replace($old, $new)
+          [System.IO.File]::WriteAllText((Resolve-Path $path), $content, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Validate focused PowerShell contract
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'isolated-dotnet-sdk.ps1'), [ref]$null, [ref]$errors)
+          if ($errors.Count -gt 0) { throw ($errors -join [Environment]::NewLine) }
+          Select-String -LiteralPath isolated-dotnet-sdk.ps1 -SimpleMatch 'SDK ${Version}' -Quiet | ForEach-Object { if ($_){ throw 'Stale SDK ${Version} interpolation remains.' } }
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git add isolated-dotnet-sdk.ps1
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: preserve SDK version in metadata errors' -m 'Refs #114'
+          git push origin HEAD:feat/114-tool-version-identity
