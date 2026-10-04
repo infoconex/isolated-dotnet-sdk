@@ -95,6 +95,8 @@
       path: docs/maintainers/development/coding-consistency.md
     - title: Source Formatting
       path: docs/maintainers/development/source-formatting.md
+    - title: List Enrichment Evaluation
+      path: docs/maintainers/development/list-enrichment-evaluation.md
     - title: Dependency Monitoring
       path: docs/maintainers/dependencies/dependency-update-monitoring.md
     - title: Release Process
