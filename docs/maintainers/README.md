@@ -6,6 +6,7 @@ These documents are for repository development, validation, dependency maintenan
 
 - [Coding and naming consistency](development/coding-consistency.md)
 - [Source formatting](development/source-formatting.md)
+- [List enrichment evaluation](development/list-enrichment-evaluation.md)
 
 ## Testing and validation
 
