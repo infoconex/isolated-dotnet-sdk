@@ -111,10 +111,10 @@ EOF
   [[ "$output" != *"2. Remove an isolated SDK"* ]]
   [[ "$output" != *"3. List installed SDKs"* ]]
   [[ "$output" != *"4. Exit"* ]]
-  [[ "$output" == *"Invalid selection: 1. Choose I, R, L, V, or E."* ]]
-  [[ "$output" == *"Invalid selection: 2. Choose I, R, L, V, or E."* ]]
-  [[ "$output" == *"Invalid selection: 3. Choose I, R, L, V, or E."* ]]
-  [[ "$output" == *"Invalid selection: 4. Choose I, R, L, V, or E."* ]]
+  [[ "$output" == *"Invalid selection: 1. Choose I, R, L, V, A, or E."* ]]
+  [[ "$output" == *"Invalid selection: 2. Choose I, R, L, V, A, or E."* ]]
+  [[ "$output" == *"Invalid selection: 3. Choose I, R, L, V, A, or E."* ]]
+  [[ "$output" == *"Invalid selection: 4. Choose I, R, L, V, A, or E."* ]]
   [[ "$output" == *"Exiting."* ]]
 
   exit_helper="$(sed -n '/^tool_exit() {/,/^}/p' "$repo_root/isolated-dotnet-sdk.sh")"
