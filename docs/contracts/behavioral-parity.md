@@ -16,13 +16,14 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Normally installed matching SDK | Ask before creating an isolated copy unless the shell's explicit confirmation-bypass option is supplied. |
 | `-Yes` / `--yes` | Bypass supported confirmation prompts only. It does not invent a version or bypass an unresolved selection prompt. |
 | Required interactive input unavailable | Fail nonzero with repository-owned `Interactive input is unavailable.` context rather than looping or treating EOF as cancellation. |
-| Persistent Main menu | Use case-insensitive `I` / `R` / `L` / `E` for Install / Remove / List / Exit. Numeric `1` / `2` / `3` / `4` are rejected rather than retained as hidden aliases. |
+| Persistent Main menu | Use case-insensitive `I` / `R` / `L` / `V` / `E` for Install / Remove / List / Verify / Exit. Old numeric Main aliases are rejected rather than retained as hidden aliases. |
 | Explicit interactive no/blank/q cancellation | Return success with no state change where that response is part of the prompt's normal cancellation contract. |
 | List | Report two ordered ownership groups: recognized isolated SDKs under the isolated root first, then read-only SDKs returned by the normally resolved `dotnet --list-sdks` host. Include each SDK's concrete version directory, preserve same-version overlap across groups, and report `None` for each empty group. |
 | Existing SDK detection | Distinguish SDKs already available from the system `dotnet` host from SDKs already present under the isolated root. An unavailable normal host is an empty system inventory; a resolved host whose `--list-sdks` command fails is an operational failure. |
 | Explicit List plus Version | Reject the version instead of silently ignoring it. |
-| Verify with an exact version | Run a direct-command-only, read-only health check against that version directory under the isolated SDK root. Require the platform host to be present/runnable, require `--list-sdks` to succeed, and require the host to report the requested exact SDK version. |
-| Unhealthy Verify result | Return nonzero with repository-owned context for not-installed, missing/non-runnable host, native host failure, or exact-version mismatch. Verification never repairs or mutates the installation. |
+| Explicit Verify with an exact version | Run a one-shot, read-only health check against that version directory under the isolated SDK root. Require the platform host to be present/runnable, require `--list-sdks` to succeed, and require the host to report the requested exact SDK version. |
+| Interactive Verify | From Main, list only recognized isolated SDKs, select one exact version, and run the same read-only health check as explicit Verify. System SDKs are not targets. Back or an empty isolated inventory is a normal no-change outcome that returns to Main. |
+| Unhealthy Verify result | Return nonzero with repository-owned context for not-installed, missing/non-runnable host, native host failure, or exact-version mismatch. Verification never repairs or mutates the installation. In a persistent session, the failure terminates the process rather than returning to Main. |
 | Remove without a version | Present the installed isolated SDK picker. Explicit cancellation or an empty installed set is a normal no-change result. |
 | Remove with a version | Target only that version's directory under the isolated SDK root. |
 | Removal confirmation | Default to no unless approval is explicitly supplied through the shell's supported mechanism. |
@@ -58,11 +59,12 @@ When the caller supplies an explicit action, or supplies an exact version throug
 
 Interactive navigation is deliberately limited:
 
-- Main provides mnemonic `I. Install`, `R. Remove`, `L. List`, and `E. Exit` commands;
+- Main provides mnemonic `I. Install`, `R. Remove`, `L. List`, `V. Verify`, and `E. Exit` commands;
 - each persistent selection menu also provides `E. Exit`;
 - Install channel selection provides Back to Main;
 - Install SDK version selection provides Back to channel selection;
 - Remove SDK selection provides Back to Main;
+- Verify SDK selection provides Back to Main and contains isolated SDKs only;
 - persistent selection menus do not expose redundant `Q. Cancel` actions when Back already provides the relevant workflow navigation;
 - explicit one-shot interactive selection may retain `Q. Cancel` as a successful no-change outcome.
 
@@ -70,7 +72,7 @@ Back is a selection-menu concept only. Ordinary yes/no install and removal confi
 
 Operational failures are never converted into navigation results. Metadata, filesystem, payload acquisition/checksum/extraction, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
 
-Automation should provide both the action and exact version when a version is required. `Verify <exact-version>` / `verify <exact-version>` is always one-shot and never enters the persistent Main menu. `-Yes` and `--yes` are confirmation controls, not selection controls.
+Automation should provide both the action and exact version when a version is required. Explicit `Verify <exact-version>` / `verify <exact-version>` remains one-shot and never enters the persistent Main loop. `-Yes` and `--yes` are confirmation controls, not selection controls.
 
 For example, `Install <exact-version> -Yes` / `install <exact-version> --yes` can run without the normally-installed-SDK confirmation. `Install -Yes` / `install --yes` still needs interactive selection because no version has been resolved. If that input cannot be obtained, the command fails rather than guessing or silently cancelling.
 
