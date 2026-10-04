@@ -1,15 +1,16 @@
 name: Temporary PowerShell Formatter
 
 on:
-  push:
+  pull_request:
     branches:
-      - issue-115-interactive-verify
+      - main
 
 permissions:
   contents: write
 
 jobs:
   format:
+    if: github.event.pull_request.head.ref == 'issue-115-interactive-verify'
     runs-on: windows-2025
 
     steps:
