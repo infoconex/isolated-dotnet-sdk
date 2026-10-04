@@ -68,7 +68,7 @@ Describe 'PowerShell removal presentation' {
         $lines = @(Get-Content -LiteralPath $script:ToolScript)
         $warningIndex = -1
         for ($index = 0; $index -lt $lines.Count; $index++) {
-            if ($lines[$index] -like '*Write-ToolWarning "Isolated SDK $Version will be removed from $InstallDir"*') {
+            if ($lines[$index] -like '*Write-ToolWarning "Isolated SDK $SdkVersion will be removed from $InstallDir"*') {
                 $warningIndex = $index
                 break
             }
