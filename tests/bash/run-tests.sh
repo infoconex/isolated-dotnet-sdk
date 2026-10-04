@@ -23,6 +23,7 @@ bats \
   "$repo_root/tests/bash/install-status.bats" \
   "$repo_root/tests/bash/installed-sdk-listing.bats" \
   "$repo_root/tests/bash/verify.bats" \
+  "$repo_root/tests/bash/audit.bats" \
   "$repo_root/tests/bash/interactive-verify.bats" \
   "$repo_root/tests/bash/interactive-lifecycle.bats" \
   "$repo_root/tests/bash/global-exit.bats" \

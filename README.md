@@ -47,6 +47,8 @@ What would you like to do?
   I. Install an SDK
   R. Remove an isolated SDK
   L. List installed SDKs
+  V. Verify an isolated SDK
+  A. Audit installed SDKs
 
   E. Exit
 
@@ -65,12 +67,13 @@ You can also query the tool identity directly without bootstrap, SDK discovery, 
 
 PowerShell `-Version` and Bash `--version` identify the tool itself. For explicit SDK selection, use PowerShell `-SdkVersion <sdk-version>` or Bash `--sdk-version <sdk-version>`; both shells also accept the exact SDK version positionally. See [Tool version](docs/commands/tool-version.md).
 
-Explicit Install, List, Verify, Remove, and exact-version invocations remain one-shot for scripting and automation.
+Explicit Install, List, Audit, Verify, Remove, and exact-version invocations remain one-shot for scripting and automation.
 
 ## What the tool does
 
 - **Install** an exact SDK under `~/dotnet-sdks/<version>` using Microsoft release metadata, SHA-512 payload verification, staging, exact-version verification, and promotion.
 - **List** recognized Isolated SDKs first, followed by read-only System SDKs visible through the normally resolved `dotnet` host.
+- **Audit** installed Isolated and System SDKs against current Microsoft servicing and lifecycle metadata without mutating either inventory.
 - **Verify** one installed isolated SDK with a read-only exact-version health check.
 - **Remove** only SDKs managed under the isolated SDK root.
 - **Identify** the running tool release/source directly or on Main without checking for updates.

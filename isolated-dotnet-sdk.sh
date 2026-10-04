@@ -298,34 +298,32 @@ looks_like_json_object() {
 # them in a simple pipe-delimited form without adding a JSON-parser dependency.
 parse_release_index() {
     awk '
-        /"channel-version"[[:space:]]*:/ {
-            channel=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", channel)
-            sub(/".*$/, "", channel)
-        }
-        /"latest-sdk"[[:space:]]*:/ {
-            latest=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", latest)
-            sub(/".*$/, "", latest)
-        }
-        /"support-phase"[[:space:]]*:/ {
-            phase=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", phase)
-            sub(/".*$/, "", phase)
-        }
-        /"release-type"[[:space:]]*:/ {
-            type=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", type)
-            sub(/".*$/, "", type)
-        }
-        /"releases.json"[[:space:]]*:/ {
-            url=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", url)
-            sub(/".*$/, "", url)
-            if (channel != "" && phase != "" && url != "") {
-                print channel "|" latest "|" phase "|" type "|" url
+        function json_string(line, key, marker, value) {
+            marker = "\\\"" key "\\\"[[:space:]]*:[[:space:]]*\\\""
+            if (!match(line, marker)) {
+                return ""
             }
-            channel=latest=phase=type=url=""
+            value = substr(line, RSTART + RLENGTH)
+            sub(/".*$/, "", value)
+            return value
+        }
+        {
+            value = json_string($0, "channel-version")
+            if (value != "") channel=value
+            value = json_string($0, "latest-sdk")
+            if (value != "") latest=value
+            value = json_string($0, "support-phase")
+            if (value != "") phase=value
+            value = json_string($0, "release-type")
+            if (value != "") type=value
+            value = json_string($0, "releases.json")
+            if (value != "") {
+                url=value
+                if (channel != "" && phase != "" && url != "") {
+                    print channel "|" latest "|" phase "|" type "|" url
+                }
+                channel=latest=phase=type=url=""
+            }
         }
     '
 }
@@ -432,6 +430,254 @@ build_compact_sdk_versions() {
     done <<< "$all_versions"
 }
 
+
+extract_security_sdk_versions() {
+    awk '
+        /"release-date"[[:space:]]*:/ { security="false" }
+        /"security"[[:space:]]*:[[:space:]]*true/ { security="true" }
+        /"security"[[:space:]]*:[[:space:]]*false/ { security="false" }
+        {
+            if (security != "true") next
+            line=$0
+            while (match(line, /\/dotnet\/Sdk\/[^\/"[:space:]]+/)) {
+                version=substr(line, RSTART, RLENGTH)
+                sub(/^.*\/Sdk\//, "", version)
+                if (!seen[version]++) print version
+                line=substr(line, RSTART + RLENGTH)
+            }
+        }
+    '
+}
+
+sdk_channel_from_version() {
+    local version="$1"
+    local core="${version%%-*}"
+    local major=""
+    local minor=""
+    local rest=""
+
+    IFS='.' read -r major minor rest <<< "$core"
+    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    printf '%s.%s' "$major" "$minor"
+}
+
+compare_sdk_versions() {
+    local left_key
+    local right_key
+    left_key="$(sdk_version_sort_key "$1")"
+    right_key="$(sdk_version_sort_key "$2")"
+
+    if [[ "$left_key" == "$right_key" ]]; then
+        printf '0'
+    elif [[ "$left_key" > "$right_key" ]]; then
+        printf '1'
+    else
+        printf '%s' '-1'
+    fi
+}
+
+audit_lifecycle_label() {
+    case "$1" in
+        active) printf '%s' '' ;;
+        maintenance) printf '%s' 'Maintenance' ;;
+        preview) printf '%s' 'Preview' ;;
+        go-live) printf '%s' 'Go Live' ;;
+        eol) printf '%s' 'End of life' ;;
+        *) printf '%s' 'Unsupported' ;;
+    esac
+}
+
+AUDIT_METADATA_CHANNELS=()
+AUDIT_METADATA_VALUES=()
+AUDIT_METADATA_RESULT=""
+AUDIT_STATUS=""
+
+load_audit_channel_metadata() {
+    local channel="$1"
+    local url="$2"
+    local i
+    local metadata=""
+    local versions=""
+
+    for ((i=0; i<${#AUDIT_METADATA_CHANNELS[@]}; i++)); do
+        if [[ "${AUDIT_METADATA_CHANNELS[$i]}" == "$channel" ]]; then
+            AUDIT_METADATA_RESULT="${AUDIT_METADATA_VALUES[$i]}"
+            return
+        fi
+    done
+
+    if ! metadata="$(curl -fsSL "$url")"; then
+        tool_fail "Unable to load release metadata for .NET $channel."
+    fi
+    if ! looks_like_json_object "$metadata" || [[ "$metadata" != *'"releases"'* ]]; then
+        tool_fail "Invalid release metadata for .NET $channel."
+    fi
+    versions="$(printf '%s\n' "$metadata" | extract_sdk_versions || true)"
+    [[ -n "$versions" ]] || tool_fail "Invalid release metadata for .NET $channel."
+
+    AUDIT_METADATA_CHANNELS+=("$channel")
+    AUDIT_METADATA_VALUES+=("$metadata")
+    AUDIT_METADATA_RESULT="$metadata"
+}
+
+resolve_audit_status() {
+    local version="$1"
+    local channel_data="$2"
+    local channel=""
+    local found="false"
+    local latest_sdk=""
+    local phase=""
+    local release_type=""
+    local releases_url=""
+    local row_channel=""
+    local metadata=""
+    local versions=""
+    local security_versions=""
+    local security_version=""
+    local comparison=0
+    local servicing=""
+    local lifecycle=""
+
+    if ! channel="$(sdk_channel_from_version "$version")"; then
+        AUDIT_STATUS="Unknown channel"
+        return
+    fi
+
+    while IFS='|' read -r row_channel latest_sdk phase release_type releases_url; do
+        if [[ "$row_channel" == "$channel" ]]; then
+            found="true"
+            break
+        fi
+    done <<< "$channel_data"
+
+    if [[ "$found" != "true" ]]; then
+        AUDIT_STATUS="Unknown channel"
+        return
+    fi
+    if [[ -z "$latest_sdk" || -z "$phase" || -z "$releases_url" ]]; then
+        tool_fail "Invalid .NET release metadata for .NET $channel."
+    fi
+
+    load_audit_channel_metadata "$channel" "$releases_url"
+    metadata="$AUDIT_METADATA_RESULT"
+    versions="$(printf '%s\n' "$metadata" | extract_sdk_versions || true)"
+    contains_line "$versions" "$latest_sdk" || tool_fail "Invalid release metadata for .NET $channel."
+
+    if [[ "$phase" == "eol" ]]; then
+        AUDIT_STATUS="End of life"
+        return
+    fi
+
+    comparison="$(compare_sdk_versions "$version" "$latest_sdk")"
+    if (( comparison > 0 )); then
+        servicing="Newer than known metadata"
+    elif (( comparison == 0 )); then
+        servicing="Current"
+    else
+        servicing="Update available -> $latest_sdk"
+        if [[ "$phase" != "preview" && "$version" != *-* ]] && contains_line "$versions" "$version"; then
+            security_versions="$(printf '%s\n' "$metadata" | extract_security_sdk_versions || true)"
+            while IFS= read -r security_version; do
+                [[ -n "$security_version" ]] || continue
+                if (( $(compare_sdk_versions "$security_version" "$version") > 0 )); then
+                    servicing="Security update available -> $latest_sdk"
+                    break
+                fi
+            done <<< "$security_versions"
+        fi
+    fi
+
+    lifecycle="$(audit_lifecycle_label "$phase")"
+    if [[ "$servicing" == "Current" && -n "$lifecycle" ]]; then
+        AUDIT_STATUS="$lifecycle"
+    elif [[ -n "$lifecycle" ]]; then
+        AUDIT_STATUS="$servicing  $lifecycle"
+    else
+        AUDIT_STATUS="$servicing"
+    fi
+}
+
+audit_installed_sdks() {
+    local isolated_output=""
+    local system_output=""
+    local index_json=""
+    local channel_data=""
+    local line=""
+    local version=""
+    local i=0
+    local audit_isolated_versions=()
+    local audit_system_versions=()
+    local audit_isolated_statuses=()
+    local audit_system_statuses=()
+
+    isolated_output="$(get_isolated_sdk_versions)"
+    system_output="$(get_system_sdk_inventory)"
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && audit_isolated_versions+=("$line")
+    done <<< "$isolated_output"
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        version="${line%%[[:space:]]*}"
+        audit_system_versions+=("$version")
+    done <<< "$system_output"
+
+    if (( ${#audit_isolated_versions[@]} == 0 && ${#audit_system_versions[@]} == 0 )); then
+        tool_heading ".NET SDK audit"
+        echo
+        tool_heading "Isolated SDKs:"
+        echo "  None"
+        echo
+        tool_heading "System SDKs:"
+        echo "  None"
+        return
+    fi
+
+    tool_info "Loading available .NET SDK releases from Microsoft..."
+    index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
+        tool_fail "Unable to load .NET release metadata from Microsoft."
+    if ! looks_like_json_object "$index_json" || [[ "$index_json" != *'"releases-index"'* ]]; then
+        tool_fail "Invalid .NET release metadata from Microsoft."
+    fi
+    channel_data="$(printf '%s\n' "$index_json" | parse_release_index)"
+    [[ -n "$channel_data" ]] || tool_fail "Invalid .NET release metadata from Microsoft."
+
+    AUDIT_METADATA_CHANNELS=()
+    AUDIT_METADATA_VALUES=()
+    for version in "${audit_isolated_versions[@]+"${audit_isolated_versions[@]}"}"; do
+        resolve_audit_status "$version" "$channel_data"
+        audit_isolated_statuses+=("$AUDIT_STATUS")
+    done
+    for version in "${audit_system_versions[@]+"${audit_system_versions[@]}"}"; do
+        resolve_audit_status "$version" "$channel_data"
+        audit_system_statuses+=("$AUDIT_STATUS")
+    done
+
+    tool_heading ".NET SDK audit"
+    echo
+    tool_heading "Isolated SDKs:"
+    if (( ${#audit_isolated_versions[@]} == 0 )); then
+        echo "  None"
+    else
+        for ((i=0; i<${#audit_isolated_versions[@]}; i++)); do
+            printf '  %s  %s\n' "${audit_isolated_versions[$i]}" "${audit_isolated_statuses[$i]}"
+        done
+    fi
+
+    echo
+    tool_heading "System SDKs:"
+    if (( ${#audit_system_versions[@]} == 0 )); then
+        echo "  None"
+    else
+        for ((i=0; i<${#audit_system_versions[@]}; i++)); do
+            printf '  %s  %s\n' "${audit_system_versions[$i]}" "${audit_system_statuses[$i]}"
+        done
+    fi
+}
+
 select_action() {
     local selection=""
 
@@ -444,6 +690,7 @@ select_action() {
         echo "  R. Remove an isolated SDK"
         echo "  L. List installed SDKs"
         echo "  V. Verify an isolated SDK"
+        echo "  A. Audit installed SDKs"
         echo
         echo "  E. Exit"
         echo
@@ -455,9 +702,10 @@ select_action() {
             r|R) ACTION="remove"; return 0 ;;
             l|L) ACTION="list"; return 0 ;;
             v|V) ACTION="verify"; return 0 ;;
+            a|A) ACTION="audit"; return 0 ;;
             e|E) tool_exit; return 1 ;;
             *)
-                warn_invalid_selection "$selection" "Choose I, R, L, V, or E."
+                warn_invalid_selection "$selection" "Choose I, R, L, V, A, or E."
                 echo
                 ;;
         esac
@@ -1411,6 +1659,9 @@ run_selected_action() {
         list)
             list_installed_sdks
             ;;
+        audit)
+            audit_installed_sdks
+            ;;
         verify)
             if [[ "$INTERACTIVE_SESSION" == "true" && -z "$VERSION" ]]; then
                 select_verify_version || return 0
@@ -1438,6 +1689,7 @@ Usage:
   isolated-dotnet-sdk.sh remove [version] [--yes|-y]
   isolated-dotnet-sdk.sh list
   isolated-dotnet-sdk.sh verify <version>
+  isolated-dotnet-sdk.sh audit
   isolated-dotnet-sdk.sh --sdk-version <version> [--yes|-y]
   isolated-dotnet-sdk.sh [version] [--yes|-y]
   isolated-dotnet-sdk.sh --version
@@ -1448,6 +1700,7 @@ Commands:
   remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
   list               List isolated SDKs and SDKs visible through the normal dotnet host. A version is invalid with list.
   verify <version>   Read-only health check for one exact installed isolated SDK.
+  audit              Online read-only lifecycle and servicing assessment for installed SDKs.
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
@@ -1463,6 +1716,7 @@ Behavior:
   List               Shows isolated ownership first, then read-only SDKs reported by the normal dotnet --list-sdks host.
   Verify <version>   Requires one exact version and checks only the existing isolated installation.
   Interactive Verify selects one installed isolated SDK and runs the same read-only health check.
+  Audit              Uses current Microsoft release metadata for Isolated and System SDKs without changing them.
   Exact-version installs bypass release-metadata discovery.
   Interactive install selection uses Microsoft's published release metadata.
   Required interactive input that is unavailable is an operational failure.
@@ -1507,7 +1761,7 @@ EXIT_REQUESTED="false"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        install|remove|list|verify)
+        install|remove|list|verify|audit)
             if [[ -n "$ACTION" ]]; then
                 tool_fail "Only one action may be specified."
             fi
@@ -1548,6 +1802,10 @@ done
 
 if [[ "$ACTION" == "list" && -n "$VERSION" ]]; then
     tool_fail "An SDK version cannot be combined with list."
+fi
+
+if [[ "$ACTION" == "audit" && -n "$VERSION" ]]; then
+    tool_fail "An SDK version cannot be combined with audit."
 fi
 
 if [[ -z "$ACTION" && -n "$VERSION" ]]; then

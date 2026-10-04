@@ -44,7 +44,7 @@ Stable releases published with embedded identity report their exact release tag.
 & "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1"
 ```
 
-Main displays the same stable/development tool identity near the top. The persistent session uses `I` for Install, `R` for Remove, `L` for List, `V` for Verify, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
+Main displays the same stable/development tool identity near the top. The persistent session uses `I` for Install, `R` for Remove, `L` for List, `V` for Verify, `A` for Audit, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
 
 ## Install an SDK
 
@@ -92,6 +92,16 @@ See [Install](../commands/install.md) for the behavioral and integrity contract.
 ```
 
 List shows Isolated SDKs first and read-only System SDKs second. See [List](../commands/list.md).
+
+## Audit installed SDKs
+
+Run the explicit online, read-only servicing and lifecycle assessment:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Action Audit
+```
+
+Audit reports Isolated SDKs and System SDKs separately and uses current Microsoft release metadata. It does not install, remove, or repair SDKs. See [Audit](../commands/audit.md).
 
 ## Verify an isolated SDK
 

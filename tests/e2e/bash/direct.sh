@@ -70,6 +70,13 @@ if ! grep -Fq "$sdk_version" <<<"$list_output"; then
   exit 1
 fi
 
+audit_output="$(bash "$saved_tool" audit)"
+printf '%s\n' "$audit_output"
+if ! grep -Fq '.NET SDK audit' <<<"$audit_output" || ! grep -Fq "$sdk_version" <<<"$audit_output"; then
+  printf 'Audit output did not assess installed SDK %s.\n' "$sdk_version" >&2
+  exit 1
+fi
+
 echo "E2E direct: removing .NET SDK $sdk_version"
 bash "$saved_tool" remove "$sdk_version" --yes
 

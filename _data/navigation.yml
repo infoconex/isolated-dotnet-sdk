@@ -24,6 +24,8 @@
       path: docs/commands/install.md
     - title: List
       path: docs/commands/list.md
+    - title: Audit
+      path: docs/commands/audit.md
     - title: Verify
       path: docs/commands/verify.md
     - title: Remove

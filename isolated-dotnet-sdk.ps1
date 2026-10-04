@@ -5,17 +5,17 @@ Installs and manages isolated .NET SDK versions on Windows with PowerShell 7.
 .DESCRIPTION
 Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. Isolated SDKs remain under that user-owned root and are not added to PATH.
 
-Supported product actions are Install, Remove, List, and Verify. When Action and SdkVersion are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and SdkVersion is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with SdkVersion is invalid. Direct Verify requires an exact SdkVersion; interactive Verify selects an installed isolated SDK from Main and runs the same read-only health check. Install or Remove without a resolved version may require interactive selection.
+Supported product actions are Install, Remove, List, Verify, and Audit. Audit is an explicit online, read-only lifecycle and servicing assessment for installed Isolated and System SDKs. When Action and SdkVersion are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and SdkVersion is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with SdkVersion is invalid. Direct Verify requires an exact SdkVersion; interactive Verify selects an installed isolated SDK from Main and runs the same read-only health check. Install or Remove without a resolved version may require interactive selection.
 
 Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
 
 Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata. List reports recognized isolated SDKs first and then the read-only SDK inventory returned by the normally resolved dotnet --list-sdks host. System SDK discovery is supplemental rather than an exhaustive filesystem inventory, and system SDKs are never managed by Remove or targeted by Verify.
 
 .PARAMETER Action
-Specifies the operation to perform: Install, Remove, List, or Verify. When omitted, the script starts the persistent interactive session unless SdkVersion is supplied, in which case Install is selected.
+Specifies the operation to perform: Install, Remove, List, Verify, or Audit. When omitted, the script starts the persistent interactive session unless SdkVersion is supplied, in which case Install is selected.
 
 .PARAMETER SdkVersion
-Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Direct Verify requires SdkVersion; interactive Verify selects from installed isolated SDKs. SdkVersion is invalid with an explicit List action. The parameter is positional, so a bare exact SDK version has the same meaning as -SdkVersion.
+Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Direct Verify requires SdkVersion; interactive Verify selects from installed isolated SDKs. SdkVersion is invalid with explicit List or Audit actions. The parameter is positional, so a bare exact SDK version has the same meaning as -SdkVersion.
 
 .PARAMETER Yes
 Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
@@ -250,7 +250,7 @@ function Assert-ValidAction {
         return
     }
 
-    if ($script:Action -notin @('Install', 'Remove', 'List', 'Verify')) {
+    if ($script:Action -notin @('Install', 'Remove', 'List', 'Verify', 'Audit')) {
         throw "Invalid action: $script:Action"
     }
 }
@@ -601,6 +601,7 @@ function Select-Action {
         Write-ToolDisplay '  R. Remove an isolated SDK'
         Write-ToolDisplay '  L. List installed SDKs'
         Write-ToolDisplay '  V. Verify an isolated SDK'
+        Write-ToolDisplay '  A. Audit installed SDKs'
         Write-ToolDisplay
         Write-ToolDisplay '  E. Exit'
         Write-ToolDisplay
@@ -616,10 +617,12 @@ function Select-Action {
             'L' { $script:Action = 'List'; return $true }
             'v' { $script:Action = 'Verify'; return $true }
             'V' { $script:Action = 'Verify'; return $true }
+            'a' { $script:Action = 'Audit'; return $true }
+            'A' { $script:Action = 'Audit'; return $true }
             'e' { Write-ToolExit; return $false }
             'E' { Write-ToolExit; return $false }
             default {
-                Write-InvalidSelection -Selection $Selection -Choices 'Choose I, R, L, V, or E.'
+                Write-InvalidSelection -Selection $Selection -Choices 'Choose I, R, L, V, A, or E.'
                 Write-ToolDisplay
             }
         }
@@ -627,7 +630,7 @@ function Select-Action {
 }
 
 function Assert-ActionParameterUsage {
-    if ($script:Action -eq 'List' -and $script:SdkVersionWasSpecified) {
+    if ($script:Action -in @('List', 'Audit') -and $script:SdkVersionWasSpecified) {
         throw '-SdkVersion is supported only with -Action Install, Remove, or Verify.'
     }
 
@@ -691,6 +694,250 @@ function Get-ChannelSdkVersion {
     }
 
     return @($Versions)
+}
+
+
+function Get-SdkChannelFromVersion {
+    param([string]$Version)
+
+    $Match = [regex]::Match($Version, '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.')
+    if (-not $Match.Success) {
+        return $null
+    }
+
+    return "$($Match.Groups['major'].Value).$($Match.Groups['minor'].Value)"
+}
+
+function Compare-SdkVersion {
+    param(
+        [string]$Left,
+        [string]$Right
+    )
+
+    return [string]::CompareOrdinal(
+        (Get-SdkVersionSortKey $Left),
+        (Get-SdkVersionSortKey $Right))
+}
+
+function Get-ReleaseSdkVersion {
+    param($Release)
+
+    $Versions = [System.Collections.Generic.List[string]]::new()
+    $Seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    if ($Release.sdk -and -not [string]::IsNullOrWhiteSpace([string]$Release.sdk.version)) {
+        $Version = [string]$Release.sdk.version
+        if ($Seen.Add($Version)) {
+            $Versions.Add($Version)
+        }
+    }
+
+    foreach ($Sdk in @($Release.sdks)) {
+        if ($Sdk -and -not [string]::IsNullOrWhiteSpace([string]$Sdk.version)) {
+            $Version = [string]$Sdk.version
+            if ($Seen.Add($Version)) {
+                $Versions.Add($Version)
+            }
+        }
+    }
+
+    return @($Versions)
+}
+
+function Test-SecurityUpdateAvailable {
+    param(
+        $ChannelMetadata,
+        [string]$InstalledVersion
+    )
+
+    $KnownVersions = @(Get-ChannelSdkVersion $ChannelMetadata)
+    if ($KnownVersions -notcontains $InstalledVersion) {
+        return $false
+    }
+
+    foreach ($Release in @($ChannelMetadata.releases)) {
+        if ($Release.security -ne $true) {
+            continue
+        }
+
+        foreach ($Version in @(Get-ReleaseSdkVersion $Release)) {
+            if ((Compare-SdkVersion -Left $Version -Right $InstalledVersion) -gt 0) {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
+function Get-AuditLifecycleLabel {
+    param([string]$SupportPhase)
+
+    switch ($SupportPhase) {
+        'active' { return '' }
+        'maintenance' { return 'Maintenance' }
+        'preview' { return 'Preview' }
+        'go-live' { return 'Go Live' }
+        'eol' { return 'End of life' }
+        default { return 'Unsupported' }
+    }
+}
+
+function Get-SdkAuditStatus {
+    param(
+        [string]$Version,
+        $ChannelEntry,
+        $ChannelMetadata
+    )
+
+    $SupportPhase = [string]$ChannelEntry.'support-phase'
+    $LatestSdk = [string]$ChannelEntry.'latest-sdk'
+    $Lifecycle = Get-AuditLifecycleLabel -SupportPhase $SupportPhase
+
+    if ($SupportPhase -eq 'eol') {
+        return 'End of life'
+    }
+
+    $Comparison = Compare-SdkVersion -Left $Version -Right $LatestSdk
+    if ($Comparison -gt 0) {
+        $Servicing = 'Newer than known metadata'
+    }
+    elseif ($Comparison -eq 0) {
+        $Servicing = 'Current'
+    }
+    else {
+        $Servicing = "Update available -> $LatestSdk"
+        $IsPrerelease = $Version.Contains('-') -or $SupportPhase -eq 'preview'
+        if (-not $IsPrerelease -and
+            (Test-SecurityUpdateAvailable -ChannelMetadata $ChannelMetadata -InstalledVersion $Version)) {
+            $Servicing = "Security update available -> $LatestSdk"
+        }
+    }
+
+    if ($Servicing -eq 'Current' -and -not [string]::IsNullOrWhiteSpace($Lifecycle)) {
+        return $Lifecycle
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Lifecycle)) {
+        return "$Servicing  $Lifecycle"
+    }
+
+    return $Servicing
+}
+
+function Get-AuditChannelRecord {
+    param(
+        [string]$ChannelVersion,
+        [string]$MetadataUrl,
+        [hashtable]$Cache
+    )
+
+    if ($Cache.ContainsKey($ChannelVersion)) {
+        return $Cache[$ChannelVersion]
+    }
+
+    try {
+        $Metadata = Invoke-RestMethod -Uri $MetadataUrl
+    }
+    catch {
+        throw "Unable to load release metadata for .NET $ChannelVersion."
+    }
+
+    if ($null -eq $Metadata -or $null -eq $Metadata.releases) {
+        throw "Invalid release metadata for .NET $ChannelVersion."
+    }
+
+    $Versions = @(Get-ChannelSdkVersion $Metadata)
+    if (-not $Versions) {
+        throw "Invalid release metadata for .NET $ChannelVersion."
+    }
+
+    $Cache[$ChannelVersion] = $Metadata
+    return $Metadata
+}
+
+function Invoke-SdkAudit {
+    $IsolatedVersions = @(Get-IsolatedSdkVersion)
+    $SystemSdks = @(Get-SystemSdkInventory)
+
+    if (-not $IsolatedVersions -and -not $SystemSdks) {
+        Write-ToolHeading '.NET SDK audit'
+        Write-ToolDisplay
+        Write-ToolHeading 'Isolated SDKs:'
+        Write-ToolDisplay '  None'
+        Write-ToolDisplay
+        Write-ToolHeading 'System SDKs:'
+        Write-ToolDisplay '  None'
+        return
+    }
+
+    $ReleaseIndex = Get-ReleaseIndex
+    $ChannelEntries = @{}
+    foreach ($Entry in @($ReleaseIndex.'releases-index')) {
+        $ChannelVersion = [string]$Entry.'channel-version'
+        if (-not [string]::IsNullOrWhiteSpace($ChannelVersion) -and
+            -not $ChannelEntries.ContainsKey($ChannelVersion)) {
+            $ChannelEntries[$ChannelVersion] = $Entry
+        }
+    }
+
+    $MetadataCache = @{}
+    $StatusByVersion = @{}
+    $AllVersions = @($IsolatedVersions) + @($SystemSdks | ForEach-Object { $_.Version })
+    foreach ($Version in @($AllVersions | Select-Object -Unique)) {
+        $ChannelVersion = Get-SdkChannelFromVersion -Version $Version
+        if ([string]::IsNullOrWhiteSpace($ChannelVersion) -or
+            -not $ChannelEntries.ContainsKey($ChannelVersion)) {
+            $StatusByVersion[$Version] = 'Unknown channel'
+            continue
+        }
+
+        $Entry = $ChannelEntries[$ChannelVersion]
+        $LatestSdk = [string]$Entry.'latest-sdk'
+        $SupportPhase = [string]$Entry.'support-phase'
+        $MetadataUrl = [string]$Entry.'releases.json'
+        if ([string]::IsNullOrWhiteSpace($LatestSdk) -or
+            [string]::IsNullOrWhiteSpace($SupportPhase) -or
+            [string]::IsNullOrWhiteSpace($MetadataUrl)) {
+            throw "Invalid .NET release metadata for .NET $ChannelVersion."
+        }
+
+        $ChannelMetadata = Get-AuditChannelRecord `
+            -ChannelVersion $ChannelVersion `
+            -MetadataUrl $MetadataUrl `
+            -Cache $MetadataCache
+        if (@(Get-ChannelSdkVersion $ChannelMetadata) -notcontains $LatestSdk) {
+            throw "Invalid release metadata for .NET $ChannelVersion."
+        }
+
+        $StatusByVersion[$Version] = Get-SdkAuditStatus `
+            -Version $Version `
+            -ChannelEntry $Entry `
+            -ChannelMetadata $ChannelMetadata
+    }
+
+    Write-ToolHeading '.NET SDK audit'
+    Write-ToolDisplay
+    Write-ToolHeading 'Isolated SDKs:'
+    if (-not $IsolatedVersions) {
+        Write-ToolDisplay '  None'
+    }
+    else {
+        foreach ($Version in $IsolatedVersions) {
+            Write-ToolDisplay "  $Version  $($StatusByVersion[$Version])"
+        }
+    }
+
+    Write-ToolDisplay
+    Write-ToolHeading 'System SDKs:'
+    if (-not $SystemSdks) {
+        Write-ToolDisplay '  None'
+    }
+    else {
+        foreach ($Sdk in $SystemSdks) {
+            Write-ToolDisplay "  $($Sdk.Version)  $($StatusByVersion[$Sdk.Version])"
+        }
+    }
 }
 
 function Read-ManualVersion {
@@ -1545,6 +1792,7 @@ function Invoke-SelectedAction {
             Remove-IsolatedSdk @RemoveArguments
         }
         'List' { Show-InstalledSdk }
+        'Audit' { Invoke-SdkAudit }
         'Verify' {
             if ($script:InteractiveSession -and [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
                 if (-not (Select-VerifyVersion)) {
