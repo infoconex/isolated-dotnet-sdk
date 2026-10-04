@@ -39,7 +39,7 @@ Describe 'PowerShell removal behavior' {
         }
 
         function Initialize-TestRemovalTarget {
-            $installDirectory = Join-Path $script:SdkRoot $script:Version
+            $installDirectory = Join-Path $script:SdkRoot $script:SdkVersion
             if (Test-Path -LiteralPath $installDirectory) {
                 Microsoft.PowerShell.Management\Remove-Item -LiteralPath $installDirectory -Recurse -Force
             }
@@ -105,7 +105,7 @@ Describe 'PowerShell removal behavior' {
         BeforeEach {
             Import-ToolFunctionDefinition
             $script:SdkRoot = Join-Path $script:TestRoot 'function-home'
-            $script:Version = $script:RemovalVersion
+            $script:SdkVersion = $script:RemovalVersion
         }
 
         It 'exposes native WhatIf and Confirm parameters' {
