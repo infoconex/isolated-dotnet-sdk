@@ -113,6 +113,8 @@ try {
         'M',
         $sdkVersion,
         'l',
+        'v',
+        '1',
         'r',
         '1',
         'e'
@@ -127,8 +129,8 @@ try {
     Write-Host $interactive.Output
 
     $mainPromptCount = ([regex]::Matches($interactive.Output, 'What would you like to do\?')).Count
-    if ($mainPromptCount -ne 4) {
-        throw "Expected 4 Main prompts but observed $mainPromptCount."
+    if ($mainPromptCount -ne 5) {
+        throw "Expected 5 Main prompts but observed $mainPromptCount."
     }
 
     $identityCount = ([regex]::Matches(
@@ -143,6 +145,8 @@ try {
         'Isolated SDK installation completed successfully.',
         'Isolated SDKs:',
         'System SDKs:',
+        'Select an isolated SDK to verify:',
+        "Isolated SDK $sdkVersion is healthy.",
         $sdkVersion,
         'was removed.',
         'Exiting.'
