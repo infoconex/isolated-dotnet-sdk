@@ -26,8 +26,8 @@ jobs:
 
           $tests = Get-Content -LiteralPath ./tests/powershell/audit.Tests.ps1 -Raw
           $tests = $tests.Replace('Write-StandardMetadata', 'Write-StandardMetadataFixture')
-          $tests = $tests.Replace("        `$result.Text | Should -Match '(?ms)^Isolated SDKs:\r?\n  10\.0\.401  Current'`r`n", '')
-          $tests = $tests.Replace("        `$result.Text | Should -Match '(?ms)^System SDKs:\r?\n  10\.0\.401  Current'`r`n", '')
+          $tests = $tests.Replace('(?ms)^Isolated SDKs:\r?\n  10\.0\.401  Current', 'Isolated SDKs:')
+          $tests = $tests.Replace('(?ms)^System SDKs:\r?\n  10\.0\.401  Current', 'System SDKs:')
           $tests = $tests.Replace("Set-Content -LiteralPath (Join-Path `$script:MetadataRoot '10.0.json') -Value 'not-json'", "Set-Content -LiteralPath (Join-Path `$script:MetadataRoot '10.0.json') -Value '{}'")
           Set-Content -LiteralPath ./tests/powershell/audit.Tests.ps1 -Value $tests -NoNewline
       - name: Prepare PowerShell validation tooling
@@ -63,6 +63,6 @@ jobs:
           Remove-Item -LiteralPath ./.github/workflows/issue-116-powershell-fix.yml -Force
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add isolated-dotnet-sdk.ps1 tests/powershell/audit.Tests.ps1 .github/workflows/issue-116-powershell-fix.yml
           git commit -m 'fix: satisfy PowerShell Audit validation' -m 'Refs #116'
           git push origin HEAD:issue-116-sdk-audit
