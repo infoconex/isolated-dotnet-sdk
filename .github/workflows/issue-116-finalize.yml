@@ -54,12 +54,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Run focused Audit tests
-        shell: pwsh
-        run: |
-          Import-Module Pester -MinimumVersion 6.2.0
-          $result = Invoke-Pester -Path ./tests/powershell/audit.Tests.ps1 -PassThru
-          if ($result.FailedCount -ne 0) { exit 1 }
       - name: Run full PowerShell behavioral suite
         shell: pwsh
         run: |
