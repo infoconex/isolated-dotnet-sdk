@@ -1,0 +1,41 @@
+name: Issue 116 RED
+
+on:
+  push:
+    branches:
+      - issue-116-sdk-audit
+    paths:
+      - .github/workflows/issue-116-red.yml
+
+permissions:
+  contents: read
+
+jobs:
+  bash-red:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare Bash validation tooling
+        shell: bash
+        run: bash scripts/initialize-bash-validation.sh false false
+      - name: Run Audit Bats tests
+        shell: bash
+        run: bats tests/bash/audit.bats
+
+  powershell-red:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare PowerShell validation tooling
+        shell: pwsh
+        run: |
+          & ./scripts/Initialize-PowerShellValidation.ps1 `
+              -ModuleRoot (Join-Path $env:RUNNER_TEMP 'isolated-dotnet-sdk-cache/powershell-modules') `
+              -CacheHit $false `
+              -GitHubEnvironmentFile $env:GITHUB_ENV
+      - name: Run Audit Pester tests
+        shell: pwsh
+        run: |
+          Import-Module Pester -RequiredVersion ((Get-Content .config/test-frameworks.json -Raw | ConvertFrom-Json).pesterVersion) -Force
+          $result = Invoke-Pester -Path ./tests/powershell/audit.Tests.ps1 -PassThru -Output Detailed
+          if ($result.Result -ne 'Passed') { exit 1 }
