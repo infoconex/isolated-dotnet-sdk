@@ -54,8 +54,9 @@ fi
 test -f "$saved_tool"
 
 # Main -> Install -> channel -> Back -> same discovered channel -> manual exact
-# version -> Main -> List -> Main -> Remove the only job-local SDK -> Main -> Exit.
-interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nl\nr\n1\ne\n' \
+# version -> Main -> List -> Main -> Verify the only job-local SDK -> Main ->
+# Remove the same SDK -> Main -> Exit.
+interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nl\nv\n1\nr\n1\ne\n' \
   "$channel_selection" "$channel_selection" "$sdk_version")"
 
 echo "E2E interactive: running persistent session for .NET SDK $sdk_version"
@@ -71,8 +72,8 @@ fi
 
 main_prompt_count="$(printf '%s\n' "$interactive_output" |
   grep -c 'What would you like to do?' || true)"
-if [[ "$main_prompt_count" -ne 4 ]]; then
-  printf 'Expected 4 Main prompts but observed %s.\n' "$main_prompt_count" >&2
+if [[ "$main_prompt_count" -ne 5 ]]; then
+  printf 'Expected 5 Main prompts but observed %s.\n' "$main_prompt_count" >&2
   exit 1
 fi
 
@@ -89,6 +90,8 @@ required_fragments=(
   "Isolated SDK installation completed successfully."
   "Isolated SDKs:"
   "System SDKs:"
+  "Select an isolated SDK to verify:"
+  "Isolated SDK $sdk_version is healthy."
   "$sdk_version"
   "was removed."
   "Exiting."
