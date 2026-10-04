@@ -68,11 +68,13 @@ write_standard_metadata() {
   cat > "$metadata_root/releases-index.json" <<'JSON'
 {
   "releases-index": [
-    { "channel-version": "11.0", "latest-sdk": "11.0.100-rc.2.999", "support-phase": "preview", "release-type": "sts", "releases.json": "https://example.invalid/11.0.json" },
+    { "channel-version": "12.0", "latest-sdk": "12.0.100-preview.2.999", "support-phase": "preview", "release-type": "sts", "releases.json": "https://example.invalid/12.0.json" },
+    { "channel-version": "11.0", "latest-sdk": "11.0.100-rc.2.999", "support-phase": "go-live", "release-type": "sts", "releases.json": "https://example.invalid/11.0.json" },
     { "channel-version": "10.0", "latest-sdk": "10.0.401", "support-phase": "active", "release-type": "lts", "releases.json": "https://example.invalid/10.0.json" },
     { "channel-version": "9.0", "latest-sdk": "9.0.318", "support-phase": "maintenance", "release-type": "sts", "releases.json": "https://example.invalid/9.0.json" },
     { "channel-version": "8.0", "latest-sdk": "8.0.425", "support-phase": "maintenance", "release-type": "lts", "releases.json": "https://example.invalid/8.0.json" },
-    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "releases.json": "https://example.invalid/7.0.json" }
+    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "releases.json": "https://example.invalid/7.0.json" },
+    { "channel-version": "6.0", "latest-sdk": "6.0.428", "support-phase": "unsupported", "release-type": "lts", "releases.json": "https://example.invalid/6.0.json" }
   ]
 }
 JSON
@@ -105,6 +107,17 @@ JSON
   {"release-date":"2026-10-01","security":true,"sdk":{"version":"11.0.100-rc.2.999","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/11.0.100-rc.2.999/archive.tgz"}]}}
 ]}
 JSON
+  cat > "$metadata_root/12.0.json" <<'JSON'
+{"releases":[
+  {"release-date":"2026-09-01","security":false,"sdk":{"version":"12.0.100-preview.1.111","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/12.0.100-preview.1.111/archive.tgz"}]}},
+  {"release-date":"2026-10-01","security":true,"sdk":{"version":"12.0.100-preview.2.999","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/12.0.100-preview.2.999/archive.tgz"}]}}
+]}
+JSON
+  cat > "$metadata_root/6.0.json" <<'JSON'
+{"releases":[
+  {"release-date":"2024-11-01","security":false,"sdk":{"version":"6.0.428","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/6.0.428/archive.tgz"}]}}
+]}
+JSON
 }
 
 add_isolated_sdk() {
@@ -133,11 +146,13 @@ run_audit() {
 }
 
 @test "audit reports servicing and lifecycle states for isolated and system SDKs" {
+  add_isolated_sdk '12.0.100-preview.1.111'
+  add_isolated_sdk '11.0.100-rc.1.111'
   add_isolated_sdk '10.0.401'
   add_isolated_sdk '9.0.306'
   add_isolated_sdk '8.0.303'
   add_isolated_sdk '7.0.410'
-  add_isolated_sdk '11.0.100-rc.1.111'
+  add_isolated_sdk '6.0.428'
   export AUDIT_SYSTEM_SDKS=$'10.0.401 [/system/sdk]\n8.0.425 [/system/sdk]\n'
 
   run_audit
@@ -148,7 +163,9 @@ run_audit() {
   [[ "$output" == *"9.0.306  Security update available -> 9.0.318  Maintenance"* ]]
   [[ "$output" == *"8.0.303  Update available -> 8.0.425  Maintenance"* ]]
   [[ "$output" == *"7.0.410  End of life"* ]]
-  [[ "$output" == *"11.0.100-rc.1.111  Update available -> 11.0.100-rc.2.999  Preview"* ]]
+  [[ "$output" == *"12.0.100-preview.1.111  Update available -> 12.0.100-preview.2.999  Preview"* ]]
+  [[ "$output" == *"11.0.100-rc.1.111  Update available -> 11.0.100-rc.2.999  Go Live"* ]]
+  [[ "$output" == *"6.0.428  Unsupported"* ]]
   [[ "$output" == *$'System SDKs:\n  10.0.401  Current'* ]]
   [[ "$output" == *"8.0.425  Maintenance"* ]]
   [[ "$output" != *"Vulnerable"* ]]
@@ -175,12 +192,12 @@ run_audit() {
 }
 
 @test "audit reports an unrecognized installed channel without fabricating lifecycle data" {
-  add_isolated_sdk '12.0.100'
+  add_isolated_sdk '13.0.100'
 
   run_audit
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"12.0.100  Unknown channel"* ]]
+  [[ "$output" == *"13.0.100  Unknown channel"* ]]
 }
 
 @test "audit fails clearly when the release index cannot be obtained" {
@@ -192,6 +209,17 @@ run_audit() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
   [[ "$output" != *"Current"* ]]
+}
+
+@test "audit fails clearly when required channel metadata cannot be obtained" {
+  add_isolated_sdk '10.0.401'
+  export AUDIT_FAIL_CHANNEL='10.0'
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load release metadata for .NET 10.0."* ]]
+  [[ "$output" != *"10.0.401  Current"* ]]
 }
 
 @test "audit fails clearly when required channel metadata is malformed" {

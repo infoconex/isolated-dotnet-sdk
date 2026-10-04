@@ -6,6 +6,8 @@ This document records the release-metadata discovery contract shared by the Powe
 
 Interactive SDK version selection uses Microsoft's release index to choose a .NET channel and then uses that channel's release metadata to enumerate exact SDK versions. An install that already supplies an exact SDK version bypasses that release-index/channel discovery path.
 
+Audit is the other intentional online consumer of release metadata. It uses the release index plus each known installed channel's release data to compare both Isolated and System SDKs with current servicing and lifecycle state. List and Verify do not use this online path.
+
 Once an exact SDK version has been resolved, installation separately retrieves Microsoft's exact-version release metadata to identify the supported platform archive and its published SHA-512. Supplying an exact version therefore bypasses interactive discovery, not the metadata required for payload acquisition and integrity verification.
 
 This contract covers interactive version discovery only. It does not define retry/backoff, stable bootstrap source policy, or the later transactional SDK payload acquisition, verification, extraction, staging, and promotion behavior.
@@ -20,7 +22,7 @@ The index must contain usable channel entries. A selectable channel requires:
 - `support-phase`;
 - `releases.json`.
 
-Display-only metadata such as `latest-sdk` and `release-type` may be absent without invalidating an otherwise selectable channel.
+For Install discovery, display-only metadata such as `latest-sdk` and `release-type` may be absent without invalidating an otherwise selectable channel. Audit requires `latest-sdk` for a known installed channel because update state cannot be assessed safely without it.
 
 Malformed, structurally unusable, missing, null, or empty index data must fail before the tool presents an empty or misleading channel picker.
 
@@ -49,6 +51,7 @@ PowerShell and Bash may parse and retrieve metadata differently, but their obser
 - failed discovery is never followed by success output;
 - unusable empty selections are rejected;
 - optional display metadata does not become an accidental hard requirement;
-- exact-version installation remains independent from release-index/channel discovery while still using exact-version release metadata for payload integrity.
+- exact-version installation remains independent from release-index/channel discovery while still using exact-version release metadata for payload integrity;
+- Audit is the explicit online inventory-assessment boundary, while List and Verify remain independent of release metadata.
 
 For Microsoft's upstream release metadata and release-note structure, see [.NET release metadata](https://github.com/dotnet/core/tree/main/release-notes).

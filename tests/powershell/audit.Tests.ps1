@@ -45,11 +45,13 @@ Describe 'PowerShell SDK Audit' {
             @'
 {
   "releases-index": [
-    { "channel-version": "11.0", "latest-sdk": "11.0.100-rc.2.999", "support-phase": "preview", "release-type": "sts", "releases.json": "https://example.invalid/11.0.json" },
+    { "channel-version": "12.0", "latest-sdk": "12.0.100-preview.2.999", "support-phase": "preview", "release-type": "sts", "releases.json": "https://example.invalid/12.0.json" },
+    { "channel-version": "11.0", "latest-sdk": "11.0.100-rc.2.999", "support-phase": "go-live", "release-type": "sts", "releases.json": "https://example.invalid/11.0.json" },
     { "channel-version": "10.0", "latest-sdk": "10.0.401", "support-phase": "active", "release-type": "lts", "releases.json": "https://example.invalid/10.0.json" },
     { "channel-version": "9.0", "latest-sdk": "9.0.318", "support-phase": "maintenance", "release-type": "sts", "releases.json": "https://example.invalid/9.0.json" },
     { "channel-version": "8.0", "latest-sdk": "8.0.425", "support-phase": "maintenance", "release-type": "lts", "releases.json": "https://example.invalid/8.0.json" },
-    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "releases.json": "https://example.invalid/7.0.json" }
+    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "releases.json": "https://example.invalid/7.0.json" },
+    { "channel-version": "6.0", "latest-sdk": "6.0.428", "support-phase": "unsupported", "release-type": "lts", "releases.json": "https://example.invalid/6.0.json" }
   ]
 }
 '@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot 'releases-index.json')
@@ -82,6 +84,17 @@ Describe 'PowerShell SDK Audit' {
   {"release-date":"2026-10-01","security":true,"sdk":{"version":"11.0.100-rc.2.999"}}
 ]}
 '@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '11.0.json')
+            @'
+{"releases":[
+  {"release-date":"2026-09-01","security":false,"sdk":{"version":"12.0.100-preview.1.111"}},
+  {"release-date":"2026-10-01","security":true,"sdk":{"version":"12.0.100-preview.2.999"}}
+]}
+'@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '12.0.json')
+            @'
+{"releases":[
+  {"release-date":"2024-11-01","security":false,"sdk":{"version":"6.0.428"}}
+]}
+'@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '6.0.json')
         }
 
         function Invoke-TestAudit {
@@ -144,7 +157,7 @@ Describe 'PowerShell SDK Audit' {
     }
 
     It 'reports servicing and lifecycle states for isolated and system SDKs' {
-        foreach ($version in @('10.0.401', '9.0.306', '8.0.303', '7.0.410', '11.0.100-rc.1.111')) {
+        foreach ($version in @('12.0.100-preview.1.111', '11.0.100-rc.1.111', '10.0.401', '9.0.306', '8.0.303', '7.0.410', '6.0.428')) {
             Add-IsolatedSdk -Version $version
         }
         Write-SystemDotNetStub -Directory $script:SystemBin -InventoryLines @(
@@ -160,7 +173,9 @@ Describe 'PowerShell SDK Audit' {
         $result.Text | Should -Match '9\.0\.306  Security update available -> 9\.0\.318  Maintenance'
         $result.Text | Should -Match '8\.0\.303  Update available -> 8\.0\.425  Maintenance'
         $result.Text | Should -Match '7\.0\.410  End of life'
-        $result.Text | Should -Match '11\.0\.100-rc\.1\.111  Update available -> 11\.0\.100-rc\.2\.999  Preview'
+        $result.Text | Should -Match '12\.0\.100-preview\.1\.111  Update available -> 12\.0\.100-preview\.2\.999  Preview'
+        $result.Text | Should -Match '11\.0\.100-rc\.1\.111  Update available -> 11\.0\.100-rc\.2\.999  Go Live'
+        $result.Text | Should -Match '6\.0\.428  Unsupported'
         $result.Text | Should -Match 'System SDKs:'
         $result.Text | Should -Match '8\.0\.425  Maintenance'
         $result.Text | Should -Not -Match 'Vulnerable'
@@ -187,12 +202,12 @@ Describe 'PowerShell SDK Audit' {
     }
 
     It 'reports an unrecognized installed channel without fabricated lifecycle data' {
-        Add-IsolatedSdk -Version '12.0.100'
+        Add-IsolatedSdk -Version '13.0.100'
 
         $result = Invoke-TestAudit
 
         $result.ExitCode | Should -Be 0
-        $result.Text | Should -Match '12\.0\.100  Unknown channel'
+        $result.Text | Should -Match '13\.0\.100  Unknown channel'
     }
 
     It 'fails clearly when the release index cannot be obtained' {
@@ -203,6 +218,18 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Not -Be 0
         $result.Text | Should -Match 'Unable to load \.NET release metadata from Microsoft\.'
+        $result.Text | Should -Not -Match '10\.0\.401  Current'
+    }
+
+
+    It 'fails clearly when required channel metadata cannot be obtained' {
+        Add-IsolatedSdk -Version '10.0.401'
+        $env:AUDIT_FAIL_CHANNEL = '10.0'
+
+        $result = Invoke-TestAudit
+
+        $result.ExitCode | Should -Not -Be 0
+        $result.Text | Should -Match 'Unable to load release metadata for \.NET 10\.0\.'
         $result.Text | Should -Not -Match '10\.0\.401  Current'
     }
 

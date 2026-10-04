@@ -41,8 +41,9 @@ The direct scenario uses the checked-out repository tool and real Microsoft infr
 3. execute that isolated SDK and require its reported version to equal the configured version;
 4. run the public standalone Verify action and require a healthy result;
 5. run List and require the configured isolated version to appear in the installed-SDK output;
-6. remove the configured SDK;
-7. require the isolated SDK directory to be absent afterward.
+6. run Audit against live Microsoft metadata and require the configured isolated version to be assessed, without pinning a transient servicing status;
+7. remove the configured SDK;
+8. require the isolated SDK directory to be absent afterward.
 
 Exact-version installation intentionally bypasses release-index/channel selection, but exact-version Microsoft release-metadata lookup, SDK payload download, SHA-512 verification, extraction, and staged-host verification remain real.
 
@@ -74,4 +75,4 @@ E2E is intentionally not triggered on pull requests and is not a required merge 
 
 ## What E2E does not own
 
-The live suite is deliberately small. It does not replace deterministic tests for metadata failures, network failures, filesystem boundaries, transactional install behavior, native-command propagation, cleanup, invalid input, or other exhaustive edge cases.
+The live suite is deliberately small. Its Audit assertion proves the real online metadata path and installed-version reporting, but deliberately does not pin a moving Current/Update/Security/Maintenance result. It does not replace deterministic tests for metadata failures, network failures, lifecycle/security classification, filesystem boundaries, transactional install behavior, native-command propagation, cleanup, invalid input, or other exhaustive edge cases.

@@ -139,6 +139,16 @@ try {
         throw "List output did not contain installed SDK $sdkVersion."
     }
 
+    $audit = Invoke-E2EProcess `
+        -FilePath 'pwsh' `
+        -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Audit')
+    Assert-Success -Result $audit -Operation 'Direct audit'
+    Write-Host $audit.Output
+    if ($audit.Output -notmatch [regex]::Escape('.NET SDK audit') -or
+        $audit.Output -notmatch [regex]::Escape($sdkVersion)) {
+        throw "Audit output did not assess installed SDK $sdkVersion."
+    }
+
     Write-Host "E2E direct: removing .NET SDK $sdkVersion"
     $remove = Invoke-E2EProcess `
         -FilePath 'pwsh' `

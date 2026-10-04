@@ -17,6 +17,7 @@ What would you like to do?
   R. Remove an isolated SDK
   L. List installed SDKs
   V. Verify an isolated SDK
+  A. Audit installed SDKs
 
   E. Exit
 
@@ -31,9 +32,9 @@ Isolated .NET SDK development (main)
 
 The identity heading is shown on Main, not repeated throughout nested Install, Remove, or Verify menus. See [Tool version](tool-version.md) for the direct query and stable/development identity contract.
 
-Main commands are case-insensitive. `I`, `R`, `L`, `V`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
+Main commands are case-insensitive. `I`, `R`, `L`, `V`, `A`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
 
-After a successful Install, List, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session returns to Main. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
+After a successful Install, List, Audit, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session returns to Main. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
 
 ## One-shot commands
 
@@ -42,6 +43,8 @@ Supplying an explicit action or the supported bare-version Install form keeps ex
 An explicit Install or Remove may still need an interactive picker when no version was supplied. That does not convert the command into a persistent Main session.
 
 Explicit Verify remains a one-shot exact-version command. Interactive Verify is available separately from Main and selects from the installed isolated SDK inventory.
+
+Explicit Audit is a one-shot online assessment of both installed ownership groups. Interactive Audit runs the same read-only assessment from Main with `A` and returns to Main after success.
 
 The direct tool-version query is also one-shot and exits before bootstrap, network access, SDK discovery, prompting, or mutation. It identifies the tool itself; it does not select a .NET SDK.
 
@@ -109,5 +112,6 @@ An explicit user cancellation or default-no confirmation remains a successful no
 - [Install](install.md)
 - [Remove](remove.md)
 - [Verify](verify.md)
+- [Audit](audit.md)
 - [SDK discovery and release metadata](../concepts/sdk-discovery.md)
 - [PowerShell and Bash behavioral parity](../contracts/behavioral-parity.md)
