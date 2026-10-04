@@ -443,6 +443,7 @@ select_action() {
         echo "  I. Install an SDK"
         echo "  R. Remove an isolated SDK"
         echo "  L. List installed SDKs"
+        echo "  V. Verify an isolated SDK"
         echo
         echo "  E. Exit"
         echo
@@ -453,9 +454,10 @@ select_action() {
             i|I) ACTION="install"; return 0 ;;
             r|R) ACTION="remove"; return 0 ;;
             l|L) ACTION="list"; return 0 ;;
+            v|V) ACTION="verify"; return 0 ;;
             e|E) tool_exit; return 1 ;;
             *)
-                warn_invalid_selection "$selection" "Choose I, R, L, or E."
+                warn_invalid_selection "$selection" "Choose I, R, L, V, or E."
                 echo
                 ;;
         esac
@@ -850,6 +852,63 @@ select_remove_version() {
             remove_choices="Choose $remove_range or Q."
         fi
         warn_invalid_selection "$selection" "$remove_choices"
+        echo
+    done
+}
+
+select_verify_version() {
+    local versions
+    local selection=""
+    local line=""
+    local i=0
+    local sdk_versions=()
+
+    versions="$(get_isolated_sdk_versions)"
+
+    if [[ -z "$versions" ]]; then
+        tool_info "No isolated SDKs are installed under $SDK_ROOT."
+        return 1
+    fi
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        sdk_versions+=("$line")
+    done <<< "$versions"
+
+    while true; do
+        tool_heading "Select an isolated SDK to verify:"
+        echo
+
+        for ((i=0; i<${#sdk_versions[@]}; i++)); do
+            printf "  %d. %s\n" "$((i + 1))" "${sdk_versions[$i]}"
+        done
+
+        echo
+        echo "  B. Back to Main"
+        echo "  E. Exit"
+        echo
+        read_tool_input "Selection: "
+        selection="$TOOL_INPUT"
+
+        case "$selection" in
+            [bB]) return 1 ;;
+            [eE])
+                EXIT_REQUESTED="true"
+                tool_exit
+                return 1
+                ;;
+        esac
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && \
+           (( selection >= 1 && selection <= ${#sdk_versions[@]} )); then
+            VERSION="${sdk_versions[$((selection - 1))]}"
+            validate_version
+            return 0
+        fi
+
+        local verify_range
+        verify_range="$(selection_range "${#sdk_versions[@]}")"
+        warn_invalid_selection "$selection" "Choose $verify_range, B, or E."
         echo
     done
 }
@@ -1353,6 +1412,9 @@ run_selected_action() {
             list_installed_sdks
             ;;
         verify)
+            if [[ "$INTERACTIVE_SESSION" == "true" && -z "$VERSION" ]]; then
+                select_verify_version || return 0
+            fi
             verify_isolated_sdk
             ;;
         *)
@@ -1400,6 +1462,7 @@ Behavior:
   Explicit actions   Run once and exit without entering the persistent Main loop.
   List               Shows isolated ownership first, then read-only SDKs reported by the normal dotnet --list-sdks host.
   Verify <version>   Requires one exact version and checks only the existing isolated installation.
+  Interactive Verify selects one installed isolated SDK and runs the same read-only health check.
   Exact-version installs bypass release-metadata discovery.
   Interactive install selection uses Microsoft's published release metadata.
   Required interactive input that is unavailable is an operational failure.
