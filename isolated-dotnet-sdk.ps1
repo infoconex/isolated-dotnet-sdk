@@ -5,17 +5,17 @@ Installs and manages isolated .NET SDK versions on Windows with PowerShell 7.
 .DESCRIPTION
 Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. Isolated SDKs remain under that user-owned root and are not added to PATH.
 
-Supported product actions are Install, Remove, List, and Verify. When Action and SdkVersion are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and SdkVersion is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with SdkVersion is invalid. Verify requires an exact SdkVersion and remains direct-command-only; it does not appear on the persistent Main menu. Install or Remove without a resolved version may require interactive selection.
+Supported product actions are Install, Remove, List, and Verify. When Action and SdkVersion are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and SdkVersion is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with SdkVersion is invalid. Direct Verify requires an exact SdkVersion; interactive Verify selects an installed isolated SDK from Main and runs the same read-only health check. Install or Remove without a resolved version may require interactive selection.
 
 Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
 
-Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata. List reports recognized isolated SDKs first and then the read-only SDK inventory returned by the normally resolved dotnet --list-sdks host. System SDK discovery is supplemental rather than an exhaustive filesystem inventory, and system SDKs are never managed by Remove.
+Exact-version installs bypass release-metadata discovery. Interactive install selection uses Microsoft's published .NET release metadata. List reports recognized isolated SDKs first and then the read-only SDK inventory returned by the normally resolved dotnet --list-sdks host. System SDK discovery is supplemental rather than an exhaustive filesystem inventory, and system SDKs are never managed by Remove or targeted by Verify.
 
 .PARAMETER Action
 Specifies the operation to perform: Install, Remove, List, or Verify. When omitted, the script starts the persistent interactive session unless SdkVersion is supplied, in which case Install is selected.
 
 .PARAMETER SdkVersion
-Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Verify requires SdkVersion. SdkVersion is invalid with an explicit List action. The parameter is positional, so a bare exact SDK version has the same meaning as -SdkVersion.
+Specifies an exact .NET SDK version. When omitted for Install or Remove, the script provides an interactive version selection workflow. Direct Verify requires SdkVersion; interactive Verify selects from installed isolated SDKs. SdkVersion is invalid with an explicit List action. The parameter is positional, so a bare exact SDK version has the same meaning as -SdkVersion.
 
 .PARAMETER Yes
 Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
@@ -600,6 +600,7 @@ function Select-Action {
         Write-ToolDisplay '  I. Install an SDK'
         Write-ToolDisplay '  R. Remove an isolated SDK'
         Write-ToolDisplay '  L. List installed SDKs'
+        Write-ToolDisplay '  V. Verify an isolated SDK'
         Write-ToolDisplay
         Write-ToolDisplay '  E. Exit'
         Write-ToolDisplay
@@ -613,10 +614,12 @@ function Select-Action {
             'R' { $script:Action = 'Remove'; return $true }
             'l' { $script:Action = 'List'; return $true }
             'L' { $script:Action = 'List'; return $true }
+            'v' { $script:Action = 'Verify'; return $true }
+            'V' { $script:Action = 'Verify'; return $true }
             'e' { Write-ToolExit; return $false }
             'E' { Write-ToolExit; return $false }
             default {
-                Write-InvalidSelection -Selection $Selection -Choices 'Choose I, R, L, or E.'
+                Write-InvalidSelection -Selection $Selection -Choices 'Choose I, R, L, V, or E.'
                 Write-ToolDisplay
             }
         }
@@ -628,7 +631,9 @@ function Assert-ActionParameterUsage {
         throw '-SdkVersion is supported only with -Action Install, Remove, or Verify.'
     }
 
-    if ($script:Action -eq 'Verify' -and [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+    if ($script:Action -eq 'Verify' -and
+        -not $script:InteractiveSession -and
+        [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
         throw '-SdkVersion is required with -Action Verify.'
     }
 
@@ -1023,6 +1028,54 @@ function Select-RemoveVersion {
     }
 }
 
+function Select-VerifyVersion {
+    $SdkVersions = @(Get-IsolatedSdkVersion)
+
+    if (-not $SdkVersions) {
+        Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
+        return $false
+    }
+
+    while ($true) {
+        Write-ToolHeading 'Select an isolated SDK to verify:'
+        Write-ToolDisplay
+
+        for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
+            Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersions[$Index])
+        }
+
+        Write-ToolDisplay
+        Write-ToolDisplay '  B. Back to Main'
+        Write-ToolDisplay '  E. Exit'
+        Write-ToolDisplay
+
+        $Selection = Read-ToolInput 'Selection'
+
+        if ($Selection -match '^[Bb]$') {
+            return $false
+        }
+
+        if ($Selection -match '^[Ee]$') {
+            $script:ExitRequested = $true
+            Write-ToolExit
+            return $false
+        }
+
+        $Number = 0
+        if ([int]::TryParse($Selection, [ref]$Number) -and
+            $Number -ge 1 -and
+            $Number -le $SdkVersions.Count) {
+            $script:SdkVersion = $SdkVersions[$Number - 1]
+            Assert-ValidSdkVersion
+            return $true
+        }
+
+        $SelectionRange = Get-SelectionRange -Count $SdkVersions.Count
+        Write-InvalidSelection -Selection $Selection -Choices "Choose $SelectionRange, B, or E."
+        Write-ToolDisplay
+    }
+}
+
 function Resolve-InstallVersion {
     if (-not [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
         Assert-ValidSdkVersion
@@ -1384,9 +1437,9 @@ function Invoke-IsolatedSdkBuildServerShutdown {
     )
 
     $EnvironmentOverrides = @{
-        DOTNET_NOLOGO                      = 'true'
+        DOTNET_NOLOGO                       = 'true'
         DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
-        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH    = 'false'
+        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH     = 'false'
     }
     $PreviousEnvironment = @{}
 
@@ -1492,7 +1545,14 @@ function Invoke-SelectedAction {
             Remove-IsolatedSdk @RemoveArguments
         }
         'List' { Show-InstalledSdk }
-        'Verify' { Test-IsolatedSdk }
+        'Verify' {
+            if ($script:InteractiveSession -and [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+                if (-not (Select-VerifyVersion)) {
+                    return
+                }
+            }
+            Test-IsolatedSdk
+        }
     }
 }
 
