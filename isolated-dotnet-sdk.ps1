@@ -1227,7 +1227,7 @@ function Install-IsolatedSdk {
             $Metadata = Get-Content -LiteralPath $MetadataPath -Raw | ConvertFrom-Json -ErrorAction Stop
         }
         catch {
-            throw "Unable to load valid Microsoft release metadata for SDK ${Version}: $($_.Exception.Message)"
+            throw "Unable to load valid Microsoft release metadata for SDK ${SdkVersion}: $($_.Exception.Message)"
         }
 
         $Artifact = Resolve-SdkArtifact -Metadata $Metadata -SdkVersion $SdkVersion -Rid $Rid
