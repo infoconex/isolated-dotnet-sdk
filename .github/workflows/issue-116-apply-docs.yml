@@ -1,0 +1,86 @@
+name: Issue 116 apply docs
+
+on:
+  push:
+    branches:
+      - issue-116-sdk-audit
+    paths:
+      - .github/workflows/issue-116-apply-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update-and-bash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: issue-116-sdk-audit
+      - name: Apply updates
+        run: python3 .github/scripts/issue-116-docs-and-coverage.py
+      - name: Validate Bash
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n isolated-dotnet-sdk.sh
+          bash -n tests/e2e/bash/direct.sh
+          bash scripts/initialize-bash-validation.sh false false
+          bash scripts/run-shellcheck.sh
+          bash tests/bash/run-tests.sh
+          git diff --check
+      - name: Validate PowerShell E2E syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path './tests/e2e/powershell/direct.ps1'),
+              [ref]$tokens,
+              [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+          }
+      - name: Commit updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/scripts/issue-116-docs-and-coverage.py
+          rm .github/workflows/issue-116-apply-docs.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat: complete SDK Audit coverage and docs' -m 'Refs #116'
+          git push origin HEAD:issue-116-sdk-audit
+
+  powershell:
+    needs: update-and-bash
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: issue-116-sdk-audit
+          persist-credentials: false
+      - name: Prepare PowerShell validation tooling
+        shell: pwsh
+        run: |
+          & ./scripts/Initialize-PowerShellValidation.ps1 `
+              -ModuleRoot (Join-Path $env:RUNNER_TEMP 'isolated-dotnet-sdk-cache/powershell-modules') `
+              -CacheHit $false `
+              -GitHubEnvironmentFile $env:GITHUB_ENV
+      - name: Run static validation
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSScriptAnalyzer.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run full PowerShell behavioral suite
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
