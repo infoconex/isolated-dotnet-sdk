@@ -1,0 +1,65 @@
+name: Issue 116 PowerShell fix
+
+on:
+  push:
+    branches:
+      - issue-116-sdk-audit
+    paths:
+      - .github/workflows/issue-116-powershell-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-fix:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: issue-116-sdk-audit
+      - name: Fix analyzer naming findings
+        shell: pwsh
+        run: |
+          $source = Get-Content -LiteralPath ./isolated-dotnet-sdk.ps1 -Raw
+          $source = $source.Replace('Get-AuditChannelMetadata', 'Get-AuditChannelRecord')
+          Set-Content -LiteralPath ./isolated-dotnet-sdk.ps1 -Value $source -NoNewline
+
+          $tests = Get-Content -LiteralPath ./tests/powershell/audit.Tests.ps1 -Raw
+          $tests = $tests.Replace('Write-StandardMetadata', 'Write-StandardMetadataFixture')
+          Set-Content -LiteralPath ./tests/powershell/audit.Tests.ps1 -Value $tests -NoNewline
+      - name: Prepare PowerShell validation tooling
+        shell: pwsh
+        run: |
+          & ./scripts/Initialize-PowerShellValidation.ps1 `
+              -ModuleRoot (Join-Path $env:RUNNER_TEMP 'isolated-dotnet-sdk-cache/powershell-modules') `
+              -CacheHit $false `
+              -GitHubEnvironmentFile $env:GITHUB_ENV
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSScriptAnalyzer.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Apply PowerShell formatter
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify PowerShell formatting
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run PowerShell behavioral tests
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit fixes
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath ./.github/workflows/issue-116-powershell-fix.yml -Force
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: satisfy PowerShell Audit validation' -m 'Refs #116'
+          git push origin HEAD:issue-116-sdk-audit
