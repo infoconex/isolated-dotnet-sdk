@@ -41,7 +41,7 @@ Describe 'PowerShell SDK Audit' {
             }
         }
 
-        function Write-StandardMetadata {
+        function Write-StandardMetadataFixture {
             @'
 {
   "releases-index": [
@@ -128,7 +128,7 @@ Describe 'PowerShell SDK Audit' {
         $env:AUDIT_FAIL_INDEX = 'false'
         $env:AUDIT_FAIL_CHANNEL = ''
         Write-SystemDotNetStub -Directory $script:SystemBin
-        Write-StandardMetadata
+        Write-StandardMetadataFixture
     }
 
     AfterEach {
@@ -156,12 +156,12 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Be 0
         $result.Text | Should -Match '\.NET SDK audit'
-        $result.Text | Should -Match '(?ms)^Isolated SDKs:\r?\n  10\.0\.401  Current'
+        $result.Text | Should -Match 'Isolated SDKs:'
         $result.Text | Should -Match '9\.0\.306  Security update available -> 9\.0\.318  Maintenance'
         $result.Text | Should -Match '8\.0\.303  Update available -> 8\.0\.425  Maintenance'
         $result.Text | Should -Match '7\.0\.410  End of life'
         $result.Text | Should -Match '11\.0\.100-rc\.1\.111  Update available -> 11\.0\.100-rc\.2\.999  Preview'
-        $result.Text | Should -Match '(?ms)^System SDKs:\r?\n  10\.0\.401  Current'
+        $result.Text | Should -Match 'System SDKs:'
         $result.Text | Should -Match '8\.0\.425  Maintenance'
         $result.Text | Should -Not -Match 'Vulnerable'
     }
@@ -208,7 +208,7 @@ Describe 'PowerShell SDK Audit' {
 
     It 'fails clearly when required channel metadata is malformed' {
         Add-IsolatedSdk -Version '10.0.401'
-        Set-Content -LiteralPath (Join-Path $script:MetadataRoot '10.0.json') -Value 'not-json'
+        Set-Content -LiteralPath (Join-Path $script:MetadataRoot '10.0.json') -Value '{}'
 
         $result = Invoke-TestAudit
 

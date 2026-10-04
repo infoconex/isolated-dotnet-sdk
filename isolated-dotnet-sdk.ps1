@@ -825,7 +825,7 @@ function Get-SdkAuditStatus {
     return $Servicing
 }
 
-function Get-AuditChannelMetadata {
+function Get-AuditChannelRecord {
     param(
         [string]$ChannelVersion,
         [string]$MetadataUrl,
@@ -902,7 +902,7 @@ function Invoke-SdkAudit {
             throw "Invalid .NET release metadata for .NET $ChannelVersion."
         }
 
-        $ChannelMetadata = Get-AuditChannelMetadata `
+        $ChannelMetadata = Get-AuditChannelRecord `
             -ChannelVersion $ChannelVersion `
             -MetadataUrl $MetadataUrl `
             -Cache $MetadataCache
