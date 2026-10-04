@@ -8,8 +8,8 @@ Describe 'PowerShell comment-based help' {
     It 'describes the supported PowerShell operational contract' {
         $script:HelpText | Should -Match 'Windows with PowerShell 7'
         $script:HelpText | Should -Match 'not added to PATH'
-        $script:HelpText | Should -Match 'Explicit List with Version is invalid'
-        $script:HelpText | Should -Match 'Verify requires an exact Version and remains direct-command-only'
+        $script:HelpText | Should -Match 'Explicit List with SdkVersion is invalid'
+        $script:HelpText | Should -Match 'Verify requires an exact SdkVersion and remains direct-command-only'
         $script:HelpText | Should -Match 'WhatIf and Confirm are supported only for Remove'
         $script:HelpText | Should -Match 'does not choose a missing action or version'
         $script:HelpText | Should -Match 'Required interactive input that is unavailable is an operational failure'

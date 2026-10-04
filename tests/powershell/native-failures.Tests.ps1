@@ -39,7 +39,7 @@ Describe 'PowerShell native install command failures' {
     It 'fails closed when the existing isolated host probe exits nonzero' {
         New-Item -ItemType Directory -Path $script:InstallDir -Force | Out-Null
         Copy-Item -LiteralPath $script:PwshPath -Destination (Join-Path $script:InstallDir 'dotnet.exe') -Force
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'Unable to inspect existing isolated SDK 99\.0\.100 with exit code -?[1-9][0-9]*\.'
@@ -49,7 +49,7 @@ Describe 'PowerShell native install command failures' {
 
     It 'reports payload download failure before verification or success' {
         $env:SDK_TEST_PAYLOAD_FAILURE = 'payload-download-failed'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'Unable to download the \.NET SDK 99\.0\.100 payload'
@@ -60,7 +60,7 @@ Describe 'PowerShell native install command failures' {
 
     It 'reports post-extraction host failure as verification failure' {
         $env:FAKE_DOTNET_EXIT_CODE = '74'
-        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
         $text | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code 74\.'

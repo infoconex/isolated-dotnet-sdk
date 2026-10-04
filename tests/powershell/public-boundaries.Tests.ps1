@@ -24,10 +24,10 @@ Describe 'PowerShell public selection and list boundaries' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'selects Install when Version is supplied without Action' {
+    It 'selects Install when SdkVersion is supplied without Action' {
         $failureOutput = @(& pwsh -NoProfile -Command '
             function Invoke-WebRequest { throw "install-download-boundary" }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Version 99.0.100 -Yes
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -SdkVersion 99.0.100 -Yes
         ' 6>&1 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0

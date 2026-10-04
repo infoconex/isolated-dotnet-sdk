@@ -25,7 +25,12 @@ module.exports = async ({ github, context, core }) => {
   const { owner, repo } = context.repo;
   const releaseBody = fs.readFileSync(releaseNotesPath, 'utf8');
   const checksumBytes = fs.readFileSync(checksumPath);
+  const powerShellBytes = fs.readFileSync('isolated-dotnet-sdk.ps1');
+  const bashBytes = fs.readFileSync('isolated-dotnet-sdk.sh');
 
+  let releaseCommitSha = null;
+  let powerShellBlobSha = null;
+  let bashBlobSha = null;
   let tagCreated = false;
   let releaseId = null;
   let published = false;
@@ -42,10 +47,110 @@ module.exports = async ({ github, context, core }) => {
     throw new Error('GitHub did not return release asset bytes.');
   };
 
+  const verifyStampedIdentity = () => {
+    const powerShell = powerShellBytes.toString('utf8');
+    const bash = bashBytes.toString('utf8');
+    const expectedPowerShellMarker = `$ToolReleaseIdentity = '${tag}'`;
+    const expectedBashMarker = `TOOL_RELEASE_IDENTITY="${tag}"`;
+
+    if (!powerShell.includes(expectedPowerShellMarker) || powerShell.includes("$ToolReleaseIdentity = 'development'")) {
+      throw new Error(`PowerShell release source is not stamped exactly for ${tag}.`);
+    }
+    if (!bash.includes(expectedBashMarker) || bash.includes('TOOL_RELEASE_IDENTITY="development"')) {
+      throw new Error(`Bash release source is not stamped exactly for ${tag}.`);
+    }
+  };
+
+  const createReleaseCommit = async () => {
+    verifyStampedIdentity();
+
+    const baseCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: expectedSha });
+    const powerShellBlob = await github.rest.git.createBlob({
+      owner,
+      repo,
+      content: powerShellBytes.toString('base64'),
+      encoding: 'base64'
+    });
+    const bashBlob = await github.rest.git.createBlob({
+      owner,
+      repo,
+      content: bashBytes.toString('base64'),
+      encoding: 'base64'
+    });
+    powerShellBlobSha = powerShellBlob.data.sha;
+    bashBlobSha = bashBlob.data.sha;
+
+    const releaseTree = await github.rest.git.createTree({
+      owner,
+      repo,
+      base_tree: baseCommit.data.tree.sha,
+      tree: [
+        {
+          path: 'isolated-dotnet-sdk.ps1',
+          mode: '100644',
+          type: 'blob',
+          sha: powerShellBlobSha
+        },
+        {
+          path: 'isolated-dotnet-sdk.sh',
+          mode: '100755',
+          type: 'blob',
+          sha: bashBlobSha
+        }
+      ]
+    });
+
+    const releaseCommit = await github.rest.git.createCommit({
+      owner,
+      repo,
+      message: `release: stamp ${tag} tool identity`,
+      tree: releaseTree.data.sha,
+      parents: [expectedSha]
+    });
+    releaseCommitSha = releaseCommit.data.sha;
+  };
+
+  const verifyReleaseCommit = async () => {
+    if (!releaseCommitSha || !powerShellBlobSha || !bashBlobSha) {
+      throw new Error('Release commit verification was requested before the derived release commit was created.');
+    }
+
+    const commit = await github.rest.git.getCommit({ owner, repo, commit_sha: releaseCommitSha });
+    if (commit.data.parents.length !== 1 || commit.data.parents[0].sha !== expectedSha) {
+      throw new Error(`Derived release commit ${releaseCommitSha} must have ${expectedSha} as its only parent.`);
+    }
+
+    const tree = await github.rest.git.getTree({ owner, repo, tree_sha: commit.data.tree.sha });
+    const entries = new Map(tree.data.tree.map((entry) => [entry.path, entry]));
+    if (entries.get('isolated-dotnet-sdk.ps1')?.sha !== powerShellBlobSha) {
+      throw new Error('Derived release commit does not contain the stamped PowerShell source bytes.');
+    }
+    if (entries.get('isolated-dotnet-sdk.sh')?.sha !== bashBlobSha) {
+      throw new Error('Derived release commit does not contain the stamped Bash source bytes.');
+    }
+
+    const comparison = await github.rest.repos.compareCommits({
+      owner,
+      repo,
+      base: expectedSha,
+      head: releaseCommitSha
+    });
+    const changedFiles = (comparison.data.files || []).map((file) => file.filename).sort();
+    const expectedFiles = ['isolated-dotnet-sdk.ps1', 'isolated-dotnet-sdk.sh'];
+    if (
+      comparison.data.ahead_by !== 1 ||
+      comparison.data.behind_by !== 0 ||
+      changedFiles.length !== expectedFiles.length ||
+      changedFiles.some((file, index) => file !== expectedFiles[index])
+    ) {
+      throw new Error(`Derived release commit ${releaseCommitSha} must differ from ${expectedSha} only by the two stamped product scripts.`);
+    }
+  };
+
   const verifyTag = async () => {
     const ref = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
-    if (ref.data.object.type !== 'commit' || ref.data.object.sha !== expectedSha) {
-      throw new Error(`Tag ${tag} does not point directly to ${expectedSha}.`);
+    if (ref.data.object.type !== 'commit' || ref.data.object.sha !== releaseCommitSha) {
+      throw new Error(`Tag ${tag} does not point directly to derived release commit ${releaseCommitSha}.`);
     }
   };
 
@@ -134,11 +239,14 @@ module.exports = async ({ github, context, core }) => {
   };
 
   try {
+    await createReleaseCommit();
+    await verifyReleaseCommit();
+
     await github.rest.git.createRef({
       owner,
       repo,
       ref: `refs/tags/${tag}`,
-      sha: expectedSha
+      sha: releaseCommitSha
     });
     tagCreated = true;
     await verifyTag();
@@ -147,7 +255,7 @@ module.exports = async ({ github, context, core }) => {
       owner,
       repo,
       tag_name: tag,
-      target_commitish: expectedSha,
+      target_commitish: releaseCommitSha,
       name: tag,
       body: releaseBody,
       draft: true,
@@ -171,6 +279,7 @@ module.exports = async ({ github, context, core }) => {
       throw new Error(`GitHub did not confirm the SHA256SUMS upload for ${tag}.`);
     }
 
+    await verifyReleaseCommit();
     await verifyTag();
     await verifyRelease(true);
 
@@ -187,6 +296,7 @@ module.exports = async ({ github, context, core }) => {
     }
     published = true;
 
+    await verifyReleaseCommit();
     await verifyTag();
     const finalRelease = await verifyRelease(false);
 
@@ -204,12 +314,14 @@ module.exports = async ({ github, context, core }) => {
 
     core.setOutput('release_url', finalRelease.html_url);
     core.setOutput('release_id', String(releaseId));
+    core.setOutput('release_commit_sha', releaseCommitSha);
 
     await core.summary
       .addHeading(`Published ${tag}`)
       .addList([
         `Release: ${finalRelease.html_url}`,
-        `Commit: ${expectedSha}`,
+        `Validated main commit: ${expectedSha}`,
+        `Derived release commit: ${releaseCommitSha}`,
         `SHA256SUMS SHA-256: ${process.env.MANIFEST_SHA256}`,
         `PowerShell script SHA-256: ${process.env.POWERSHELL_SHA256}`,
         `Bash script SHA-256: ${process.env.BASH_SHA256}`

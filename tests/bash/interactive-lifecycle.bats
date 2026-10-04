@@ -239,8 +239,8 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"A selection is required. Choose I, R, L, or E."* ]]
   [[ "$output" == *"Invalid selection: 6. Choose I, R, L, or E."* ]]
-  [[ "$output" == *$'A selection is required. Choose I, R, L, or E.\n\nWhat would you like to do?'* ]]
-  [[ "$output" == *$'Invalid selection: 6. Choose I, R, L, or E.\n\nWhat would you like to do?'* ]]
+  [[ "$output" == *$'A selection is required. Choose I, R, L, or E.\n\nIsolated .NET SDK development (main)\n\nWhat would you like to do?'* ]]
+  [[ "$output" == *$'Invalid selection: 6. Choose I, R, L, or E.\n\nIsolated .NET SDK development (main)\n\nWhat would you like to do?'* ]]
 }
 
 @test "Remove retry reports active choices and separates feedback from redraw" {

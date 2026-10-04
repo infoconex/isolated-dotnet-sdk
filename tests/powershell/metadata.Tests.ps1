@@ -116,7 +116,7 @@ Describe 'PowerShell release-metadata behavior' {
         $metadataOutput = @(& pwsh -NoProfile -Command '
             function Invoke-RestMethod { throw "metadata-discovery-was-called" }
             function Invoke-WebRequest { throw "release-metadata-download-boundary" }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.9.999 -Yes
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.9.999 -Yes
         ' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0

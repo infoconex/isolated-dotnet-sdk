@@ -37,9 +37,11 @@ For platform requirements, normal usage, pinned installation, and development-so
 - [Windows with PowerShell 7](docs/getting-started/windows-powershell.md)
 - [Linux or macOS with Bash](docs/getting-started/linux-macos-bash.md)
 
-After bootstrap, the saved tool starts a persistent interactive session:
+For stable releases published with embedded tool identity, the saved tool shows the exact release tag. Mutable `main` shows `development (main)` in the same location:
 
 ```text
+Isolated .NET SDK v1.2.3
+
 What would you like to do?
 
   I. Install an SDK
@@ -51,6 +53,18 @@ What would you like to do?
 Selection:
 ```
 
+You can also query the tool identity directly without bootstrap, SDK discovery, network access, prompting, or mutation:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version
+```
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version
+```
+
+PowerShell `-Version` and Bash `--version` identify the tool itself. For explicit SDK selection, use PowerShell `-SdkVersion <sdk-version>` or Bash `--sdk-version <sdk-version>`; both shells also accept the exact SDK version positionally. See [Tool version](docs/commands/tool-version.md).
+
 Explicit Install, List, Verify, Remove, and exact-version invocations remain one-shot for scripting and automation.
 
 ## What the tool does
@@ -59,6 +73,7 @@ Explicit Install, List, Verify, Remove, and exact-version invocations remain one
 - **List** recognized Isolated SDKs first, followed by read-only System SDKs visible through the normally resolved `dotnet` host.
 - **Verify** one installed isolated SDK with a read-only exact-version health check.
 - **Remove** only SDKs managed under the isolated SDK root.
+- **Identify** the running tool release/source directly or on Main without checking for updates.
 - **Use** an isolated SDK by invoking its version-specific `dotnet` host directly; the tool does not permanently modify normal `PATH`.
 
 See the [command documentation](docs/commands/README.md) for the behavioral contract of each operation.
@@ -78,9 +93,11 @@ For the full model, see [Supply-chain integrity](docs/concepts/supply-chain-inte
 
 The short Pages command selects the latest published stable release at bootstrap time. Rerunning it is the explicit update operation; the saved tool does not silently check for or install updates during normal execution.
 
-Explicit tag-pinned stable installation remains supported for reproducibility and rollback. See [Stable bootstrap, update, and rollback](docs/releases/stable-bootstrap.md).
+Stable releases published with embedded tool identity report their exact tag from the tagged and saved copies. Explicit tag-pinned stable installation remains supported for reproducibility and rollback. See [Stable bootstrap, update, and rollback](docs/releases/stable-bootstrap.md).
 
-Mutable `main` remains available for explicit development testing, but it is not the stable installation channel and does not carry the stable-release checksum guarantee.
+Mutable `main` remains available for explicit development testing, but it is not the stable installation channel and does not carry the stable-release checksum guarantee. Current `main` identifies itself as development source rather than claiming the latest stable version.
+
+Historical releases are not rewritten solely to retrofit tool-version metadata.
 
 ## Documentation
 

@@ -8,6 +8,7 @@ on:
       - .github/scripts/publish-release.js
       - .github/release-notes/**
       - scripts/New-ReleaseChecksums.ps1
+      - scripts/Set-ReleaseToolVersion.ps1
   workflow_dispatch:
     inputs:
       tag:
@@ -42,6 +43,7 @@ jobs:
     outputs:
       release_url: ${{ steps.release.outputs.release_url }}
       release_id: ${{ steps.release.outputs.release_id }}
+      release_commit_sha: ${{ steps.release.outputs.release_commit_sha }}
       release_tag: ${{ steps.inputs.outputs.release_tag }}
       expected_sha: ${{ steps.inputs.outputs.expected_sha }}
     env:
@@ -161,6 +163,36 @@ jobs:
             } else {
               core.info('Pages: no run exists for this SHA, so Pages is not required for publication.');
             }
+
+      - name: Stamp and verify stable tool identity
+        shell: pwsh
+        run: |
+          & ./scripts/Set-ReleaseToolVersion.ps1 `
+              -RepositoryRoot $env:GITHUB_WORKSPACE `
+              -ReleaseTag $env:RELEASE_TAG
+
+          $powerShellMarker = "`$ToolReleaseIdentity = '$env:RELEASE_TAG'"
+          $bashMarker = "TOOL_RELEASE_IDENTITY=`"$env:RELEASE_TAG`""
+          $powerShellContent = Get-Content -LiteralPath ./isolated-dotnet-sdk.ps1 -Raw
+          $bashContent = Get-Content -LiteralPath ./isolated-dotnet-sdk.sh -Raw
+
+          if (([regex]::Matches($powerShellContent, [regex]::Escape($powerShellMarker))).Count -ne 1) {
+              throw 'Stamped PowerShell source does not contain exactly one expected release identity marker.'
+          }
+          if (([regex]::Matches($bashContent, [regex]::Escape($bashMarker))).Count -ne 1) {
+              throw 'Stamped Bash source does not contain exactly one expected release identity marker.'
+          }
+          if ($powerShellContent.Contains('$ToolReleaseIdentity = ''development''') -or
+              $bashContent.Contains('TOOL_RELEASE_IDENTITY="development"')) {
+              throw 'Stamped release source still contains a development identity marker.'
+          }
+
+          $changedFiles = @(git diff --name-only | Sort-Object)
+          if ($changedFiles.Count -ne 2 -or
+              $changedFiles[0] -ne 'isolated-dotnet-sdk.ps1' -or
+              $changedFiles[1] -ne 'isolated-dotnet-sdk.sh') {
+              throw "Release identity stamping must modify only the two product scripts. Changed: $($changedFiles -join ', ')"
+          }
 
       - name: Generate deterministic release checksums
         shell: pwsh

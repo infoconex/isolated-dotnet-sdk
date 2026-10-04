@@ -52,7 +52,7 @@ prepare_source() {
   [[ "$output" == *"Isolated SDKs:"* ]]
 }
 
-@test "captured non-TTY output contains no ANSI escape sequences or CLI-name prefix" {
+@test "captured non-TTY output contains no ANSI escape sequences CLI-name prefix or tty diagnostic" {
   test_home="$test_root/non-tty-home"
 
   mkdir -p "$test_home"
@@ -63,4 +63,6 @@ prepare_source() {
   [ "$status" -eq 0 ]
   [[ "$output" != *$'\033['* ]]
   [[ "$output" != *"isolated-dotnet-sdk:"* ]]
+  [[ "$output" != *"/dev/tty:"* ]]
+  [[ "$output" != *"Device not configured"* ]]
 }

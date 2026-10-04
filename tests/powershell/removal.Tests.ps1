@@ -39,7 +39,7 @@ Describe 'PowerShell removal behavior' {
         }
 
         function Initialize-TestRemovalTarget {
-            $installDirectory = Join-Path $script:SdkRoot $script:Version
+            $installDirectory = Join-Path $script:SdkRoot $script:SdkVersion
             if (Test-Path -LiteralPath $installDirectory) {
                 Microsoft.PowerShell.Management\Remove-Item -LiteralPath $installDirectory -Recurse -Force
             }
@@ -72,7 +72,7 @@ Describe 'PowerShell removal behavior' {
             New-Item -ItemType Directory -Path $publicInstallDirectory -Force | Out-Null
             New-Item -ItemType File -Path (Join-Path $publicInstallDirectory 'dotnet.exe') -Force | Out-Null
 
-            $whatIfOutput = @(& pwsh -NoProfile -File $script:ToolScript -Action Remove -Version $script:RemovalVersion -WhatIf *>&1)
+            $whatIfOutput = @(& pwsh -NoProfile -File $script:ToolScript -Action Remove -SdkVersion $script:RemovalVersion -WhatIf *>&1)
 
             $LASTEXITCODE | Should -Be 0
             Test-Path -LiteralPath $publicInstallDirectory | Should -BeTrue
@@ -94,7 +94,7 @@ Describe 'PowerShell removal behavior' {
             New-Item -ItemType Directory -Path $publicInstallDirectory -Force | Out-Null
             New-Item -ItemType File -Path (Join-Path $publicInstallDirectory 'dotnet.exe') -Force | Out-Null
 
-            & pwsh -NoProfile -NonInteractive -File $script:InstalledToolPath -Action Remove -Version $script:RemovalVersion *> $null
+            & pwsh -NoProfile -NonInteractive -File $script:InstalledToolPath -Action Remove -SdkVersion $script:RemovalVersion *> $null
 
             $LASTEXITCODE | Should -Not -Be 0
             Test-Path -LiteralPath $publicInstallDirectory | Should -BeTrue
@@ -105,7 +105,7 @@ Describe 'PowerShell removal behavior' {
         BeforeEach {
             Import-ToolFunctionDefinition
             $script:SdkRoot = Join-Path $script:TestRoot 'function-home'
-            $script:Version = $script:RemovalVersion
+            $script:SdkVersion = $script:RemovalVersion
         }
 
         It 'exposes native WhatIf and Confirm parameters' {

@@ -56,7 +56,7 @@ Describe 'PowerShell process-level behavior' {
     It 'propagates a failing saved child tool through file-based bootstrap' {
         Copy-Item $script:ToolScript $script:SourceCopy -Force
 
-        & pwsh -NoProfile -File $script:SourceCopy -Action Install -Version 'invalid/version' -Yes *> $null
+        & pwsh -NoProfile -File $script:SourceCopy -Action Install -SdkVersion 'invalid/version' -Yes *> $null
 
         $LASTEXITCODE | Should -Not -Be 0
     }
@@ -69,7 +69,7 @@ Describe 'PowerShell process-level behavior' {
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         $env:ISOLATED_DOTNET_SDK_FAKE_BIN = $fakeBin
 
-        $failureOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_FAKE_BIN;$env:PATH"; function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_FAKE_BIN;$env:PATH"; function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to list SDKs through the system dotnet host with exit code 71\.'
@@ -135,7 +135,7 @@ Describe 'PowerShell process-level behavior' {
     It 'rejects an invalid SDK version' {
         Install-TestTool
 
-        & pwsh -NoProfile -File $script:ToolPath -Action Install -Version 'invalid/version' -Yes *> $null
+        & pwsh -NoProfile -File $script:ToolPath -Action Install -SdkVersion 'invalid/version' -Yes *> $null
 
         $LASTEXITCODE | Should -Not -Be 0
     }
@@ -169,7 +169,7 @@ Describe 'PowerShell process-level behavior' {
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
         New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
 
-        $failureOutput = @(& pwsh -NoProfile -NonInteractive -File $script:ToolPath -Action Remove -Version $version 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -NonInteractive -File $script:ToolPath -Action Remove -SdkVersion $version 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'Interactive input is unavailable\.'
@@ -180,7 +180,7 @@ Describe 'PowerShell process-level behavior' {
         Install-TestTool
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
 
-        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "transport-specific-metadata-detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Version 99.0.100 -Yes' 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "transport-specific-metadata-detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match "Unable to load valid Microsoft release metadata for SDK 99\.0\.100"
@@ -190,7 +190,7 @@ Describe 'PowerShell process-level behavior' {
     It 'rejects a version with an explicit List action' {
         Install-TestTool
 
-        $failureOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List -Version 99.0.100 2>&1)
+        $failureOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List -SdkVersion 99.0.100 2>&1)
 
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'Version.*supported only with.*Install, Remove, or Verify'

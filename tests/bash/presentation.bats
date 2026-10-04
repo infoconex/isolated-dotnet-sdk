@@ -31,7 +31,7 @@ teardown() {
   run env HOME="$test_home" "$source_copy" list unexpected
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"Unknown argument: unexpected"* ]]
+  [[ "$output" == *"An SDK version cannot be combined with list."* ]]
   [[ "$output" != *"isolated-dotnet-sdk:"* ]]
 }
 

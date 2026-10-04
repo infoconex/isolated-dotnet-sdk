@@ -76,6 +76,14 @@ if [[ "$main_prompt_count" -ne 4 ]]; then
   exit 1
 fi
 
+identity_count="$(printf '%s\n' "$interactive_output" |
+  grep -cFx 'Isolated .NET SDK development (main)' || true)"
+if [[ "$identity_count" -ne "$main_prompt_count" ]]; then
+  printf 'Expected one development identity heading per Main prompt; observed %s identities for %s prompts.\n' \
+    "$identity_count" "$main_prompt_count" >&2
+  exit 1
+fi
+
 required_fragments=(
   "Back to .NET channels"
   "Isolated SDK installation completed successfully."
