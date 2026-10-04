@@ -6,7 +6,8 @@ Describe 'PowerShell interactive Verify' {
         function Invoke-InteractiveVerifyTool {
             param(
                 [string[]]$InputLines,
-                [string]$Command = '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH'
+                [string]$Command = '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH',
+                [string]$PathPrefix
             )
 
             $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -21,6 +22,9 @@ Describe 'PowerShell interactive Verify' {
             $startInfo.Environment['ISOLATED_DOTNET_SDK_TOOL_PATH'] = $script:ToolPath
             $startInfo.Environment['HOME'] = $script:TestHome
             $startInfo.Environment['USERPROFILE'] = $script:TestHome
+            if ($PathPrefix) {
+                $startInfo.Environment['PATH'] = "$PathPrefix$([System.IO.Path]::PathSeparator)$env:PATH"
+            }
             if ($env:FAKE_DOTNET_SDK_VERSION) {
                 $startInfo.Environment['FAKE_DOTNET_SDK_VERSION'] = $env:FAKE_DOTNET_SDK_VERSION
             }
@@ -128,6 +132,28 @@ Describe 'PowerShell interactive Verify' {
         $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Match 'Exiting\.'
         $result.Output | Should -Not -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
+    }
+
+    It 'never offers System SDKs as interactive Verify targets' {
+        $isolatedVersion = '99.0.100'
+        $systemVersion = '88.0.100'
+        Install-FakeInteractiveVerifyHost -Version $isolatedVersion -ReportedVersion $isolatedVersion | Out-Null
+
+        $fakeBin = Join-Path $script:TestRoot 'fake-bin'
+        New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
+        @"
+@echo off
+if "%1"=="--list-sdks" echo $systemVersion [C:\system\sdk]
+exit /b 0
+"@ | Set-Content -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') -Encoding ascii
+
+        $result = Invoke-InteractiveVerifyTool `
+            -InputLines @('v', 'b', 'e') `
+            -PathPrefix $fakeBin
+
+        $result.ExitCode | Should -Be 0
+        $result.Output | Should -Match "1\. $([regex]::Escape($isolatedVersion))"
+        $result.Output | Should -Not -Match [regex]::Escape($systemVersion)
     }
 
     It 'terminates nonzero when the selected isolated SDK fails verification' {
