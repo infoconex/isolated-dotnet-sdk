@@ -59,9 +59,10 @@ The persistent session then:
 5. uses the picker’s semantic manual-version option to enter the configured fixed SDK version;
 6. verifies return to Main after installation;
 7. runs List with `L` and verifies the installed SDK is displayed;
-8. runs Remove with `R` for the single job-local isolated SDK and verifies return to Main;
-9. exits explicitly with `E` and requires a successful process result;
-10. verifies the SDK is absent afterward.
+8. runs Verify with `V`, selects the only job-local isolated SDK, requires a healthy result, and verifies return to Main;
+9. runs Remove with `R` for that isolated SDK and verifies return to Main;
+10. exits explicitly with `E` and requires a successful process result;
+11. verifies the SDK is absent afterward.
 
 The E2E driver may use the tool’s `-Yes` / `--yes` confirmation control so hosted-runner system SDK inventory cannot introduce an extra confirmation-input branch. `-Yes` / `--yes` does not choose menu items and does not replace the persistent interactive session.
 
