@@ -1,0 +1,73 @@
+name: Issue 116 Bash portability
+
+on:
+  push:
+    branches:
+      - issue-116-sdk-audit
+    paths:
+      - .github/workflows/issue-116-bash-portability.yml
+
+permissions:
+  contents: write
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: issue-116-sdk-audit
+          persist-credentials: false
+      - name: Apply portability fix
+        run: python3 .github/scripts/issue-116-final-fixes.py
+      - name: Prepare Bash validation tooling
+        shell: bash
+        run: bash scripts/initialize-bash-validation.sh false false
+      - name: Validate Bash
+        shell: bash
+        run: |
+          bash -n isolated-dotnet-sdk.sh
+          bash scripts/run-shellcheck.sh
+          bash tests/bash/run-tests.sh
+
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: issue-116-sdk-audit
+          persist-credentials: false
+      - name: Apply portability fix
+        run: python3 .github/scripts/issue-116-final-fixes.py
+      - name: Prepare Bash validation tooling
+        shell: bash
+        run: bash scripts/initialize-bash-validation.sh false false
+      - name: Validate Audit on system Bash
+        shell: bash
+        run: |
+          bash --version | head -n 1
+          bash -n isolated-dotnet-sdk.sh
+          bats tests/bash/audit.bats
+
+  commit:
+    needs: [ubuntu, macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: issue-116-sdk-audit
+      - name: Commit validated portability fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/issue-116-final-fixes.py
+          rm .github/scripts/issue-116-final-fixes.py
+          rm .github/workflows/issue-116-bash-portability.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: preserve Audit portability on macOS Bash' -m 'Refs #116'
+          git push origin HEAD:issue-116-sdk-audit
