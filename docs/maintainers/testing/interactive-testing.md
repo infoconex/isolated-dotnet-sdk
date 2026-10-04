@@ -7,30 +7,32 @@ The repository keeps deterministic interactive-session coverage separate from re
 Both product implementations have behavioral coverage for:
 
 - no-action invocation remaining in the interactive session until Exit;
-- case-insensitive Main commands `I`, `R`, `L`, and `E`, with the old numeric Main aliases rejected;
+- case-insensitive Main commands `I`, `R`, `L`, `V`, and `E`, with the old numeric Main aliases rejected;
 - normal operation/no-change outcomes returning to Main;
 - explicit List remaining one-shot;
 - operational failures terminating nonzero instead of returning to Main;
 - Install channel Back to Main;
 - Install SDK Back to channel selection;
 - Remove SDK Back to Main;
+- Verify selecting only installed isolated SDKs, never System SDKs;
+- Verify Back and Exit navigation, empty-inventory no-change behavior, healthy return to Main, retry feedback, and failure propagation;
 - compact SDK presentation using latest/recommended metadata and newest-per-feature-band choices;
 - `Show all versions` exposing older servicing releases in deterministic order;
 - recoverable blank/invalid selection feedback and global Exit behavior across persistent menus.
 
-The Bash suite also exercises a representative multi-operation session through Install, List, Remove, and Exit using deterministic fake metadata and an isolated fake SDK host. Existing focused suites continue to own transactional installation, confirmation, metadata failure, filesystem, native-command, cleanup, and presentation boundaries.
+The Bash suite also exercises a representative multi-operation session through Install, List, Remove, and Exit using deterministic fake metadata and an isolated fake SDK host. Focused interactive Verify suites in both shells use fake isolated hosts to establish that the menu path delegates to the existing read-only health behavior. Existing focused suites continue to own transactional installation, confirmation, metadata failure, filesystem, native-command, cleanup, direct Verify, and presentation boundaries.
 
 ## Relationship to real E2E
 
 These suites are repository-controlled integration/behavioral tests. They replace external network and destructive boundaries where necessary so failures are deterministic and fast to diagnose.
 
-Real Microsoft/.NET lifecycle coverage exists separately in [`e2e-testing.md`](e2e-testing.md). The live E2E suite complements this deterministic layer; it does not replace the focused failure and navigation coverage here.
+Real Microsoft/.NET lifecycle coverage exists separately in [`e2e-testing.md`](e2e-testing.md). The live interactive E2E path installs a real isolated SDK, lists it, verifies it through Main, removes it, and exits. The live E2E suite complements this deterministic layer; it does not replace the focused failure and navigation coverage here.
 
 ## Test design
 
 Interactive tests resolve behavior from displayed labels and current data rather than assuming that a fixed numeric SDK-menu position always represents a particular version. Deterministic metadata fixtures intentionally contain SDK versions in non-sorted order so presentation ordering is established by the product rather than fixture order.
 
-The persistent Main menu is different: its semantic commands are explicitly `I`, `R`, `L`, and `E`, so those mnemonics are part of the product contract rather than data-derived positions.
+The persistent Main menu is different: its semantic commands are explicitly `I`, `R`, `L`, `V`, and `E`, so those mnemonics are part of the product contract rather than data-derived positions.
 
 ## Running validation
 
