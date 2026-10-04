@@ -153,7 +153,7 @@ exit /b 0
 
         $result.ExitCode | Should -Be 0
         $result.Output | Should -Match "1\. $([regex]::Escape($isolatedVersion))"
-        $result.Output | Should -Not -Match [regex]::Escape($systemVersion)
+        $result.Output | Should -Not -Match ([regex]::Escape($systemVersion))
     }
 
     It 'terminates nonzero when the selected isolated SDK fails verification' {
