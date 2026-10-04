@@ -299,7 +299,7 @@ looks_like_json_object() {
 parse_release_index() {
     awk '
         function json_string(line, key, marker, value) {
-            marker = "\\\"" key "\\\"[[:space:]]*:[[:space:]]*\\\""
+            marker = "\"" key "\"[[:space:]]*:[[:space:]]*\""
             if (!match(line, marker)) {
                 return ""
             }
