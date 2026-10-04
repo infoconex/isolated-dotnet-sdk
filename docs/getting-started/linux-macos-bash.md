@@ -47,7 +47,7 @@ This identifies the `isolated-dotnet-sdk` tool itself. `--sdk-version <sdk-versi
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 ```
 
-Main displays the same stable/development tool identity near the top. The persistent session uses `I` for Install, `R` for Remove, `L` for List, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
+Main displays the same stable/development tool identity near the top. The persistent session uses `I` for Install, `R` for Remove, `L` for List, `V` for Verify, and `E` for Exit. See [Interactive mode](../commands/interactive.md) for navigation semantics.
 
 ## Install an SDK
 
@@ -93,11 +93,13 @@ List shows Isolated SDKs first and read-only System SDKs second. See [List](../c
 
 ## Verify an isolated SDK
 
+Run Verify directly for a known exact isolated SDK:
+
 ```bash
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" verify 10.0.401
 ```
 
-Verify is read-only and direct-command-only. See [Verify](../commands/verify.md).
+Verify is read-only. The persistent Main menu also exposes `V` so you can choose from installed isolated SDKs; System SDKs are not offered as Verify targets. See [Verify](../commands/verify.md).
 
 ## Use an isolated SDK
 

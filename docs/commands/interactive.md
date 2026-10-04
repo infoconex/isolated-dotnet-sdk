@@ -16,6 +16,7 @@ What would you like to do?
   I. Install an SDK
   R. Remove an isolated SDK
   L. List installed SDKs
+  V. Verify an isolated SDK
 
   E. Exit
 
@@ -28,11 +29,11 @@ Mutable `main` uses the same location but identifies itself as development sourc
 Isolated .NET SDK development (main)
 ```
 
-The identity heading is shown on Main, not repeated throughout nested Install or Remove menus. See [Tool version](tool-version.md) for the direct query and stable/development identity contract.
+The identity heading is shown on Main, not repeated throughout nested Install, Remove, or Verify menus. See [Tool version](tool-version.md) for the direct query and stable/development identity contract.
 
-Main commands are case-insensitive. `I`, `R`, `L`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
+Main commands are case-insensitive. `I`, `R`, `L`, `V`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
 
-After a successful Install, List, or Remove operation, or after a normal cancellation/no-change result, the persistent session returns to Main. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
+After a successful Install, List, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session returns to Main. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
 
 ## One-shot commands
 
@@ -40,7 +41,7 @@ Supplying an explicit action or the supported bare-version Install form keeps ex
 
 An explicit Install or Remove may still need an interactive picker when no version was supplied. That does not convert the command into a persistent Main session.
 
-Verify is always direct-command-only and never appears on Main.
+Explicit Verify remains a one-shot exact-version command. Interactive Verify is available separately from Main and selects from the installed isolated SDK inventory.
 
 The direct tool-version query is also one-shot and exits before bootstrap, network access, SDK discovery, prompting, or mutation. It identifies the tool itself; it does not select a .NET SDK.
 
@@ -57,7 +58,10 @@ Main
 │  │  └─ Back → Main
 │  └─ SDK version selection
 │     └─ Back → Channel selection
-└─ Remove
+├─ Remove
+│  └─ SDK selection
+│     └─ Back → Main
+└─ Verify
    └─ SDK selection
       └─ Back → Main
 ```
@@ -74,7 +78,7 @@ Channel menu numbers are derived from current metadata rather than fixed product
 
 ## SDK version selection
 
-The default SDK picker is intentionally compact:
+The default Install SDK picker is intentionally compact:
 
 - Microsoft's `latest-sdk` is shown first and marked `latest` when that metadata is present and resolves to an SDK in the selected channel;
 - the newest SDK from each other available feature band is also shown;
@@ -83,9 +87,15 @@ The default SDK picker is intentionally compact:
 - Back remains available from compact and expanded views; and
 - manual exact-version entry remains available.
 
-SDK choices may be marked `latest`, `isolated`, and/or `system` to describe current metadata and ownership state.
+Install choices may be marked `latest`, `isolated`, and/or `system` to describe current metadata and ownership state.
 
-The picker does not depend on fixed numeric positions for a particular SDK version.
+The Install picker does not depend on fixed numeric positions for a particular SDK version.
+
+## Verify selection
+
+Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only health check used by explicit Verify; there is no separate interactive verification implementation.
+
+A healthy result returns to Main. `B` returns to Main without running verification, and `E` exits the session. If no isolated SDKs are installed, the tool reports that state and returns to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
 
 ## Input failure versus cancellation
 
@@ -98,5 +108,6 @@ An explicit user cancellation or default-no confirmation remains a successful no
 - [Tool version](tool-version.md)
 - [Install](install.md)
 - [Remove](remove.md)
+- [Verify](verify.md)
 - [SDK discovery and release metadata](../concepts/sdk-discovery.md)
 - [PowerShell and Bash behavioral parity](../contracts/behavioral-parity.md)
