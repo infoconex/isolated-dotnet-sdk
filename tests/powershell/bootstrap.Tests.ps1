@@ -95,7 +95,7 @@ Describe 'PowerShell bootstrap filesystem behavior' {
         $script:ToolPath = Join-Path $script:SdkRoot $script:ToolName
         $script:RepositoryRawBase = 'https://example.invalid'
         $script:ActionWasSpecified = $false
-        $script:VersionWasSpecified = $false
+        $script:SdkVersionWasSpecified = $false
         $script:ConfirmWasSpecified = $false
         $script:WhatIfWasSpecified = $false
         $script:Bootstrapped = $false
