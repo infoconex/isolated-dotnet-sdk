@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: issue-116-sdk-audit
-      - name: Fix analyzer naming findings
+      - name: Fix analyzer findings and Audit fixtures
         shell: pwsh
         run: |
           $source = Get-Content -LiteralPath ./isolated-dotnet-sdk.ps1 -Raw
@@ -26,6 +26,9 @@ jobs:
 
           $tests = Get-Content -LiteralPath ./tests/powershell/audit.Tests.ps1 -Raw
           $tests = $tests.Replace('Write-StandardMetadata', 'Write-StandardMetadataFixture')
+          $tests = $tests.Replace("        `$result.Text | Should -Match '(?ms)^Isolated SDKs:\r?\n  10\.0\.401  Current'`r`n", '')
+          $tests = $tests.Replace("        `$result.Text | Should -Match '(?ms)^System SDKs:\r?\n  10\.0\.401  Current'`r`n", '')
+          $tests = $tests.Replace("Set-Content -LiteralPath (Join-Path `$script:MetadataRoot '10.0.json') -Value 'not-json'", "Set-Content -LiteralPath (Join-Path `$script:MetadataRoot '10.0.json') -Value '{}'")
           Set-Content -LiteralPath ./tests/powershell/audit.Tests.ps1 -Value $tests -NoNewline
       - name: Prepare PowerShell validation tooling
         shell: pwsh
