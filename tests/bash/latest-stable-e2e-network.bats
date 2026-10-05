@@ -19,10 +19,15 @@ set -euo pipefail
 
 out=''
 url=''
+write_out=''
 while (($#)); do
   case "$1" in
-    -o)
+    -o|--output)
       out="$2"
+      shift 2
+      ;;
+    -w|--write-out)
+      write_out="$2"
       shift 2
       ;;
     -H)
@@ -41,6 +46,12 @@ while (($#)); do
   esac
 done
 
+emit_http_code() {
+  if [[ -n "$write_out" ]]; then
+    printf '%s' "$1"
+  fi
+}
+
 printf '%s\n' "$url" >> "$E2E_REQUEST_LOG"
 request_count="$(grep -Fc "$url" "$E2E_REQUEST_LOG" || true)"
 
@@ -49,14 +60,27 @@ case "$url" in
     case "${E2E_SCENARIO:-success}" in
       transient-release-receive)
         if [[ "$request_count" -eq 1 ]]; then
+          emit_http_code '000'
+          exit 56
+        fi
+        ;;
+      transient-release-receive-http-200)
+        if [[ "$request_count" -eq 1 ]]; then
+          emit_http_code '200'
           exit 56
         fi
         ;;
       persistent-release-receive)
+        emit_http_code '000'
         exit 56
         ;;
       http-release-failure)
+        emit_http_code '403'
         exit 22
+        ;;
+      http-release-failure-exit-56)
+        emit_http_code '403'
+        exit 56
         ;;
     esac
 
@@ -66,9 +90,11 @@ case "$url" in
     else
       printf '%s\n' "$release_json"
     fi
+    emit_http_code '200'
     ;;
   */SHA256SUMS)
     if [[ "${E2E_SCENARIO:-success}" == transient-checksum-receive && "$request_count" -eq 1 ]]; then
+      emit_http_code '000'
       exit 56
     fi
     if [[ "${E2E_SCENARIO:-success}" == malformed-checksum ]]; then
@@ -76,15 +102,18 @@ case "$url" in
     else
       printf '%s  isolated-dotnet-sdk.sh\n' "$E2E_EXPECTED_HASH" > "$out"
     fi
+    emit_http_code '200'
     ;;
   */isolated-dotnet-sdk.sh)
     case "${E2E_SCENARIO:-success}" in
       transient-bootstrap-tool-receive)
         if [[ "$request_count" -eq 1 ]]; then
+          emit_http_code '000'
           exit 56
         fi
         ;;
       persistent-bootstrap-tool-receive)
+        emit_http_code '000'
         exit 56
         ;;
     esac
@@ -97,8 +126,10 @@ mkdir -p "$HOME/dotnet-sdks"
 cat "$0" > "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
 printf '%s\n' 'Exiting.'
 PAYLOAD
+    emit_http_code '200'
     ;;
   *)
+    emit_http_code '000'
     exit 23
     ;;
 esac
@@ -141,6 +172,17 @@ request_count() {
 
 @test "latest-stable E2E retries a transient release metadata receive failure" {
   E2E_SCENARIO='transient-release-receive'
+  run_driver
+
+  [ "$status" -eq 0 ]
+  [ "$(request_count '/releases/latest')" -eq 3 ]
+  [ "$(wc -l < "$sleep_log" | tr -d ' ')" -eq 1 ]
+  [[ "$output" == *"release metadata"* ]]
+  [[ "$output" == *"curl exit 56"* ]]
+}
+
+@test "latest-stable E2E retries a receive failure after a non-error HTTP response" {
+  E2E_SCENARIO='transient-release-receive-http-200'
   run_driver
 
   [ "$status" -eq 0 ]
@@ -206,6 +248,19 @@ request_count() {
   [ ! -s "$sleep_log" ]
   [[ "$output" == *"release metadata"* ]]
   [[ "$output" == *"curl exit 22"* ]]
+  [ ! -e "$execution_log" ]
+}
+
+@test "latest-stable E2E does not retry an HTTP failure surfaced as curl exit 56" {
+  E2E_SCENARIO='http-release-failure-exit-56'
+  run_driver
+
+  [ "$status" -eq 56 ]
+  [ "$(request_count '/releases/latest')" -eq 1 ]
+  [ ! -s "$sleep_log" ]
+  [[ "$output" == *"release metadata"* ]]
+  [[ "$output" == *"HTTP 403"* ]]
+  [[ "$output" == *"curl exit 56"* ]]
   [ ! -e "$execution_log" ]
 }
 
