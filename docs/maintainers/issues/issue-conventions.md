@@ -77,15 +77,26 @@ Use comments sparingly and intentionally. The normal concise sequence is:
 6. **Full review** — record separately when useful; otherwise it may be summarized in the consolidated implementation evidence if the comprehensive review result remains explicit.
 7. **Draft PR opening** — only after implementation, appropriate targeted pre-PR validation, full diff review, and linked-issue state reconciliation are complete with no known blocking findings.
 8. **Final completion evidence** — exact reviewed PR head, authoritative full PR Validate evidence, final review result, reconciled acceptance criteria, and intentional follow-ups.
-9. **Post-merge verification** — merge, issue closure, branch deletion, integration-target validation, tracker status, and final issue checkbox reconciliation.
+9. **Post-merge verification** — merge, explicit issue closure when required, branch deletion, integration-target validation, tracker status, and final issue checkbox reconciliation.
 
 Do not add generic comments for every tool call, commit, routine status change, or small Task when a consolidated lifecycle-boundary record carries the same evidence more clearly.
+
+## Pull request issue references
+
+GitHub closing keywords such as `Closes #123` are interpreted for pull requests that target the repository's default branch. They do not provide the intended issue-link/auto-close behavior when a pull request targets a non-default integration branch.
+
+Use:
+
+- `Closes #<issue>` when the pull request targets `main` and the issue should close automatically when that PR merges;
+- `Refs #<issue>` for a pull request targeting a non-default release integration branch, then explicitly close the issue only after merge and successful post-merge integration verification.
+
+The explicit close for an integration-branch issue is part of lifecycle reconciliation, not an exception to traceability.
 
 ## Pull request description
 
 A useful PR description normally includes:
 
-- summary and linked issue;
+- summary and linked/referenced issue;
 - intended base/integration target;
 - behavioral or technical contract being implemented;
 - test-list and RED → GREEN → REFACTOR evidence when applicable;
