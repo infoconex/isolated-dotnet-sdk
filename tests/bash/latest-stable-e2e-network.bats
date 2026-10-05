@@ -77,28 +77,33 @@ case "$url" in
       printf '%s  isolated-dotnet-sdk.sh\n' "$E2E_EXPECTED_HASH" > "$out"
     fi
     ;;
+  */isolated-dotnet-sdk.sh)
+    case "${E2E_SCENARIO:-success}" in
+      transient-bootstrap-tool-receive)
+        if [[ "$request_count" -eq 1 ]]; then
+          exit 56
+        fi
+        ;;
+      persistent-bootstrap-tool-receive)
+        exit 56
+        ;;
+    esac
+
+    cat > "$out" <<'PAYLOAD'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' executed >> "$E2E_EXECUTION_LOG"
+mkdir -p "$HOME/dotnet-sdks"
+cat "$0" > "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
+printf '%s\n' 'Exiting.'
+PAYLOAD
+    ;;
   *)
     exit 23
     ;;
 esac
 EOF
   chmod +x "$fake_bin/curl"
-
-  cat > "$fake_bin/bash" <<'EOF'
-#!/bin/bash
-set -euo pipefail
-
-if [[ "${1:-}" == */install.sh ]]; then
-  printf '%s\n' invoked >> "$E2E_EXECUTION_LOG"
-  mkdir -p "$HOME/dotnet-sdks"
-  printf '%s\n' '#!/usr/bin/env bash' > "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
-  printf '%s\n' 'Exiting.'
-  exit 0
-fi
-
-exec /bin/bash "$@"
-EOF
-  chmod +x "$fake_bin/bash"
 
   cat > "$fake_bin/sha256sum" <<'EOF'
 #!/bin/bash
@@ -139,7 +144,7 @@ request_count() {
   run_driver
 
   [ "$status" -eq 0 ]
-  [ "$(request_count '/releases/latest')" -eq 2 ]
+  [ "$(request_count '/releases/latest')" -eq 3 ]
   [ "$(wc -l < "$sleep_log" | tr -d ' ')" -eq 1 ]
   [[ "$output" == *"release metadata"* ]]
   [[ "$output" == *"curl exit 56"* ]]
@@ -150,10 +155,22 @@ request_count() {
   run_driver
 
   [ "$status" -eq 0 ]
-  [ "$(request_count '/SHA256SUMS')" -eq 2 ]
+  [ "$(request_count '/SHA256SUMS')" -eq 3 ]
   [ "$(wc -l < "$sleep_log" | tr -d ' ')" -eq 1 ]
   [[ "$output" == *"release checksums"* ]]
   [[ "$output" == *"curl exit 56"* ]]
+}
+
+@test "latest-stable E2E retries a transient released-tool receive failure inside the bootstrap" {
+  E2E_SCENARIO='transient-bootstrap-tool-receive'
+  run_driver
+
+  [ "$status" -eq 0 ]
+  [ "$(request_count '/v1.0.0/isolated-dotnet-sdk.sh')" -eq 2 ]
+  [ "$(wc -l < "$sleep_log" | tr -d ' ')" -eq 1 ]
+  [[ "$output" == *"released Bash tool"* ]]
+  [[ "$output" == *"curl exit 56"* ]]
+  [ -e "$execution_log" ]
 }
 
 @test "latest-stable E2E stops after the bounded receive retry attempts" {
@@ -164,6 +181,18 @@ request_count() {
   [ "$(request_count '/releases/latest')" -eq 3 ]
   [ "$(wc -l < "$sleep_log" | tr -d ' ')" -eq 2 ]
   [[ "$output" == *"release metadata"* ]]
+  [[ "$output" == *"after 3 attempts"* ]]
+  [ ! -e "$execution_log" ]
+}
+
+@test "latest-stable E2E surfaces persistent released-tool failure inside the bootstrap" {
+  E2E_SCENARIO='persistent-bootstrap-tool-receive'
+  run_driver
+
+  [ "$status" -eq 56 ]
+  [ "$(request_count '/v1.0.0/isolated-dotnet-sdk.sh')" -eq 3 ]
+  [ "$(wc -l < "$sleep_log" | tr -d ' ')" -eq 2 ]
+  [[ "$output" == *"released Bash tool"* ]]
   [[ "$output" == *"after 3 attempts"* ]]
   [ ! -e "$execution_log" ]
 }
