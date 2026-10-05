@@ -40,4 +40,5 @@ bats \
   "$repo_root/tests/bash/finalization-failures.bats" \
   "$repo_root/tests/bash/release-bootstrap.bats" \
   "$repo_root/tests/bash/latest-stable-bootstrap.bats" \
+  "$repo_root/tests/bash/latest-stable-e2e-network.bats" \
   "$repo_root/tests/bash/sdk-payload-integrity.bats"
