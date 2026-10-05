@@ -217,7 +217,9 @@ Open the pull request as **Draft** only after all of the following are true:
 
 Opening/updating the PR is what normally obtains the authoritative complete pre-merge Validate matrix on the exact reviewed head. The Draft PR is therefore the formal review and exact-head CI artifact, not a second copy of an equivalent full branch-validation stage.
 
-Link the PR to the issue, normally with `Closes #<issue>` when appropriate. Record `## Draft PR opened` when the PR link, reviewed head, base branch, and Draft status add useful traceability.
+Reference the issue according to [`issue-conventions.md`](issue-conventions.md): use `Closes #<issue>` when the PR targets `main` and should auto-close the issue, but use `Refs #<issue>` for a PR targeting a non-default release integration branch. An integration-branch issue remains open until post-merge verification succeeds, then it is closed explicitly.
+
+Record `## Draft PR opened` when the PR link, reviewed head, base branch, and Draft status add useful traceability.
 
 Do not mark the Draft PR ready automatically. The user decides when it becomes ready for review. Do not merge without explicit user approval.
 
@@ -272,19 +274,19 @@ Normal next-release issue PRs merge into the active release integration branch. 
 After merge, verify:
 
 1. the PR is merged into the intended integration target;
-2. the related issue is closed/completed as expected;
-3. the short-lived issue branch is deleted;
-4. the integration target points to the expected merge result;
-5. required post-merge validation for that integration target completes successfully, where repository workflow triggers provide it;
-6. the roadmap/tracker is updated when applicable;
-7. acceptance criteria that depend on merge are satisfied and checked;
-8. no completed Task or satisfied acceptance criterion remains unchecked in the issue.
+2. the short-lived issue branch is deleted;
+3. the integration target points to the expected merge result;
+4. required post-merge validation for that integration target completes successfully, where repository workflow triggers provide it;
+5. the roadmap/tracker is updated when applicable;
+6. acceptance criteria that depend on merge are satisfied and checked;
+7. no completed Task or satisfied acceptance criterion remains unchecked in the issue;
+8. the related issue is closed/completed as expected. When the PR targeted a non-default integration branch, close the issue explicitly only after the preceding post-merge checks succeed.
 
 Reconcile the issue checkbox state before declaring the issue fully closed out. A stale unchecked completed Task or satisfied acceptance criterion is unfinished lifecycle bookkeeping and must be corrected.
 
 Record the result under `## Post-merge verification`.
 
-If post-merge validation fails, treat the issue as unfinished and investigate before moving on.
+If post-merge validation fails, treat the issue as unfinished and investigate before moving on; do not close the issue merely because the integration PR merged.
 
 Merging an issue to the release integration branch is not a stable release. Final integration-branch review, merge to `main`, release documentation, publication, and public verification are governed separately by the stable release process.
 
