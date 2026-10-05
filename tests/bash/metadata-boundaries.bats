@@ -17,6 +17,34 @@ teardown() {
   rm -rf "$test_root"
 }
 
+@test "valid release index parsing is warning-free and preserves selection fields" {
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+cat <<'JSON'
+{
+  "releases-index": [
+    {
+      "channel-version": "99.0",
+      "latest-sdk": "99.0.100",
+      "support-phase": "active",
+      "release-type": "sts",
+      "releases.json": "https://example.invalid/releases.json"
+    }
+  ]
+}
+JSON
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run bash -c 'printf "q\n" | env HOME="$1" PATH="$2:$PATH" "$3" install' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1. .NET 99.0  STS  Active  latest SDK 99.0.100"* ]]
+  [[ "$output" != *"awk:"* ]]
+  [[ "$output" != *"regexp escape sequence"* ]]
+}
+
 @test "release index entries missing required selection fields are not selectable" {
   cat > "$fake_bin/curl" <<'EOF'
 #!/usr/bin/env bash
