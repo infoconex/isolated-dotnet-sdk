@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-05
+
+### Added
+
+- Verified latest-stable bootstrap through short Pages-hosted PowerShell and Bash commands that resolve the latest published stable release, acquire the tagged product script and release `SHA256SUMS`, verify the selected script, and execute only the verified tagged bytes.
+- Explicit tool release/source identity through PowerShell `-Version` and Bash `--version`, with the same identity displayed in the persistent Main menu. Stable releases report their exact tag while mutable `main` reports development identity.
+- Interactive access to the existing read-only Verify operation for exact-version health checks of installed isolated SDKs.
+- A read-only Audit operation that assesses both Isolated SDKs and read-only System SDKs against current Microsoft release metadata for servicing and lifecycle state, including current/update status, security-release metadata, maintenance, preview/Go Live, end-of-life, unknown-channel, and newer-than-known-metadata cases.
+- Independently rerunnable public-release verification covering the published tag, GitHub Release metadata, checksum asset, supported stable-bootstrap paths, saved-tool byte identity, and embedded stable tool identity.
+- A navigable documentation hierarchy with task-focused Getting Started, Commands, Guides, Concepts, Contracts, Releases, and Maintainer sections, plus focused Audit, tool-version, interactive, and stable-bootstrap guidance.
+
+### Changed
+
+- Stable release publication now derives a release-only commit from the already-validated `main` state, stamps one explicit stable tag into both product scripts, generates checksums from those exact release bytes, verifies draft release state before publication, and reads the public release back after publication.
+- Latest stable is now the normal documented installation/update path; pinned checksum-verified stable bootstrap remains available for reproducibility, controlled rollout, and rollback.
+- Release documentation is version controlled as a coordinated changelog entry, exact GitHub Release body, user-facing history page, Releases overview entry, and Pages navigation entry.
+- Documentation and command terminology were reorganized around user tasks and durable product contracts while keeping mutable `main` explicitly separate from stable release identity.
+
+### Fixed
+
+- Removed the GNU awk warning from Bash release-index parsing while preserving portable behavior across Linux and macOS.
+- Hardened latest-stable bootstrap and E2E network acquisition against transient curl receive failures with bounded retries.
+- Preserved real curl HTTP failures as terminal failures rather than misclassifying them as retryable receive failures.
+- Silenced unavailable controlling-terminal probe diagnostics and preserved the selected SDK version in relevant metadata error messages.
+
+### Security
+
+- Latest-stable bootstrap verifies the resolved tagged PowerShell or Bash product script against the selected release's `SHA256SUMS` before the product script executes.
+- Stable release verification independently confirms that public tagged source, checksum material, saved bootstrap result, and embedded release identity agree on supported platform paths.
+- The checksum and tagged product script remain within the project's GitHub trust domain and are not presented as an independent publisher signature.
+
 ## [0.2.0] - 2026-10-02
 
 ### Added

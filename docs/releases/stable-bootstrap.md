@@ -45,12 +45,12 @@ The checksum and tagged product script are both distributed through the project'
 
 ## Pinned stable bootstrap
 
-Use a pinned release when the exact product version must be explicit rather than resolved through latest stable. The current checksum-policy-compliant stable release is `v0.2.0`.
+Use a pinned release when the exact product version must be explicit rather than resolved through latest stable. The current checksum-policy-compliant stable release is `v0.3.0`.
 
 ### Windows / PowerShell 7
 
 ```powershell
-$release = 'v0.2.0'
+$release = 'v0.3.0'
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release.ps1")
 $checksums = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-$release-SHA256SUMS")
 try {
@@ -78,7 +78,7 @@ finally {
 ### Linux or macOS / Bash
 
 ```bash
-release='v0.2.0'
+release='v0.3.0'
 temp="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.sh")"
 checksums="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk.XXXXXX.SHA256SUMS")"
 trap 'rm -f "$temp" "$checksums"' EXIT
