@@ -17,8 +17,10 @@ The command pages describe shared product behavior without repeating shell-speci
 
 - [Install](commands/install.md) — install an exact SDK under the isolated SDK root
 - [List](commands/list.md) — show Isolated SDKs and read-only System SDKs
+- [Audit](commands/audit.md) — assess installed SDK servicing and lifecycle state against current Microsoft release metadata
 - [Verify](commands/verify.md) — health-check one installed isolated SDK
 - [Remove](commands/remove.md) — remove an SDK managed under the isolated root
+- [Tool version](commands/tool-version.md) — identify the tool's stable release or development source
 - [Interactive mode](commands/interactive.md) — persistent sessions, navigation, channel selection, and SDK selection
 
 See the [command index](commands/README.md) for the command/documentation boundary.
@@ -51,10 +53,12 @@ These documents define detailed implementation-independent behavior and intentio
 
 - [Release documentation index](releases/README.md)
 - [Stable bootstrap, update, and rollback](releases/stable-bootstrap.md)
+- [v0.3.0 release history](releases/history/v0.3.0.md)
+- [v0.2.0 release history](releases/history/v0.2.0.md)
 - [v0.1.0 historical release notes](releases/history/v0.1.0.md)
 - [v0.1.0 historical release checklist](releases/history/v0.1.0-checklist.md)
 
-The current checksum-policy-compliant stable release is `v0.2.0`.
+The current checksum-policy-compliant stable release is `v0.3.0`.
 
 ## Maintainer documentation
 
