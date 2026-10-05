@@ -4,7 +4,7 @@ set -euo pipefail
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
 TOOL_NAME="isolated-dotnet-sdk.sh"
-TOOL_RELEASE_IDENTITY="development"
+TOOL_RELEASE_IDENTITY="v0.3.0"
 SDK_ROOT="$HOME/dotnet-sdks"
 TOOL_PATH="$SDK_ROOT/$TOOL_NAME"
 TOOL_INPUT=""
