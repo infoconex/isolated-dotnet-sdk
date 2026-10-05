@@ -83,6 +83,10 @@
   items:
     - title: Maintainer Overview
       path: docs/maintainers/README.md
+    - title: Development Operating Model
+      path: docs/maintainers/development/operating-model.md
+    - title: October 2026 Retrospective
+      path: docs/maintainers/development/retrospective-2026-10.md
     - title: Testing Overview
       path: docs/maintainers/testing/README.md
     - title: Testing & Validation
