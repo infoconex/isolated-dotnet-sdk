@@ -8,7 +8,8 @@ test_home="$test_root/home"
 release_json="$test_root/latest-release.json"
 checksums="$test_root/SHA256SUMS"
 output="$test_root/bootstrap-output.txt"
-mkdir -p "$test_home"
+curl_wrapper_dir="$test_root/curl-wrapper"
+mkdir -p "$test_home" "$curl_wrapper_dir"
 
 cleanup() {
   rm -rf "$test_root"
@@ -29,55 +30,103 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
   github_api_args+=(-H "Authorization: Bearer $GITHUB_TOKEN")
 fi
 
-fetch_with_receive_retry() {
-  local stage="$1"
-  local destination="$2"
-  shift 2
+real_curl="$(command -v curl)"
+cat > "$curl_wrapper_dir/curl" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
 
-  local max_attempts=3
-  local attempt=1
-  local status
+real_curl="${LATEST_STABLE_E2E_REAL_CURL:?}"
+max_attempts=3
+attempt=1
+status=0
+url=''
+destination=''
+args=("$@")
 
-  while true; do
-    rm -f "$destination"
-    if curl -fsSL "$@" -o "$destination"; then
-      return 0
-    else
-      status=$?
-    fi
+for ((index = 0; index < ${#args[@]}; index++)); do
+  case "${args[$index]}" in
+    -o|--output)
+      if ((index + 1 < ${#args[@]})); then
+        destination="${args[$((index + 1))]}"
+      fi
+      ;;
+    http://*|https://*)
+      url="${args[$index]}"
+      ;;
+  esac
+done
 
-    rm -f "$destination"
+case "$url" in
+  */releases/latest)
+    stage='release metadata'
+    ;;
+  */SHA256SUMS)
+    stage='release checksums'
+    ;;
+  https://raw.githubusercontent.com/*/isolated-dotnet-sdk.sh)
+    stage='released Bash tool'
+    ;;
+  *)
+    stage='network resource'
+    ;;
+esac
 
-    if [[ "$status" -ne 56 ]]; then
-      printf 'Latest-stable bootstrap fetch failed during %s (curl exit %d, attempt %d/%d).\n' \
-        "$stage" "$status" "$attempt" "$max_attempts" >&2
-      return "$status"
-    fi
-
-    if [[ "$attempt" -ge "$max_attempts" ]]; then
-      printf 'Latest-stable bootstrap fetch failed during %s after %d attempts (curl exit %d).\n' \
-        "$stage" "$max_attempts" "$status" >&2
-      return "$status"
-    fi
-
-    printf 'Latest-stable bootstrap fetch retry: %s failed with curl exit %d (attempt %d/%d); retrying.\n' \
-      "$stage" "$status" "$attempt" "$max_attempts" >&2
-    attempt=$((attempt + 1))
-    sleep 1
-  done
+attempt_output="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk-e2e-curl.XXXXXX")"
+cleanup_wrapper() {
+  rm -f "$attempt_output"
 }
+trap cleanup_wrapper EXIT
 
-fetch_with_receive_retry 'release metadata' "$release_json" \
+while true; do
+  : > "$attempt_output"
+  if [[ -n "$destination" ]]; then
+    rm -f "$destination"
+  fi
+
+  if "$real_curl" "${args[@]}" > "$attempt_output"; then
+    cat "$attempt_output"
+    exit 0
+  else
+    status=$?
+  fi
+
+  if [[ -n "$destination" ]]; then
+    rm -f "$destination"
+  fi
+
+  if [[ "$status" -ne 56 ]]; then
+    printf 'Latest-stable bootstrap fetch failed during %s (curl exit %d, attempt %d/%d).\n' \
+      "$stage" "$status" "$attempt" "$max_attempts" >&2
+    exit "$status"
+  fi
+
+  if [[ "$attempt" -ge "$max_attempts" ]]; then
+    printf 'Latest-stable bootstrap fetch failed during %s after %d attempts (curl exit %d).\n' \
+      "$stage" "$max_attempts" "$status" >&2
+    exit "$status"
+  fi
+
+  printf 'Latest-stable bootstrap fetch retry: %s failed with curl exit %d (attempt %d/%d); retrying.\n' \
+    "$stage" "$status" "$attempt" "$max_attempts" >&2
+  attempt=$((attempt + 1))
+  sleep 1
+done
+EOF
+chmod +x "$curl_wrapper_dir/curl"
+export LATEST_STABLE_E2E_REAL_CURL="$real_curl"
+export PATH="$curl_wrapper_dir:$PATH"
+
+curl -fsSL \
   "${github_api_args[@]}" \
-  "$latest_release_url"
+  "$latest_release_url" \
+  -o "$release_json"
 release_tag="$(jq -er '
   select(.draft == false and .prerelease == false)
   | .tag_name
   | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
 ' "$release_json")"
 
-fetch_with_receive_retry 'release checksums' "$checksums" \
-  "$release_download_base_url/$release_tag/SHA256SUMS"
+curl -fsSL "$release_download_base_url/$release_tag/SHA256SUMS" -o "$checksums"
 expected="$(awk '
   NF == 2 && $2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ {
     print tolower($1)
@@ -88,7 +137,10 @@ if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
   exit 1
 fi
 
+set +e
 printf 'E\n' | bash "$repo_root/install.sh" > "$output" 2>&1
+bootstrap_status=$?
+set -e
 
 # v0.2.0 predates the silent controlling-terminal probe. Keep its immutable release
 # bytes under test while omitting that known macOS shell diagnostic from CI output.
@@ -96,6 +148,10 @@ if [[ "$release_tag" == 'v0.2.0' ]]; then
   sed '/\/dev\/tty: Device not configured$/d' "$output"
 else
   cat "$output"
+fi
+
+if [[ "$bootstrap_status" -ne 0 ]]; then
+  exit "$bootstrap_status"
 fi
 
 saved_tool="$HOME/dotnet-sdks/isolated-dotnet-sdk.sh"
