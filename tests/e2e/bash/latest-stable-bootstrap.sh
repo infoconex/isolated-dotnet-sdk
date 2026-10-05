@@ -39,6 +39,7 @@ real_curl="${LATEST_STABLE_E2E_REAL_CURL:?}"
 max_attempts=3
 attempt=1
 status=0
+http_status='000'
 url=''
 destination=''
 args=("$@")
@@ -72,27 +73,47 @@ case "$url" in
 esac
 
 attempt_output="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk-e2e-curl.XXXXXX")"
+http_status_output="$(mktemp "${TMPDIR:-/tmp}/isolated-dotnet-sdk-e2e-http.XXXXXX")"
 cleanup_wrapper() {
-  rm -f "$attempt_output"
+  rm -f "$attempt_output" "$http_status_output"
 }
 trap cleanup_wrapper EXIT
 
+curl_args=("${args[@]}")
+if [[ -z "$destination" ]]; then
+  curl_args+=(-o "$attempt_output")
+fi
+
 while true; do
   : > "$attempt_output"
+  : > "$http_status_output"
+  http_status='000'
   if [[ -n "$destination" ]]; then
     rm -f "$destination"
   fi
 
-  if "$real_curl" "${args[@]}" > "$attempt_output"; then
-    cat "$attempt_output"
+  if "$real_curl" "${curl_args[@]}" --write-out '%{http_code}' > "$http_status_output"; then
+    http_status="$(cat "$http_status_output")"
+    if [[ -z "$destination" ]]; then
+      cat "$attempt_output"
+    fi
     exit 0
   else
     status=$?
+    http_status="$(cat "$http_status_output")"
   fi
 
   if [[ -n "$destination" ]]; then
     rm -f "$destination"
   fi
+
+  case "$http_status" in
+    [45][0-9][0-9])
+      printf 'Latest-stable bootstrap fetch failed during %s (HTTP %s, curl exit %d, attempt %d/%d).\n' \
+        "$stage" "$http_status" "$status" "$attempt" "$max_attempts" >&2
+      exit "$status"
+      ;;
+  esac
 
   if [[ "$status" -ne 56 ]]; then
     printf 'Latest-stable bootstrap fetch failed during %s (curl exit %d, attempt %d/%d).\n' \
