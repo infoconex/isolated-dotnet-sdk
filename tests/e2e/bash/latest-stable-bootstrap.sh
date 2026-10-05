@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 base_temp="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 test_root="$(mktemp -d "$base_temp/isolated-dotnet-sdk-e2e-latest-bootstrap.XXXXXX")"
 test_home="$test_root/home"
+release_json="$test_root/latest-release.json"
 checksums="$test_root/SHA256SUMS"
 output="$test_root/bootstrap-output.txt"
 mkdir -p "$test_home"
@@ -28,16 +29,55 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
   github_api_args+=(-H "Authorization: Bearer $GITHUB_TOKEN")
 fi
 
-release_json="$(curl -fsSL \
+fetch_with_receive_retry() {
+  local stage="$1"
+  local destination="$2"
+  shift 2
+
+  local max_attempts=3
+  local attempt=1
+  local status
+
+  while true; do
+    rm -f "$destination"
+    if curl -fsSL "$@" -o "$destination"; then
+      return 0
+    else
+      status=$?
+    fi
+
+    rm -f "$destination"
+
+    if [[ "$status" -ne 56 ]]; then
+      printf 'Latest-stable bootstrap fetch failed during %s (curl exit %d, attempt %d/%d).\n' \
+        "$stage" "$status" "$attempt" "$max_attempts" >&2
+      return "$status"
+    fi
+
+    if [[ "$attempt" -ge "$max_attempts" ]]; then
+      printf 'Latest-stable bootstrap fetch failed during %s after %d attempts (curl exit %d).\n' \
+        "$stage" "$max_attempts" "$status" >&2
+      return "$status"
+    fi
+
+    printf 'Latest-stable bootstrap fetch retry: %s failed with curl exit %d (attempt %d/%d); retrying.\n' \
+      "$stage" "$status" "$attempt" "$max_attempts" >&2
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+}
+
+fetch_with_receive_retry 'release metadata' "$release_json" \
   "${github_api_args[@]}" \
-  "$latest_release_url")"
+  "$latest_release_url"
 release_tag="$(jq -er '
   select(.draft == false and .prerelease == false)
   | .tag_name
   | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
-' <<< "$release_json")"
+' "$release_json")"
 
-curl -fsSL "$release_download_base_url/$release_tag/SHA256SUMS" -o "$checksums"
+fetch_with_receive_retry 'release checksums' "$checksums" \
+  "$release_download_base_url/$release_tag/SHA256SUMS"
 expected="$(awk '
   NF == 2 && $2 == "isolated-dotnet-sdk.sh" && $1 ~ /^[0-9a-fA-F]{64}$/ {
     print tolower($1)
