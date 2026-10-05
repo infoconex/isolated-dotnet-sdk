@@ -10,13 +10,26 @@ Stable releases are published through the manually triggered [`Publish Release`]
 
 Mutable `main` always carries the development tool identity. A stable tag is never produced by manually editing independent PowerShell and Bash version strings on `main`.
 
+## Release documentation authorities
+
+Release documentation has four distinct responsibilities:
+
+- `CHANGELOG.md` is the chronological, categorized record of notable project changes by release.
+- `.github/release-notes/<tag>.md` is the version-controlled publication body consumed by `Publish Release` for that exact stable tag.
+- the GitHub Release is the published copy of those version-controlled release notes plus the release's checksum asset.
+- `docs/releases/history/<tag>.md` is the concise user-facing historical summary published on the documentation site. It must be linked from the Releases overview and site navigation.
+
+Do not duplicate the full changelog into each history page. The history page should summarize the stable release and link to the changelog and relevant durable documentation for deeper detail.
+
+The Pages validation path checks every version-controlled stable release-notes file for a corresponding release-history page, Releases overview link, navigation entry, generated page, and search-index entry. A release documentation set that fails this consistency check is incomplete and must not be published.
+
 ## Before dispatch
 
 Before starting `Publish Release`:
 
-1. the complete intended release state, including `.github/release-notes/<tag>.md`, must already be merged to `main`;
+1. the complete intended release state, including `.github/release-notes/<tag>.md`, `docs/releases/history/<tag>.md`, the Releases overview link, and the Pages navigation entry, must already be merged to `main`;
 2. the exact intended `main` commit must have successful post-merge Validate and E2E push runs;
-3. when a Pages push run exists for that exact commit, it must also be successful; and
+3. the Pages push run for that release-documentation commit must be successful, including the release-history consistency checks;
 4. the intended stable tag and GitHub Release must not already exist.
 
 ## Release identity derivation
@@ -83,6 +96,8 @@ This verification is independently rerunnable without asking a maintainer to dup
 ## Publication evidence
 
 The publication workflow records the published release URL, validated `main` commit SHA, derived release commit SHA, checksum-manifest SHA-256, both script SHA-256 values, and final manifest in the workflow summary. Retain that evidence as the publication record together with the landed Validate/E2E/Pages evidence required by the release issue.
+
+The completed release record should also leave the corresponding user-facing history page discoverable from the Releases overview and Pages navigation.
 
 ## Administrative trust boundary
 

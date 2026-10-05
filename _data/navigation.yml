@@ -70,6 +70,8 @@
       path: docs/releases/README.md
     - title: Stable Bootstrap & Rollback
       path: docs/releases/stable-bootstrap.md
+    - title: v0.2.0 History
+      path: docs/releases/history/v0.2.0.md
     - title: v0.1.0 History
       path: docs/releases/history/v0.1.0.md
     - title: v0.1.0 Checklist
