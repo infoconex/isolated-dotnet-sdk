@@ -17,12 +17,14 @@ Use [Stable bootstrap, update, and rollback](stable-bootstrap.md) for the trust 
 - [Windows / PowerShell 7](../getting-started/windows-powershell.md#install-or-update-the-stable-tool)
 - [Linux or macOS / Bash](../getting-started/linux-macos-bash.md#install-or-update-the-stable-tool)
 
-## Historical release material
+## Release history
 
-- [v0.1.0 release notes](history/v0.1.0.md)
-- [v0.1.0 release checklist](history/v0.1.0-checklist.md)
+Release-history pages summarize each published stable release for users. For the chronological categorized change log, see the project [CHANGELOG](../../CHANGELOG.md).
 
-`v0.1.0` predates the checksum-verifying stable-release policy and remains legacy history.
+- [v0.2.0 release history](history/v0.2.0.md) — first stable release under the checksum-verifying release policy.
+- [v0.1.0 release history](history/v0.1.0.md) — initial release and legacy pre-checksum-policy behavior.
+
+The [v0.1.0 release checklist](history/v0.1.0-checklist.md) remains available as legacy release-process history.
 
 ## Maintainers
 
