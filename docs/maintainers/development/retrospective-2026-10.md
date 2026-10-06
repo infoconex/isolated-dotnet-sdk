@@ -34,6 +34,8 @@ Most issues have been appropriately sized. The larger problem is avoidable follo
 
 Automated validation has been valuable primarily as a guardrail against breaking behavior. The owner has not independently reviewed the full test suite recently, so test quantity and green CI should not be treated as proof that the test strategy is optimal. The test suite itself needs periodic review against product risks and behaviors.
 
+Ready-for-Review handoffs should also be optimized for owner judgment rather than internal process detail. When a pull request reaches the Ready-for-Review gate, the handoff should begin with a short TL;DR that explains what changed, why it matters, any notable findings or corrections made during implementation, the current validation state, and any remaining owner judgment. The pull request link and deeper implementation evidence should follow that summary rather than forcing the owner to reconstruct the outcome from issue history or CI details.
+
 ## Autonomy and decision quality
 
 Greater implementation autonomy is desired, but the project has exposed an important boundary between technical autonomy and product authority.
