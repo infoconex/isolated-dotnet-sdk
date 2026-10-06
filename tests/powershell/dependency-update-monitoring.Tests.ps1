@@ -63,11 +63,11 @@ Describe 'Pinned dependency update discovery' {
         try {
             $jsonPath = Join-Path $testRoot 'result.json'
             $reportPath = Join-Path $testRoot 'report.md'
-            $current = Get-TestCurrentPin
-            $candidate = Get-TestCandidateSnapshot
+            $script:NoUpdateCurrentPin = Get-TestCurrentPin
+            $script:NoUpdateCandidateSnapshot = Get-TestCandidateSnapshot
 
-            Mock Get-RepositoryDependencyPin { return $current }
-            Mock Get-UpstreamDependencySnapshot { return $candidate }
+            Mock Get-RepositoryDependencyPin { return $script:NoUpdateCurrentPin }
+            Mock Get-UpstreamDependencySnapshot { return $script:NoUpdateCandidateSnapshot }
 
             Invoke-DependencyUpdateCheck `
                 -Root $script:RepositoryRoot `
@@ -77,7 +77,9 @@ Describe 'Pinned dependency update discovery' {
             $result = Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json
             $report = Get-Content -LiteralPath $reportPath -Raw
 
+            $result.PSObject.Properties.Name | Should -Contain 'UpdateCount'
             $result.UpdateCount | Should -Be 0
+            $result.PSObject.Properties.Name | Should -Contain 'Updates'
             @($result.Updates).Count | Should -Be 0
             $report | Should -Match 'All unsupported repository-owned dependency pins match'
         }
