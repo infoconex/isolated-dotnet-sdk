@@ -121,6 +121,20 @@ For new issue work:
 
 Historical conversation context can explain intent, but it must not override current repository contracts silently.
 
+## Ready-for-Review handoff
+
+When work reaches the Ready-for-Review gate, lead the owner handoff with a concise TL;DR before deeper evidence.
+
+The TL;DR should answer, in this order:
+
+- what changed;
+- why the change matters;
+- any notable findings, corrections, or adjacent issues resolved while implementing it;
+- validation status on the exact reviewed head; and
+- any remaining owner judgment or approval required.
+
+Then provide the pull request link and only the additional detail needed for informed review. Do not make the owner reconstruct the result from raw issue history, commit history, or CI logs when the mechanically verifiable evidence is already known.
+
 ## Backlog discipline
 
 An issue or idea is not automatically worth implementing because it exists.
