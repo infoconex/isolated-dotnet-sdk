@@ -227,8 +227,8 @@ jobs:
             printf 'Artifact: [%s](%s)\n\n' "$PREVIEW_NAME" "$PREVIEW_URL"
             printf '%s\n\n' 'Review the exact rendered pull-request site locally:'
             printf '%s\n' '1. Download and extract the artifact.'
-            printf '%s\n' '2. From the extracted artifact root, run `python -m http.server 8000`.'
-            printf '%s\n\n' '3. Open <http://localhost:8000/isolated-dotnet-sdk/> in a browser.'
+            printf '%s\n' '2. From the extracted artifact root, run `python -m http.server 8000 --bind 127.0.0.1`.'
+            printf '%s\n\n' '3. Open <http://127.0.0.1:8000/isolated-dotnet-sdk/> in a browser.'
             printf '%s\n' 'The artifact expires after 7 days and is never deployed to the production Pages site.'
           } >> "$GITHUB_STEP_SUMMARY"
 
