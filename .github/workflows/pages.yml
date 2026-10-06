@@ -193,13 +193,24 @@ jobs:
           test ! -e _site/isolated-dotnet-sdk.sh
           test ! -e _site/isolated-dotnet-sdk.ps1
 
+      - name: Stage pull request preview
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf .pages-preview
+          mkdir -p .pages-preview/isolated-dotnet-sdk
+          cp -a _site/. .pages-preview/isolated-dotnet-sdk/
+          diff -qr _site .pages-preview/isolated-dotnet-sdk
+
       - name: Upload pull request preview
         id: preview
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pages-preview-pr-${{ github.event.pull_request.number }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
-          path: ./_site
+          path: ./.pages-preview
           if-no-files-found: error
           retention-days: 7
           include-hidden-files: true
@@ -216,8 +227,8 @@ jobs:
             printf 'Artifact: [%s](%s)\n\n' "$PREVIEW_NAME" "$PREVIEW_URL"
             printf '%s\n\n' 'Review the exact rendered pull-request site locally:'
             printf '%s\n' '1. Download and extract the artifact.'
-            printf '%s\n' '2. From the extracted directory, run `python -m http.server 8000`.'
-            printf '%s\n\n' '3. Open <http://localhost:8000/> in a browser.'
+            printf '%s\n' '2. From the extracted artifact root, run `python -m http.server 8000`.'
+            printf '%s\n\n' '3. Open <http://localhost:8000/isolated-dotnet-sdk/> in a browser.'
             printf '%s\n' 'The artifact expires after 7 days and is never deployed to the production Pages site.'
           } >> "$GITHUB_STEP_SUMMARY"
 
