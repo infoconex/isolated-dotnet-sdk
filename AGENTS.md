@@ -19,7 +19,7 @@ Proceed autonomously on routine implementation choices governed by established r
 - Work one implementation issue at a time.
 - When an active next-release integration branch exists, branch from it and target it unless the issue is explicitly a released-line hotfix or other approved exception.
 - Do not mark a Draft PR ready for review unless the user explicitly directs it.
-- Do not merge without explicit user approval.
+- The user's Ready-for-Review approval also authorizes merge of that reviewed state after final verification; do not request a separate merge approval unless the reviewed state materially changes, validation regresses, or a new blocking finding appears.
 - After fully closing out an issue, stop and let the user decide when to begin the next one.
 
 Follow all detailed process requirements in `docs/maintainers/issues/issue-workflow.md`; they are intentionally not duplicated here.
