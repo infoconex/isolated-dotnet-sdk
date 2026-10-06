@@ -60,7 +60,7 @@ Use these default patterns when the corresponding evidence is useful:
 7. `## Manual validation — <behavior>` only when manual validation is genuinely required.
 8. `## Full review — implementation complete` for a distinct comprehensive branch/diff review record when it is not already clear in the consolidated reconciliation.
 9. `## Draft PR opened` after the implementation/targeted-validation/full-review quality threshold is met, when recording the PR link, reviewed head, base branch, and Draft status adds useful traceability.
-10. `## Final review — completion evidence` for the final exact-head PR CI/review/follow-up summary before the user decides readiness or merge.
+10. `## Final review — completion evidence` for the final exact-head PR CI/review/follow-up summary before the user decides Ready for Review; that approval also authorizes merge of the reviewed state.
 11. `## Post-merge verification` for final closure evidence after merge to the issue's integration target.
 
 Keep text after the em dash concise and specific. Exceptional comments may use the same grammar with a precise qualifier. The heading should identify the lifecycle event and, for Task comments, the relevant Task.
