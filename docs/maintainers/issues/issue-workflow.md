@@ -251,6 +251,8 @@ If no user judgment remains other than an explicit lifecycle approval gate, say 
 
 The PR should already be Draft only after implementation, appropriate targeted pre-PR validation, issue reconciliation, and full diff review reached the quality threshold in the previous steps. Use complete PR CI and exact-head verification to confirm that reviewed state before readiness.
 
+When a Pages-affecting pull request requires subjective website review, the Ready-for-Review handoff must include the exact preview artifact or hosted-preview location from the current reviewed head plus the minimum steps needed to inspect it. A successful Pages build proves mechanical validity but does not replace the owner's visual review of layout, navigation, readability, responsive presentation, or other user-facing behavior.
+
 Do not mark the PR ready unless the user explicitly directs it.
 
 When the user approves Ready for Review, mark the PR ready and verify:
