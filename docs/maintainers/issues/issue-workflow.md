@@ -221,7 +221,7 @@ Reference the issue according to [`issue-conventions.md`](issue-conventions.md):
 
 Record `## Draft PR opened` when the PR link, reviewed head, base branch, and Draft status add useful traceability.
 
-Do not mark the Draft PR ready automatically. The user decides when it becomes ready for review. Do not merge without explicit user approval.
+Do not mark the Draft PR ready automatically. The user decides when it becomes ready for review. That Ready-for-Review approval also authorizes merge of the reviewed state after the final verification in the next steps; do not request a separate merge approval unless the approved state materially changes or new blocking evidence appears.
 
 ## 11. Record final evidence
 
@@ -243,7 +243,7 @@ Use `## Final review — completion evidence` for the final exact-head summary. 
 The completion handoff to the user must clearly separate:
 
 - **Programmatically verified evidence** — facts already established by repository inspection, tests, static analysis, CI, API/tool queries, or exact diff/head review. Report these as completed evidence; do not present them as work the user needs to repeat.
-- **User judgment or approval still required** — decisions that genuinely require the user's authority or subjective judgment, including the explicit Ready-for-Review and merge gates, policy/product choices, architecture/tradeoffs, UX judgment, risk acceptance, or validation that cannot reasonably be automated.
+- **User judgment or approval still required** — decisions that genuinely require the user's authority or subjective judgment, including the Ready-for-Review gate, policy/product choices, architecture/tradeoffs, UX judgment, risk acceptance, or validation that cannot reasonably be automated. Ready-for-Review approval includes merge authorization for the reviewed state.
 
 If no user judgment remains other than an explicit lifecycle approval gate, say so directly.
 
@@ -253,7 +253,7 @@ The PR should already be Draft only after implementation, appropriate targeted p
 
 Do not mark the PR ready unless the user explicitly directs it.
 
-When the user marks it ready, verify:
+When the user approves Ready for Review, mark the PR ready and verify:
 
 - the PR is non-draft;
 - the base branch is still the intended integration target;
@@ -261,9 +261,11 @@ When the user marks it ready, verify:
 - required CI on that head is green;
 - the final diff has no new blocking findings.
 
+Ready-for-Review approval authorizes merge of that exact reviewed state after these checks. If the head or material scope changes, required CI regresses, the base/integration target changes, or a new blocking finding appears, stop and obtain renewed owner approval before merging.
+
 ## 13. Merge
 
-Do not merge until the user explicitly approves the merge.
+After Ready-for-Review approval and successful final verification, proceed to merge without a second owner approval prompt.
 
 Prefer **squash merge** unless the repository or issue requires another strategy. Protect against head movement by verifying/using the exact expected reviewed head where tooling supports it.
 
