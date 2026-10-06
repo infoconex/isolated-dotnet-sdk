@@ -375,7 +375,7 @@ function Invoke-DependencyUpdateCheck {
 
     $current = Get-RepositoryDependencyPin -Root $Root
     $candidate = Get-UpstreamDependencySnapshot
-    $updates = Get-DependencyUpdateRecord -Current $current -Candidate $candidate
+    $updates = @(Get-DependencyUpdateRecord -Current $current -Candidate $candidate)
     return Write-DependencyUpdateResult -Update $updates -JsonPath $JsonPath -MarkdownPath $MarkdownPath
 }
 
