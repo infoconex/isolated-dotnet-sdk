@@ -13,7 +13,7 @@ The goal is repeatable, evidence-driven delivery with clear traceability. Durabl
 - Establish mechanically verifiable facts with automation/tooling rather than asking the user to re-verify them manually.
 - Green CI is necessary evidence, not proof by itself that a change is correct.
 - Optimize validation for distinct evidence. Do not run equivalent full validation twice on the same source SHA unless the runs serve materially different enforcement or coverage purposes.
-- Do not include unrelated cleanup. Capture material unrelated work as a follow-up issue.
+- Do not include unrelated cleanup. For material unrelated findings, use the issue-proposal and owner-approval lifecycle below before creating any follow-up issue.
 - Prefer live repository state over historical conversation context.
 - When a next-release integration branch exists, use it as the normal issue base and pull-request target. `main` remains the released-production line unless an explicitly approved release/hotfix workflow says otherwise.
 - Creating a new GitHub issue from a discovered finding requires explicit owner approval. Investigation and recommendation remain autonomous; backlog creation does not.
