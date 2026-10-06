@@ -56,6 +56,38 @@ Describe 'Pinned dependency update discovery' {
             Should -Match 'All unsupported repository-owned dependency pins match'
     }
 
+    It 'preserves a zero-update result through the top-level orchestration boundary' {
+        $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("dependency-update-orchestration-tests-{0}" -f [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
+
+        try {
+            $jsonPath = Join-Path $testRoot 'result.json'
+            $reportPath = Join-Path $testRoot 'report.md'
+            $script:NoUpdateCurrentPin = Get-TestCurrentPin
+            $script:NoUpdateCandidateSnapshot = Get-TestCandidateSnapshot
+
+            Mock Get-RepositoryDependencyPin { return $script:NoUpdateCurrentPin }
+            Mock Get-UpstreamDependencySnapshot { return $script:NoUpdateCandidateSnapshot }
+
+            Invoke-DependencyUpdateCheck `
+                -Root $script:RepositoryRoot `
+                -JsonPath $jsonPath `
+                -MarkdownPath $reportPath | Out-Null
+
+            $result = Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json
+            $report = Get-Content -LiteralPath $reportPath -Raw
+
+            $result.PSObject.Properties.Name | Should -Contain 'UpdateCount'
+            $result.UpdateCount | Should -Be 0
+            $result.PSObject.Properties.Name | Should -Contain 'Updates'
+            @($result.Updates).Count | Should -Be 0
+            $report | Should -Match 'All unsupported repository-owned dependency pins match'
+        }
+        finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'reports every newer candidate with authoritative context and coupled metadata guidance' {
         $candidate = Get-TestCandidateSnapshot `
             -PSScriptAnalyzerVersion '1.26.0' `
