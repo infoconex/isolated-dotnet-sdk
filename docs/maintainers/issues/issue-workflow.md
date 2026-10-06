@@ -16,6 +16,25 @@ The goal is repeatable, evidence-driven delivery with clear traceability. Durabl
 - Do not include unrelated cleanup. Capture material unrelated work as a follow-up issue.
 - Prefer live repository state over historical conversation context.
 - When a next-release integration branch exists, use it as the normal issue base and pull-request target. `main` remains the released-production line unless an explicitly approved release/hotfix workflow says otherwise.
+- Creating a new GitHub issue from a discovered finding requires explicit owner approval. Investigation and recommendation remain autonomous; backlog creation does not.
+- Before drafting a proposed issue, inspect the current repository issue template and issue conventions rather than relying on remembered structure.
+
+## Creating issues from discovered findings
+
+When repository work discovers a material follow-up, do not create the GitHub issue automatically. This applies to findings from implementation, full review, adjacent-impact review, validation, retrospectives, architecture/testing/documentation/UX evaluations, and other repository analysis.
+
+Use this lifecycle:
+
+1. inspect the current `.github/ISSUE_TEMPLATE/implementation.md` and [`issue-conventions.md`](issue-conventions.md);
+2. determine whether the finding materially justifies a separate issue rather than in-scope completion work, an accepted/deferred concern, or no change;
+3. draft the proposed issue from the current template, adapting sections only when they genuinely do not apply;
+4. present the proposed title, rationale, scope, non-goals, and meaningful dependency/sequencing implications to the owner;
+5. obtain explicit owner approval to add the issue to the repository backlog; and
+6. only then create the GitHub issue.
+
+This approval gate applies to **issue creation**, not to investigation. Continue to inspect, analyze, prioritize, and recommend findings autonomously when repository contracts make that work appropriate.
+
+Once an approved issue is created, it must be independently understandable and executable from its own body/comments and repository artifacts. Preserve genuine technical dependencies and sequencing relationships when they exist; independence does not mean pretending related work is unrelated.
 
 ## 1. Select and verify the issue
 
@@ -121,7 +140,7 @@ State the TDD exception explicitly in the issue/PR and rely on appropriate stati
 
 Use small, scoped Conventional Commits containing only related changes. Follow <https://www.conventionalcommits.org/en/v1.0.0/>.
 
-Do not bundle incidental cleanup into the active issue. Create a follow-up issue for unrelated work.
+Do not bundle incidental cleanup into the active issue. For material unrelated work, use the issue-proposal and owner-approval lifecycle above; create a follow-up issue only after explicit approval.
 
 ## 7. Reconcile Tasks and acceptance criteria
 
@@ -196,7 +215,7 @@ Passing targeted checks or CI does not replace this review.
 If the review finds gaps:
 
 1. fix closely coupled in-scope findings on the same branch when they are necessary for a complete result;
-2. create follow-up issues for material unrelated findings;
+2. for material unrelated findings, draft and present a follow-up issue proposal using the issue-creation lifecycle above, then create it only after explicit owner approval;
 3. rerun appropriate validation;
 4. repeat the full review.
 

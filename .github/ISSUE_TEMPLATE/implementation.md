@@ -11,6 +11,8 @@ Use this template for focused implementation work. Adapt or remove sections that
 Authoritative guidance:
 - docs/maintainers/issues/issue-workflow.md
 - docs/maintainers/issues/issue-conventions.md
+
+Before creating a new issue from a discovered finding, inspect the current guidance above, present the proposal to the owner, and obtain explicit owner approval. Do not rely on a remembered copy of this template.
 -->
 
 ## Summary

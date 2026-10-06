@@ -17,6 +17,7 @@ Proceed autonomously on routine implementation choices governed by established r
 ## Non-negotiable guardrails
 
 - Work one implementation issue at a time.
+- Before proposing or creating a new GitHub issue from a review, retrospective, implementation finding, adjacent-impact finding, validation finding, or other repository work, inspect the current `.github/ISSUE_TEMPLATE/implementation.md` and `docs/maintainers/issues/issue-conventions.md`. Present the proposed issue to the owner and obtain explicit approval before creating it. Investigation, analysis, prioritization, and recommendation remain autonomous.
 - When an active next-release integration branch exists, branch from it and target it unless the issue is explicitly a released-line hotfix or other approved exception.
 - Do not mark a Draft PR ready for review unless the user explicitly directs it.
 - The user's Ready-for-Review approval also authorizes merge of that reviewed state after final verification; do not request a separate merge approval unless the reviewed state materially changes, validation regresses, or a new blocking finding appears.
