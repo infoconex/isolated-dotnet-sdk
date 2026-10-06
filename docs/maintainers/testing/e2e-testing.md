@@ -20,7 +20,9 @@ Cache requirements:
 
 ## Live E2E
 
-`.github/workflows/e2e.yml` runs automatically on `push` to `main` after changes land and also supports `workflow_dispatch` for ad hoc reruns. It is a real-system confidence layer and is not a required PR or merge check while the repository remains under personal-account ownership.
+`.github/workflows/e2e.yml` runs automatically on `push` to `main` after a release candidate or released-line fix lands and also supports `workflow_dispatch` for ad hoc or release-candidate runs. It is a real-system confidence layer and is not a required normal issue-PR check while the repository remains under personal-account ownership.
+
+During an active next-release integration cycle, routine issue PRs target the release integration branch and rely on deterministic Validate. Before the final release-candidate PR to `main`, maintainers can use `workflow_dispatch` to exercise the integrated candidate against live Microsoft/.NET infrastructure. After the approved candidate lands on `main`, the normal automatic E2E run provides exact landed-source evidence required before stable publication.
 
 The workflow runs only the supported product mappings:
 
@@ -69,9 +71,14 @@ The E2E driver may use the tool’s `-Yes` / `--yes` confirmation control so hos
 
 ## Trigger and gating model
 
-The automatic `push: main` trigger proves the exact code that actually landed on the default branch against live Microsoft/.NET infrastructure. `workflow_dispatch` remains available when a maintainer needs to rerun the same live suite without creating another commit.
+The automatic `push: main` trigger proves the exact source state that actually landed on the released-production line against live Microsoft/.NET infrastructure. `workflow_dispatch` remains available to validate the active release integration candidate or rerun the same live suite without creating another commit.
 
-E2E is intentionally not triggered on pull requests and is not a required merge check yet. Future organization-backed merge-queue work may promote E2E into required merge-candidate gating. Until that protection exists and is demonstrated, deterministic `push: main` Validate remains enabled as the normal post-merge deterministic signal.
+E2E is intentionally not triggered on every pull request and is not a required normal issue-merge check yet. Future organization-backed merge-queue work may promote E2E into required merge-candidate gating. Until that protection exists and is demonstrated:
+
+- deterministic PR Validate is the authoritative normal pre-merge signal;
+- deterministic Validate runs on landed `release/**` and `main` updates;
+- manual E2E is appropriate for an integrated release candidate when release-level confidence is needed before promotion; and
+- automatic `push: main` E2E remains required landed-source evidence before stable publication.
 
 ## What E2E does not own
 

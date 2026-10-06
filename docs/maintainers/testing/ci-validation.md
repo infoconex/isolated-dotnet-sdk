@@ -2,6 +2,18 @@
 
 `Validate` is the deterministic pre-merge and post-merge confidence layer. It intentionally keeps GitHub Actions focused on runner/matrix selection, checkout, GitHub-hosted cache restore/save, and invoking repository-owned validation commands.
 
+## Trigger model
+
+The complete Validate matrix runs for:
+
+- pull requests, where the exact reviewed PR head is the authoritative pre-merge signal;
+- pushes to `main`, which verify the landed released-production source line; and
+- non-creation pushes to `release/**`, which verify landed next-release integration state.
+
+Creating a new `release/**` branch from an already-validated base can still create a lightweight workflow event, but the validation jobs are skipped when the push payload identifies branch creation. This preserves the no-change branch-creation optimization while restoring post-merge validation for the active release integration branch.
+
+Normal issue branches do not receive a full Validate run merely because they are pushed. Use targeted deterministic development checks before the PR and rely on PR exact-head Validate as the normal authoritative pre-merge matrix.
+
 ## Responsibility split
 
 `.github/workflows/validate.yml` owns GitHub-specific orchestration:
@@ -72,4 +84,8 @@ The maintained expectation is that validation changes should not materially regr
 
 ## Relationship to E2E
 
-`Validate` remains repository-controlled and deterministic. `.github/workflows/e2e.yml` is the separate real Microsoft/.NET ecosystem signal that runs automatically after merge to `main` and can be invoked manually. It intentionally does not share or cache installed product SDK/HOME state with deterministic validation. Merge-candidate E2E enforcement remains separate work tracked by Issue #60.
+`Validate` remains repository-controlled and deterministic. `.github/workflows/e2e.yml` is the separate real Microsoft/.NET ecosystem signal that runs automatically after merge to `main` and can be invoked manually.
+
+During an active next-release integration cycle, deterministic Validate runs after landed changes on the release integration branch, while real E2E remains a release-level signal that can be invoked manually on the integrated candidate before the final release PR. After the approved candidate merges to `main`, the normal automatic E2E run provides landed release-source evidence before publication.
+
+E2E intentionally does not share or cache installed product SDK/HOME state with deterministic validation. Merge-candidate E2E enforcement remains separate work tracked by Issue #60.

@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
   pull_request:
 
 permissions:
@@ -12,6 +13,7 @@ permissions:
 
 jobs:
   bash:
+    if: ${{ github.event_name != 'push' || github.event.created == false }}
     name: Bash (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -61,6 +63,7 @@ jobs:
         run: bash tests/bash/run-tests.sh
 
   powershell:
+    if: ${{ github.event_name != 'push' || github.event.created == false }}
     name: PowerShell (windows-2025)
     runs-on: windows-2025
 
