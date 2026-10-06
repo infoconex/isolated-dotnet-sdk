@@ -27,6 +27,23 @@ Add sections such as baseline behavior, behavioral scenarios, sequencing/depende
 
 Issue #9 is a useful example of this structure.
 
+## Issue creation and owner approval
+
+Discovery and backlog creation are separate decisions.
+
+Maintainers and agents may investigate, analyze, prioritize, and recommend findings autonomously when repository contracts make that work appropriate. A discovered finding must not be turned into a new GitHub issue until the owner explicitly approves adding it to the repository backlog.
+
+Before drafting a proposed issue:
+
+1. read the current `.github/ISSUE_TEMPLATE/implementation.md` and this conventions document rather than relying on a remembered issue shape;
+2. determine whether the finding materially warrants a separate issue;
+3. draft the proposal using the current template structure, adapting or removing sections only when they genuinely do not apply; and
+4. present the proposed title, rationale, scope, non-goals, and meaningful dependency/sequencing implications to the owner.
+
+Create the issue only after explicit owner approval.
+
+The resulting issue should be independently understandable and executable from repository artifacts without requiring a tracker or historical chat context for its contract. Record genuine dependencies and sequencing relationships when they matter; issue independence does not require removing legitimate relationships between work items.
+
 ## User-facing documentation references
 
 User-facing product documentation must describe current behavior, guarantees, policies, and capabilities directly. Do not use GitHub issue numbers, pull request numbers, or implementation-history identifiers as product terminology or as context a user must understand to follow the documentation.

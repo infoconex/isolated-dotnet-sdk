@@ -106,7 +106,7 @@ Ask whether the change creates or exposes an obvious inconsistency in:
 - release or CI behavior; or
 - terminology and product contracts.
 
-Fix closely coupled in-scope inconsistencies in the same issue when they are necessary for a complete result. Do not use adjacent-impact review to absorb unrelated cleanup or expand an issue indefinitely. Material unrelated findings become separate issues.
+Fix closely coupled in-scope inconsistencies in the same issue when they are necessary for a complete result. Do not use adjacent-impact review to absorb unrelated cleanup or expand an issue indefinitely. Present material unrelated findings as proposed separate issues and create them only after explicit owner approval under the issue workflow.
 
 ## Context discipline
 
@@ -150,7 +150,7 @@ Before starting work, consider whether it:
 - weakens architectural clarity; or
 - represents speculative feature expansion.
 
-During v0.4.0 hardening, prefer evaluation first and create implementation follow-ups only for findings that justify action.
+During v0.4.0 hardening, prefer evaluation first. Propose implementation follow-ups only for findings that justify action, and create them only after explicit owner approval under the issue workflow.
 
 ## Release integration model
 
