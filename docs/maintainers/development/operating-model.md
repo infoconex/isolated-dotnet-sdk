@@ -135,6 +135,8 @@ The TL;DR should answer, in this order:
 
 Then provide the pull request link and only the additional detail needed for informed review. Do not make the owner reconstruct the result from raw issue history, commit history, or CI logs when the mechanically verifiable evidence is already known.
 
+Ready-for-Review approval is also the owner's authorization to merge that reviewed state after final exact-head verification. Do not ask for a second merge approval when nothing material has changed. Seek renewed owner approval only if the approved head or material scope changes, required validation regresses, the intended integration target changes, or a new blocking finding appears.
+
 ## Backlog discipline
 
 An issue or idea is not automatically worth implementing because it exists.
