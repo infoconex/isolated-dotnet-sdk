@@ -753,7 +753,11 @@ format_audit_row() {
     fi
     if [[ -n "$AUDIT_STATUS_TOKEN" ]]; then
         color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
-        printf '  %b%s%b' "$color" "$AUDIT_STATUS_TOKEN" "$RESET"
+        if [[ -n "$color" ]]; then
+            printf '  %b%s%b' "$color" "$AUDIT_STATUS_TOKEN" "$RESET"
+        else
+            printf '  %s' "$AUDIT_STATUS_TOKEN"
+        fi
     fi
     if [[ -n "$AUDIT_RELEASE_DATE" ]]; then
         printf '  Release date: %s' "$AUDIT_RELEASE_DATE"
