@@ -596,7 +596,9 @@ resolve_audit_go_live_date() {
     AUDIT_GO_LIVE_DATE=""
 
     load_audit_release_schedule
-    [[ -n "$AUDIT_RELEASE_SCHEDULE" ]] || return
+    if [[ -z "$AUDIT_RELEASE_SCHEDULE" ]]; then
+        return 0
+    fi
 
     AUDIT_GO_LIVE_DATE="$(
         printf '%s\n' "$AUDIT_RELEASE_SCHEDULE" |
