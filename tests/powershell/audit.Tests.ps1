@@ -207,7 +207,7 @@ Describe 'PowerShell SDK Audit' {
         $result = Invoke-TestAudit
 
         $result.ExitCode | Should -Be 0
-        ([regex]::Matches($result.Text, '(?m)^  10\.0\.401  LTS  Current  Release date: 2026-09-01  End of support: 2028-11-14\r?
+        ([regex]::Matches($result.Text, '(?m)^  10\.0\.401  LTS  Current  Release date: 2026-09-01  End of support: 2028-11-14\r?$')).Count | Should -Be 2
     }
 
     It 'does not mark an SDK newer than known metadata as outdated' {
@@ -232,10 +232,27 @@ Describe 'PowerShell SDK Audit' {
     It 'treats the Go Live schedule fallback as optional' {
         Add-IsolatedSdk -Version '11.0.100-rc.1.111'
         $env:AUDIT_FAIL_SCHEDULE = 'true'
+
         $result = Invoke-TestAudit
+
         $result.ExitCode | Should -Be 0
         $result.Text | Should -Match '11\.0\.100-rc\.1\.111  STS  Update available -> 11\.0\.100-rc\.2\.999  RC1  Release date: 2026-09-01'
         $result.Text | Should -Not -Match 'Go Live:'
+    }
+
+    It 'omits a missing optional exact release date without fabricating one' {
+        Add-IsolatedSdk -Version '10.0.401'
+        @'
+{"releases":[
+  {"security":false,"sdk":{"version":"10.0.401"}}
+]}
+'@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '10.0.json')
+
+        $result = Invoke-TestAudit
+
+        $result.ExitCode | Should -Be 0
+        $result.Text | Should -Match '10\.0\.401  LTS  Current  End of support: 2028-11-14'
+        $result.Text | Should -Not -Match 'Release date:'
     }
 
     It 'colors only Current Maintenance and EOL lifecycle tokens when ANSI rendering is enabled' {
@@ -243,7 +260,9 @@ Describe 'PowerShell SDK Audit' {
         Add-IsolatedSdk -Version '9.0.318'
         Add-IsolatedSdk -Version '7.0.410'
         $env:AUDIT_FORCE_ANSI = 'true'
+
         $result = Invoke-TestAudit
+
         $result.ExitCode | Should -Be 0
         $result.Text | Should -Match ([regex]::Escape("$($PSStyle.Foreground.Green)Current$($PSStyle.Reset)"))
         $result.Text | Should -Match ([regex]::Escape("$($PSStyle.Foreground.Yellow)Maintenance$($PSStyle.Reset)"))
@@ -261,7 +280,7 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Not -Be 0
         $result.Text | Should -Match 'Unable to load \.NET release metadata from Microsoft\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
+        $result.Text | Should -Not -Match '10\.0\.401  LTS  Current'
     }
 
 
@@ -273,7 +292,7 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Not -Be 0
         $result.Text | Should -Match 'Unable to load release metadata for \.NET 10\.0\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
+        $result.Text | Should -Not -Match '10\.0\.401  LTS  Current'
     }
 
     It 'fails clearly when required channel metadata is malformed' {
@@ -284,7 +303,7 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Not -Be 0
         $result.Text | Should -Match 'Invalid release metadata for \.NET 10\.0\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
+        $result.Text | Should -Not -Match '10\.0\.401  LTS  Current'
     }
 
     It 'rejects an SDK version argument for Audit' {
@@ -316,120 +335,7 @@ Describe 'PowerShell SDK Audit' {
 
         $LASTEXITCODE | Should -Be 0
         $text | Should -Match 'A\. Audit installed SDKs'
-        $text | Should -Match '10\.0\.401  Current'
-        ([regex]::Matches($text, 'What would you like to do\?')).Count | Should -Be 2
-        $text | Should -Match 'Exiting\.'
-    }
-
-    It 'keeps List and Verify independent of release metadata' {
-        Add-IsolatedSdk -Version '10.0.401' -Runnable
-        $listOutput = @(& pwsh -NoProfile -Command '
-            $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
-            function Invoke-RestMethod { throw "network-should-not-be-used" }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List
-        ' 2>&1)
-        $listExitCode = $LASTEXITCODE
-
-        $verifyOutput = @(& pwsh -NoProfile -Command '
-            $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
-            function Invoke-RestMethod { throw "network-should-not-be-used" }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Verify -SdkVersion 10.0.401
-        ' 2>&1)
-        $verifyExitCode = $LASTEXITCODE
-
-        $listExitCode | Should -Be 0
-        ($listOutput -join [Environment]::NewLine) | Should -Not -Match 'network-should-not-be-used'
-        $verifyExitCode | Should -Be 0
-        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 10\.0\.401 is healthy\.'
-        ($verifyOutput -join [Environment]::NewLine) | Should -Not -Match 'network-should-not-be-used'
-    }
-}
-)).Count | Should -Be 2
-    }
-
-    It 'does not mark an SDK newer than known metadata as outdated' {
-        Add-IsolatedSdk -Version '10.0.999'
-
-        $result = Invoke-TestAudit
-
-        $result.ExitCode | Should -Be 0
-        $result.Text | Should -Match '10\.0\.999  Newer than known metadata'
-        $result.Text | Should -Not -Match '10\.0\.999  Update available'
-    }
-
-    It 'reports an unrecognized installed channel without fabricated lifecycle data' {
-        Add-IsolatedSdk -Version '13.0.100'
-
-        $result = Invoke-TestAudit
-
-        $result.ExitCode | Should -Be 0
-        $result.Text | Should -Match '13\.0\.100  Unknown channel'
-    }
-
-    It 'fails clearly when the release index cannot be obtained' {
-        Add-IsolatedSdk -Version '10.0.401'
-        $env:AUDIT_FAIL_INDEX = 'true'
-
-        $result = Invoke-TestAudit
-
-        $result.ExitCode | Should -Not -Be 0
-        $result.Text | Should -Match 'Unable to load \.NET release metadata from Microsoft\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
-    }
-
-
-    It 'fails clearly when required channel metadata cannot be obtained' {
-        Add-IsolatedSdk -Version '10.0.401'
-        $env:AUDIT_FAIL_CHANNEL = '10.0'
-
-        $result = Invoke-TestAudit
-
-        $result.ExitCode | Should -Not -Be 0
-        $result.Text | Should -Match 'Unable to load release metadata for \.NET 10\.0\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
-    }
-
-    It 'fails clearly when required channel metadata is malformed' {
-        Add-IsolatedSdk -Version '10.0.401'
-        Set-Content -LiteralPath (Join-Path $script:MetadataRoot '10.0.json') -Value '{}'
-
-        $result = Invoke-TestAudit
-
-        $result.ExitCode | Should -Not -Be 0
-        $result.Text | Should -Match 'Invalid release metadata for \.NET 10\.0\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
-    }
-
-    It 'rejects an SDK version argument for Audit' {
-        $output = @(& pwsh -NoProfile -File $script:ToolPath -Action Audit -SdkVersion 10.0.401 2>&1)
-
-        $LASTEXITCODE | Should -Not -Be 0
-        ($output -join [Environment]::NewLine) | Should -Match '-SdkVersion is supported only with -Action Install, Remove, or Verify\.'
-    }
-
-    It 'returns to Main after interactive Audit completes' {
-        Add-IsolatedSdk -Version '10.0.401'
-        $output = @(& pwsh -NoProfile -Command '
-            $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
-            $global:responses = [System.Collections.Generic.Queue[string]]::new()
-            $global:responses.Enqueue("A")
-            $global:responses.Enqueue("E")
-            function Read-Host { param([string]$Prompt) $global:responses.Dequeue() }
-            function Invoke-RestMethod {
-                param([string]$Uri)
-                if ($Uri -like "*releases-index.json") {
-                    return Get-Content -LiteralPath (Join-Path $env:AUDIT_METADATA_ROOT "releases-index.json") -Raw | ConvertFrom-Json
-                }
-                $name = [IO.Path]::GetFileNameWithoutExtension($Uri)
-                return Get-Content -LiteralPath (Join-Path $env:AUDIT_METADATA_ROOT "$name.json") -Raw | ConvertFrom-Json
-            }
-            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH
-        ' 2>&1)
-        $text = $output -join [Environment]::NewLine
-
-        $LASTEXITCODE | Should -Be 0
-        $text | Should -Match 'A\. Audit installed SDKs'
-        $text | Should -Match '10\.0\.401  Current'
+        $text | Should -Match '10\.0\.401  LTS  Current'
         ([regex]::Matches($text, 'What would you like to do\?')).Count | Should -Be 2
         $text | Should -Match 'Exiting\.'
     }
