@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
+RELEASE_SCHEDULE_URL="https://raw.githubusercontent.com/dotnet/core/main/release-notes/README.md"
 TOOL_NAME="isolated-dotnet-sdk.sh"
 TOOL_RELEASE_IDENTITY="development"
 SDK_ROOT="$HOME/dotnet-sdks"
@@ -13,11 +14,13 @@ if [[ -t 1 ]]; then
     CYAN='\033[0;36m'
     YELLOW='\033[0;33m'
     GREEN='\033[0;32m'
+    DISPLAY_RED='\033[0;31m'
     RESET='\033[0m'
 else
     CYAN=''
     YELLOW=''
     GREEN=''
+    DISPLAY_RED=''
     RESET=''
 fi
 
@@ -307,9 +310,18 @@ parse_release_index() {
             sub(/".*$/, "", value)
             return value
         }
+        function emit_record() {
+            if (channel != "" && phase != "" && url != "") {
+                print channel "|" latest "|" phase "|" type "|" url "|" eol
+            }
+            channel=latest=phase=type=url=eol=""
+        }
         {
             value = json_string($0, "channel-version")
-            if (value != "") channel=value
+            if (value != "") {
+                if (channel != "") emit_record()
+                channel=value
+            }
             value = json_string($0, "latest-sdk")
             if (value != "") latest=value
             value = json_string($0, "support-phase")
@@ -317,13 +329,12 @@ parse_release_index() {
             value = json_string($0, "release-type")
             if (value != "") type=value
             value = json_string($0, "releases.json")
-            if (value != "") {
-                url=value
-                if (channel != "" && phase != "" && url != "") {
-                    print channel "|" latest "|" phase "|" type "|" url
-                }
-                channel=latest=phase=type=url=""
-            }
+            if (value != "") url=value
+            value = json_string($0, "eol-date")
+            if (value != "") eol=value
+        }
+        END {
+            if (channel != "") emit_record()
         }
     '
 }
@@ -332,6 +343,35 @@ extract_sdk_versions() {
     grep -oE '/dotnet/Sdk/[^/"[:space:]]+' |
         sed 's#^.*/Sdk/##' |
         awk '!seen[$0]++'
+}
+
+
+extract_sdk_release_date() {
+    local expected_version="$1"
+    awk -v expected="$expected_version" '
+        function json_string(line, key, marker, value) {
+            marker = "\"" key "\"[[:space:]]*:[[:space:]]*\""
+            if (!match(line, marker)) return ""
+            value = substr(line, RSTART + RLENGTH)
+            sub(/".*$/, "", value)
+            return value
+        }
+        {
+            value = json_string($0, "release-date")
+            if (value != "") release_date=value
+
+            line=$0
+            while (match(line, /\/dotnet\/Sdk\/[^\/"[:space:]]+/)) {
+                version=substr(line, RSTART, RLENGTH)
+                sub(/^.*\/Sdk\//, "", version)
+                if (version == expected && release_date != "") {
+                    print release_date
+                    exit
+                }
+                line=substr(line, RSTART + RLENGTH)
+            }
+        }
+    '
 }
 
 sdk_version_sort_key() {
@@ -479,21 +519,31 @@ compare_sdk_versions() {
     fi
 }
 
-audit_lifecycle_label() {
-    case "$1" in
-        active) printf '%s' '' ;;
-        maintenance) printf '%s' 'Maintenance' ;;
-        preview) printf '%s' 'Preview' ;;
-        go-live) printf '%s' 'Go Live' ;;
-        eol) printf '%s' 'End of life' ;;
-        *) printf '%s' 'Unsupported' ;;
-    esac
+audit_prerelease_label() {
+    local version="$1"
+
+    if [[ "$version" =~ -preview\.([0-9]+)(\.|$) ]]; then
+        printf 'Preview %s' "\${BASH_REMATCH[1]}"
+        return
+    fi
+
+    if [[ "$version" =~ -rc\.([0-9]+)(\.|$) ]]; then
+        printf 'RC%s' "\${BASH_REMATCH[1]}"
+        return
+    fi
 }
 
 AUDIT_METADATA_CHANNELS=()
 AUDIT_METADATA_VALUES=()
 AUDIT_METADATA_RESULT=""
-AUDIT_STATUS=""
+AUDIT_RELEASE_SCHEDULE_LOADED="false"
+AUDIT_RELEASE_SCHEDULE=""
+AUDIT_RELEASE_TYPE=""
+AUDIT_SERVICING_STATUS=""
+AUDIT_STATUS_TOKEN=""
+AUDIT_RELEASE_DATE=""
+AUDIT_GO_LIVE_DATE=""
+AUDIT_END_OF_SUPPORT_DATE=""
 
 load_audit_channel_metadata() {
     local channel="$1"
@@ -502,9 +552,9 @@ load_audit_channel_metadata() {
     local metadata=""
     local versions=""
 
-    for ((i=0; i<${#AUDIT_METADATA_CHANNELS[@]}; i++)); do
-        if [[ "${AUDIT_METADATA_CHANNELS[$i]}" == "$channel" ]]; then
-            AUDIT_METADATA_RESULT="${AUDIT_METADATA_VALUES[$i]}"
+    for ((i=0; i<\${#AUDIT_METADATA_CHANNELS[@]}; i++)); do
+        if [[ "\${AUDIT_METADATA_CHANNELS[$i]}" == "$channel" ]]; then
+            AUDIT_METADATA_RESULT="\${AUDIT_METADATA_VALUES[$i]}"
             return
         fi
     done
@@ -523,7 +573,60 @@ load_audit_channel_metadata() {
     AUDIT_METADATA_RESULT="$metadata"
 }
 
-resolve_audit_status() {
+load_audit_release_schedule() {
+    if [[ "$AUDIT_RELEASE_SCHEDULE_LOADED" == "true" ]]; then
+        return
+    fi
+
+    AUDIT_RELEASE_SCHEDULE_LOADED="true"
+    if AUDIT_RELEASE_SCHEDULE="$(curl -fsSL "$RELEASE_SCHEDULE_URL" 2>/dev/null)"; then
+        :
+    else
+        AUDIT_RELEASE_SCHEDULE=""
+    fi
+}
+
+resolve_audit_go_live_date() {
+    local channel="$1"
+    AUDIT_GO_LIVE_DATE=""
+
+    load_audit_release_schedule
+    [[ -n "$AUDIT_RELEASE_SCHEDULE" ]] || return
+
+    AUDIT_GO_LIVE_DATE="$(
+        printf '%s\n' "$AUDIT_RELEASE_SCHEDULE" |
+            awk -F '|' -v expected="$channel" '
+                function trim(value) {
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+                    return value
+                }
+                BEGIN {
+                    months["January"]="01"; months["February"]="02"; months["March"]="03"; months["April"]="04"
+                    months["May"]="05"; months["June"]="06"; months["July"]="07"; months["August"]="08"
+                    months["September"]="09"; months["October"]="10"; months["November"]="11"; months["December"]="12"
+                }
+                {
+                    version=trim($2)
+                    phase=trim($5)
+                    if (version !~ ("\\.NET[[:space:]]+" expected "([^0-9.]|$)") || phase != "Go-Live") next
+
+                    date=trim($3)
+                    if (date ~ /^\[/) {
+                        sub(/^\[/, "", date)
+                        sub(/\]\(.*/, "", date)
+                    }
+                    gsub(/,/, "", date)
+                    split(date, parts, /[[:space:]]+/)
+                    if (parts[1] in months && parts[2] ~ /^[0-9]+$/ && parts[3] ~ /^[0-9][0-9][0-9][0-9]$/) {
+                        printf "%04d-%s-%02d", parts[3], months[parts[1]], parts[2]
+                    }
+                    exit
+                }
+            '
+    )"
+}
+
+resolve_audit_classification() {
     local version="$1"
     local channel_data="$2"
     local channel=""
@@ -532,21 +635,28 @@ resolve_audit_status() {
     local phase=""
     local release_type=""
     local releases_url=""
+    local eol_date=""
     local row_channel=""
     local metadata=""
     local versions=""
     local security_versions=""
     local security_version=""
     local comparison=0
-    local servicing=""
-    local lifecycle=""
+    local prerelease_label=""
+
+    AUDIT_RELEASE_TYPE=""
+    AUDIT_SERVICING_STATUS=""
+    AUDIT_STATUS_TOKEN=""
+    AUDIT_RELEASE_DATE=""
+    AUDIT_GO_LIVE_DATE=""
+    AUDIT_END_OF_SUPPORT_DATE=""
 
     if ! channel="$(sdk_channel_from_version "$version")"; then
-        AUDIT_STATUS="Unknown channel"
+        AUDIT_SERVICING_STATUS="Unknown channel"
         return
     fi
 
-    while IFS='|' read -r row_channel latest_sdk phase release_type releases_url; do
+    while IFS='|' read -r row_channel latest_sdk phase release_type releases_url eol_date; do
         if [[ "$row_channel" == "$channel" ]]; then
             found="true"
             break
@@ -554,10 +664,10 @@ resolve_audit_status() {
     done <<< "$channel_data"
 
     if [[ "$found" != "true" ]]; then
-        AUDIT_STATUS="Unknown channel"
+        AUDIT_SERVICING_STATUS="Unknown channel"
         return
     fi
-    if [[ -z "$latest_sdk" || -z "$phase" || -z "$releases_url" ]]; then
+    if [[ -z "$latest_sdk" || -z "$phase" || -z "$releases_url" || ( "$release_type" != "lts" && "$release_type" != "sts" ) ]]; then
         tool_fail "Invalid .NET release metadata for .NET $channel."
     fi
 
@@ -566,37 +676,93 @@ resolve_audit_status() {
     versions="$(printf '%s\n' "$metadata" | extract_sdk_versions || true)"
     contains_line "$versions" "$latest_sdk" || tool_fail "Invalid release metadata for .NET $channel."
 
+    AUDIT_RELEASE_TYPE="$(printf '%s' "$release_type" | tr '[:lower:]' '[:upper:]')"
+    AUDIT_RELEASE_DATE="$(printf '%s\n' "$metadata" | extract_sdk_release_date "$version" || true)"
+    AUDIT_END_OF_SUPPORT_DATE="$eol_date"
+
+    if [[ "$phase" == "go-live" ]]; then
+        resolve_audit_go_live_date "$channel"
+    fi
+
     if [[ "$phase" == "eol" ]]; then
-        AUDIT_STATUS="End of life"
+        AUDIT_STATUS_TOKEN="EOL"
         return
     fi
 
     comparison="$(compare_sdk_versions "$version" "$latest_sdk")"
     if (( comparison > 0 )); then
-        servicing="Newer than known metadata"
+        AUDIT_SERVICING_STATUS="Newer than known metadata"
     elif (( comparison == 0 )); then
-        servicing="Current"
+        AUDIT_SERVICING_STATUS="Current"
     else
-        servicing="Update available -> $latest_sdk"
+        AUDIT_SERVICING_STATUS="Update available -> $latest_sdk"
         if [[ "$phase" != "preview" && "$version" != *-* ]] && contains_line "$versions" "$version"; then
             security_versions="$(printf '%s\n' "$metadata" | extract_security_sdk_versions || true)"
             while IFS= read -r security_version; do
                 [[ -n "$security_version" ]] || continue
                 if (( $(compare_sdk_versions "$security_version" "$version") > 0 )); then
-                    servicing="Security update available -> $latest_sdk"
+                    AUDIT_SERVICING_STATUS="Security update available -> $latest_sdk"
                     break
                 fi
             done <<< "$security_versions"
         fi
     fi
 
-    lifecycle="$(audit_lifecycle_label "$phase")"
-    if [[ "$servicing" == "Current" && -n "$lifecycle" ]]; then
-        AUDIT_STATUS="$lifecycle"
-    elif [[ -n "$lifecycle" ]]; then
-        AUDIT_STATUS="$servicing  $lifecycle"
+    prerelease_label="$(audit_prerelease_label "$version")"
+    if [[ -n "$prerelease_label" ]]; then
+        AUDIT_STATUS_TOKEN="$prerelease_label"
     else
-        AUDIT_STATUS="$servicing"
+        case "$phase" in
+            maintenance) AUDIT_STATUS_TOKEN="Maintenance" ;;
+            preview) AUDIT_STATUS_TOKEN="Preview" ;;
+            go-live) AUDIT_STATUS_TOKEN="Go Live" ;;
+            active)
+                if [[ "$AUDIT_SERVICING_STATUS" == "Current" ]]; then
+                    AUDIT_STATUS_TOKEN="Current"
+                fi
+                ;;
+            *) AUDIT_STATUS_TOKEN="Unsupported" ;;
+        esac
+    fi
+
+    if [[ "$AUDIT_SERVICING_STATUS" == "Current" ]]; then
+        [[ -n "$AUDIT_STATUS_TOKEN" ]] || AUDIT_STATUS_TOKEN="Current"
+        AUDIT_SERVICING_STATUS=""
+    fi
+}
+
+audit_status_color() {
+    case "$1" in
+        Current) printf '%s' "$GREEN" ;;
+        Maintenance) printf '%s' "$YELLOW" ;;
+        EOL) printf '%s' "$DISPLAY_RED" ;;
+        *) printf '%s' '' ;;
+    esac
+}
+
+format_audit_row() {
+    local version="$1"
+    local color=""
+
+    printf '  %s' "$version"
+    if [[ -n "$AUDIT_RELEASE_TYPE" ]]; then
+        printf '  %s' "$AUDIT_RELEASE_TYPE"
+    fi
+    if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
+        printf '  %s' "$AUDIT_SERVICING_STATUS"
+    fi
+    if [[ -n "$AUDIT_STATUS_TOKEN" ]]; then
+        color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
+        printf '  %b%s%b' "$color" "$AUDIT_STATUS_TOKEN" "$RESET"
+    fi
+    if [[ -n "$AUDIT_RELEASE_DATE" ]]; then
+        printf '  Release date: %s' "$AUDIT_RELEASE_DATE"
+    fi
+    if [[ -n "$AUDIT_GO_LIVE_DATE" ]]; then
+        printf '  Go Live: %s' "$AUDIT_GO_LIVE_DATE"
+    fi
+    if [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]]; then
+        printf '  End of support: %s' "$AUDIT_END_OF_SUPPORT_DATE"
     fi
 }
 
@@ -610,8 +776,8 @@ audit_installed_sdks() {
     local i=0
     local audit_isolated_versions=()
     local audit_system_versions=()
-    local audit_isolated_statuses=()
-    local audit_system_statuses=()
+    local audit_isolated_rows=()
+    local audit_system_rows=()
 
     isolated_output="$(get_isolated_sdk_versions)"
     system_output="$(get_system_sdk_inventory)"
@@ -621,11 +787,11 @@ audit_installed_sdks() {
     done <<< "$isolated_output"
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
-        version="${line%%[[:space:]]*}"
+        version="\${line%%[[:space:]]*}"
         audit_system_versions+=("$version")
     done <<< "$system_output"
 
-    if (( ${#audit_isolated_versions[@]} == 0 && ${#audit_system_versions[@]} == 0 )); then
+    if (( \${#audit_isolated_versions[@]} == 0 && \${#audit_system_versions[@]} == 0 )); then
         tool_heading ".NET SDK audit"
         echo
         tool_heading "Isolated SDKs:"
@@ -647,33 +813,36 @@ audit_installed_sdks() {
 
     AUDIT_METADATA_CHANNELS=()
     AUDIT_METADATA_VALUES=()
-    for version in "${audit_isolated_versions[@]+"${audit_isolated_versions[@]}"}"; do
-        resolve_audit_status "$version" "$channel_data"
-        audit_isolated_statuses+=("$AUDIT_STATUS")
+    AUDIT_RELEASE_SCHEDULE_LOADED="false"
+    AUDIT_RELEASE_SCHEDULE=""
+
+    for version in "\${audit_isolated_versions[@]+"\${audit_isolated_versions[@]}"}"; do
+        resolve_audit_classification "$version" "$channel_data"
+        audit_isolated_rows+=("$(format_audit_row "$version")")
     done
-    for version in "${audit_system_versions[@]+"${audit_system_versions[@]}"}"; do
-        resolve_audit_status "$version" "$channel_data"
-        audit_system_statuses+=("$AUDIT_STATUS")
+    for version in "\${audit_system_versions[@]+"\${audit_system_versions[@]}"}"; do
+        resolve_audit_classification "$version" "$channel_data"
+        audit_system_rows+=("$(format_audit_row "$version")")
     done
 
     tool_heading ".NET SDK audit"
     echo
     tool_heading "Isolated SDKs:"
-    if (( ${#audit_isolated_versions[@]} == 0 )); then
+    if (( \${#audit_isolated_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<${#audit_isolated_versions[@]}; i++)); do
-            printf '  %s  %s\n' "${audit_isolated_versions[$i]}" "${audit_isolated_statuses[$i]}"
+        for ((i=0; i<\${#audit_isolated_rows[@]}; i++)); do
+            printf '%s\n' "\${audit_isolated_rows[$i]}"
         done
     fi
 
     echo
     tool_heading "System SDKs:"
-    if (( ${#audit_system_versions[@]} == 0 )); then
+    if (( \${#audit_system_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<${#audit_system_versions[@]}; i++)); do
-            printf '  %s  %s\n' "${audit_system_versions[$i]}" "${audit_system_statuses[$i]}"
+        for ((i=0; i<\${#audit_system_rows[@]}; i++)); do
+            printf '%s\n' "\${audit_system_rows[$i]}"
         done
     fi
 }
@@ -722,6 +891,7 @@ select_install_version() {
     local phase=""
     local release_type=""
     local releases_url=""
+    local eol_date=""
     local metadata_file=""
     local metadata_json=""
     local versions=""
@@ -762,7 +932,7 @@ select_install_version() {
         local release_types=()
         local release_urls=()
 
-        while IFS='|' read -r channel latest_sdk phase release_type releases_url; do
+        while IFS='|' read -r channel latest_sdk phase release_type releases_url eol_date; do
             [[ -n "$channel" ]] || continue
 
             if [[ "$show_archived" == "true" ]]; then
