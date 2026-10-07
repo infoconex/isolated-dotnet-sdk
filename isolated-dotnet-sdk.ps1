@@ -995,7 +995,7 @@ function Format-AuditStatusToken {
 
     $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
     $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi' -or
-        ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
+    ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
 
     if (-not $UseAnsi) {
         return $StatusToken
