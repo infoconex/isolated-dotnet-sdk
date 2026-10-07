@@ -108,7 +108,7 @@ Describe 'PowerShell SDK Audit' {
         function Invoke-TestAudit {
             $output = @(& pwsh -NoProfile -Command '
                 $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
-                if ($env:AUDIT_FORCE_ANSI -eq "true") { $PSStyle.OutputRendering = "Ansi" }
+                $PSStyle.OutputRendering = if ($env:AUDIT_FORCE_ANSI -eq "true") { "Ansi" } else { "PlainText" }
                 function Invoke-RestMethod {
                     param([string]$Uri)
                     Add-Content -LiteralPath $env:AUDIT_NETWORK_LOG -Value $Uri
@@ -317,6 +317,7 @@ Describe 'PowerShell SDK Audit' {
         Add-IsolatedSdk -Version '10.0.401'
         $output = @(& pwsh -NoProfile -Command '
             $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
+            $PSStyle.OutputRendering = "PlainText"
             $global:responses = [System.Collections.Generic.Queue[string]]::new()
             $global:responses.Enqueue("A")
             $global:responses.Enqueue("E")
