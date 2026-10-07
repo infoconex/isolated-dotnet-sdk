@@ -89,6 +89,25 @@ if ($ChangedPaths.Count -gt 0) {
     foreach ($Path in $ChangedPaths) {
         [Console]::Error.WriteLine(
             "Formatting required: $([System.IO.Path]::GetRelativePath($RepositoryRoot, $Path))")
+
+        $Original = [System.IO.File]::ReadAllText($Path)
+        $Formatted = Invoke-Formatter -ScriptDefinition $Original
+        $TemporaryPath = [System.IO.Path]::GetTempFileName()
+        try {
+            [System.IO.File]::WriteAllText(
+                $TemporaryPath,
+                $Formatted,
+                [System.Text.UTF8Encoding]::new($false))
+            $Diff = @(& git diff --no-index -- $Path $TemporaryPath 2>&1)
+            [Console]::Error.WriteLine('FORMATTER-DIFF-BEGIN')
+            foreach ($Line in $Diff) {
+                [Console]::Error.WriteLine([string]$Line)
+            }
+            [Console]::Error.WriteLine('FORMATTER-DIFF-END')
+        }
+        finally {
+            Remove-Item -LiteralPath $TemporaryPath -Force -ErrorAction SilentlyContinue
+        }
     }
     [Console]::Error.WriteLine(
         'Run: pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Write')
