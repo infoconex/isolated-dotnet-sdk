@@ -319,7 +319,12 @@ parse_release_index() {
         {
             value = json_string($0, "channel-version")
             if (value != "") {
-                if (channel != "") emit_record()
+                if (channel != "") {
+                    emit_record()
+                }
+                else {
+                    latest=phase=type=url=eol=""
+                }
                 channel=value
             }
             value = json_string($0, "latest-sdk")
@@ -523,12 +528,12 @@ audit_prerelease_label() {
     local version="$1"
 
     if [[ "$version" =~ -preview\.([0-9]+)(\.|$) ]]; then
-        printf 'Preview %s' "\${BASH_REMATCH[1]}"
+        printf 'Preview %s' "${BASH_REMATCH[1]}"
         return
     fi
 
     if [[ "$version" =~ -rc\.([0-9]+)(\.|$) ]]; then
-        printf 'RC%s' "\${BASH_REMATCH[1]}"
+        printf 'RC%s' "${BASH_REMATCH[1]}"
         return
     fi
 }
@@ -552,9 +557,9 @@ load_audit_channel_metadata() {
     local metadata=""
     local versions=""
 
-    for ((i=0; i<\${#AUDIT_METADATA_CHANNELS[@]}; i++)); do
-        if [[ "\${AUDIT_METADATA_CHANNELS[$i]}" == "$channel" ]]; then
-            AUDIT_METADATA_RESULT="\${AUDIT_METADATA_VALUES[$i]}"
+    for ((i=0; i<${#AUDIT_METADATA_CHANNELS[@]}; i++)); do
+        if [[ "${AUDIT_METADATA_CHANNELS[$i]}" == "$channel" ]]; then
+            AUDIT_METADATA_RESULT="${AUDIT_METADATA_VALUES[$i]}"
             return
         fi
     done
@@ -791,11 +796,11 @@ audit_installed_sdks() {
     done <<< "$isolated_output"
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
-        version="\${line%%[[:space:]]*}"
+        version="${line%%[[:space:]]*}"
         audit_system_versions+=("$version")
     done <<< "$system_output"
 
-    if (( \${#audit_isolated_versions[@]} == 0 && \${#audit_system_versions[@]} == 0 )); then
+    if (( ${#audit_isolated_versions[@]} == 0 && ${#audit_system_versions[@]} == 0 )); then
         tool_heading ".NET SDK audit"
         echo
         tool_heading "Isolated SDKs:"
@@ -820,11 +825,11 @@ audit_installed_sdks() {
     AUDIT_RELEASE_SCHEDULE_LOADED="false"
     AUDIT_RELEASE_SCHEDULE=""
 
-    for version in "\${audit_isolated_versions[@]+"\${audit_isolated_versions[@]}"}"; do
+    for version in "${audit_isolated_versions[@]+"${audit_isolated_versions[@]}"}"; do
         resolve_audit_classification "$version" "$channel_data"
         audit_isolated_rows+=("$(format_audit_row "$version")")
     done
-    for version in "\${audit_system_versions[@]+"\${audit_system_versions[@]}"}"; do
+    for version in "${audit_system_versions[@]+"${audit_system_versions[@]}"}"; do
         resolve_audit_classification "$version" "$channel_data"
         audit_system_rows+=("$(format_audit_row "$version")")
     done
@@ -832,21 +837,21 @@ audit_installed_sdks() {
     tool_heading ".NET SDK audit"
     echo
     tool_heading "Isolated SDKs:"
-    if (( \${#audit_isolated_versions[@]} == 0 )); then
+    if (( ${#audit_isolated_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<\${#audit_isolated_rows[@]}; i++)); do
-            printf '%s\n' "\${audit_isolated_rows[$i]}"
+        for ((i=0; i<${#audit_isolated_rows[@]}; i++)); do
+            printf '%s\n' "${audit_isolated_rows[$i]}"
         done
     fi
 
     echo
     tool_heading "System SDKs:"
-    if (( \${#audit_system_versions[@]} == 0 )); then
+    if (( ${#audit_system_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<\${#audit_system_rows[@]}; i++)); do
-            printf '%s\n' "\${audit_system_rows[$i]}"
+        for ((i=0; i<${#audit_system_rows[@]}; i++)); do
+            printf '%s\n' "${audit_system_rows[$i]}"
         done
     fi
 }
