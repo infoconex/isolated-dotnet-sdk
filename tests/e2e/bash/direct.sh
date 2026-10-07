@@ -91,17 +91,7 @@ if ! grep -Fq "End of support: $audit_end_of_support" <<<"$audit_output"; then
   printf 'Audit output did not report SDK %s end of support %s.\n' "$sdk_version" "$audit_end_of_support" >&2
   exit 1
 fi
-if [[ "$audit_output" == *
-echo "E2E direct: removing .NET SDK $sdk_version"
-bash "$saved_tool" remove "$sdk_version" --yes
-
-if [[ -e "$sdk_root" ]]; then
-  printf 'SDK directory still exists after removal: %s\n' "$sdk_root" >&2
-  exit 1
-fi
-
-echo "E2E direct lifecycle passed for .NET SDK $sdk_version."
-\033['* ]]; then
+if grep -q $'\033' <<<"$audit_output"; then
   printf 'Captured Audit output unexpectedly contained ANSI escape sequences.\n' >&2
   exit 1
 fi
