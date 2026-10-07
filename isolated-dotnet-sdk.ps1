@@ -833,8 +833,8 @@ function Get-AuditGoLiveDate {
     }
 
     $Pattern = '(?m)^\|\s*\[\.NET\s+' +
-        [regex]::Escape($ChannelVersion) +
-        '\]\([^)]+\)\s*\|\s*(?<date>[^|]+)\|\s*[^|]+\|\s*Go-Live\s*\|'
+    [regex]::Escape($ChannelVersion) +
+    '\]\([^)]+\)\s*\|\s*(?<date>[^|]+)\|\s*[^|]+\|\s*Go-Live\s*\|'
     $Match = [regex]::Match($ScheduleText, $Pattern)
     if (-not $Match.Success) {
         $Cache[$ChannelVersion] = ''
@@ -849,11 +849,11 @@ function Get-AuditGoLiveDate {
 
     $ParsedDate = [datetime]::MinValue
     if (-not [datetime]::TryParseExact(
-        $DateText,
-        'MMMM d, yyyy',
-        [System.Globalization.CultureInfo]::InvariantCulture,
-        [System.Globalization.DateTimeStyles]::None,
-        [ref]$ParsedDate)) {
+            $DateText,
+            'MMMM d, yyyy',
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::None,
+            [ref]$ParsedDate)) {
         $Cache[$ChannelVersion] = ''
         return $null
     }
