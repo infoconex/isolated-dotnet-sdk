@@ -365,16 +365,21 @@ extract_sdk_release_date() {
             value = json_string($0, "release-date")
             if (value != "") release_date=value
 
+            if (found != "") next
+
             line=$0
             while (match(line, /\/dotnet\/Sdk\/[^\/"[:space:]]+/)) {
                 version=substr(line, RSTART, RLENGTH)
                 sub(/^.*\/Sdk\//, "", version)
                 if (version == expected && release_date != "") {
-                    print release_date
-                    exit
+                    found=release_date
+                    break
                 }
                 line=substr(line, RSTART + RLENGTH)
             }
+        }
+        END {
+            if (found != "") print found
         }
     '
 }
