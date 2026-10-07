@@ -141,13 +141,15 @@ function Format-ToolMessage {
         [string]$Message
     )
 
-    if ($null -eq $PSStyle -or [Console]::IsOutputRedirected) {
+    if ($null -eq $PSStyle) {
         return $Message
     }
 
     $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
-    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi' -or
-    ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
+    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi'
+    if (-not $UseAnsi -and $PSStyle.OutputRendering -eq 'Host') {
+        $UseAnsi = -not [Console]::IsOutputRedirected -and $SupportsVirtualTerminal
+    }
 
     if (-not $UseAnsi) {
         return $Message
@@ -989,15 +991,15 @@ function Get-AuditChannelRecord {
 function Format-AuditStatusToken {
     param([string]$StatusToken)
 
-    if ($StatusToken -notin @('Current', 'Maintenance', 'EOL') -or
-        $null -eq $PSStyle -or
-        [Console]::IsOutputRedirected) {
+    if ($StatusToken -notin @('Current', 'Maintenance', 'EOL') -or $null -eq $PSStyle) {
         return $StatusToken
     }
 
     $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
-    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi' -or
-    ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
+    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi'
+    if (-not $UseAnsi -and $PSStyle.OutputRendering -eq 'Host') {
+        $UseAnsi = -not [Console]::IsOutputRedirected -and $SupportsVirtualTerminal
+    }
 
     if (-not $UseAnsi) {
         return $StatusToken
