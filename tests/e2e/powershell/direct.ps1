@@ -4,8 +4,16 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 $config = Get-Content -LiteralPath (Join-Path $repositoryRoot '.config/e2e.json') -Raw |
     ConvertFrom-Json
 $sdkVersion = [string]$config.sdkVersion
+$auditReleaseType = [string]$config.audit.releaseType
+$auditReleaseDate = [string]$config.audit.releaseDate
+$auditEndOfSupport = [string]$config.audit.endOfSupport
 if ([string]::IsNullOrWhiteSpace($sdkVersion)) {
     throw 'sdkVersion is required in .config/e2e.json.'
+}
+if ([string]::IsNullOrWhiteSpace($auditReleaseType) -or
+    [string]::IsNullOrWhiteSpace($auditReleaseDate) -or
+    [string]::IsNullOrWhiteSpace($auditEndOfSupport)) {
+    throw 'audit releaseType, releaseDate, and endOfSupport are required in .config/e2e.json.'
 }
 
 $baseTemp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
@@ -144,9 +152,20 @@ try {
         -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Audit')
     Assert-Success -Result $audit -Operation 'Direct audit'
     Write-Host $audit.Output
-    if ($audit.Output -notmatch [regex]::Escape('.NET SDK audit') -or
-        $audit.Output -notmatch [regex]::Escape($sdkVersion)) {
-        throw "Audit output did not assess installed SDK $sdkVersion."
+    if ($audit.Output -notmatch [regex]::Escape('.NET SDK audit')) {
+        throw 'Audit output did not contain the Audit heading.'
+    }
+    if ($audit.Output -notmatch [regex]::Escape("$sdkVersion  $auditReleaseType")) {
+        throw "Audit output did not report SDK $sdkVersion as $auditReleaseType."
+    }
+    if ($audit.Output -notmatch [regex]::Escape("Release date: $auditReleaseDate")) {
+        throw "Audit output did not report SDK $sdkVersion release date $auditReleaseDate."
+    }
+    if ($audit.Output -notmatch [regex]::Escape("End of support: $auditEndOfSupport")) {
+        throw "Audit output did not report SDK $sdkVersion end of support $auditEndOfSupport."
+    }
+    if ($audit.Output.Contains([char]27)) {
+        throw 'Captured Audit output unexpectedly contained ANSI escape sequences.'
     }
 
     Write-Host "E2E direct: removing .NET SDK $sdkVersion"
