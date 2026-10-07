@@ -47,14 +47,22 @@ Describe 'PowerShell SDK Audit' {
   "releases-index": [
     { "channel-version": "12.0", "latest-sdk": "12.0.100-preview.2.999", "support-phase": "preview", "release-type": "sts", "releases.json": "https://example.invalid/12.0.json" },
     { "channel-version": "11.0", "latest-sdk": "11.0.100-rc.2.999", "support-phase": "go-live", "release-type": "sts", "releases.json": "https://example.invalid/11.0.json" },
-    { "channel-version": "10.0", "latest-sdk": "10.0.401", "support-phase": "active", "release-type": "lts", "releases.json": "https://example.invalid/10.0.json" },
-    { "channel-version": "9.0", "latest-sdk": "9.0.318", "support-phase": "maintenance", "release-type": "sts", "releases.json": "https://example.invalid/9.0.json" },
-    { "channel-version": "8.0", "latest-sdk": "8.0.425", "support-phase": "maintenance", "release-type": "lts", "releases.json": "https://example.invalid/8.0.json" },
-    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "releases.json": "https://example.invalid/7.0.json" },
+    { "channel-version": "10.0", "latest-sdk": "10.0.401", "support-phase": "active", "release-type": "lts", "eol-date": "2028-11-14", "releases.json": "https://example.invalid/10.0.json" },
+    { "channel-version": "9.0", "latest-sdk": "9.0.318", "support-phase": "maintenance", "release-type": "sts", "eol-date": "2026-11-10", "releases.json": "https://example.invalid/9.0.json" },
+    { "channel-version": "8.0", "latest-sdk": "8.0.425", "support-phase": "maintenance", "release-type": "lts", "eol-date": "2026-11-10", "releases.json": "https://example.invalid/8.0.json" },
+    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "eol-date": "2024-05-14", "releases.json": "https://example.invalid/7.0.json" },
     { "channel-version": "6.0", "latest-sdk": "6.0.428", "support-phase": "unsupported", "release-type": "lts", "releases.json": "https://example.invalid/6.0.json" }
   ]
 }
 '@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot 'releases-index.json')
+
+            @'
+# .NET Release Notes
+
+| Version | Release Date | Release type | Support phase | Latest Patch Version | End of Support |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| [.NET 11.0](./11.0/README.md) | November 10, 2026 | [STS][policies] | Go-Live | [11.0.0-rc.1][11.0.0-rc.1] | October 13, 2026 |
+'@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot 'release-notes.md')
 
             @'
 {"releases":[
@@ -75,7 +83,7 @@ Describe 'PowerShell SDK Audit' {
 '@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '8.0.json')
             @'
 {"releases":[
-  {"release-date":"2024-05-01","security":true,"sdk":{"version":"7.0.410"}}
+  {"release-date":"2024-05-28","security":true,"sdk":{"version":"7.0.410"}}
 ]}
 '@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '7.0.json')
             @'
@@ -100,12 +108,17 @@ Describe 'PowerShell SDK Audit' {
         function Invoke-TestAudit {
             $output = @(& pwsh -NoProfile -Command '
                 $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
+                $PSStyle.OutputRendering = if ($env:AUDIT_FORCE_ANSI -eq "true") { "Ansi" } else { "PlainText" }
                 function Invoke-RestMethod {
                     param([string]$Uri)
                     Add-Content -LiteralPath $env:AUDIT_NETWORK_LOG -Value $Uri
                     if ($Uri -like "*releases-index.json") {
                         if ($env:AUDIT_FAIL_INDEX -eq "true") { throw "index transport" }
                         return Get-Content -LiteralPath (Join-Path $env:AUDIT_METADATA_ROOT "releases-index.json") -Raw | ConvertFrom-Json
+                    }
+                    if ($Uri -like "*release-notes/README.md") {
+                        if ($env:AUDIT_FAIL_SCHEDULE -eq "true") { throw "schedule transport" }
+                        return Get-Content -LiteralPath (Join-Path $env:AUDIT_METADATA_ROOT "release-notes.md") -Raw
                     }
                     $name = [IO.Path]::GetFileNameWithoutExtension($Uri)
                     if ($env:AUDIT_FAIL_CHANNEL -eq $name) { throw "channel transport" }
@@ -140,6 +153,8 @@ Describe 'PowerShell SDK Audit' {
         $env:AUDIT_NETWORK_LOG = $script:NetworkLog
         $env:AUDIT_FAIL_INDEX = 'false'
         $env:AUDIT_FAIL_CHANNEL = ''
+        $env:AUDIT_FAIL_SCHEDULE = 'false'
+        $env:AUDIT_FORCE_ANSI = 'false'
         Write-SystemDotNetStub -Directory $script:SystemBin
         Write-StandardMetadataFixture
     }
@@ -152,6 +167,8 @@ Describe 'PowerShell SDK Audit' {
         Remove-Item Env:AUDIT_NETWORK_LOG -ErrorAction SilentlyContinue
         Remove-Item Env:AUDIT_FAIL_INDEX -ErrorAction SilentlyContinue
         Remove-Item Env:AUDIT_FAIL_CHANNEL -ErrorAction SilentlyContinue
+        Remove-Item Env:AUDIT_FAIL_SCHEDULE -ErrorAction SilentlyContinue
+        Remove-Item Env:AUDIT_FORCE_ANSI -ErrorAction SilentlyContinue
         Remove-Item Env:FAKE_DOTNET_SDK_VERSION -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -170,15 +187,17 @@ Describe 'PowerShell SDK Audit' {
         $result.ExitCode | Should -Be 0
         $result.Text | Should -Match '\.NET SDK audit'
         $result.Text | Should -Match 'Isolated SDKs:'
-        $result.Text | Should -Match '9\.0\.306  Security update available -> 9\.0\.318  Maintenance'
-        $result.Text | Should -Match '8\.0\.303  Update available -> 8\.0\.425  Maintenance'
-        $result.Text | Should -Match '7\.0\.410  End of life'
-        $result.Text | Should -Match '12\.0\.100-preview\.1\.111  Update available -> 12\.0\.100-preview\.2\.999  Preview'
-        $result.Text | Should -Match '11\.0\.100-rc\.1\.111  Update available -> 11\.0\.100-rc\.2\.999  Go Live'
-        $result.Text | Should -Match '6\.0\.428  Unsupported'
+        $result.Text | Should -Match '10\.0\.401  LTS  Current  Release date: 2026-09-01  End of support: 2028-11-14'
+        $result.Text | Should -Match '9\.0\.306  STS  Security update available -> 9\.0\.318  Maintenance  Release date: 2026-07-01  End of support: 2026-11-10'
+        $result.Text | Should -Match '8\.0\.303  LTS  Update available -> 8\.0\.425  Maintenance  Release date: 2026-06-01  End of support: 2026-11-10'
+        $result.Text | Should -Match '7\.0\.410  STS  EOL  Release date: 2024-05-28  End of support: 2024-05-14'
+        $result.Text | Should -Match '12\.0\.100-preview\.1\.111  STS  Update available -> 12\.0\.100-preview\.2\.999  Preview 1  Release date: 2026-09-01'
+        $result.Text | Should -Match '11\.0\.100-rc\.1\.111  STS  Update available -> 11\.0\.100-rc\.2\.999  RC1  Release date: 2026-09-01  Go Live: 2026-11-10'
+        $result.Text | Should -Match '6\.0\.428  LTS  Unsupported  Release date: 2024-11-01'
         $result.Text | Should -Match 'System SDKs:'
-        $result.Text | Should -Match '8\.0\.425  Maintenance'
+        $result.Text | Should -Match '8\.0\.425  LTS  Maintenance  Release date: 2026-09-01  End of support: 2026-11-10'
         $result.Text | Should -Not -Match 'Vulnerable'
+        $result.Text.Contains([char]27) | Should -BeFalse
     }
 
     It 'preserves duplicate versions across ownership groups' {
@@ -188,7 +207,7 @@ Describe 'PowerShell SDK Audit' {
         $result = Invoke-TestAudit
 
         $result.ExitCode | Should -Be 0
-        ([regex]::Matches($result.Text, '(?m)^  10\.0\.401  Current\r?$')).Count | Should -Be 2
+        ([regex]::Matches($result.Text, '(?m)^  10\.0\.401  LTS  Current  Release date: 2026-09-01  End of support: 2028-11-14\r?$')).Count | Should -Be 2
     }
 
     It 'does not mark an SDK newer than known metadata as outdated' {
@@ -197,7 +216,7 @@ Describe 'PowerShell SDK Audit' {
         $result = Invoke-TestAudit
 
         $result.ExitCode | Should -Be 0
-        $result.Text | Should -Match '10\.0\.999  Newer than known metadata'
+        $result.Text | Should -Match '10\.0\.999  LTS  Newer than known metadata  End of support: 2028-11-14'
         $result.Text | Should -Not -Match '10\.0\.999  Update available'
     }
 
@@ -210,6 +229,49 @@ Describe 'PowerShell SDK Audit' {
         $result.Text | Should -Match '13\.0\.100  Unknown channel'
     }
 
+    It 'treats the Go Live schedule fallback as optional' {
+        Add-IsolatedSdk -Version '11.0.100-rc.1.111'
+        $env:AUDIT_FAIL_SCHEDULE = 'true'
+
+        $result = Invoke-TestAudit
+
+        $result.ExitCode | Should -Be 0
+        $result.Text | Should -Match '11\.0\.100-rc\.1\.111  STS  Update available -> 11\.0\.100-rc\.2\.999  RC1  Release date: 2026-09-01'
+        $result.Text | Should -Not -Match 'Go Live:'
+    }
+
+    It 'omits a missing optional exact release date without fabricating one' {
+        Add-IsolatedSdk -Version '10.0.401'
+        @'
+{"releases":[
+  {"security":false,"sdk":{"version":"10.0.401"}}
+]}
+'@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '10.0.json')
+
+        $result = Invoke-TestAudit
+
+        $result.ExitCode | Should -Be 0
+        $result.Text | Should -Match '10\.0\.401  LTS  Current  End of support: 2028-11-14'
+        $result.Text | Should -Not -Match 'Release date:'
+    }
+
+    It 'colors only Current Maintenance and EOL lifecycle tokens when ANSI rendering is enabled' {
+        Add-IsolatedSdk -Version '10.0.401'
+        Add-IsolatedSdk -Version '9.0.318'
+        Add-IsolatedSdk -Version '7.0.410'
+        $env:AUDIT_FORCE_ANSI = 'true'
+
+        $result = Invoke-TestAudit
+
+        $result.ExitCode | Should -Be 0
+        $result.Text | Should -Match ([regex]::Escape("$($PSStyle.Foreground.Green)Current$($PSStyle.Reset)"))
+        $result.Text | Should -Match ([regex]::Escape("$($PSStyle.Foreground.Yellow)Maintenance$($PSStyle.Reset)"))
+        $result.Text | Should -Match ([regex]::Escape("$($PSStyle.Foreground.Red)EOL$($PSStyle.Reset)"))
+        $result.Text | Should -Not -Match ([regex]::Escape("$($PSStyle.Foreground.Green)10.0.401"))
+        $result.Text | Should -Not -Match ([regex]::Escape("$($PSStyle.Foreground.Yellow)9.0.318"))
+        $result.Text | Should -Not -Match ([regex]::Escape("$($PSStyle.Foreground.Red)7.0.410"))
+    }
+
     It 'fails clearly when the release index cannot be obtained' {
         Add-IsolatedSdk -Version '10.0.401'
         $env:AUDIT_FAIL_INDEX = 'true'
@@ -218,7 +280,7 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Not -Be 0
         $result.Text | Should -Match 'Unable to load \.NET release metadata from Microsoft\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
+        $result.Text | Should -Not -Match '10\.0\.401  LTS  Current'
     }
 
 
@@ -230,7 +292,7 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Not -Be 0
         $result.Text | Should -Match 'Unable to load release metadata for \.NET 10\.0\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
+        $result.Text | Should -Not -Match '10\.0\.401  LTS  Current'
     }
 
     It 'fails clearly when required channel metadata is malformed' {
@@ -241,7 +303,7 @@ Describe 'PowerShell SDK Audit' {
 
         $result.ExitCode | Should -Not -Be 0
         $result.Text | Should -Match 'Invalid release metadata for \.NET 10\.0\.'
-        $result.Text | Should -Not -Match '10\.0\.401  Current'
+        $result.Text | Should -Not -Match '10\.0\.401  LTS  Current'
     }
 
     It 'rejects an SDK version argument for Audit' {
@@ -255,6 +317,7 @@ Describe 'PowerShell SDK Audit' {
         Add-IsolatedSdk -Version '10.0.401'
         $output = @(& pwsh -NoProfile -Command '
             $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
+            $PSStyle.OutputRendering = "PlainText"
             $global:responses = [System.Collections.Generic.Queue[string]]::new()
             $global:responses.Enqueue("A")
             $global:responses.Enqueue("E")
@@ -273,7 +336,7 @@ Describe 'PowerShell SDK Audit' {
 
         $LASTEXITCODE | Should -Be 0
         $text | Should -Match 'A\. Audit installed SDKs'
-        $text | Should -Match '10\.0\.401  Current'
+        $text | Should -Match '10\.0\.401  LTS  Current'
         ([regex]::Matches($text, 'What would you like to do\?')).Count | Should -Be 2
         $text | Should -Match 'Exiting\.'
     }

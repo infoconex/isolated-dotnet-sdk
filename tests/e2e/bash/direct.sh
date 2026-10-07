@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 config="$repo_root/.config/e2e.json"
 sdk_version="$(jq -er '.sdkVersion | select(type == "string" and length > 0)' "$config")"
+audit_release_type="$(jq -er '.audit.releaseType | select(type == "string" and length > 0)' "$config")"
+audit_release_date="$(jq -er '.audit.releaseDate | select(type == "string" and length > 0)' "$config")"
+audit_end_of_support="$(jq -er '.audit.endOfSupport | select(type == "string" and length > 0)' "$config")"
 base_temp="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 test_root="$(mktemp -d "$base_temp/isolated-dotnet-sdk-e2e-direct.XXXXXX")"
 test_home="$test_root/home"
@@ -72,8 +75,24 @@ fi
 
 audit_output="$(bash "$saved_tool" audit)"
 printf '%s\n' "$audit_output"
-if ! grep -Fq '.NET SDK audit' <<<"$audit_output" || ! grep -Fq "$sdk_version" <<<"$audit_output"; then
-  printf 'Audit output did not assess installed SDK %s.\n' "$sdk_version" >&2
+if ! grep -Fq '.NET SDK audit' <<<"$audit_output"; then
+  printf 'Audit output did not contain the Audit heading.\n' >&2
+  exit 1
+fi
+if ! grep -Fq "$sdk_version  $audit_release_type" <<<"$audit_output"; then
+  printf 'Audit output did not report SDK %s as %s.\n' "$sdk_version" "$audit_release_type" >&2
+  exit 1
+fi
+if ! grep -Fq "Release date: $audit_release_date" <<<"$audit_output"; then
+  printf 'Audit output did not report SDK %s release date %s.\n' "$sdk_version" "$audit_release_date" >&2
+  exit 1
+fi
+if ! grep -Fq "End of support: $audit_end_of_support" <<<"$audit_output"; then
+  printf 'Audit output did not report SDK %s end of support %s.\n' "$sdk_version" "$audit_end_of_support" >&2
+  exit 1
+fi
+if grep -q $'\033' <<<"$audit_output"; then
+  printf 'Captured Audit output unexpectedly contained ANSI escape sequences.\n' >&2
   exit 1
 fi
 

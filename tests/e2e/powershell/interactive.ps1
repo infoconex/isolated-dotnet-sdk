@@ -5,11 +5,19 @@ $config = Get-Content -LiteralPath (Join-Path $repositoryRoot '.config/e2e.json'
     ConvertFrom-Json
 $channelVersion = [string]$config.channelVersion
 $sdkVersion = [string]$config.sdkVersion
+$auditReleaseType = [string]$config.audit.releaseType
+$auditReleaseDate = [string]$config.audit.releaseDate
+$auditEndOfSupport = [string]$config.audit.endOfSupport
 if ([string]::IsNullOrWhiteSpace($channelVersion)) {
     throw 'channelVersion is required in .config/e2e.json.'
 }
 if ([string]::IsNullOrWhiteSpace($sdkVersion)) {
     throw 'sdkVersion is required in .config/e2e.json.'
+}
+if ([string]::IsNullOrWhiteSpace($auditReleaseType) -or
+    [string]::IsNullOrWhiteSpace($auditReleaseDate) -or
+    [string]::IsNullOrWhiteSpace($auditEndOfSupport)) {
+    throw 'audit releaseType, releaseDate, and endOfSupport are required in .config/e2e.json.'
 }
 
 $baseTemp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
@@ -113,6 +121,7 @@ try {
         'M',
         $sdkVersion,
         'l',
+        'a',
         'v',
         '1',
         'r',
@@ -129,8 +138,8 @@ try {
     Write-Host $interactive.Output
 
     $mainPromptCount = ([regex]::Matches($interactive.Output, 'What would you like to do\?')).Count
-    if ($mainPromptCount -ne 5) {
-        throw "Expected 5 Main prompts but observed $mainPromptCount."
+    if ($mainPromptCount -ne 6) {
+        throw "Expected 6 Main prompts but observed $mainPromptCount."
     }
 
     $identityCount = ([regex]::Matches(
@@ -145,6 +154,10 @@ try {
         'Isolated SDK installation completed successfully.',
         'Isolated SDKs:',
         'System SDKs:',
+        '.NET SDK audit',
+        "$sdkVersion  $auditReleaseType",
+        "Release date: $auditReleaseDate",
+        "End of support: $auditEndOfSupport",
         'Select an isolated SDK to verify:',
         "Isolated SDK $sdkVersion is healthy.",
         $sdkVersion,

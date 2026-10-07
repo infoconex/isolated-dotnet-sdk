@@ -85,6 +85,7 @@ $ErrorActionPreference = 'Stop'
 
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
 $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
+$ReleaseScheduleUrl = 'https://raw.githubusercontent.com/dotnet/core/main/release-notes/README.md'
 $ToolName = 'isolated-dotnet-sdk.ps1'
 $ToolReleaseIdentity = 'development'
 $SdkRoot = Join-Path $HOME 'dotnet-sdks'
@@ -145,8 +146,10 @@ function Format-ToolMessage {
     }
 
     $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
-    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi' -or
-    ($PSStyle.OutputRendering -eq 'Host' -and $SupportsVirtualTerminal)
+    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi'
+    if (-not $UseAnsi -and $PSStyle.OutputRendering -eq 'Host') {
+        $UseAnsi = -not [Console]::IsOutputRedirected -and $SupportsVirtualTerminal
+    }
 
     if (-not $UseAnsi) {
         return $Message
@@ -770,32 +773,140 @@ function Test-SecurityUpdateAvailable {
     return $false
 }
 
-function Get-AuditLifecycleLabel {
-    param([string]$SupportPhase)
+function Get-SdkPrereleaseLabel {
+    param([string]$Version)
 
-    switch ($SupportPhase) {
-        'active' { return '' }
-        'maintenance' { return 'Maintenance' }
-        'preview' { return 'Preview' }
-        'go-live' { return 'Go Live' }
-        'eol' { return 'End of life' }
-        default { return 'Unsupported' }
+    $Match = [regex]::Match($Version, '-(?<label>preview|rc)\.(?<sequence>[0-9]+)(?:\.|$)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $Match.Success) {
+        return $null
     }
+
+    $Sequence = $Match.Groups['sequence'].Value
+    if ($Match.Groups['label'].Value -ieq 'rc') {
+        return "RC$Sequence"
+    }
+
+    return "Preview $Sequence"
 }
 
-function Get-SdkAuditStatus {
+function Get-SdkReleaseDate {
+    param(
+        $ChannelMetadata,
+        [string]$Version
+    )
+
+    foreach ($Release in @($ChannelMetadata.releases)) {
+        if (@(Get-ReleaseSdkVersion $Release) -contains $Version) {
+            $ReleaseDate = [string]$Release.'release-date'
+            if (-not [string]::IsNullOrWhiteSpace($ReleaseDate)) {
+                return $ReleaseDate
+            }
+            return $null
+        }
+    }
+
+    return $null
+}
+
+function Get-AuditGoLiveDate {
+    param(
+        [string]$ChannelVersion,
+        [hashtable]$Cache
+    )
+
+    if ($Cache.ContainsKey($ChannelVersion)) {
+        return [string]$Cache[$ChannelVersion]
+    }
+
+    if (-not $Cache.ContainsKey('__schedule')) {
+        try {
+            $Schedule = Invoke-RestMethod -Uri $ReleaseScheduleUrl
+            $Cache['__schedule'] = [string]$Schedule
+        }
+        catch {
+            $Cache['__schedule'] = ''
+        }
+    }
+
+    $ScheduleText = [string]$Cache['__schedule']
+    if ([string]::IsNullOrWhiteSpace($ScheduleText)) {
+        $Cache[$ChannelVersion] = ''
+        return $null
+    }
+
+    $Pattern = '(?m)^\|\s*\[\.NET\s+' +
+    [regex]::Escape($ChannelVersion) +
+    '\]\([^)]+\)\s*\|\s*(?<date>[^|]+)\|\s*[^|]+\|\s*Go-Live\s*\|'
+    $Match = [regex]::Match($ScheduleText, $Pattern)
+    if (-not $Match.Success) {
+        $Cache[$ChannelVersion] = ''
+        return $null
+    }
+
+    $DateText = $Match.Groups['date'].Value.Trim()
+    $LinkMatch = [regex]::Match($DateText, '^\[(?<text>[^\]]+)\]\([^)]+\)$')
+    if ($LinkMatch.Success) {
+        $DateText = $LinkMatch.Groups['text'].Value.Trim()
+    }
+
+    $ParsedDate = [datetime]::MinValue
+    if (-not [datetime]::TryParseExact(
+            $DateText,
+            'MMMM d, yyyy',
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::None,
+            [ref]$ParsedDate)) {
+        $Cache[$ChannelVersion] = ''
+        return $null
+    }
+
+    $Result = $ParsedDate.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture)
+    $Cache[$ChannelVersion] = $Result
+    return $Result
+}
+
+function Get-SdkAuditClassification {
     param(
         [string]$Version,
         $ChannelEntry,
-        $ChannelMetadata
+        $ChannelMetadata,
+        [hashtable]$GoLiveCache
     )
 
+    $ChannelVersion = [string]$ChannelEntry.'channel-version'
     $SupportPhase = [string]$ChannelEntry.'support-phase'
     $LatestSdk = [string]$ChannelEntry.'latest-sdk'
-    $Lifecycle = Get-AuditLifecycleLabel -SupportPhase $SupportPhase
+    $ReleaseTypeValue = [string]$ChannelEntry.'release-type'
+
+    if ($ReleaseTypeValue -notin @('lts', 'sts')) {
+        throw "Invalid .NET release metadata for .NET $ChannelVersion."
+    }
+
+    $ReleaseType = $ReleaseTypeValue.ToUpperInvariant()
+    $ReleaseDate = Get-SdkReleaseDate -ChannelMetadata $ChannelMetadata -Version $Version
+    $EndOfSupportDate = [string]$ChannelEntry.'eol-date'
+    if ([string]::IsNullOrWhiteSpace($EndOfSupportDate)) {
+        $EndOfSupportDate = ''
+    }
+
+    $GoLiveDate = ''
+    if ($SupportPhase -eq 'go-live') {
+        $ResolvedGoLiveDate = Get-AuditGoLiveDate -ChannelVersion $ChannelVersion -Cache $GoLiveCache
+        if (-not [string]::IsNullOrWhiteSpace($ResolvedGoLiveDate)) {
+            $GoLiveDate = $ResolvedGoLiveDate
+        }
+    }
 
     if ($SupportPhase -eq 'eol') {
-        return 'End of life'
+        return [pscustomobject]@{
+            Version          = $Version
+            ReleaseType      = $ReleaseType
+            ServicingStatus  = ''
+            StatusToken      = 'EOL'
+            ReleaseDate      = $ReleaseDate
+            GoLiveDate       = $GoLiveDate
+            EndOfSupportDate = $EndOfSupportDate
+        }
     }
 
     $Comparison = Compare-SdkVersion -Left $Version -Right $LatestSdk
@@ -814,15 +925,36 @@ function Get-SdkAuditStatus {
         }
     }
 
-    if ($Servicing -eq 'Current' -and -not [string]::IsNullOrWhiteSpace($Lifecycle)) {
-        return $Lifecycle
+    $PrereleaseLabel = Get-SdkPrereleaseLabel -Version $Version
+    $StatusToken = if (-not [string]::IsNullOrWhiteSpace($PrereleaseLabel)) {
+        $PrereleaseLabel
+    }
+    else {
+        switch ($SupportPhase) {
+            'maintenance' { 'Maintenance' }
+            'preview' { 'Preview' }
+            'go-live' { 'Go Live' }
+            'active' { if ($Servicing -eq 'Current') { 'Current' } else { '' } }
+            default { 'Unsupported' }
+        }
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($Lifecycle)) {
-        return "$Servicing  $Lifecycle"
+    if ($Servicing -eq 'Current') {
+        if ([string]::IsNullOrWhiteSpace($StatusToken)) {
+            $StatusToken = 'Current'
+        }
+        $Servicing = ''
     }
 
-    return $Servicing
+    return [pscustomobject]@{
+        Version          = $Version
+        ReleaseType      = $ReleaseType
+        ServicingStatus  = $Servicing
+        StatusToken      = $StatusToken
+        ReleaseDate      = $ReleaseDate
+        GoLiveDate       = $GoLiveDate
+        EndOfSupportDate = $EndOfSupportDate
+    }
 }
 
 function Get-AuditChannelRecord {
@@ -856,6 +988,58 @@ function Get-AuditChannelRecord {
     return $Metadata
 }
 
+function Format-AuditStatusToken {
+    param([string]$StatusToken)
+
+    if ($StatusToken -notin @('Current', 'Maintenance', 'EOL') -or $null -eq $PSStyle) {
+        return $StatusToken
+    }
+
+    $SupportsVirtualTerminal = $null -ne $Host.UI -and $Host.UI.SupportsVirtualTerminal
+    $UseAnsi = $PSStyle.OutputRendering -eq 'Ansi'
+    if (-not $UseAnsi -and $PSStyle.OutputRendering -eq 'Host') {
+        $UseAnsi = -not [Console]::IsOutputRedirected -and $SupportsVirtualTerminal
+    }
+
+    if (-not $UseAnsi) {
+        return $StatusToken
+    }
+
+    $Foreground = switch ($StatusToken) {
+        'Current' { $PSStyle.Foreground.Green }
+        'Maintenance' { $PSStyle.Foreground.Yellow }
+        'EOL' { $PSStyle.Foreground.Red }
+    }
+
+    return "$Foreground$StatusToken$($PSStyle.Reset)"
+}
+
+function Format-SdkAuditRow {
+    param($Classification)
+
+    $Line = "  $($Classification.Version)"
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ReleaseType)) {
+        $Line += "  $($Classification.ReleaseType)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ServicingStatus)) {
+        $Line += "  $($Classification.ServicingStatus)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.StatusToken)) {
+        $Line += "  $(Format-AuditStatusToken -StatusToken $Classification.StatusToken)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
+        $Line += "  Release date: $($Classification.ReleaseDate)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.GoLiveDate)) {
+        $Line += "  Go Live: $($Classification.GoLiveDate)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.EndOfSupportDate)) {
+        $Line += "  End of support: $($Classification.EndOfSupportDate)"
+    }
+
+    return $Line
+}
+
 function Invoke-SdkAudit {
     $IsolatedVersions = @(Get-IsolatedSdkVersion)
     $SystemSdks = @(Get-SystemSdkInventory)
@@ -882,38 +1066,43 @@ function Invoke-SdkAudit {
     }
 
     $MetadataCache = @{}
-    $StatusByVersion = @{}
+    $GoLiveCache = @{}
+    $ClassificationByVersion = @{}
     $AllVersions = @($IsolatedVersions) + @($SystemSdks | ForEach-Object { $_.Version })
     foreach ($Version in @($AllVersions | Select-Object -Unique)) {
         $ChannelVersion = Get-SdkChannelFromVersion -Version $Version
         if ([string]::IsNullOrWhiteSpace($ChannelVersion) -or
             -not $ChannelEntries.ContainsKey($ChannelVersion)) {
-            $StatusByVersion[$Version] = 'Unknown channel'
+            $ClassificationByVersion[$Version] = [pscustomobject]@{
+                Version          = $Version
+                ReleaseType      = ''
+                ServicingStatus  = 'Unknown channel'
+                StatusToken      = ''
+                ReleaseDate      = ''
+                GoLiveDate       = ''
+                EndOfSupportDate = ''
+            }
             continue
         }
 
         $Entry = $ChannelEntries[$ChannelVersion]
         $LatestSdk = [string]$Entry.'latest-sdk'
         $SupportPhase = [string]$Entry.'support-phase'
+        $ReleaseType = [string]$Entry.'release-type'
         $MetadataUrl = [string]$Entry.'releases.json'
         if ([string]::IsNullOrWhiteSpace($LatestSdk) -or
             [string]::IsNullOrWhiteSpace($SupportPhase) -or
+            $ReleaseType -notin @('lts', 'sts') -or
             [string]::IsNullOrWhiteSpace($MetadataUrl)) {
             throw "Invalid .NET release metadata for .NET $ChannelVersion."
         }
 
-        $ChannelMetadata = Get-AuditChannelRecord `
-            -ChannelVersion $ChannelVersion `
-            -MetadataUrl $MetadataUrl `
-            -Cache $MetadataCache
+        $ChannelMetadata = Get-AuditChannelRecord -ChannelVersion $ChannelVersion -MetadataUrl $MetadataUrl -Cache $MetadataCache
         if (@(Get-ChannelSdkVersion $ChannelMetadata) -notcontains $LatestSdk) {
             throw "Invalid release metadata for .NET $ChannelVersion."
         }
 
-        $StatusByVersion[$Version] = Get-SdkAuditStatus `
-            -Version $Version `
-            -ChannelEntry $Entry `
-            -ChannelMetadata $ChannelMetadata
+        $ClassificationByVersion[$Version] = Get-SdkAuditClassification -Version $Version -ChannelEntry $Entry -ChannelMetadata $ChannelMetadata -GoLiveCache $GoLiveCache
     }
 
     Write-ToolHeading '.NET SDK audit'
@@ -924,7 +1113,7 @@ function Invoke-SdkAudit {
     }
     else {
         foreach ($Version in $IsolatedVersions) {
-            Write-ToolDisplay "  $Version  $($StatusByVersion[$Version])"
+            Write-ToolDisplay (Format-SdkAuditRow -Classification $ClassificationByVersion[$Version])
         }
     }
 
@@ -935,7 +1124,7 @@ function Invoke-SdkAudit {
     }
     else {
         foreach ($Sdk in $SystemSdks) {
-            Write-ToolDisplay "  $($Sdk.Version)  $($StatusByVersion[$Sdk.Version])"
+            Write-ToolDisplay (Format-SdkAuditRow -Classification $ClassificationByVersion[$Sdk.Version])
         }
     }
 }
