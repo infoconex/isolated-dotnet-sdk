@@ -895,7 +895,6 @@ select_install_version() {
     local phase=""
     local release_type=""
     local releases_url=""
-    local eol_date=""
     local metadata_file=""
     local metadata_json=""
     local versions=""
@@ -936,7 +935,7 @@ select_install_version() {
         local release_types=()
         local release_urls=()
 
-        while IFS='|' read -r channel latest_sdk phase release_type releases_url eol_date; do
+        while IFS='|' read -r channel latest_sdk phase release_type releases_url _; do
             [[ -n "$channel" ]] || continue
 
             if [[ "$show_archived" == "true" ]]; then
