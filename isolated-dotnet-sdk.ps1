@@ -141,7 +141,7 @@ function Format-ToolMessage {
         [string]$Message
     )
 
-    if ($null -eq $PSStyle) {
+    if ($null -eq $PSStyle -or [Console]::IsOutputRedirected) {
         return $Message
     }
 
@@ -989,7 +989,9 @@ function Get-AuditChannelRecord {
 function Format-AuditStatusToken {
     param([string]$StatusToken)
 
-    if ($StatusToken -notin @('Current', 'Maintenance', 'EOL') -or $null -eq $PSStyle) {
+    if ($StatusToken -notin @('Current', 'Maintenance', 'EOL') -or
+        $null -eq $PSStyle -or
+        [Console]::IsOutputRedirected) {
         return $StatusToken
     }
 
