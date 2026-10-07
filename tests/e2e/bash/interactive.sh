@@ -5,6 +5,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 config="$repo_root/.config/e2e.json"
 channel_version="$(jq -er '.channelVersion | select(type == "string" and length > 0)' "$config")"
 sdk_version="$(jq -er '.sdkVersion | select(type == "string" and length > 0)' "$config")"
+audit_release_type="$(jq -er '.audit.releaseType | select(type == "string" and length > 0)' "$config")"
+audit_release_date="$(jq -er '.audit.releaseDate | select(type == "string" and length > 0)' "$config")"
+audit_end_of_support="$(jq -er '.audit.endOfSupport | select(type == "string" and length > 0)' "$config")"
 base_temp="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 test_root="$(mktemp -d "$base_temp/isolated-dotnet-sdk-e2e-interactive.XXXXXX")"
 test_home="$test_root/home"
@@ -54,9 +57,9 @@ fi
 test -f "$saved_tool"
 
 # Main -> Install -> channel -> Back -> same discovered channel -> manual exact
-# version -> Main -> List -> Main -> Verify the only job-local SDK -> Main ->
-# Remove the same SDK -> Main -> Exit.
-interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nl\nv\n1\nr\n1\ne\n' \
+# version -> Main -> List -> Main -> Audit -> Main -> Verify the only job-local
+# SDK -> Main -> Remove the same SDK -> Main -> Exit.
+interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nl\na\nv\n1\nr\n1\ne\n' \
   "$channel_selection" "$channel_selection" "$sdk_version")"
 
 echo "E2E interactive: running persistent session for .NET SDK $sdk_version"
@@ -72,8 +75,8 @@ fi
 
 main_prompt_count="$(printf '%s\n' "$interactive_output" |
   grep -c 'What would you like to do?' || true)"
-if [[ "$main_prompt_count" -ne 5 ]]; then
-  printf 'Expected 5 Main prompts but observed %s.\n' "$main_prompt_count" >&2
+if [[ "$main_prompt_count" -ne 6 ]]; then
+  printf 'Expected 6 Main prompts but observed %s.\n' "$main_prompt_count" >&2
   exit 1
 fi
 
@@ -90,6 +93,10 @@ required_fragments=(
   "Isolated SDK installation completed successfully."
   "Isolated SDKs:"
   "System SDKs:"
+  ".NET SDK audit"
+  "$sdk_version  $audit_release_type"
+  "Release date: $audit_release_date"
+  "End of support: $audit_end_of_support"
   "Select an isolated SDK to verify:"
   "Isolated SDK $sdk_version is healthy."
   "$sdk_version"
