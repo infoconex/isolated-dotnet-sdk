@@ -186,29 +186,52 @@ run_audit() {
 
   current_line="$(printf '%s\n' "$output" | grep '^  10\.0\.401[[:space:]]' | head -n 1)"
   maintenance_line="$(printf '%s\n' "$output" | grep '^  8\.0\.425[[:space:]]' | head -n 1)"
+  update_line="$(printf '%s\n' "$output" | grep '^  8\.0\.303[[:space:]]' | head -n 1)"
+  security_line="$(printf '%s\n' "$output" | grep '^  9\.0\.306[[:space:]]' | head -n 1)"
   preview_line="$(printf '%s\n' "$output" | grep '^  12\.0\.100-preview\.1\.111[[:space:]]' | head -n 1)"
+  rc_line="$(printf '%s\n' "$output" | grep '^  11\.0\.100-rc\.1\.111[[:space:]]' | head -n 1)"
+  eol_line="$(printf '%s\n' "$output" | grep '^  7\.0\.410[[:space:]]' | head -n 1)"
 
-  current_release_prefix="${current_line%%LTS*}"
-  maintenance_release_prefix="${maintenance_line%%LTS*}"
-  preview_release_prefix="${preview_line%%STS*}"
-  [ "${#current_release_prefix}" -eq "${#maintenance_release_prefix}" ]
-  [ "${#current_release_prefix}" -eq "${#preview_release_prefix}" ]
+  current_release_type_prefix="${current_line%%LTS*}"
+  maintenance_release_type_prefix="${maintenance_line%%LTS*}"
+  preview_release_type_prefix="${preview_line%%STS*}"
+  [ "${#current_release_type_prefix}" -eq "${#maintenance_release_type_prefix}" ]
+  [ "${#current_release_type_prefix}" -eq "${#preview_release_type_prefix}" ]
 
-  current_status_prefix="${current_line%%Current*}"
-  maintenance_status_prefix="${maintenance_line%%Maintenance*}"
-  preview_status_prefix="${preview_line%%Update\ available*}"
-  [ "${#current_status_prefix}" -eq "${#maintenance_status_prefix}" ]
-  [ "${#current_status_prefix}" -eq "${#preview_status_prefix}" ]
+  update_servicing_prefix="${update_line%%Update\ available*}"
+  security_servicing_prefix="${security_line%%Security\ update\ available*}"
+  preview_servicing_prefix="${preview_line%%Update\ available*}"
+  [ "${#update_servicing_prefix}" -eq "${#security_servicing_prefix}" ]
+  [ "${#update_servicing_prefix}" -eq "${#preview_servicing_prefix}" ]
+
+  current_lifecycle_prefix="${current_line%%Current*}"
+  maintenance_lifecycle_prefix="${maintenance_line%%Maintenance*}"
+  preview_lifecycle_prefix="${preview_line%%Preview\ 1*}"
+  rc_lifecycle_prefix="${rc_line%%RC1*}"
+  eol_lifecycle_prefix="${eol_line%%EOL*}"
+  [ "${#current_lifecycle_prefix}" -eq "${#maintenance_lifecycle_prefix}" ]
+  [ "${#current_lifecycle_prefix}" -eq "${#preview_lifecycle_prefix}" ]
+  [ "${#current_lifecycle_prefix}" -eq "${#rc_lifecycle_prefix}" ]
+  [ "${#current_lifecycle_prefix}" -eq "${#eol_lifecycle_prefix}" ]
+  [ "${#update_servicing_prefix}" -lt "${#current_lifecycle_prefix}" ]
 
   current_release_date_prefix="${current_line%%Release:*}"
   maintenance_release_date_prefix="${maintenance_line%%Release:*}"
   preview_release_date_prefix="${preview_line%%Release:*}"
+  rc_release_date_prefix="${rc_line%%Release:*}"
   [ "${#current_release_date_prefix}" -eq "${#maintenance_release_date_prefix}" ]
   [ "${#current_release_date_prefix}" -eq "${#preview_release_date_prefix}" ]
+  [ "${#current_release_date_prefix}" -eq "${#rc_release_date_prefix}" ]
+
+  rc_go_live_prefix="${rc_line%%Go\ Live:*}"
+  [ "${#rc_go_live_prefix}" -gt "${#rc_release_date_prefix}" ]
 
   current_eos_prefix="${current_line%%EOS:*}"
   maintenance_eos_prefix="${maintenance_line%%EOS:*}"
+  eol_eos_prefix="${eol_line%%EOS:*}"
   [ "${#current_eos_prefix}" -eq "${#maintenance_eos_prefix}" ]
+  [ "${#current_eos_prefix}" -eq "${#eol_eos_prefix}" ]
+  [ "${#current_eos_prefix}" -gt "${#rc_go_live_prefix}" ]
   [[ "$output" != *"Release date:"* ]]
   [[ "$output" != *"End of support:"* ]]
 }
