@@ -220,7 +220,7 @@ run_audit() {
   run_audit
 
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -Ec '^  10\.0\.401 +LTS +Current +Release: 2026-09-01 +EOS: 2028-11-14
+  [ "$(printf '%s\n' "$output" | grep -Ec '^  10\.0\.401 +LTS +Current +Release: 2026-09-01 +EOS: 2028-11-14$')" -eq 2 ]
 }
 
 @test "audit does not mark an SDK newer than known metadata as outdated" {
@@ -229,7 +229,7 @@ run_audit() {
   run_audit
 
   [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -Eq '^  10\.0\.999 +LTS +Newer than known metadata +EOS: 2028-11-14
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.999 +LTS +Newer than known metadata +EOS: 2028-11-14$'
   [[ "$output" != *"10.0.999  Update available"* ]]
 }
 
@@ -249,7 +249,7 @@ run_audit() {
   run_audit
 
   [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +Update available -> 11\.0\.100-rc\.2\.999 +RC1 +Release: 2026-09-01
+  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +Update available -> 11\.0\.100-rc\.2\.999 +RC1 +Release: 2026-09-01$'
   [[ "$output" != *"Go Live:"* ]]
 }
 
@@ -264,7 +264,7 @@ JSON
   run_audit
 
   [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +EOS: 2028-11-14
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +EOS: 2028-11-14$'
   [[ "$output" != *"Release:"* ]]
 }
 
