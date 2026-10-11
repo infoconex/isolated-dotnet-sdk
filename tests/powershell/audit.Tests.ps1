@@ -251,13 +251,20 @@ Describe 'PowerShell SDK Audit' {
         $result.Text | Should -Not -Match '10\.0\.999  Update available'
     }
 
-    It 'reports an unrecognized installed channel without fabricated lifecycle data' {
+    It 'reports an unrecognized installed channel in the lifecycle status column without fabricated metadata' {
         Add-IsolatedSdk -Version '13.0.100'
+        Add-IsolatedSdk -Version '10.0.401'
 
         $result = Invoke-TestAudit
 
         $result.ExitCode | Should -Be 0
-        $result.Text | Should -Match '13\.0\.100  Unknown channel'
+        $lines = @($result.Text -split '\r?\n')
+        $unknownLine = $lines | Where-Object { $_ -match '^  13\.0\.100\s' } | Select-Object -First 1
+        $currentLine = $lines | Where-Object { $_ -match '^  10\.0\.401\s' } | Select-Object -First 1
+
+        $unknownLine | Should -Match 'Unknown channel'
+        $unknownLine | Should -Not -Match '\bLTS\b|\bSTS\b|Release:|Go Live:|EOS:'
+        $unknownLine.IndexOf('Unknown channel') | Should -Be $currentLine.IndexOf('Current')
     }
 
     It 'treats the Go Live schedule fallback as optional' {
