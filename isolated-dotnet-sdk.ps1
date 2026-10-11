@@ -1159,8 +1159,8 @@ function Invoke-SdkAudit {
             $ClassificationByVersion[$Version] = [pscustomobject]@{
                 Version          = $Version
                 ReleaseType      = ''
-                ServicingStatus  = 'Unknown channel'
-                StatusToken      = ''
+                ServicingStatus  = ''
+                StatusToken      = 'Unknown channel'
                 ReleaseDate      = ''
                 GoLiveDate       = ''
                 EndOfSupportDate = ''
