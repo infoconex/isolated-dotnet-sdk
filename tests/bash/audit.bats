@@ -351,7 +351,7 @@ EOF
 
   current_status_prefix="${current_line%%Current*}"
   maintenance_status_prefix="${maintenance_line%%Maintenance*}"
-  preview_status_prefix="${preview_line%%Update available*}"
+  preview_status_prefix="${preview_line%%Update\ available*}"
   [ "${#current_status_prefix}" -eq "${#maintenance_status_prefix}" ]
   [ "${#current_status_prefix}" -eq "${#preview_status_prefix}" ]
 
