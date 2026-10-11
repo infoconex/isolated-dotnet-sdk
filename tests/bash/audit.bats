@@ -256,13 +256,26 @@ run_audit() {
   [[ "$output" != *"10.0.999  Update available"* ]]
 }
 
-@test "audit reports an unrecognized installed channel without fabricating lifecycle data" {
+@test "audit reports an unrecognized installed channel in the lifecycle status column without fabricated metadata" {
   add_isolated_sdk '13.0.100'
+  add_isolated_sdk '10.0.401'
 
   run_audit
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"13.0.100  Unknown channel"* ]]
+  unknown_line="$(printf '%s\n' "$output" | grep '^  13\.0\.100[[:space:]]' | head -n 1)"
+  current_line="$(printf '%s\n' "$output" | grep '^  10\.0\.401[[:space:]]' | head -n 1)"
+
+  [[ "$unknown_line" == *"Unknown channel"* ]]
+  [[ "$unknown_line" != *"LTS"* ]]
+  [[ "$unknown_line" != *"STS"* ]]
+  [[ "$unknown_line" != *"Release:"* ]]
+  [[ "$unknown_line" != *"Go Live:"* ]]
+  [[ "$unknown_line" != *"EOS:"* ]]
+
+  unknown_lifecycle_prefix="${unknown_line%%Unknown\ channel*}"
+  current_lifecycle_prefix="${current_line%%Current*}"
+  [ "${#unknown_lifecycle_prefix}" -eq "${#current_lifecycle_prefix}" ]
 }
 
 @test "audit treats the Go Live schedule fallback as optional" {
