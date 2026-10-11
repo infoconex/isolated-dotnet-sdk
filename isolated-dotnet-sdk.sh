@@ -554,6 +554,12 @@ AUDIT_STATUS_TOKEN=""
 AUDIT_RELEASE_DATE=""
 AUDIT_GO_LIVE_DATE=""
 AUDIT_END_OF_SUPPORT_DATE=""
+AUDIT_VERSION_WIDTH=0
+AUDIT_RELEASE_TYPE_WIDTH=0
+AUDIT_STATUS_WIDTH=0
+AUDIT_RELEASE_WIDTH=0
+AUDIT_GO_LIVE_WIDTH=0
+AUDIT_END_OF_SUPPORT_WIDTH=0
 
 load_audit_channel_metadata() {
     local channel="$1"
@@ -752,33 +758,96 @@ audit_status_color() {
     esac
 }
 
+audit_status_text() {
+    if [[ -n "$AUDIT_SERVICING_STATUS" && -n "$AUDIT_STATUS_TOKEN" ]]; then
+        printf '%s  %s' "$AUDIT_SERVICING_STATUS" "$AUDIT_STATUS_TOKEN"
+    elif [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
+        printf '%s' "$AUDIT_SERVICING_STATUS"
+    else
+        printf '%s' "$AUDIT_STATUS_TOKEN"
+    fi
+}
+
+update_audit_layout_widths() {
+    local version="$1"
+    local status_text=""
+    local release_text=""
+    local go_live_text=""
+    local eos_text=""
+
+    status_text="$(audit_status_text)"
+    [[ -n "$AUDIT_RELEASE_DATE" ]] && release_text="Release: $AUDIT_RELEASE_DATE"
+    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && go_live_text="Go Live: $AUDIT_GO_LIVE_DATE"
+    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && eos_text="EOS: $AUDIT_END_OF_SUPPORT_DATE"
+
+    if (( ${#version} > AUDIT_VERSION_WIDTH )); then
+        AUDIT_VERSION_WIDTH=${#version}
+    fi
+    if (( ${#AUDIT_RELEASE_TYPE} > AUDIT_RELEASE_TYPE_WIDTH )); then
+        AUDIT_RELEASE_TYPE_WIDTH=${#AUDIT_RELEASE_TYPE}
+    fi
+    if (( ${#status_text} > AUDIT_STATUS_WIDTH )); then
+        AUDIT_STATUS_WIDTH=${#status_text}
+    fi
+    if (( ${#release_text} > AUDIT_RELEASE_WIDTH )); then
+        AUDIT_RELEASE_WIDTH=${#release_text}
+    fi
+    if (( ${#go_live_text} > AUDIT_GO_LIVE_WIDTH )); then
+        AUDIT_GO_LIVE_WIDTH=${#go_live_text}
+    fi
+    if (( ${#eos_text} > AUDIT_END_OF_SUPPORT_WIDTH )); then
+        AUDIT_END_OF_SUPPORT_WIDTH=${#eos_text}
+    fi
+}
+
 format_audit_row() {
     local version="$1"
     local color=""
+    local status_text=""
+    local release_text=""
+    local go_live_text=""
+    local eos_text=""
+    local status_padding=0
 
-    printf '  %s' "$version"
-    if [[ -n "$AUDIT_RELEASE_TYPE" ]]; then
-        printf '  %s' "$AUDIT_RELEASE_TYPE"
+    status_text="$(audit_status_text)"
+    [[ -n "$AUDIT_RELEASE_DATE" ]] && release_text="Release: $AUDIT_RELEASE_DATE"
+    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && go_live_text="Go Live: $AUDIT_GO_LIVE_DATE"
+    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && eos_text="EOS: $AUDIT_END_OF_SUPPORT_DATE"
+
+    printf '  %-*s' "$AUDIT_VERSION_WIDTH" "$version"
+    if (( AUDIT_RELEASE_TYPE_WIDTH > 0 )); then
+        printf '  %-*s' "$AUDIT_RELEASE_TYPE_WIDTH" "$AUDIT_RELEASE_TYPE"
     fi
-    if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
-        printf '  %s' "$AUDIT_SERVICING_STATUS"
-    fi
-    if [[ -n "$AUDIT_STATUS_TOKEN" ]]; then
-        color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
-        if [[ -n "$color" ]]; then
-            printf '  %b%s%b' "$color" "$AUDIT_STATUS_TOKEN" "$RESET"
-        else
-            printf '  %s' "$AUDIT_STATUS_TOKEN"
+
+    if (( AUDIT_STATUS_WIDTH > 0 )); then
+        printf '  '
+        if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
+            printf '%s' "$AUDIT_SERVICING_STATUS"
+            [[ -n "$AUDIT_STATUS_TOKEN" ]] && printf '  '
+        fi
+        if [[ -n "$AUDIT_STATUS_TOKEN" ]]; then
+            color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
+            if [[ -n "$color" ]]; then
+                printf '%b%s%b' "$color" "$AUDIT_STATUS_TOKEN" "$RESET"
+            else
+                printf '%s' "$AUDIT_STATUS_TOKEN"
+            fi
+        fi
+
+        status_padding=$((AUDIT_STATUS_WIDTH - ${#status_text}))
+        if (( status_padding > 0 )); then
+            printf '%*s' "$status_padding" ''
         fi
     fi
-    if [[ -n "$AUDIT_RELEASE_DATE" ]]; then
-        printf '  Release date: %s' "$AUDIT_RELEASE_DATE"
+
+    if (( AUDIT_RELEASE_WIDTH > 0 )); then
+        printf '  %-*s' "$AUDIT_RELEASE_WIDTH" "$release_text"
     fi
-    if [[ -n "$AUDIT_GO_LIVE_DATE" ]]; then
-        printf '  Go Live: %s' "$AUDIT_GO_LIVE_DATE"
+    if (( AUDIT_GO_LIVE_WIDTH > 0 )); then
+        printf '  %-*s' "$AUDIT_GO_LIVE_WIDTH" "$go_live_text"
     fi
-    if [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]]; then
-        printf '  End of support: %s' "$AUDIT_END_OF_SUPPORT_DATE"
+    if (( AUDIT_END_OF_SUPPORT_WIDTH > 0 )); then
+        printf '  %s' "$eos_text"
     fi
 }
 
@@ -792,8 +861,6 @@ audit_installed_sdks() {
     local i=0
     local audit_isolated_versions=()
     local audit_system_versions=()
-    local audit_isolated_rows=()
-    local audit_system_rows=()
 
     isolated_output="$(get_isolated_sdk_versions)"
     system_output="$(get_system_sdk_inventory)"
@@ -831,14 +898,20 @@ audit_installed_sdks() {
     AUDIT_METADATA_VALUES=()
     AUDIT_RELEASE_SCHEDULE_LOADED="false"
     AUDIT_RELEASE_SCHEDULE=""
+    AUDIT_VERSION_WIDTH=0
+    AUDIT_RELEASE_TYPE_WIDTH=0
+    AUDIT_STATUS_WIDTH=0
+    AUDIT_RELEASE_WIDTH=0
+    AUDIT_GO_LIVE_WIDTH=0
+    AUDIT_END_OF_SUPPORT_WIDTH=0
 
     for version in "${audit_isolated_versions[@]+"${audit_isolated_versions[@]}"}"; do
         resolve_audit_classification "$version" "$channel_data"
-        audit_isolated_rows+=("$(format_audit_row "$version")")
+        update_audit_layout_widths "$version"
     done
     for version in "${audit_system_versions[@]+"${audit_system_versions[@]}"}"; do
         resolve_audit_classification "$version" "$channel_data"
-        audit_system_rows+=("$(format_audit_row "$version")")
+        update_audit_layout_widths "$version"
     done
 
     tool_heading ".NET SDK audit"
@@ -847,8 +920,11 @@ audit_installed_sdks() {
     if (( ${#audit_isolated_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<${#audit_isolated_rows[@]}; i++)); do
-            printf '%s\n' "${audit_isolated_rows[$i]}"
+        for ((i=0; i<${#audit_isolated_versions[@]}; i++)); do
+            version="${audit_isolated_versions[$i]}"
+            resolve_audit_classification "$version" "$channel_data"
+            format_audit_row "$version"
+            printf '\n'
         done
     fi
 
@@ -857,8 +933,11 @@ audit_installed_sdks() {
     if (( ${#audit_system_versions[@]} == 0 )); then
         echo "  None"
     else
-        for ((i=0; i<${#audit_system_rows[@]}; i++)); do
-            printf '%s\n' "${audit_system_rows[$i]}"
+        for ((i=0; i<${#audit_system_versions[@]}; i++)); do
+            version="${audit_system_versions[$i]}"
+            resolve_audit_classification "$version" "$channel_data"
+            format_audit_row "$version"
+            printf '\n'
         done
     fi
 }
