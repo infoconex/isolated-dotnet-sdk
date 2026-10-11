@@ -556,7 +556,8 @@ AUDIT_GO_LIVE_DATE=""
 AUDIT_END_OF_SUPPORT_DATE=""
 AUDIT_VERSION_WIDTH=0
 AUDIT_RELEASE_TYPE_WIDTH=0
-AUDIT_STATUS_WIDTH=0
+AUDIT_SERVICING_WIDTH=0
+AUDIT_LIFECYCLE_WIDTH=0
 AUDIT_RELEASE_WIDTH=0
 AUDIT_GO_LIVE_WIDTH=0
 AUDIT_END_OF_SUPPORT_WIDTH=0
@@ -758,24 +759,12 @@ audit_status_color() {
     esac
 }
 
-audit_status_text() {
-    if [[ -n "$AUDIT_SERVICING_STATUS" && -n "$AUDIT_STATUS_TOKEN" ]]; then
-        printf '%s  %s' "$AUDIT_SERVICING_STATUS" "$AUDIT_STATUS_TOKEN"
-    elif [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
-        printf '%s' "$AUDIT_SERVICING_STATUS"
-    else
-        printf '%s' "$AUDIT_STATUS_TOKEN"
-    fi
-}
-
 update_audit_layout_widths() {
     local version="$1"
-    local status_text=""
     local release_text=""
     local go_live_text=""
     local eos_text=""
 
-    status_text="$(audit_status_text)"
     [[ -n "$AUDIT_RELEASE_DATE" ]] && release_text="Release: $AUDIT_RELEASE_DATE"
     [[ -n "$AUDIT_GO_LIVE_DATE" ]] && go_live_text="Go Live: $AUDIT_GO_LIVE_DATE"
     [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && eos_text="EOS: $AUDIT_END_OF_SUPPORT_DATE"
@@ -786,8 +775,11 @@ update_audit_layout_widths() {
     if (( ${#AUDIT_RELEASE_TYPE} > AUDIT_RELEASE_TYPE_WIDTH )); then
         AUDIT_RELEASE_TYPE_WIDTH=${#AUDIT_RELEASE_TYPE}
     fi
-    if (( ${#status_text} > AUDIT_STATUS_WIDTH )); then
-        AUDIT_STATUS_WIDTH=${#status_text}
+    if (( ${#AUDIT_SERVICING_STATUS} > AUDIT_SERVICING_WIDTH )); then
+        AUDIT_SERVICING_WIDTH=${#AUDIT_SERVICING_STATUS}
+    fi
+    if (( ${#AUDIT_STATUS_TOKEN} > AUDIT_LIFECYCLE_WIDTH )); then
+        AUDIT_LIFECYCLE_WIDTH=${#AUDIT_STATUS_TOKEN}
     fi
     if (( ${#release_text} > AUDIT_RELEASE_WIDTH )); then
         AUDIT_RELEASE_WIDTH=${#release_text}
@@ -803,13 +795,11 @@ update_audit_layout_widths() {
 format_audit_row() {
     local version="$1"
     local color=""
-    local status_text=""
     local release_text=""
     local go_live_text=""
     local eos_text=""
-    local status_padding=0
+    local lifecycle_padding=0
 
-    status_text="$(audit_status_text)"
     [[ -n "$AUDIT_RELEASE_DATE" ]] && release_text="Release: $AUDIT_RELEASE_DATE"
     [[ -n "$AUDIT_GO_LIVE_DATE" ]] && go_live_text="Go Live: $AUDIT_GO_LIVE_DATE"
     [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && eos_text="EOS: $AUDIT_END_OF_SUPPORT_DATE"
@@ -818,13 +808,11 @@ format_audit_row() {
     if (( AUDIT_RELEASE_TYPE_WIDTH > 0 )); then
         printf '  %-*s' "$AUDIT_RELEASE_TYPE_WIDTH" "$AUDIT_RELEASE_TYPE"
     fi
-
-    if (( AUDIT_STATUS_WIDTH > 0 )); then
+    if (( AUDIT_SERVICING_WIDTH > 0 )); then
+        printf '  %-*s' "$AUDIT_SERVICING_WIDTH" "$AUDIT_SERVICING_STATUS"
+    fi
+    if (( AUDIT_LIFECYCLE_WIDTH > 0 )); then
         printf '  '
-        if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
-            printf '%s' "$AUDIT_SERVICING_STATUS"
-            [[ -n "$AUDIT_STATUS_TOKEN" ]] && printf '  '
-        fi
         if [[ -n "$AUDIT_STATUS_TOKEN" ]]; then
             color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
             if [[ -n "$color" ]]; then
@@ -834,12 +822,11 @@ format_audit_row() {
             fi
         fi
 
-        status_padding=$((AUDIT_STATUS_WIDTH - ${#status_text}))
-        if (( status_padding > 0 )); then
-            printf '%*s' "$status_padding" ''
+        lifecycle_padding=$((AUDIT_LIFECYCLE_WIDTH - ${#AUDIT_STATUS_TOKEN}))
+        if (( lifecycle_padding > 0 )); then
+            printf '%*s' "$lifecycle_padding" ''
         fi
     fi
-
     if (( AUDIT_RELEASE_WIDTH > 0 )) && [[ -n "$release_text$go_live_text$eos_text" ]]; then
         printf '  %-*s' "$AUDIT_RELEASE_WIDTH" "$release_text"
     fi
@@ -900,7 +887,8 @@ audit_installed_sdks() {
     AUDIT_RELEASE_SCHEDULE=""
     AUDIT_VERSION_WIDTH=0
     AUDIT_RELEASE_TYPE_WIDTH=0
-    AUDIT_STATUS_WIDTH=0
+    AUDIT_SERVICING_WIDTH=0
+    AUDIT_LIFECYCLE_WIDTH=0
     AUDIT_RELEASE_WIDTH=0
     AUDIT_GO_LIVE_WIDTH=0
     AUDIT_END_OF_SUPPORT_WIDTH=0
