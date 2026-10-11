@@ -202,15 +202,31 @@ Describe 'PowerShell SDK Audit' {
         $lines = @($result.Text -split '\r?\n')
         $currentLine = $lines | Where-Object { $_ -match '^  10\.0\.401\s' } | Select-Object -First 1
         $maintenanceLine = $lines | Where-Object { $_ -match '^  8\.0\.425\s' } | Select-Object -First 1
+        $updateLine = $lines | Where-Object { $_ -match '^  8\.0\.303\s' } | Select-Object -First 1
+        $securityLine = $lines | Where-Object { $_ -match '^  9\.0\.306\s' } | Select-Object -First 1
         $previewLine = $lines | Where-Object { $_ -match '^  12\.0\.100-preview\.1\.111\s' } | Select-Object -First 1
+        $rcLine = $lines | Where-Object { $_ -match '^  11\.0\.100-rc\.1\.111\s' } | Select-Object -First 1
+        $eolLine = $lines | Where-Object { $_ -match '^  7\.0\.410\s' } | Select-Object -First 1
 
         ([regex]::Match($currentLine, '\bLTS\b').Index) | Should -Be ([regex]::Match($maintenanceLine, '\bLTS\b').Index)
         ([regex]::Match($currentLine, '\bLTS\b').Index) | Should -Be ([regex]::Match($previewLine, '\bSTS\b').Index)
+
+        $updateLine.IndexOf('Update available') | Should -Be $securityLine.IndexOf('Security update available')
+        $updateLine.IndexOf('Update available') | Should -Be $previewLine.IndexOf('Update available')
+
         $currentLine.IndexOf('Current') | Should -Be $maintenanceLine.IndexOf('Maintenance')
-        $currentLine.IndexOf('Current') | Should -Be $previewLine.IndexOf('Update available')
+        $currentLine.IndexOf('Current') | Should -Be $previewLine.IndexOf('Preview 1')
+        $currentLine.IndexOf('Current') | Should -Be $rcLine.IndexOf('RC1')
+        $currentLine.IndexOf('Current') | Should -Be $eolLine.IndexOf('EOL')
+        $updateLine.IndexOf('Update available') | Should -BeLessThan $updateLine.IndexOf('Maintenance')
+
         $currentLine.IndexOf('Release:') | Should -Be $maintenanceLine.IndexOf('Release:')
         $currentLine.IndexOf('Release:') | Should -Be $previewLine.IndexOf('Release:')
+        $currentLine.IndexOf('Release:') | Should -Be $rcLine.IndexOf('Release:')
+        $rcLine.IndexOf('Go Live:') | Should -BeGreaterThan $rcLine.IndexOf('Release:')
         $currentLine.IndexOf('EOS:') | Should -Be $maintenanceLine.IndexOf('EOS:')
+        $currentLine.IndexOf('EOS:') | Should -Be $eolLine.IndexOf('EOS:')
+        $currentLine.IndexOf('EOS:') | Should -BeGreaterThan $rcLine.IndexOf('Go Live:')
         $result.Text | Should -Not -Match 'Release date:'
         $result.Text | Should -Not -Match 'End of support:'
     }
