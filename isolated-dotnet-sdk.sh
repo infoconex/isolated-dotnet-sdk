@@ -840,13 +840,13 @@ format_audit_row() {
         fi
     fi
 
-    if (( AUDIT_RELEASE_WIDTH > 0 )); then
+    if (( AUDIT_RELEASE_WIDTH > 0 )) && [[ -n "$release_text$go_live_text$eos_text" ]]; then
         printf '  %-*s' "$AUDIT_RELEASE_WIDTH" "$release_text"
     fi
-    if (( AUDIT_GO_LIVE_WIDTH > 0 )); then
+    if (( AUDIT_GO_LIVE_WIDTH > 0 )) && [[ -n "$go_live_text$eos_text" ]]; then
         printf '  %-*s' "$AUDIT_GO_LIVE_WIDTH" "$go_live_text"
     fi
-    if (( AUDIT_END_OF_SUPPORT_WIDTH > 0 )); then
+    if (( AUDIT_END_OF_SUPPORT_WIDTH > 0 )) && [[ -n "$eos_text" ]]; then
         printf '  %s' "$eos_text"
     fi
 }
