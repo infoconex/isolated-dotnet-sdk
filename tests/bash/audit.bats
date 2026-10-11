@@ -343,27 +343,27 @@ EOF
   maintenance_line="$(printf '%s\n' "$output" | grep '^  8\.0\.425  ' | head -n 1)"
   preview_line="$(printf '%s\n' "$output" | grep '^  12\.0\.100-preview\.1\.111  ' | head -n 1)"
 
-  current_release_prefix="\${current_line%%LTS*}"
-  maintenance_release_prefix="\${maintenance_line%%LTS*}"
-  preview_release_prefix="\${preview_line%%STS*}"
-  [ "\${#current_release_prefix}" -eq "\${#maintenance_release_prefix}" ]
-  [ "\${#current_release_prefix}" -eq "\${#preview_release_prefix}" ]
+  current_release_prefix="${current_line%%LTS*}"
+  maintenance_release_prefix="${maintenance_line%%LTS*}"
+  preview_release_prefix="${preview_line%%STS*}"
+  [ "${#current_release_prefix}" -eq "${#maintenance_release_prefix}" ]
+  [ "${#current_release_prefix}" -eq "${#preview_release_prefix}" ]
 
-  current_status_prefix="\${current_line%%Current*}"
-  maintenance_status_prefix="\${maintenance_line%%Maintenance*}"
-  preview_status_prefix="\${preview_line%%Update\ available*}"
-  [ "\${#current_status_prefix}" -eq "\${#maintenance_status_prefix}" ]
-  [ "\${#current_status_prefix}" -eq "\${#preview_status_prefix}" ]
+  current_status_prefix="${current_line%%Current*}"
+  maintenance_status_prefix="${maintenance_line%%Maintenance*}"
+  preview_status_prefix="${preview_line%%Update\ available*}"
+  [ "${#current_status_prefix}" -eq "${#maintenance_status_prefix}" ]
+  [ "${#current_status_prefix}" -eq "${#preview_status_prefix}" ]
 
-  current_release_date_prefix="\${current_line%%Release:*}"
-  maintenance_release_date_prefix="\${maintenance_line%%Release:*}"
-  preview_release_date_prefix="\${preview_line%%Release:*}"
-  [ "\${#current_release_date_prefix}" -eq "\${#maintenance_release_date_prefix}" ]
-  [ "\${#current_release_date_prefix}" -eq "\${#preview_release_date_prefix}" ]
+  current_release_date_prefix="${current_line%%Release:*}"
+  maintenance_release_date_prefix="${maintenance_line%%Release:*}"
+  preview_release_date_prefix="${preview_line%%Release:*}"
+  [ "${#current_release_date_prefix}" -eq "${#maintenance_release_date_prefix}" ]
+  [ "${#current_release_date_prefix}" -eq "${#preview_release_date_prefix}" ]
 
-  current_eos_prefix="\${current_line%%EOS:*}"
-  maintenance_eos_prefix="\${maintenance_line%%EOS:*}"
-  [ "\${#current_eos_prefix}" -eq "\${#maintenance_eos_prefix}" ]
+  current_eos_prefix="${current_line%%EOS:*}"
+  maintenance_eos_prefix="${maintenance_line%%EOS:*}"
+  [ "${#current_eos_prefix}" -eq "${#maintenance_eos_prefix}" ]
   [[ "$output" != *"Release date:"* ]]
   [[ "$output" != *"End of support:"* ]]
 }
