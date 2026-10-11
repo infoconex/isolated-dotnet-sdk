@@ -31,23 +31,25 @@ The same exact version may appear in both groups. Audit keeps both entries rathe
 
 ## Row format
 
-For a recognized channel, Audit reports the installed SDK as:
+For a recognized channel, Audit uses this fixed semantic order:
 
 ```text
-<version>  <LTS|STS>  <status>  <date fields>
+<version>  <LTS|STS>  <servicing>  <lifecycle/status>  <Release>  <Go Live>  <EOS>
 ```
+
+Servicing and lifecycle/status are separate columns. When an optional fact is absent, its column remains empty when needed so later fields keep the same position and order.
 
 For example:
 
 ```text
 Isolated SDKs:
-  10.0.401                      LTS  Current      Release: 2026-09-08  EOS: 2028-11-14
-  11.0.100-preview.5.26302.115  STS  Preview 5    Release: 2026-06-09
+  10.0.401                 LTS                                        Current      Release: 2026-09-08                       EOS: 2028-11-14
+  11.0.100-rc.1.26425.128  STS                                        RC1          Release: 2026-09-08  Go Live: 2026-11-10
 
 System SDKs:
-  8.0.425                       LTS  Maintenance  Release: 2026-09-08  EOS: 2026-11-10
-  9.0.318                       STS  Maintenance  Release: 2026-09-08  EOS: 2026-11-10
-  10.0.401                      LTS  Current      Release: 2026-09-08  EOS: 2028-11-14
+  8.0.303                  LTS  Update available -> 8.0.425           Maintenance  Release: 2026-06-11                       EOS: 2026-11-10
+  8.0.425                  LTS                                        Maintenance  Release: 2026-09-08                       EOS: 2026-11-10
+  9.0.306                  STS  Security update available -> 9.0.318  Maintenance  Release: 2026-07-01                       EOS: 2026-11-10
 ```
 
 Audit calculates one shared set of display widths from the complete result, so equivalent columns align across both ownership groups. All date-bearing fields remain at the end of the row.
