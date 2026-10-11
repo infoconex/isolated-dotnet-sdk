@@ -40,13 +40,17 @@ For a recognized channel, Audit reports the installed SDK as:
 For example:
 
 ```text
-11.0.100-rc.1.26425.128  STS  RC1          Release date: 2026-09-08  Go Live: 2026-11-10
-10.0.401                 LTS  Current      Release date: 2026-09-08  End of support: 2028-11-14
-9.0.318                  STS  Maintenance  Release date: 2026-09-08  End of support: 2026-11-10
-7.0.410                  STS  EOL          Release date: 2024-05-28  End of support: 2024-05-14
+Isolated SDKs:
+  10.0.401                      LTS  Current      Release: 2026-09-08  EOS: 2028-11-14
+  11.0.100-preview.5.26302.115  STS  Preview 5    Release: 2026-06-09
+
+System SDKs:
+  8.0.425                       LTS  Maintenance  Release: 2026-09-08  EOS: 2026-11-10
+  9.0.318                       STS  Maintenance  Release: 2026-09-08  EOS: 2026-11-10
+  10.0.401                      LTS  Current      Release: 2026-09-08  EOS: 2028-11-14
 ```
 
-All date-bearing fields remain at the end of the row.
+Audit calculates one shared set of display widths from the complete result, so equivalent columns align across both ownership groups. All date-bearing fields remain at the end of the row.
 
 ## Statuses
 
@@ -66,9 +70,9 @@ In styled terminal output, only the `Current`, `Maintenance`, or `EOL` status to
 
 ## Dates
 
-- `Release date` is the release date of the exact installed SDK version's matching Microsoft release record.
+- `Release` is the release date of the exact installed SDK version's matching Microsoft release record.
 - `Go Live` is shown for a Go-Live channel only when Microsoft publishes an authoritative future GA date.
-- `End of support` is shown whenever the release index publishes `eol-date`, including channels that are already EOL.
+- `EOS` is shown whenever the release index publishes `eol-date`, including channels that are already EOL.
 
 Release date and end-of-support date are independent facts. Audit does not assume that an SDK's release date must precede the channel's end-of-support date.
 
