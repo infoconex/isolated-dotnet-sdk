@@ -158,10 +158,10 @@ try {
     if ($audit.Output -notmatch [regex]::Escape("$sdkVersion  $auditReleaseType")) {
         throw "Audit output did not report SDK $sdkVersion as $auditReleaseType."
     }
-    if ($audit.Output -notmatch [regex]::Escape("Release date: $auditReleaseDate")) {
+    if ($audit.Output -notmatch [regex]::Escape("Release: $auditReleaseDate")) {
         throw "Audit output did not report SDK $sdkVersion release date $auditReleaseDate."
     }
-    if ($audit.Output -notmatch [regex]::Escape("End of support: $auditEndOfSupport")) {
+    if ($audit.Output -notmatch [regex]::Escape("EOS: $auditEndOfSupport")) {
         throw "Audit output did not report SDK $sdkVersion end of support $auditEndOfSupport."
     }
     if ($audit.Output.Contains([char]27)) {
