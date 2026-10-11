@@ -1014,27 +1014,14 @@ function Format-AuditStatusToken {
     return "$Foreground$StatusToken$($PSStyle.Reset)"
 }
 
-function Get-AuditStatusText {
-    param($Classification)
-
-    $Parts = @()
-    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ServicingStatus)) {
-        $Parts += [string]$Classification.ServicingStatus
-    }
-    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.StatusToken)) {
-        $Parts += [string]$Classification.StatusToken
-    }
-
-    return ($Parts -join '  ')
-}
-
 function Get-SdkAuditDisplayLayout {
     param([object[]]$Classifications)
 
     $Layout = [ordered]@{
         Version      = 0
         ReleaseType  = 0
-        Status       = 0
+        Servicing    = 0
+        Lifecycle    = 0
         Release      = 0
         GoLive       = 0
         EndOfSupport = 0
@@ -1043,7 +1030,8 @@ function Get-SdkAuditDisplayLayout {
     foreach ($Classification in $Classifications) {
         $Version = [string]$Classification.Version
         $ReleaseType = [string]$Classification.ReleaseType
-        $Status = Get-AuditStatusText -Classification $Classification
+        $Servicing = [string]$Classification.ServicingStatus
+        $Lifecycle = [string]$Classification.StatusToken
         $Release = if ([string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
             ''
         }
@@ -1065,7 +1053,8 @@ function Get-SdkAuditDisplayLayout {
 
         $Layout.Version = [Math]::Max($Layout.Version, $Version.Length)
         $Layout.ReleaseType = [Math]::Max($Layout.ReleaseType, $ReleaseType.Length)
-        $Layout.Status = [Math]::Max($Layout.Status, $Status.Length)
+        $Layout.Servicing = [Math]::Max($Layout.Servicing, $Servicing.Length)
+        $Layout.Lifecycle = [Math]::Max($Layout.Lifecycle, $Lifecycle.Length)
         $Layout.Release = [Math]::Max($Layout.Release, $Release.Length)
         $Layout.GoLive = [Math]::Max($Layout.GoLive, $GoLive.Length)
         $Layout.EndOfSupport = [Math]::Max($Layout.EndOfSupport, $EndOfSupport.Length)
@@ -1082,16 +1071,13 @@ function Format-SdkAuditRow {
 
     $Version = [string]$Classification.Version
     $ReleaseType = [string]$Classification.ReleaseType
-    $Status = Get-AuditStatusText -Classification $Classification
-    $RenderedStatus = if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ServicingStatus) -and
-        -not [string]::IsNullOrWhiteSpace([string]$Classification.StatusToken)) {
-        "$($Classification.ServicingStatus)  $(Format-AuditStatusToken -StatusToken $Classification.StatusToken)"
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace([string]$Classification.StatusToken)) {
-        Format-AuditStatusToken -StatusToken $Classification.StatusToken
+    $Servicing = [string]$Classification.ServicingStatus
+    $Lifecycle = [string]$Classification.StatusToken
+    $RenderedLifecycle = if ([string]::IsNullOrWhiteSpace($Lifecycle)) {
+        ''
     }
     else {
-        [string]$Classification.ServicingStatus
+        Format-AuditStatusToken -StatusToken $Lifecycle
     }
 
     $Release = if ([string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
@@ -1117,9 +1103,12 @@ function Format-SdkAuditRow {
     if ($Layout.ReleaseType -gt 0) {
         $Line += '  ' + $ReleaseType.PadRight($Layout.ReleaseType)
     }
-    if ($Layout.Status -gt 0) {
-        $Line += '  ' + $RenderedStatus
-        $Line += ' ' * [Math]::Max(0, ($Layout.Status - $Status.Length))
+    if ($Layout.Servicing -gt 0) {
+        $Line += '  ' + $Servicing.PadRight($Layout.Servicing)
+    }
+    if ($Layout.Lifecycle -gt 0) {
+        $Line += '  ' + $RenderedLifecycle
+        $Line += ' ' * [Math]::Max(0, ($Layout.Lifecycle - $Lifecycle.Length))
     }
     if ($Layout.Release -gt 0) {
         $Line += '  ' + $Release.PadRight($Layout.Release)
