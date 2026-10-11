@@ -1014,30 +1014,124 @@ function Format-AuditStatusToken {
     return "$Foreground$StatusToken$($PSStyle.Reset)"
 }
 
-function Format-SdkAuditRow {
+function Get-AuditStatusText {
     param($Classification)
 
-    $Line = "  $($Classification.Version)"
-    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ReleaseType)) {
-        $Line += "  $($Classification.ReleaseType)"
-    }
+    $Parts = @()
     if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ServicingStatus)) {
-        $Line += "  $($Classification.ServicingStatus)"
+        $Parts += [string]$Classification.ServicingStatus
     }
     if (-not [string]::IsNullOrWhiteSpace([string]$Classification.StatusToken)) {
-        $Line += "  $(Format-AuditStatusToken -StatusToken $Classification.StatusToken)"
-    }
-    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
-        $Line += "  Release date: $($Classification.ReleaseDate)"
-    }
-    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.GoLiveDate)) {
-        $Line += "  Go Live: $($Classification.GoLiveDate)"
-    }
-    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.EndOfSupportDate)) {
-        $Line += "  End of support: $($Classification.EndOfSupportDate)"
+        $Parts += [string]$Classification.StatusToken
     }
 
-    return $Line
+    return ($Parts -join '  ')
+}
+
+function Get-SdkAuditDisplayLayout {
+    param([object[]]$Classifications)
+
+    $Layout = [ordered]@{
+        Version      = 0
+        ReleaseType  = 0
+        Status       = 0
+        Release      = 0
+        GoLive       = 0
+        EndOfSupport = 0
+    }
+
+    foreach ($Classification in $Classifications) {
+        $Version = [string]$Classification.Version
+        $ReleaseType = [string]$Classification.ReleaseType
+        $Status = Get-AuditStatusText -Classification $Classification
+        $Release = if ([string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
+            ''
+        }
+        else {
+            "Release: $($Classification.ReleaseDate)"
+        }
+        $GoLive = if ([string]::IsNullOrWhiteSpace([string]$Classification.GoLiveDate)) {
+            ''
+        }
+        else {
+            "Go Live: $($Classification.GoLiveDate)"
+        }
+        $EndOfSupport = if ([string]::IsNullOrWhiteSpace([string]$Classification.EndOfSupportDate)) {
+            ''
+        }
+        else {
+            "EOS: $($Classification.EndOfSupportDate)"
+        }
+
+        $Layout.Version = [Math]::Max($Layout.Version, $Version.Length)
+        $Layout.ReleaseType = [Math]::Max($Layout.ReleaseType, $ReleaseType.Length)
+        $Layout.Status = [Math]::Max($Layout.Status, $Status.Length)
+        $Layout.Release = [Math]::Max($Layout.Release, $Release.Length)
+        $Layout.GoLive = [Math]::Max($Layout.GoLive, $GoLive.Length)
+        $Layout.EndOfSupport = [Math]::Max($Layout.EndOfSupport, $EndOfSupport.Length)
+    }
+
+    return [pscustomobject]$Layout
+}
+
+function Format-SdkAuditRow {
+    param(
+        $Classification,
+        $Layout
+    )
+
+    $Version = [string]$Classification.Version
+    $ReleaseType = [string]$Classification.ReleaseType
+    $Status = Get-AuditStatusText -Classification $Classification
+    $RenderedStatus = if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ServicingStatus) -and
+        -not [string]::IsNullOrWhiteSpace([string]$Classification.StatusToken)) {
+        "$($Classification.ServicingStatus)  $(Format-AuditStatusToken -StatusToken $Classification.StatusToken)"
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace([string]$Classification.StatusToken)) {
+        Format-AuditStatusToken -StatusToken $Classification.StatusToken
+    }
+    else {
+        [string]$Classification.ServicingStatus
+    }
+
+    $Release = if ([string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
+        ''
+    }
+    else {
+        "Release: $($Classification.ReleaseDate)"
+    }
+    $GoLive = if ([string]::IsNullOrWhiteSpace([string]$Classification.GoLiveDate)) {
+        ''
+    }
+    else {
+        "Go Live: $($Classification.GoLiveDate)"
+    }
+    $EndOfSupport = if ([string]::IsNullOrWhiteSpace([string]$Classification.EndOfSupportDate)) {
+        ''
+    }
+    else {
+        "EOS: $($Classification.EndOfSupportDate)"
+    }
+
+    $Line = '  ' + $Version.PadRight($Layout.Version)
+    if ($Layout.ReleaseType -gt 0) {
+        $Line += '  ' + $ReleaseType.PadRight($Layout.ReleaseType)
+    }
+    if ($Layout.Status -gt 0) {
+        $Line += '  ' + $RenderedStatus
+        $Line += ' ' * [Math]::Max(0, ($Layout.Status - $Status.Length))
+    }
+    if ($Layout.Release -gt 0) {
+        $Line += '  ' + $Release.PadRight($Layout.Release)
+    }
+    if ($Layout.GoLive -gt 0) {
+        $Line += '  ' + $GoLive.PadRight($Layout.GoLive)
+    }
+    if ($Layout.EndOfSupport -gt 0) {
+        $Line += '  ' + $EndOfSupport.PadRight($Layout.EndOfSupport)
+    }
+
+    return $Line.TrimEnd()
 }
 
 function Invoke-SdkAudit {
@@ -1105,6 +1199,8 @@ function Invoke-SdkAudit {
         $ClassificationByVersion[$Version] = Get-SdkAuditClassification -Version $Version -ChannelEntry $Entry -ChannelMetadata $ChannelMetadata -GoLiveCache $GoLiveCache
     }
 
+    $Layout = Get-SdkAuditDisplayLayout -Classifications @($ClassificationByVersion.Values)
+
     Write-ToolHeading '.NET SDK audit'
     Write-ToolDisplay
     Write-ToolHeading 'Isolated SDKs:'
@@ -1113,7 +1209,7 @@ function Invoke-SdkAudit {
     }
     else {
         foreach ($Version in $IsolatedVersions) {
-            Write-ToolDisplay (Format-SdkAuditRow -Classification $ClassificationByVersion[$Version])
+            Write-ToolDisplay (Format-SdkAuditRow -Classification $ClassificationByVersion[$Version] -Layout $Layout)
         }
     }
 
@@ -1124,7 +1220,7 @@ function Invoke-SdkAudit {
     }
     else {
         foreach ($Sdk in $SystemSdks) {
-            Write-ToolDisplay (Format-SdkAuditRow -Classification $ClassificationByVersion[$Sdk.Version])
+            Write-ToolDisplay (Format-SdkAuditRow -Classification $ClassificationByVersion[$Sdk.Version] -Layout $Layout)
         }
     }
 }
