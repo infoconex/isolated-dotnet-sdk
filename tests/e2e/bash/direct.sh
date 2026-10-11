@@ -83,11 +83,11 @@ if ! grep -Fq "$sdk_version  $audit_release_type" <<<"$audit_output"; then
   printf 'Audit output did not report SDK %s as %s.\n' "$sdk_version" "$audit_release_type" >&2
   exit 1
 fi
-if ! grep -Fq "Release date: $audit_release_date" <<<"$audit_output"; then
+if ! grep -Fq "Release: $audit_release_date" <<<"$audit_output"; then
   printf 'Audit output did not report SDK %s release date %s.\n' "$sdk_version" "$audit_release_date" >&2
   exit 1
 fi
-if ! grep -Fq "End of support: $audit_end_of_support" <<<"$audit_output"; then
+if ! grep -Fq "EOS: $audit_end_of_support" <<<"$audit_output"; then
   printf 'Audit output did not report SDK %s end of support %s.\n' "$sdk_version" "$audit_end_of_support" >&2
   exit 1
 fi
