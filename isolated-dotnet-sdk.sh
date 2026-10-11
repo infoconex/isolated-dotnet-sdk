@@ -671,7 +671,7 @@ resolve_audit_classification() {
     AUDIT_END_OF_SUPPORT_DATE=""
 
     if ! channel="$(sdk_channel_from_version "$version")"; then
-        AUDIT_SERVICING_STATUS="Unknown channel"
+        AUDIT_STATUS_TOKEN="Unknown channel"
         return
     fi
 
@@ -683,7 +683,7 @@ resolve_audit_classification() {
     done <<< "$channel_data"
 
     if [[ "$found" != "true" ]]; then
-        AUDIT_SERVICING_STATUS="Unknown channel"
+        AUDIT_STATUS_TOKEN="Unknown channel"
         return
     fi
     if [[ -z "$latest_sdk" || -z "$phase" || -z "$releases_url" || ( "$release_type" != "lts" && "$release_type" != "sts" ) ]]; then
