@@ -2171,6 +2171,7 @@ Push-Location $SdkRoot
 try {
     try {
         if ($script:InteractiveSession) {
+            Clear-InteractiveScreen
             while ($true) {
                 $script:Action = $null
                 $script:SdkVersion = $null

@@ -10,6 +10,7 @@ Both product implementations have behavioral coverage for:
 - case-insensitive Main commands `I`, `R`, `L`, `V`, and `E`, with the old numeric Main aliases rejected;
 - terminal-backed normal operation/no-change outcomes remaining visible until contextual Enter acknowledgement before returning to the immediate parent screen;
 - capability-aware screen clearing at persistent navigation and picker-view boundaries, including Back and only *after* completed-result acknowledgement;
+- first-launch persistent Main clearing once after successful bootstrap, with original bootstrap errors preserved and no extra clear on invalid Main retries or Exit;
 - successful Install, Verify, and Remove picker selections clearing once before operation details or confirmation, retaining output until acknowledgement and clearing again before the parent picker;
 - unsupported terminals retaining scrolling, and captured/redirected/one-shot execution staying free of clearing controls;
 - invalid-selection feedback and active operation progress not being erased by a generic menu redraw;

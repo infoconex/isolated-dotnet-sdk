@@ -2175,6 +2175,7 @@ if [[ -z "$ACTION" && -z "$VERSION" ]]; then
 fi
 
 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+    clear_interactive_screen
     while true; do
         ACTION=""
         VERSION=""
