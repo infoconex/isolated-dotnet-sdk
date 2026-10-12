@@ -66,7 +66,9 @@ Describe 'PowerShell SDK Audit' {
 
             @'
 {"releases":[
-  {"release-date":"2026-09-01","security":false,"sdk":{"version":"10.0.401"}}
+  {"release-date":"2025-11-11","security":false,"sdk":{"version":"10.0.100"}},
+  {"release-date":"2026-08-11","security":false,"sdk":{"version":"10.0.303"}},
+  {"release-date":"2026-09-01","security":true,"sdk":{"version":"10.0.401"}}
 ]}
 '@ | Set-Content -LiteralPath (Join-Path $script:MetadataRoot '10.0.json')
             @'
@@ -173,8 +175,8 @@ Describe 'PowerShell SDK Audit' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'reports servicing and lifecycle states for isolated and system SDKs' {
-        foreach ($version in @('12.0.100-preview.1.111', '11.0.100-rc.1.111', '10.0.401', '9.0.306', '8.0.303', '7.0.410', '6.0.428')) {
+    It 'reports compact lifecycle-first Audit rows for isolated and system SDKs' {
+        foreach ($version in @('12.0.100-preview.1.111', '11.0.100-rc.1.111', '10.0.100', '10.0.303', '10.0.401', '9.0.306', '8.0.303', '7.0.410', '6.0.428')) {
             Add-IsolatedSdk -Version $version
         }
         Write-SystemDotNetStub -Directory $script:SystemBin -InventoryLines @(
@@ -187,12 +189,14 @@ Describe 'PowerShell SDK Audit' {
         $result.ExitCode | Should -Be 0
         $result.Text | Should -Match '\.NET SDK audit'
         $result.Text | Should -Match 'Isolated SDKs:'
+        $result.Text | Should -Match '10\.0\.100 +LTS +Active +Security update available -> 10\.0\.401 +Release: 2025-11-11 +EOS: 2028-11-14'
+        $result.Text | Should -Match '10\.0\.303 +LTS +Active +Security update available -> 10\.0\.401 +Release: 2026-08-11 +EOS: 2028-11-14'
         $result.Text | Should -Match '10\.0\.401 +LTS +Current +Release: 2026-09-01 +EOS: 2028-11-14'
-        $result.Text | Should -Match '9\.0\.306 +STS +Security update available -> 9\.0\.318 +Maintenance +Release: 2026-07-01 +EOS: 2026-11-10'
-        $result.Text | Should -Match '8\.0\.303 +LTS +Update available -> 8\.0\.425 +Maintenance +Release: 2026-06-01 +EOS: 2026-11-10'
+        $result.Text | Should -Match '9\.0\.306 +STS +Maintenance +Security update available -> 9\.0\.318 +Release: 2026-07-01 +EOS: 2026-11-10'
+        $result.Text | Should -Match '8\.0\.303 +LTS +Maintenance +Update available -> 8\.0\.425 +Release: 2026-06-01 +EOS: 2026-11-10'
         $result.Text | Should -Match '7\.0\.410 +STS +EOL +Release: 2024-05-28 +EOS: 2024-05-14'
-        $result.Text | Should -Match '12\.0\.100-preview\.1\.111 +STS +Update available -> 12\.0\.100-preview\.2\.999 +Preview 1 +Release: 2026-09-01'
-        $result.Text | Should -Match '11\.0\.100-rc\.1\.111 +STS +Update available -> 11\.0\.100-rc\.2\.999 +RC1 +Release: 2026-09-01 +Go Live: 2026-11-10'
+        $result.Text | Should -Match '12\.0\.100-preview\.1\.111 +STS +Preview 1 +Update available -> 12\.0\.100-preview\.2\.999 +Release: 2026-09-01'
+        $result.Text | Should -Match '11\.0\.100-rc\.1\.111 +STS +RC1 +Update available -> 11\.0\.100-rc\.2\.999 +Release: 2026-09-01 +Go Live: 2026-11-10'
         $result.Text | Should -Match '6\.0\.428 +LTS +Unsupported +Release: 2024-11-01'
         $result.Text | Should -Match 'System SDKs:'
         $result.Text | Should -Match '8\.0\.425 +LTS +Maintenance +Release: 2026-09-01 +EOS: 2026-11-10'
@@ -200,6 +204,7 @@ Describe 'PowerShell SDK Audit' {
         $result.Text.Contains([char]27) | Should -BeFalse
 
         $lines = @($result.Text -split '\r?\n')
+        $activeLine = $lines | Where-Object { $_ -match '^  10\.0\.100\s' } | Select-Object -First 1
         $currentLine = $lines | Where-Object { $_ -match '^  10\.0\.401\s' } | Select-Object -First 1
         $maintenanceLine = $lines | Where-Object { $_ -match '^  8\.0\.425\s' } | Select-Object -First 1
         $updateLine = $lines | Where-Object { $_ -match '^  8\.0\.303\s' } | Select-Object -First 1
@@ -211,22 +216,22 @@ Describe 'PowerShell SDK Audit' {
         ([regex]::Match($currentLine, '\bLTS\b').Index) | Should -Be ([regex]::Match($maintenanceLine, '\bLTS\b').Index)
         ([regex]::Match($currentLine, '\bLTS\b').Index) | Should -Be ([regex]::Match($previewLine, '\bSTS\b').Index)
 
-        $updateLine.IndexOf('Update available') | Should -Be $securityLine.IndexOf('Security update available')
-        $updateLine.IndexOf('Update available') | Should -Be $previewLine.IndexOf('Update available')
-
+        $currentLine.IndexOf('Current') | Should -Be $activeLine.IndexOf('Active')
         $currentLine.IndexOf('Current') | Should -Be $maintenanceLine.IndexOf('Maintenance')
         $currentLine.IndexOf('Current') | Should -Be $previewLine.IndexOf('Preview 1')
         $currentLine.IndexOf('Current') | Should -Be $rcLine.IndexOf('RC1')
         $currentLine.IndexOf('Current') | Should -Be $eolLine.IndexOf('EOL')
-        $updateLine.IndexOf('Update available') | Should -BeLessThan $updateLine.IndexOf('Maintenance')
 
-        $currentLine.IndexOf('Release:') | Should -Be $maintenanceLine.IndexOf('Release:')
-        $currentLine.IndexOf('Release:') | Should -Be $previewLine.IndexOf('Release:')
-        $currentLine.IndexOf('Release:') | Should -Be $rcLine.IndexOf('Release:')
-        $rcLine.IndexOf('Go Live:') | Should -BeGreaterThan $rcLine.IndexOf('Release:')
-        $currentLine.IndexOf('EOS:') | Should -Be $maintenanceLine.IndexOf('EOS:')
-        $currentLine.IndexOf('EOS:') | Should -Be $eolLine.IndexOf('EOS:')
-        $currentLine.IndexOf('EOS:') | Should -BeGreaterThan $rcLine.IndexOf('Go Live:')
+        $activeLine.IndexOf('Active') | Should -BeLessThan $activeLine.IndexOf('Security update available')
+        $updateLine.IndexOf('Maintenance') | Should -BeLessThan $updateLine.IndexOf('Update available')
+        $securityLine.IndexOf('Maintenance') | Should -BeLessThan $securityLine.IndexOf('Security update available')
+        $previewLine.IndexOf('Preview 1') | Should -BeLessThan $previewLine.IndexOf('Update available')
+        $rcLine.IndexOf('RC1') | Should -BeLessThan $rcLine.IndexOf('Update available')
+
+        $activeLine | Should -Match 'Security update available -> 10\.0\.401  Release: 2025-11-11  EOS: 2028-11-14$'
+        $currentLine | Should -Match 'Current +Release: 2026-09-01  EOS: 2028-11-14$'
+        $rcLine | Should -Match 'Release: 2026-09-01  Go Live: 2026-11-10$'
+        $rcLine | Should -Not -Match 'Go Live: 2026-11-10\s{3,}$'
         $result.Text | Should -Not -Match 'Release date:'
         $result.Text | Should -Not -Match 'End of support:'
     }
