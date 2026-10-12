@@ -95,6 +95,10 @@ EOF
 }
 
 @test "terminal interactive List waits for Enter before returning to Main" {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    skip "BSD script does not deterministically drive bidirectional PTY input in CI"
+  fi
+
   bootstrap_tool
   wrapper="$test_root/interactive-tty.sh"
   cat > "$wrapper" <<EOF
@@ -104,15 +108,9 @@ exec "$tool_path"
 EOF
   chmod +x "$wrapper"
 
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    run bash -c 'printf "l\n\ne\n" | script -q /dev/null "$1"' _ "$wrapper"
-  else
-    run bash -c 'printf "l\n\ne\n" | script -q -c "$1" /dev/null' _ "$wrapper"
-  fi
+  run bash -c 'printf "l\n\ne\n" | script -q -c "$1" /dev/null' _ "$wrapper"
 
-  if [[ "$(uname -s)" != "Darwin" ]]; then
-    [ "$status" -eq 0 ]
-  fi
+  [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   [[ "$output" == *"Press Enter to return to Main..."* ]]
