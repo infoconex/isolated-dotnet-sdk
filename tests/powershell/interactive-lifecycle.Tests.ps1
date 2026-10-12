@@ -93,25 +93,76 @@ Describe 'PowerShell interactive lifecycle' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'holds interactive List until acknowledgement before returning to Main' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', '', 'e')
+    It 'waits for Enter only when persistent input and output are terminal-capable' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $script:ToolScript,
+            [ref]$tokens,
+            [ref]$parseErrors)
+        $parseErrors | Should -BeNullOrEmpty
+
+        $functionAst = $ast.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Wait-ForInteractiveResultAcknowledgement'
+            }, $true)
+        $functionAst | Should -Not -BeNullOrEmpty
+        Invoke-Expression $functionAst.Extent.Text
+
+        $script:InteractiveSession = $true
+        $script:AcknowledgementOutput = [System.Collections.Generic.List[string]]::new()
+        $script:AcknowledgementReadCount = 0
+
+        function Write-ToolDisplay {
+            param(
+                [AllowEmptyString()]
+                [string]$Message = ''
+            )
+            $script:AcknowledgementOutput.Add($Message)
+        }
+
+        function Read-ToolInput {
+            param(
+                [AllowEmptyString()]
+                [string]$Prompt = ''
+            )
+            $script:AcknowledgementReadCount++
+            return ''
+        }
+
+        Wait-ForInteractiveResultAcknowledgement -InputRedirected:$false -OutputRedirected:$false
+
+        $script:AcknowledgementOutput | Should -Contain 'Press Enter to return to Main...'
+        $script:AcknowledgementReadCount | Should -Be 1
+
+        $script:AcknowledgementOutput.Clear()
+        $script:AcknowledgementReadCount = 0
+        Wait-ForInteractiveResultAcknowledgement -InputRedirected:$true -OutputRedirected:$false
+        Wait-ForInteractiveResultAcknowledgement -InputRedirected:$false -OutputRedirected:$true
+
+        $script:AcknowledgementOutput.Count | Should -Be 0
+        $script:AcknowledgementReadCount | Should -Be 0
+    }
+
+    It 'captured persistent List returns to Main without acknowledgement' {
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
-        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'L\. List installed SDKs'
         $result.Output | Should -Match 'Isolated SDKs:'
         $result.Output | Should -Match 'System SDKs:'
-        $result.Output | Should -Match 'Press Enter to return to Main\.\.\.'
         $result.Output | Should -Match 'Exiting\.'
     }
 
-    It 'holds normal interactive Remove no-change until acknowledgement' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', '', 'e')
+    It 'captured persistent Remove no-change returns without acknowledgement' {
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
-        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'No isolated SDKs are installed'
         $result.Output | Should -Match 'Removal cancelled\.'
     }
@@ -170,7 +221,7 @@ function Invoke-RestMethod { return $releaseIndex }
     }
 
 
-    It 'holds an already-installed interactive Install result until acknowledgement' {
+    It 'captured already-installed interactive Install returns without acknowledgement' {
         $version = '99.0.100'
         Install-FakeInteractiveHost -Version $version
 
@@ -189,14 +240,13 @@ function Invoke-RestMethod { return $releaseIndex }
 '@
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
-            -InputLines @('i', 'm', $version, '', 'e') `
+            -InputLines @('i', 'm', $version, 'e') `
             -Command $command
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
-        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'Isolated SDK:.*Already installed'
-        $result.Output | Should -Match 'Press Enter to return to Main\.\.\.'
     }
     It 'returns from Install SDK selection to channel selection with Back' {
         $command = @'
