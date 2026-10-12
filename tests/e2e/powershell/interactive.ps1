@@ -120,17 +120,12 @@ try {
         $channelSelection,
         'M',
         $sdkVersion,
-        '',
         'l',
-        '',
         'a',
-        '',
         'v',
         '1',
-        '',
         'r',
         '1',
-        '',
         'e'
     )
 
@@ -157,13 +152,12 @@ try {
     $acknowledgementCount = ([regex]::Matches(
         $interactive.Output,
         [regex]::Escape('Press Enter to return to Main...'))).Count
-    if ($acknowledgementCount -ne 5) {
-        throw "Expected 5 completed-result acknowledgement prompts but observed $acknowledgementCount."
+    if ($acknowledgementCount -ne 0) {
+        throw "Captured E2E execution must not wait for result acknowledgement; observed $acknowledgementCount prompts."
     }
 
     $requiredFragments = @(
         'Back to .NET channels',
-        'Press Enter to return to Main...',
         'Isolated SDK installation completed successfully.',
         'Isolated SDKs:',
         'System SDKs:',

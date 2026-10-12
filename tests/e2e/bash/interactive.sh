@@ -57,10 +57,10 @@ fi
 test -f "$saved_tool"
 
 # Main -> Install -> channel -> Back -> same discovered channel -> manual exact
-# version -> acknowledge -> Main -> List -> acknowledge -> Main -> Audit ->
-# acknowledge -> Main -> Verify the only job-local SDK -> acknowledge -> Main ->
-# Remove the same SDK -> acknowledge -> Main -> Exit.
-interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\n\nl\n\na\n\nv\n1\n\nr\n1\n\ne\n' \
+# version -> Main -> List -> Main -> Audit -> Main -> Verify the only job-local
+# SDK -> Main -> Remove the same SDK -> Main -> Exit. This E2E flow is captured,
+# so completed-result acknowledgement must be skipped.
+interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nl\na\nv\n1\nr\n1\ne\n' \
   "$channel_selection" "$channel_selection" "$sdk_version")"
 
 echo "E2E interactive: running persistent session for .NET SDK $sdk_version"
@@ -91,15 +91,14 @@ fi
 
 acknowledgement_count="$(printf '%s\n' "$interactive_output" |
   grep -cFx 'Press Enter to return to Main...' || true)"
-if [[ "$acknowledgement_count" -ne 5 ]]; then
-  printf 'Expected 5 completed-result acknowledgement prompts but observed %s.\n' \
+if [[ "$acknowledgement_count" -ne 0 ]]; then
+  printf 'Captured E2E execution must not wait for result acknowledgement; observed %s prompts.\n' \
     "$acknowledgement_count" >&2
   exit 1
 fi
 
 required_fragments=(
   "Back to .NET channels"
-  "Press Enter to return to Main..."
   "Isolated SDK installation completed successfully."
   "Isolated SDKs:"
   "System SDKs:"
