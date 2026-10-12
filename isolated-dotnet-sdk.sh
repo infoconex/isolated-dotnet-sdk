@@ -1008,6 +1008,7 @@ select_install_version() {
     local selection=""
     local channel=""
     local latest_sdk=""
+    local current_sdk=""
     local phase=""
     local release_type=""
     local releases_url=""
