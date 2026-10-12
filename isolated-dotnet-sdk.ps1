@@ -1570,29 +1570,7 @@ function Select-VerifyVersion {
 
         $Selection = Read-ToolInput 'Selection'
 
-        if ($Selection -match '^[Bb]
-        if ($Selection -match '^[Ee]$') {
-            $script:ExitRequested = $true
-            Write-ToolExit
-            return $false
-        }
-
-        $Number = 0
-        if ([int]::TryParse($Selection, [ref]$Number) -and
-            $Number -ge 1 -and
-            $Number -le $SdkVersions.Count) {
-            $script:SdkVersion = $SdkVersions[$Number - 1]
-            Assert-ValidSdkVersion
-            return $true
-        }
-
-        $SelectionRange = Get-SelectionRange -Count $SdkVersions.Count
-        Write-InvalidSelection -Selection $Selection -Choices "Choose $SelectionRange, B, or E."
-        Write-ToolDisplay
-    }
-}
-
-) {
+        if ($Selection -match '^[Bb]$') {
             $script:BackToMain = $true
             return $false
         }
