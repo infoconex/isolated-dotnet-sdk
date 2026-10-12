@@ -934,7 +934,7 @@ function Get-SdkAuditClassification {
             'maintenance' { 'Maintenance' }
             'preview' { 'Preview' }
             'go-live' { 'Go Live' }
-            'active' { if ($Servicing -eq 'Current') { 'Current' } else { '' } }
+            'active' { if ($Servicing -eq 'Current') { 'Current' } else { 'Active' } }
             default { 'Unsupported' }
         }
     }
@@ -1018,46 +1018,19 @@ function Get-SdkAuditDisplayLayout {
     param([object[]]$Classifications)
 
     $Layout = [ordered]@{
-        Version      = 0
-        ReleaseType  = 0
-        Servicing    = 0
-        Lifecycle    = 0
-        Release      = 0
-        GoLive       = 0
-        EndOfSupport = 0
+        Version     = 0
+        ReleaseType = 0
+        Lifecycle   = 0
     }
 
     foreach ($Classification in $Classifications) {
         $Version = [string]$Classification.Version
         $ReleaseType = [string]$Classification.ReleaseType
-        $Servicing = [string]$Classification.ServicingStatus
         $Lifecycle = [string]$Classification.StatusToken
-        $Release = if ([string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
-            ''
-        }
-        else {
-            "Release: $($Classification.ReleaseDate)"
-        }
-        $GoLive = if ([string]::IsNullOrWhiteSpace([string]$Classification.GoLiveDate)) {
-            ''
-        }
-        else {
-            "Go Live: $($Classification.GoLiveDate)"
-        }
-        $EndOfSupport = if ([string]::IsNullOrWhiteSpace([string]$Classification.EndOfSupportDate)) {
-            ''
-        }
-        else {
-            "EOS: $($Classification.EndOfSupportDate)"
-        }
 
         $Layout.Version = [Math]::Max($Layout.Version, $Version.Length)
         $Layout.ReleaseType = [Math]::Max($Layout.ReleaseType, $ReleaseType.Length)
-        $Layout.Servicing = [Math]::Max($Layout.Servicing, $Servicing.Length)
         $Layout.Lifecycle = [Math]::Max($Layout.Lifecycle, $Lifecycle.Length)
-        $Layout.Release = [Math]::Max($Layout.Release, $Release.Length)
-        $Layout.GoLive = [Math]::Max($Layout.GoLive, $GoLive.Length)
-        $Layout.EndOfSupport = [Math]::Max($Layout.EndOfSupport, $EndOfSupport.Length)
     }
 
     return [pscustomobject]$Layout
@@ -1071,8 +1044,8 @@ function Format-SdkAuditRow {
 
     $Version = [string]$Classification.Version
     $ReleaseType = [string]$Classification.ReleaseType
-    $Servicing = [string]$Classification.ServicingStatus
     $Lifecycle = [string]$Classification.StatusToken
+    $Servicing = [string]$Classification.ServicingStatus
     $RenderedLifecycle = if ([string]::IsNullOrWhiteSpace($Lifecycle)) {
         ''
     }
@@ -1080,44 +1053,26 @@ function Format-SdkAuditRow {
         Format-AuditStatusToken -StatusToken $Lifecycle
     }
 
-    $Release = if ([string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
-        ''
-    }
-    else {
-        "Release: $($Classification.ReleaseDate)"
-    }
-    $GoLive = if ([string]::IsNullOrWhiteSpace([string]$Classification.GoLiveDate)) {
-        ''
-    }
-    else {
-        "Go Live: $($Classification.GoLiveDate)"
-    }
-    $EndOfSupport = if ([string]::IsNullOrWhiteSpace([string]$Classification.EndOfSupportDate)) {
-        ''
-    }
-    else {
-        "EOS: $($Classification.EndOfSupportDate)"
-    }
-
     $Line = '  ' + $Version.PadRight($Layout.Version)
     if ($Layout.ReleaseType -gt 0) {
         $Line += '  ' + $ReleaseType.PadRight($Layout.ReleaseType)
-    }
-    if ($Layout.Servicing -gt 0) {
-        $Line += '  ' + $Servicing.PadRight($Layout.Servicing)
     }
     if ($Layout.Lifecycle -gt 0) {
         $Line += '  ' + $RenderedLifecycle
         $Line += ' ' * [Math]::Max(0, ($Layout.Lifecycle - $Lifecycle.Length))
     }
-    if ($Layout.Release -gt 0) {
-        $Line += '  ' + $Release.PadRight($Layout.Release)
+
+    if (-not [string]::IsNullOrWhiteSpace($Servicing)) {
+        $Line += '  ' + $Servicing
     }
-    if ($Layout.GoLive -gt 0) {
-        $Line += '  ' + $GoLive.PadRight($Layout.GoLive)
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
+        $Line += "  Release: $($Classification.ReleaseDate)"
     }
-    if ($Layout.EndOfSupport -gt 0) {
-        $Line += '  ' + $EndOfSupport.PadRight($Layout.EndOfSupport)
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.GoLiveDate)) {
+        $Line += "  Go Live: $($Classification.GoLiveDate)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Classification.EndOfSupportDate)) {
+        $Line += "  EOS: $($Classification.EndOfSupportDate)"
     }
 
     return $Line.TrimEnd()
