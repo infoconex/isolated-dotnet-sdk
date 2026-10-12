@@ -1996,7 +1996,7 @@ Options:
   --help, -h         Show this help text.
 
 Behavior:
-  No command         Start a persistent interactive session that returns to Main after normal operations.
+  No command         Start a persistent session; completed results wait for Enter before Main.
   SDK version        --sdk-version <version> and a bare positional version select the same exact SDK.
   Bare version       Treat the positional version as a one-shot install request.
   Explicit actions   Run once and exit without entering the persistent Main loop.

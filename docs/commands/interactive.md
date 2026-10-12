@@ -34,7 +34,13 @@ The identity heading is shown on Main, not repeated throughout nested Install, R
 
 Main commands are case-insensitive. `I`, `R`, `L`, `V`, `A`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
 
-After a successful Install, List, Audit, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session returns to Main. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
+After a successful Install, List, Audit, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session keeps that completed result visible and prompts:
+
+```text
+Press Enter to return to Main...
+```
+
+Pressing Enter then returns to Main. This acknowledgement is a completed-result boundary, not another decision menu. Back and Exit navigation do not require it. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
 
 ## One-shot commands
 
@@ -44,7 +50,7 @@ An explicit Install or Remove may still need an interactive picker when no versi
 
 Explicit Verify remains a one-shot exact-version command. Interactive Verify is available separately from Main and selects from the installed isolated SDK inventory.
 
-Explicit Audit is a one-shot online assessment of both installed ownership groups. Interactive Audit runs the same read-only assessment from Main with `A` and returns to Main after success.
+Explicit Audit is a one-shot online assessment of both installed ownership groups. Interactive Audit runs the same read-only assessment from Main with `A`; after success, the result remains visible until Enter acknowledges the return to Main.
 
 The direct tool-version query is also one-shot and exits before bootstrap, network access, SDK discovery, prompting, or mutation. It identifies the tool itself; it does not select a .NET SDK.
 
@@ -71,7 +77,7 @@ Main
 
 Persistent menus do not add a redundant `Q. Cancel` where Back already provides navigation. Explicit one-shot Install/Remove pickers may use `Q` to cancel that one-shot command successfully.
 
-Ordinary yes/no confirmation prompts are not navigation menus. Declining a confirmation is a normal no-change result; in persistent mode that returns to Main, while one-shot execution exits successfully.
+Ordinary yes/no confirmation prompts are not navigation menus. Declining a confirmation is a normal no-change result; in persistent mode that result waits for Enter acknowledgement before returning to Main, while one-shot execution exits successfully.
 
 ## Channel selection
 
@@ -98,7 +104,7 @@ The Install picker does not depend on fixed numeric positions for a particular S
 
 Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only health check used by explicit Verify; there is no separate interactive verification implementation.
 
-A healthy result returns to Main. `B` returns to Main without running verification, and `E` exits the session. If no isolated SDKs are installed, the tool reports that state and returns to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
+A healthy result remains visible until Enter acknowledgement, then returns to Main. `B` returns to Main immediately without running verification or requiring acknowledgement, and `E` exits the session. If no isolated SDKs are installed, the tool reports that state and waits for Enter before returning to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
 
 ## Input failure versus cancellation
 
