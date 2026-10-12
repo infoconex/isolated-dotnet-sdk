@@ -134,6 +134,22 @@ Describe 'PowerShell interactive Verify' {
         $result.Output | Should -Not -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
     }
 
+    It 'sorts Verify choices newest to oldest' {
+        foreach ($version in @('8.0.425', '11.0.100-rc.1.26425.128', '10.0.401')) {
+            Install-FakeInteractiveVerifyHost -Version $version -ReportedVersion $version | Out-Null
+        }
+
+        $result = Invoke-InteractiveVerifyTool -InputLines @('v', 'b', 'e')
+
+        $result.ExitCode | Should -Be 0
+        $verifyStart = $result.Output.IndexOf('Select an isolated SDK to verify:')
+        $verifyEnd = $result.Output.IndexOf('B. Back to Main', $verifyStart)
+        $verifySection = $result.Output.Substring($verifyStart, $verifyEnd - $verifyStart)
+        $verifySection | Should -Match '1\. 11\.0\.100-rc\.1\.26425\.128'
+        $verifySection | Should -Match '2\. 10\.0\.401'
+        $verifySection | Should -Match '3\. 8\.0\.425'
+    }
+
     It 'never offers System SDKs as interactive Verify targets' {
         $isolatedVersion = '99.0.100'
         $systemVersion = '88.0.100'
