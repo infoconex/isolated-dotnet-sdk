@@ -8,9 +8,9 @@ Both product implementations have behavioral coverage for:
 
 - no-action invocation remaining in the interactive session until Exit;
 - case-insensitive Main commands `I`, `R`, `L`, `V`, and `E`, with the old numeric Main aliases rejected;
-- terminal-backed normal operation/no-change outcomes remaining visible until Enter acknowledgement before returning to Main;
+- terminal-backed normal operation/no-change outcomes remaining visible until contextual Enter acknowledgement before returning to the immediate parent screen;
 - redirected/captured persistent execution skipping acknowledgement so pipes, CI, and automation never wait;
-- completed Install, List, Audit, Verify, and Remove transitions sharing the same terminal acknowledgement boundary;
+- completed Install, List, Audit, Verify, and Remove transitions sharing the same terminal acknowledgement boundary while returning to the correct parent screen;
 - Back and Exit navigation returning/leaving immediately without completed-result acknowledgement;
 - explicit List and other one-shot execution remaining acknowledgement-free;
 - operational failures terminating nonzero instead of returning to Main or waiting for acknowledgement;
@@ -23,7 +23,7 @@ Both product implementations have behavioral coverage for:
 - `Show all versions` exposing older servicing releases in deterministic order;
 - recoverable blank/invalid selection feedback and global Exit behavior across persistent menus.
 
-The Bash suite also exercises a representative multi-operation session through Install, List, Remove, and Exit using deterministic fake metadata and an isolated fake SDK host. A Bash pseudo-terminal test proves the visible Enter acknowledgement in a real terminal-capable session, while PowerShell exercises the acknowledgement helper with explicit terminal-capability inputs. Focused captured-process tests prove that redirected input/output never waits. The real interactive E2E flow is intentionally captured automation, so it asserts zero acknowledgement prompts while still exercising Install, List, Audit, Verify, Remove, and Exit. Existing focused suites continue to own transactional installation, confirmation, metadata failure, filesystem, native-command, cleanup, direct Verify, and presentation boundaries.
+The Bash suite also exercises a representative multi-operation session through Install, List, Remove, and Exit using deterministic fake metadata and an isolated fake SDK host. Parent-navigation coverage verifies that Verify and Remove return to their SDK lists and that Install returns to the selected channel's SDK list. A Bash pseudo-terminal test proves the visible Enter acknowledgement in a real terminal-capable session, while PowerShell exercises the acknowledgement helper with explicit terminal-capability inputs and contextual destinations. Focused captured-process tests prove that redirected input/output never waits while still following parent navigation. The real interactive E2E flow is intentionally captured automation, so it asserts zero acknowledgement prompts while still exercising Install, List, Audit, Verify, Remove, and Exit. Existing focused suites continue to own transactional installation, confirmation, metadata failure, filesystem, native-command, cleanup, direct Verify, and presentation boundaries.
 
 ## Relationship to real E2E
 
