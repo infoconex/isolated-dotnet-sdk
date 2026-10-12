@@ -797,10 +797,18 @@ format_audit_row() {
         fi
     fi
 
-    [[ -n "$AUDIT_SERVICING_STATUS" ]] && printf '  %s' "$AUDIT_SERVICING_STATUS"
-    [[ -n "$AUDIT_RELEASE_DATE" ]] && printf '  Release: %s' "$AUDIT_RELEASE_DATE"
-    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && printf '  Go Live: %s' "$AUDIT_GO_LIVE_DATE"
-    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && printf '  EOS: %s' "$AUDIT_END_OF_SUPPORT_DATE"
+    if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
+        printf '  %s' "$AUDIT_SERVICING_STATUS"
+    fi
+    if [[ -n "$AUDIT_RELEASE_DATE" ]]; then
+        printf '  Release: %s' "$AUDIT_RELEASE_DATE"
+    fi
+    if [[ -n "$AUDIT_GO_LIVE_DATE" ]]; then
+        printf '  Go Live: %s' "$AUDIT_GO_LIVE_DATE"
+    fi
+    if [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]]; then
+        printf '  EOS: %s' "$AUDIT_END_OF_SUPPORT_DATE"
+    fi
 }
 
 audit_installed_sdks() {
