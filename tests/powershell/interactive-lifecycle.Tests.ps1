@@ -273,7 +273,7 @@ function Invoke-RestMethod { return $releaseIndex }
 '@
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
-            -InputLines @('i', 'm', $version, 'e') `
+            -InputLines @('i', 'm', $version, 'b', 'e') `
             -Command $command
 
         $result.ExitCode | Should -Be 0
