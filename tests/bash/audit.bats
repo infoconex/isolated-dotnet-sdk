@@ -246,7 +246,433 @@ run_audit() {
   run_audit
 
   [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -Eq '^  10\.0\.999 +LTS +Newer than known metadata +EOS: 2028-11-14$'
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.999 +LTS +Active +Newer than known metadata +EOS: 2028-11-14
+  [[ "$output" != *"10.0.999  Update available"* ]]
+}
+
+@test "audit reports an unrecognized installed channel in the lifecycle status column without fabricated metadata" {
+  add_isolated_sdk '13.0.100'
+  add_isolated_sdk '10.0.401'
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  unknown_line="$(printf '%s\n' "$output" | grep '^  13\.0\.100[[:space:]]' | head -n 1)"
+  current_line="$(printf '%s\n' "$output" | grep '^  10\.0\.401[[:space:]]' | head -n 1)"
+
+  [[ "$unknown_line" == *"Unknown channel"* ]]
+  [[ "$unknown_line" != *"LTS"* ]]
+  [[ "$unknown_line" != *"STS"* ]]
+  [[ "$unknown_line" != *"Release:"* ]]
+  [[ "$unknown_line" != *"Go Live:"* ]]
+  [[ "$unknown_line" != *"EOS:"* ]]
+
+  unknown_lifecycle_prefix="${unknown_line%%Unknown\ channel*}"
+  current_lifecycle_prefix="${current_line%%Current*}"
+  [ "${#unknown_lifecycle_prefix}" -eq "${#current_lifecycle_prefix}" ]
+}
+
+@test "audit treats the Go Live schedule fallback as optional" {
+  add_isolated_sdk '11.0.100-rc.1.111'
+  export AUDIT_FAIL_SCHEDULE=true
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +RC1 +Update available -> 11\.0\.100-rc\.2\.999 +Release: 2026-09-01
+  [[ "$output" != *"Go Live:"* ]]
+}
+
+@test "audit omits a missing optional exact release date without fabricating one" {
+  add_isolated_sdk '10.0.401'
+  cat > "$metadata_root/10.0.json" <<'JSON'
+{"releases":[
+  {"security":false,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
+]}
+JSON
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +EOS: 2028-11-14$'
+  [[ "$output" != *"Release:"* ]]
+}
+
+@test "audit colors only Current Maintenance and EOL lifecycle tokens on a terminal" {
+  add_isolated_sdk '10.0.401'
+  add_isolated_sdk '9.0.318'
+  add_isolated_sdk '7.0.410'
+  wrapper="$test_root/audit-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+export PATH="$fake_bin:\$PATH"
+export AUDIT_METADATA_ROOT="$metadata_root"
+export AUDIT_NETWORK_LOG="$network_log"
+exec "$tool_path" audit
+EOF
+  chmod +x "$wrapper"
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    run script -q /dev/null "$wrapper"
+  else
+    run script -q -c "$wrapper" /dev/null
+  fi
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033[0;32mCurrent\033[0m'* ]]
+  [[ "$output" == *$'\033[0;33mMaintenance\033[0m'* ]]
+  [[ "$output" == *$'\033[0;31mEOL\033[0m'* ]]
+  [[ "$output" != *$'\033[0;32m10.0.401'* ]]
+  [[ "$output" != *$'\033[0;33m9.0.318'* ]]
+  [[ "$output" != *$'\033[0;31m7.0.410'* ]]
+}
+
+@test "audit fails clearly when the release index cannot be obtained" {
+  add_isolated_sdk '10.0.401'
+  export AUDIT_FAIL_INDEX=true
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
+  [[ "$output" != *"Current"* ]]
+}
+
+@test "audit fails clearly when required channel metadata cannot be obtained" {
+  add_isolated_sdk '10.0.401'
+  export AUDIT_FAIL_CHANNEL='10.0'
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load release metadata for .NET 10.0."* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+}
+
+@test "audit fails clearly when required channel metadata is malformed" {
+  add_isolated_sdk '10.0.401'
+  printf '%s\n' 'not-json' > "$metadata_root/10.0.json"
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid release metadata for .NET 10.0."* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+}
+
+@test "audit rejects an SDK version argument" {
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" audit 10.0.401
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"An SDK version cannot be combined with audit."* ]]
+}
+
+@test "interactive Audit returns to Main after completion" {
+  add_isolated_sdk '10.0.401'
+
+  run bash -c 'printf "a\ne\n" | env HOME="$1" PATH="$2:$PATH" AUDIT_METADATA_ROOT="$3" AUDIT_NETWORK_LOG="$4" "$5"' _ \
+    "$test_home" "$fake_bin" "$metadata_root" "$network_log" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A. Audit installed SDKs"* ]]
+  printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+  [ "$(printf '%s\n' "$output" | grep -c 'What would you like to do?')" -eq 2 ]
+  [[ "$output" == *"Exiting."* ]]
+}
+
+@test "List and Verify remain independent of release metadata" {
+  add_isolated_sdk '10.0.401'
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'network-should-not-be-used' >&2
+exit 91
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"network-should-not-be-used"* ]]
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" verify 10.0.401
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Isolated SDK 10.0.401 is healthy."* ]]
+  [[ "$output" != *"network-should-not-be-used"* ]]
+}
+
+  [[ "$output" != *"10.0.999  Update available"* ]]
+}
+
+@test "audit reports an unrecognized installed channel in the lifecycle status column without fabricated metadata" {
+  add_isolated_sdk '13.0.100'
+  add_isolated_sdk '10.0.401'
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  unknown_line="$(printf '%s\n' "$output" | grep '^  13\.0\.100[[:space:]]' | head -n 1)"
+  current_line="$(printf '%s\n' "$output" | grep '^  10\.0\.401[[:space:]]' | head -n 1)"
+
+  [[ "$unknown_line" == *"Unknown channel"* ]]
+  [[ "$unknown_line" != *"LTS"* ]]
+  [[ "$unknown_line" != *"STS"* ]]
+  [[ "$unknown_line" != *"Release:"* ]]
+  [[ "$unknown_line" != *"Go Live:"* ]]
+  [[ "$unknown_line" != *"EOS:"* ]]
+
+  unknown_lifecycle_prefix="${unknown_line%%Unknown\ channel*}"
+  current_lifecycle_prefix="${current_line%%Current*}"
+  [ "${#unknown_lifecycle_prefix}" -eq "${#current_lifecycle_prefix}" ]
+}
+
+@test "audit treats the Go Live schedule fallback as optional" {
+  add_isolated_sdk '11.0.100-rc.1.111'
+  export AUDIT_FAIL_SCHEDULE=true
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +Update available -> 11\.0\.100-rc\.2\.999 +RC1 +Release: 2026-09-01$'
+  [[ "$output" != *"Go Live:"* ]]
+}
+
+@test "audit omits a missing optional exact release date without fabricating one" {
+  add_isolated_sdk '10.0.401'
+  cat > "$metadata_root/10.0.json" <<'JSON'
+{"releases":[
+  {"security":false,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
+]}
+JSON
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +EOS: 2028-11-14$'
+  [[ "$output" != *"Release:"* ]]
+}
+
+@test "audit colors only Current Maintenance and EOL lifecycle tokens on a terminal" {
+  add_isolated_sdk '10.0.401'
+  add_isolated_sdk '9.0.318'
+  add_isolated_sdk '7.0.410'
+  wrapper="$test_root/audit-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+export PATH="$fake_bin:\$PATH"
+export AUDIT_METADATA_ROOT="$metadata_root"
+export AUDIT_NETWORK_LOG="$network_log"
+exec "$tool_path" audit
+EOF
+  chmod +x "$wrapper"
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    run script -q /dev/null "$wrapper"
+  else
+    run script -q -c "$wrapper" /dev/null
+  fi
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033[0;32mCurrent\033[0m'* ]]
+  [[ "$output" == *$'\033[0;33mMaintenance\033[0m'* ]]
+  [[ "$output" == *$'\033[0;31mEOL\033[0m'* ]]
+  [[ "$output" != *$'\033[0;32m10.0.401'* ]]
+  [[ "$output" != *$'\033[0;33m9.0.318'* ]]
+  [[ "$output" != *$'\033[0;31m7.0.410'* ]]
+}
+
+@test "audit fails clearly when the release index cannot be obtained" {
+  add_isolated_sdk '10.0.401'
+  export AUDIT_FAIL_INDEX=true
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
+  [[ "$output" != *"Current"* ]]
+}
+
+@test "audit fails clearly when required channel metadata cannot be obtained" {
+  add_isolated_sdk '10.0.401'
+  export AUDIT_FAIL_CHANNEL='10.0'
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load release metadata for .NET 10.0."* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+}
+
+@test "audit fails clearly when required channel metadata is malformed" {
+  add_isolated_sdk '10.0.401'
+  printf '%s\n' 'not-json' > "$metadata_root/10.0.json"
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid release metadata for .NET 10.0."* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+}
+
+@test "audit rejects an SDK version argument" {
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" audit 10.0.401
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"An SDK version cannot be combined with audit."* ]]
+}
+
+@test "interactive Audit returns to Main after completion" {
+  add_isolated_sdk '10.0.401'
+
+  run bash -c 'printf "a\ne\n" | env HOME="$1" PATH="$2:$PATH" AUDIT_METADATA_ROOT="$3" AUDIT_NETWORK_LOG="$4" "$5"' _ \
+    "$test_home" "$fake_bin" "$metadata_root" "$network_log" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A. Audit installed SDKs"* ]]
+  printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+  [ "$(printf '%s\n' "$output" | grep -c 'What would you like to do?')" -eq 2 ]
+  [[ "$output" == *"Exiting."* ]]
+}
+
+@test "List and Verify remain independent of release metadata" {
+  add_isolated_sdk '10.0.401'
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'network-should-not-be-used' >&2
+exit 91
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"network-should-not-be-used"* ]]
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" verify 10.0.401
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Isolated SDK 10.0.401 is healthy."* ]]
+  [[ "$output" != *"network-should-not-be-used"* ]]
+}
+
+  [[ "$output" != *"Go Live:"* ]]
+}
+
+@test "audit omits a missing optional exact release date without fabricating one" {
+  add_isolated_sdk '10.0.401'
+  cat > "$metadata_root/10.0.json" <<'JSON'
+{"releases":[
+  {"security":false,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
+]}
+JSON
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +EOS: 2028-11-14$'
+  [[ "$output" != *"Release:"* ]]
+}
+
+@test "audit colors only Current Maintenance and EOL lifecycle tokens on a terminal" {
+  add_isolated_sdk '10.0.401'
+  add_isolated_sdk '9.0.318'
+  add_isolated_sdk '7.0.410'
+  wrapper="$test_root/audit-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+export PATH="$fake_bin:\$PATH"
+export AUDIT_METADATA_ROOT="$metadata_root"
+export AUDIT_NETWORK_LOG="$network_log"
+exec "$tool_path" audit
+EOF
+  chmod +x "$wrapper"
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    run script -q /dev/null "$wrapper"
+  else
+    run script -q -c "$wrapper" /dev/null
+  fi
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033[0;32mCurrent\033[0m'* ]]
+  [[ "$output" == *$'\033[0;33mMaintenance\033[0m'* ]]
+  [[ "$output" == *$'\033[0;31mEOL\033[0m'* ]]
+  [[ "$output" != *$'\033[0;32m10.0.401'* ]]
+  [[ "$output" != *$'\033[0;33m9.0.318'* ]]
+  [[ "$output" != *$'\033[0;31m7.0.410'* ]]
+}
+
+@test "audit fails clearly when the release index cannot be obtained" {
+  add_isolated_sdk '10.0.401'
+  export AUDIT_FAIL_INDEX=true
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
+  [[ "$output" != *"Current"* ]]
+}
+
+@test "audit fails clearly when required channel metadata cannot be obtained" {
+  add_isolated_sdk '10.0.401'
+  export AUDIT_FAIL_CHANNEL='10.0'
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load release metadata for .NET 10.0."* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+}
+
+@test "audit fails clearly when required channel metadata is malformed" {
+  add_isolated_sdk '10.0.401'
+  printf '%s\n' 'not-json' > "$metadata_root/10.0.json"
+
+  run_audit
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid release metadata for .NET 10.0."* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+}
+
+@test "audit rejects an SDK version argument" {
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" audit 10.0.401
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"An SDK version cannot be combined with audit."* ]]
+}
+
+@test "interactive Audit returns to Main after completion" {
+  add_isolated_sdk '10.0.401'
+
+  run bash -c 'printf "a\ne\n" | env HOME="$1" PATH="$2:$PATH" AUDIT_METADATA_ROOT="$3" AUDIT_NETWORK_LOG="$4" "$5"' _ \
+    "$test_home" "$fake_bin" "$metadata_root" "$network_log" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A. Audit installed SDKs"* ]]
+  printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
+  [ "$(printf '%s\n' "$output" | grep -c 'What would you like to do?')" -eq 2 ]
+  [[ "$output" == *"Exiting."* ]]
+}
+
+@test "List and Verify remain independent of release metadata" {
+  add_isolated_sdk '10.0.401'
+  cat > "$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'network-should-not-be-used' >&2
+exit 91
+EOF
+  chmod +x "$fake_bin/curl"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"network-should-not-be-used"* ]]
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" verify 10.0.401
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Isolated SDK 10.0.401 is healthy."* ]]
+  [[ "$output" != *"network-should-not-be-used"* ]]
+}
+
   [[ "$output" != *"10.0.999  Update available"* ]]
 }
 
