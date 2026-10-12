@@ -34,13 +34,26 @@ The identity heading is shown on Main, not repeated throughout nested Install, R
 
 Main commands are case-insensitive. `I`, `R`, `L`, `V`, `A`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
 
-After a successful Install, List, Audit, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session keeps that completed result visible and prompts:
+After a successful Install, List, Audit, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session keeps that completed result visible and prompts for Enter before returning to the screen that launched that result.
+
+The prompt names that destination. For example:
 
 ```text
 Press Enter to return to Main...
+Press Enter to return to Verify...
+Press Enter to return to Remove...
+Press Enter to return to SDK selection...
 ```
 
-Pressing Enter then returns to Main. This acknowledgement is a completed-result boundary, not another decision menu. It is enabled only when both input and output are attached to an interactive terminal. Redirected input, redirected/captured output, pipes, CI, and automation never wait for it. Back and Exit navigation do not require it. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
+The return hierarchy is deliberate:
+
+- List and Audit return to Main.
+- Verify returns to the Verify SDK list.
+- Remove returns to the Remove SDK list when a selection was available.
+- Install from a channel's SDK picker returns to that same channel's SDK list.
+- A no-inventory result that never displayed a Verify or Remove picker returns to Main.
+
+This acknowledgement is a completed-result boundary, not another decision menu. It is enabled only when both input and output are attached to an interactive terminal. Redirected input, redirected/captured output, pipes, CI, and automation never wait for it; they still follow the same parent-screen navigation without pausing. Back and Exit navigation do not require acknowledgement. A genuine operational failure terminates nonzero rather than navigating to a parent screen where a later successful Exit could mask it.
 
 ## One-shot commands
 
@@ -77,7 +90,7 @@ Main
 
 Persistent menus do not add a redundant `Q. Cancel` where Back already provides navigation. Explicit one-shot Install/Remove pickers may use `Q` to cancel that one-shot command successfully.
 
-Ordinary yes/no confirmation prompts are not navigation menus. Declining a confirmation is a normal no-change result; in persistent mode that result waits for Enter acknowledgement before returning to Main, while one-shot execution exits successfully.
+Ordinary yes/no confirmation prompts are not navigation menus. Declining a confirmation is a normal no-change result; in persistent mode that result waits for Enter acknowledgement before returning to the operation's immediate parent screen, while one-shot execution exits successfully.
 
 ## Channel selection
 
@@ -104,7 +117,7 @@ The Install picker does not depend on fixed numeric positions for a particular S
 
 Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only health check used by explicit Verify; there is no separate interactive verification implementation.
 
-A healthy result remains visible until Enter acknowledgement, then returns to Main. `B` returns to Main immediately without running verification or requiring acknowledgement, and `E` exits the session. If no isolated SDKs are installed, the tool reports that state and waits for Enter before returning to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
+A healthy result remains visible until Enter acknowledgement, then returns to the Verify SDK list. `B` from that list returns to Main immediately without running verification or requiring acknowledgement, and `E` exits the session. If no isolated SDKs are installed, no Verify picker exists, so the tool reports that state and waits for Enter before returning to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
 
 ## Input failure versus cancellation
 
