@@ -1256,105 +1256,105 @@ function Select-InstallVersion {
             $ResumeChannel = $null
         }
         else {
-        Write-ToolDisplay
-
-        if ($ShowArchived) {
-            Write-ToolHeading 'Select an end-of-life .NET channel:'
-            $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
-        }
-        else {
-            Write-ToolHeading 'Select a supported or development .NET channel:'
-            $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
-        }
-
-        Write-ToolDisplay
-
-        for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
-            $Channel = $Channels[$Index]
-            $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
-            $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
-            $LatestSdk = [string]$Channel.'latest-sdk'
-
-            if ([string]::IsNullOrWhiteSpace($LatestSdk)) {
-                Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}" -f `
-                    ($Index + 1), `
-                        $Channel.'channel-version', `
-                        $ReleaseType, `
-                        $SupportPhase)
+            Write-ToolDisplay
+    
+            if ($ShowArchived) {
+                Write-ToolHeading 'Select an end-of-life .NET channel:'
+                $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
             }
             else {
-                Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
-                    ($Index + 1), `
-                        $Channel.'channel-version', `
-                        $ReleaseType, `
-                        $SupportPhase, `
-                        $LatestSdk)
+                Write-ToolHeading 'Select a supported or development .NET channel:'
+                $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
             }
-        }
-
-        Write-ToolDisplay
-        if ($ShowArchived) {
-            Write-ToolDisplay '  S. Show supported/development channels'
-        }
-        else {
-            Write-ToolDisplay '  S. Show end-of-life channels'
-        }
-        if ($script:InteractiveSession) {
-            Write-ToolDisplay '  B. Back to Main'
-        }
-        Write-ToolDisplay '  M. Enter an exact SDK version manually'
-        if ($script:InteractiveSession) {
-            Write-ToolDisplay '  E. Exit'
-        }
-        else {
-            Write-ToolDisplay '  Q. Cancel'
-        }
-        Write-ToolDisplay
-
-        $Selection = Read-ToolInput 'Selection'
-
-        if ($Selection -match '^[Mm]$') {
-            Read-ManualVersion
-            $script:InstallResultParent = '.NET channels'
-            return $true
-        }
-
-        if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
-            $script:ExitRequested = $true
-            Write-ToolExit
-            return $false
-        }
-
-        if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
-            return $false
-        }
-
-        if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
-            $script:BackToMain = $true
-            return $false
-        }
-
-        if ($Selection -match '^[Ss]$') {
-            $ShowArchived = -not $ShowArchived
-            continue
-        }
-
-        $Number = 0
-        if (-not [int]::TryParse($Selection, [ref]$Number) -or
-            $Number -lt 1 -or
-            $Number -gt $Channels.Count) {
-            $SelectionRange = Get-SelectionRange -Count $Channels.Count
-            $Choices = if ($script:InteractiveSession) {
-                "Choose $SelectionRange, S, B, M, or E."
+    
+            Write-ToolDisplay
+    
+            for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
+                $Channel = $Channels[$Index]
+                $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
+                $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
+                $LatestSdk = [string]$Channel.'latest-sdk'
+    
+                if ([string]::IsNullOrWhiteSpace($LatestSdk)) {
+                    Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}" -f `
+                        ($Index + 1), `
+                            $Channel.'channel-version', `
+                            $ReleaseType, `
+                            $SupportPhase)
+                }
+                else {
+                    Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
+                        ($Index + 1), `
+                            $Channel.'channel-version', `
+                            $ReleaseType, `
+                            $SupportPhase, `
+                            $LatestSdk)
+                }
+            }
+    
+            Write-ToolDisplay
+            if ($ShowArchived) {
+                Write-ToolDisplay '  S. Show supported/development channels'
             }
             else {
-                "Choose $SelectionRange, S, M, or Q."
+                Write-ToolDisplay '  S. Show end-of-life channels'
             }
-            Write-InvalidSelection -Selection $Selection -Choices $Choices
-            continue
-        }
-
-        $SelectedChannel = $Channels[$Number - 1]
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  B. Back to Main'
+            }
+            Write-ToolDisplay '  M. Enter an exact SDK version manually'
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  E. Exit'
+            }
+            else {
+                Write-ToolDisplay '  Q. Cancel'
+            }
+            Write-ToolDisplay
+    
+            $Selection = Read-ToolInput 'Selection'
+    
+            if ($Selection -match '^[Mm]$') {
+                Read-ManualVersion
+                $script:InstallResultParent = '.NET channels'
+                return $true
+            }
+    
+            if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+                $script:ExitRequested = $true
+                Write-ToolExit
+                return $false
+            }
+    
+            if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
+                return $false
+            }
+    
+            if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
+                $script:BackToMain = $true
+                return $false
+            }
+    
+            if ($Selection -match '^[Ss]$') {
+                $ShowArchived = -not $ShowArchived
+                continue
+            }
+    
+            $Number = 0
+            if (-not [int]::TryParse($Selection, [ref]$Number) -or
+                $Number -lt 1 -or
+                $Number -gt $Channels.Count) {
+                $SelectionRange = Get-SelectionRange -Count $Channels.Count
+                $Choices = if ($script:InteractiveSession) {
+                    "Choose $SelectionRange, S, B, M, or E."
+                }
+                else {
+                    "Choose $SelectionRange, S, M, or Q."
+                }
+                Write-InvalidSelection -Selection $Selection -Choices $Choices
+                continue
+            }
+    
+            $SelectedChannel = $Channels[$Number - 1]
         }
         $ChannelVersion = [string]$SelectedChannel.'channel-version'
         $LatestSdk = [string]$SelectedChannel.'latest-sdk'
