@@ -1257,7 +1257,7 @@ function Select-InstallVersion {
         }
         else {
             Write-ToolDisplay
-    
+
             if ($ShowArchived) {
                 Write-ToolHeading 'Select an end-of-life .NET channel:'
                 $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
@@ -1266,15 +1266,15 @@ function Select-InstallVersion {
                 Write-ToolHeading 'Select a supported or development .NET channel:'
                 $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
             }
-    
+
             Write-ToolDisplay
-    
+
             for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
                 $Channel = $Channels[$Index]
                 $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
                 $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
                 $LatestSdk = [string]$Channel.'latest-sdk'
-    
+
                 if ([string]::IsNullOrWhiteSpace($LatestSdk)) {
                     Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}" -f `
                         ($Index + 1), `
@@ -1291,7 +1291,7 @@ function Select-InstallVersion {
                             $LatestSdk)
                 }
             }
-    
+
             Write-ToolDisplay
             if ($ShowArchived) {
                 Write-ToolDisplay '  S. Show supported/development channels'
@@ -1310,35 +1310,35 @@ function Select-InstallVersion {
                 Write-ToolDisplay '  Q. Cancel'
             }
             Write-ToolDisplay
-    
+
             $Selection = Read-ToolInput 'Selection'
-    
+
             if ($Selection -match '^[Mm]$') {
                 Read-ManualVersion
                 $script:InstallResultParent = '.NET channels'
                 return $true
             }
-    
+
             if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
                 $script:ExitRequested = $true
                 Write-ToolExit
                 return $false
             }
-    
+
             if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
                 return $false
             }
-    
+
             if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
                 $script:BackToMain = $true
                 return $false
             }
-    
+
             if ($Selection -match '^[Ss]$') {
                 $ShowArchived = -not $ShowArchived
                 continue
             }
-    
+
             $Number = 0
             if (-not [int]::TryParse($Selection, [ref]$Number) -or
                 $Number -lt 1 -or
@@ -1353,7 +1353,7 @@ function Select-InstallVersion {
                 Write-InvalidSelection -Selection $Selection -Choices $Choices
                 continue
             }
-    
+
             $SelectedChannel = $Channels[$Number - 1]
         }
         $ChannelVersion = [string]$SelectedChannel.'channel-version'
