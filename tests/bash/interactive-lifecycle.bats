@@ -274,11 +274,12 @@ exit 0
 EOF
   chmod +x "$install_dir/dotnet"
 
-  run bash -c 'printf "i\n1\n1\nl\nr\n1\ny\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\n1\n1\n\nl\n\nr\n1\ny\n\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 4 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 3 ]
   [[ "$output" == *"Isolated SDK: Already installed"* ]]
   [[ "$output" == *"Isolated SDK $version was removed."* ]]
   [[ "$output" == *"Exiting."* ]]
