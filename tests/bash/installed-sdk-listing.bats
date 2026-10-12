@@ -121,6 +121,28 @@ EOF
   [ "$isolated_line" -lt "$system_line" ]
 }
 
+@test "direct list sorts each ownership group newest to oldest" {
+  bootstrap_tool
+  create_isolated_sdk '8.0.425'
+  create_isolated_sdk '11.0.100-rc.1.26425.128'
+  create_isolated_sdk '10.0.401'
+
+  fake_bin="$test_root/ordered-system-bin"
+  write_fake_system_dotnet "$fake_bin" \
+    '8.0.425 [/usr/share/dotnet/sdk]' \
+    '10.0.401 [/usr/share/dotnet/sdk]' \
+    '9.0.318 [/usr/share/dotnet/sdk]'
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" list
+
+  [ "$status" -eq 0 ]
+  isolated_section="$(printf '%s\n' "$output" | sed -n '/^Isolated SDKs:$/,/^System SDKs:$/p')"
+  system_section="$(printf '%s\n' "$output" | sed -n '/^System SDKs:$/,$p')"
+
+  [[ "$isolated_section" == *"11.0.100-rc.1.26425.128"*"10.0.401"*"8.0.425"* ]]
+  [[ "$system_section" == *"10.0.401"*"9.0.318"*"8.0.425"* ]]
+}
+
 @test "direct list shows None for both empty ownership groups" {
   bootstrap_tool
   fake_bin="$test_root/empty-system-bin"
