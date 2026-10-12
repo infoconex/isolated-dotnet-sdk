@@ -29,6 +29,10 @@ count_main_prompts() {
   printf '%s\n' "$1" | grep -c 'What would you like to do?' || true
 }
 
+count_acknowledgement_prompts() {
+  printf '%s\n' "$1" | grep -c 'Press Enter to return to Main...' || true
+}
+
 write_metadata_fake_curl() {
   local fake_bin="$1"
   mkdir -p "$fake_bin"
@@ -90,36 +94,40 @@ EOF
   chmod +x "$fake_bin/curl"
 }
 
-@test "no-action invocation returns to Main after List and exits explicitly" {
+@test "interactive List waits for acknowledgement before returning to Main" {
   prepare_source
 
-  run bash -c 'printf "l\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
+  run bash -c 'printf "l\n\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   [[ "$output" == *"Isolated SDKs:"* ]]
   [[ "$output" == *"System SDKs:"* ]]
+  [[ "$output" == *"Press Enter to return to Main..."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
-@test "normal interactive Remove no-change returns to Main" {
+@test "normal interactive Remove no-change waits for acknowledgement" {
   prepare_source
 
-  run bash -c 'printf "r\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
+  run bash -c 'printf "r\n\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$source_copy"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   [[ "$output" == *"No isolated SDKs are installed"* ]]
   [[ "$output" == *"Removal cancelled."* ]]
 }
 
-@test "explicit List remains one-shot" {
+@test "explicit List remains one-shot without acknowledgement" {
   bootstrap_tool
 
   run env HOME="$test_home" "$tool_path" list
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 0 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"Installed .NET SDKs"* ]]
 }
 
@@ -138,6 +146,7 @@ EOF
 
   [ "$status" -ne 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
   [[ "$output" != *"Exiting."* ]]
 }
@@ -152,6 +161,7 @@ EOF
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"B. Back to Main"* ]]
 }
 

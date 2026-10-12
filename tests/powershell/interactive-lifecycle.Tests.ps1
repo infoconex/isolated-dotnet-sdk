@@ -47,6 +47,11 @@ Describe 'PowerShell interactive lifecycle' {
             param([string]$Output)
             return ([regex]::Matches($Output, 'What would you like to do\?')).Count
         }
+
+        function Get-AcknowledgementPromptCount {
+            param([string]$Output)
+            return ([regex]::Matches($Output, 'Press Enter to return to Main\.\.\.')).Count
+        }
     }
 
     BeforeEach {
@@ -74,33 +79,37 @@ Describe 'PowerShell interactive lifecycle' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'returns to Main after interactive List and exits explicitly' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', 'e')
+    It 'holds interactive List until acknowledgement before returning to Main' {
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', '', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
         $result.Output | Should -Match 'L\. List installed SDKs'
         $result.Output | Should -Match 'Isolated SDKs:'
         $result.Output | Should -Match 'System SDKs:'
+        $result.Output | Should -Match 'Press Enter to return to Main\.\.\.'
         $result.Output | Should -Match 'Exiting\.'
     }
 
-    It 'returns to Main after normal interactive Remove no-change' {
-        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', 'e')
+    It 'holds normal interactive Remove no-change until acknowledgement' {
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', '', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
         $result.Output | Should -Match 'No isolated SDKs are installed'
         $result.Output | Should -Match 'Removal cancelled\.'
     }
 
-    It 'keeps explicit List one-shot' {
+    It 'keeps explicit List one-shot without acknowledgement' {
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
             -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List'
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 0
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'Installed \.NET SDKs'
     }
 
@@ -116,6 +125,7 @@ function Invoke-RestMethod { throw 'transport failure' }
 
         $result.ExitCode | Should -Not -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'Unable to load .NET release metadata from Microsoft\.'
         $result.Output | Should -Not -Match 'Exiting\.'
     }
@@ -141,6 +151,7 @@ function Invoke-RestMethod { return $releaseIndex }
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'B\. Back to Main'
     }
 
