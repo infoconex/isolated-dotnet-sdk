@@ -121,6 +121,38 @@ Describe 'PowerShell installed SDK listing' {
         $text.IndexOf('Isolated SDKs:') | Should -BeLessThan $text.IndexOf('System SDKs:')
     }
 
+    It 'sorts each ownership group newest to oldest' {
+        Install-TestTool
+        foreach ($version in @('8.0.425', '11.0.100-rc.1.26425.128', '10.0.401')) {
+            $installDir = Join-Path $script:ToolRoot $version
+            New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $installDir 'dotnet.exe') -Force | Out-Null
+        }
+
+        $fakeBin = Join-Path $script:TestRoot 'ordered-system-bin'
+        Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @(
+            '8.0.425 [C:\dotnet\sdk]',
+            '10.0.401 [C:\dotnet\sdk]',
+            '9.0.318 [C:\dotnet\sdk]'
+        )
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+        $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
+
+        $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
+        $text = $listOutput -join [Environment]::NewLine
+
+        $LASTEXITCODE | Should -Be 0
+        $isolatedStart = $text.IndexOf('Isolated SDKs:')
+        $systemStart = $text.IndexOf('System SDKs:')
+        $isolatedSection = $text.Substring($isolatedStart, $systemStart - $isolatedStart)
+        $systemSection = $text.Substring($systemStart)
+
+        $isolatedSection.IndexOf('11.0.100-rc.1.26425.128') | Should -BeLessThan $isolatedSection.IndexOf('10.0.401')
+        $isolatedSection.IndexOf('10.0.401') | Should -BeLessThan $isolatedSection.IndexOf('8.0.425')
+        $systemSection.IndexOf('10.0.401') | Should -BeLessThan $systemSection.IndexOf('9.0.318')
+        $systemSection.IndexOf('9.0.318') | Should -BeLessThan $systemSection.IndexOf('8.0.425')
+    }
+
     It 'shows None for both empty ownership groups' {
         Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'empty-system-bin'
