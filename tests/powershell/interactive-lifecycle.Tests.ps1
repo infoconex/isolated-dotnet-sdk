@@ -190,6 +190,24 @@ function Invoke-RestMethod {
         $result.Output | Should -Not -Match 'Continue\?'
     }
 
+    It 'sorts Remove choices newest to oldest' {
+        foreach ($version in @('8.0.425', '11.0.100-rc.1.26425.128', '10.0.401')) {
+            $installDirectory = Join-Path $script:ToolRoot $version
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $installDirectory 'dotnet.exe') -Force | Out-Null
+        }
+
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', 'b', 'e')
+
+        $result.ExitCode | Should -Be 0
+        $removeStart = $result.Output.IndexOf('Select an isolated SDK to remove:')
+        $removeEnd = $result.Output.IndexOf('B. Back to Main', $removeStart)
+        $removeSection = $result.Output.Substring($removeStart, $removeEnd - $removeStart)
+        $removeSection | Should -Match '1\. 11\.0\.100-rc\.1\.26425\.128'
+        $removeSection | Should -Match '2\. 10\.0\.401'
+        $removeSection | Should -Match '3\. 8\.0\.425'
+    }
+
     It 'shows latest and newest feature bands before older servicing versions' {
         $command = @'
 $releaseIndex = [pscustomobject]@{
