@@ -203,6 +203,74 @@ EOF
   [[ "$output" != *"Exiting."* ]]
 }
 
+@test "terminal Install Verify and Remove clear selected picker before their operation result" {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    skip "BSD script does not deterministically drive bidirectional PTY input in CI"
+  fi
+
+  bootstrap_tool
+  fake_bin="$test_root/operation-tty-bin"
+  write_metadata_fake_curl "$fake_bin"
+  for version in '10.0.401' '9.0.318'; do
+    mkdir -p "$tool_root/$version"
+    cat > "$tool_root/$version/dotnet" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf '%s\n' '$version [/fake/sdk]'
+fi
+exit 0
+EOF
+    chmod +x "$tool_root/$version/dotnet"
+  done
+  wrapper="$test_root/operation-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+export PATH="$fake_bin:$PATH"
+exec "$tool_path"
+EOF
+  chmod +x "$wrapper"
+  clear_sequence="$(printf '\033[H\033[2J')"
+
+  assert_operation_view() {
+    local picker_tail="$1" first_output="$2" success="$3" acknowledgement="$4" parent="$5"
+    local after_picker before_first after_first before_ack after_ack without_clear
+    after_picker="${output#*"$picker_tail"}"
+    [[ "$after_picker" != "$output" ]] || return 1
+    before_first="${after_picker%%"$first_output"*}"
+    [[ "$before_first" == *"$clear_sequence"* ]] || return 1
+    without_clear="${before_first//"$clear_sequence"/}"
+    [ "$(( (${#before_first} - ${#without_clear}) / ${#clear_sequence} ))" -eq 1 ] || return 1
+    after_first="${after_picker#*"$first_output"}"
+    before_ack="${after_first%%"$acknowledgement"*}"
+    [[ "$before_ack" == *"$success"* ]] || return 1
+    [[ "$before_ack" != *"$clear_sequence"* ]] || return 1
+    after_ack="${after_first#*"$acknowledgement"}"
+    [[ "$after_ack" == *"$clear_sequence"* ]] || return 1
+    [[ "$after_ack" == *"$parent"* ]]
+  }
+
+  run bash -c 'printf "i\n1\n1\n\nb\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
+  [ "$status" -eq 0 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
+  assert_operation_view 'B. Back to .NET channels' 'Target SDK:' \
+    'Isolated SDK: Already installed' 'Press Enter to return to SDK selection...' \
+    'Available .NET 10.0 SDKs:'
+
+  run bash -c 'printf "v\n1\n\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
+  [ "$status" -eq 0 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
+  assert_operation_view 'B. Back to Main' 'Isolated SDK 10.0.401 is healthy.' \
+    'Location:' 'Press Enter to return to Verify...' 'Select an isolated SDK to verify:'
+
+  run bash -c 'printf "r\n1\ny\n\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
+  [ "$status" -eq 0 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
+  assert_operation_view 'B. Back to Main' 'Isolated SDK 10.0.401 will be removed' \
+    'Isolated SDK 10.0.401 was removed.' 'Press Enter to return to Remove...' \
+    'Select an isolated SDK to remove:'
+}
+
 @test "terminal nested Install Back clears each destination without waiting" {
   if [[ "$(uname -s)" == "Darwin" ]]; then
     skip "BSD script does not deterministically drive bidirectional PTY input in CI"

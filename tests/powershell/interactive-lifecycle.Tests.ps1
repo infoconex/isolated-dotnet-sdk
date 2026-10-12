@@ -177,6 +177,49 @@ Describe 'PowerShell interactive lifecycle' {
         { Clear-InteractiveScreen -InputRedirected:$false -OutputRedirected:$false } | Should -Not -Throw
     }
 
+    It 'clears after a successful nested Install Remove or Verify selection before operation output' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $script:ToolScript,
+            [ref]$tokens,
+            [ref]$parseErrors)
+        $parseErrors | Should -BeNullOrEmpty
+
+        $cases = @(
+            @{ Function = 'Install-IsolatedSdk'; Select = 'Resolve-InstallVersion'; Output = 'Write-ToolLabelValue' },
+            @{ Function = 'Remove-IsolatedSdk'; Select = 'Resolve-RemoveVersion'; Output = 'Write-ToolWarning' },
+            @{ Function = 'Invoke-SelectedAction'; Select = 'Select-VerifyVersion'; Output = 'Test-IsolatedSdk' }
+        )
+
+        foreach ($case in $cases) {
+            $functionName = $case.Function
+            $functionAst = $ast.Find({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $functionName
+                }, $true)
+            $functionAst | Should -Not -BeNullOrEmpty
+
+            $commands = [System.Collections.Generic.List[string]]::new()
+            $functionAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst]
+                }, $true) |
+                Sort-Object { $_.Extent.StartOffset } |
+                ForEach-Object { $commands.Add($_.GetCommandName()) }
+
+            $selectIndex = $commands.IndexOf($case.Select)
+            $clearIndex = $commands.IndexOf('Clear-InteractiveScreen')
+            $outputIndex = $commands.IndexOf($case.Output)
+            $selectIndex | Should -BeGreaterOrEqual 0
+            $clearIndex | Should -BeGreaterThan $selectIndex
+            $clearIndex | Should -BeLessThan $outputIndex
+            (@($commands | Where-Object { $_ -eq 'Clear-InteractiveScreen' })).Count |
+                Should -Be 1
+        }
+    }
+
     It 'captured persistent List returns to Main without acknowledgement' {
         $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', 'e')
 
