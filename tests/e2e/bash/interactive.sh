@@ -60,7 +60,7 @@ test -f "$saved_tool"
 # version -> Main -> List -> Main -> Audit -> Main -> Verify the only job-local
 # SDK -> Main -> Remove the same SDK -> Main -> Exit. This E2E flow is captured,
 # so completed-result acknowledgement must be skipped.
-interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nl\na\nv\n1\nr\n1\ne\n' \
+interactive_input="$(printf 'i\n%s\nB\n%s\nM\n%s\nB\nB\nl\na\nv\n1\nB\nr\n1\ne\n' \
   "$channel_selection" "$channel_selection" "$sdk_version")"
 
 echo "E2E interactive: running persistent session for .NET SDK $sdk_version"
@@ -90,7 +90,7 @@ if [[ "$identity_count" -ne "$main_prompt_count" ]]; then
 fi
 
 acknowledgement_count="$(printf '%s\n' "$interactive_output" |
-  grep -cFx 'Press Enter to return to Main...' || true)"
+  grep -Ec 'Press Enter to return to .+\.\.\.' || true)"
 if [[ "$acknowledgement_count" -ne 0 ]]; then
   printf 'Captured E2E execution must not wait for result acknowledgement; observed %s prompts.\n' \
     "$acknowledgement_count" >&2
