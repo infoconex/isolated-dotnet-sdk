@@ -50,7 +50,7 @@ Describe 'PowerShell interactive lifecycle' {
 
         function Get-AcknowledgementPromptCount {
             param([string]$Output)
-            return ([regex]::Matches($Output, 'Press Enter to return to Main\.\.\.')).Count
+            return ([regex]::Matches($Output, 'Press Enter to return to [^\r\n]+\.\.\.')).Count
         }
 
         function Install-FakeInteractiveHost {
@@ -128,9 +128,9 @@ Describe 'PowerShell interactive lifecycle' {
             return ''
         }
 
-        Wait-ForInteractiveResultAcknowledgement -InputRedirected:$false -OutputRedirected:$false
+        Wait-ForInteractiveResultAcknowledgement -Destination 'Verify' -InputRedirected:$false -OutputRedirected:$false
 
-        $script:AcknowledgementOutput | Should -Contain 'Press Enter to return to Main...'
+        $script:AcknowledgementOutput | Should -Contain 'Press Enter to return to Verify...'
         $script:AcknowledgementReadCount | Should -Be 1
 
         $script:AcknowledgementOutput.Clear()
@@ -218,6 +218,42 @@ function Invoke-RestMethod { return $releaseIndex }
     }
 
 
+    It 'returns an acknowledged Install result to the selected channel SDK list' {
+        $version = '10.0.401'
+        Install-FakeInteractiveHost -Version $version
+
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+$channelMetadata = [pscustomobject]@{
+    releases = @([pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.401' } })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    if ($Uri -like '*releases-index.json') { return $releaseIndex }
+    return $channelMetadata
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('i', '1', '1', 'b', 'b', 'e') `
+            -Command $command
+
+        $result.ExitCode | Should -Be 0
+        ([regex]::Matches($result.Output, 'Available \.NET 10\.0 SDKs:')).Count | Should -Be 2
+        ([regex]::Matches($result.Output, 'Select a supported or development \.NET channel:')).Count | Should -Be 2
+        (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
+    }
+
     It 'captured already-installed interactive Install returns without acknowledgement' {
         $version = '99.0.100'
         Install-FakeInteractiveHost -Version $version
@@ -289,6 +325,23 @@ function Invoke-RestMethod {
         (Get-MainPromptCount $result.Output) | Should -Be 2
         $result.Output | Should -Match 'B\. Back to Main'
         $result.Output | Should -Not -Match 'Continue\?'
+    }
+
+    It 'returns a completed Remove result to the Remove SDK list' {
+        foreach ($version in @('99.0.100', '98.0.100')) {
+            Install-FakeInteractiveHost -Version $version
+        }
+
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('r', '1', 'b', 'e') `
+            -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Yes'
+
+        $result.ExitCode | Should -Be 0
+        ([regex]::Matches($result.Output, 'Select an isolated SDK to remove:')).Count | Should -Be 2
+        $result.Output | Should -Match 'Isolated SDK 99\.0\.100 was removed\.'
+        (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
     }
 
     It 'sorts Remove choices newest to oldest' {
