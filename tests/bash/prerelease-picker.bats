@@ -70,7 +70,7 @@ teardown() {
 run_picker() {
   local input="$1"
   shift
-  run bash -c 'printf "%b" "$1" | env HOME="$2" PATH="$3:$PATH" "$@"' _ \
+  run bash -c 'printf "%b" "$1" | env HOME="$2" PATH="$3:$PATH" "${@:4}"' _ \
     "$input" "$test_home" "$fake_bin" "$@"
 }
 
