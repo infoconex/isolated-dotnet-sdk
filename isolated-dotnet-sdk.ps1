@@ -300,6 +300,25 @@ function Wait-ForInteractiveResultAcknowledgement {
     [void](Read-ToolInput)
 }
 
+function Clear-InteractiveScreen {
+    param(
+        [bool]$InputRedirected = [Console]::IsInputRedirected,
+        [bool]$OutputRedirected = [Console]::IsOutputRedirected
+    )
+
+    if (-not $script:InteractiveSession -or $InputRedirected -or $OutputRedirected) {
+        return
+    }
+
+    # Terminal control is optional: unsupported hosts continue with scrolling.
+    try {
+        Clear-Host -ErrorAction Stop
+    }
+    catch {
+        return
+    }
+}
+
 function Confirm-Action {
     param([string]$Prompt)
 
@@ -1249,6 +1268,7 @@ function Select-InstallVersion {
     $ShowArchived = $false
     $ResumeChannel = $script:InstallResumeChannel
     $script:InstallResumeChannel = $null
+    $ClearChannelScreen = $true
 
     while ($true) {
         if ($null -ne $ResumeChannel) {
@@ -1256,6 +1276,10 @@ function Select-InstallVersion {
             $ResumeChannel = $null
         }
         else {
+            if ($ClearChannelScreen) {
+                Clear-InteractiveScreen
+                $ClearChannelScreen = $false
+            }
             Write-ToolDisplay
 
             if ($ShowArchived) {
@@ -1336,6 +1360,7 @@ function Select-InstallVersion {
 
             if ($Selection -match '^[Ss]$') {
                 $ShowArchived = -not $ShowArchived
+                $ClearChannelScreen = $true
                 continue
             }
 
@@ -1384,8 +1409,13 @@ function Select-InstallVersion {
         $ShowAllVersions = $false
         $SystemVersions = @(Get-SystemSdkVersion)
         $IsolatedVersions = @(Get-IsolatedSdkVersion)
+        $ClearSdkScreen = $true
 
         while ($true) {
+            if ($ClearSdkScreen) {
+                Clear-InteractiveScreen
+                $ClearSdkScreen = $false
+            }
             Write-ToolDisplay
             Write-ToolHeading "Available .NET $ChannelVersion SDKs:"
             Write-ToolDisplay
@@ -1444,12 +1474,14 @@ function Select-InstallVersion {
 
             if ($Selection -match '^[Bb]$') {
                 $script:InstallResumeChannel = $null
+                $ClearChannelScreen = $true
                 break
             }
 
             if ($Selection -match '^[Ss]$' -and
                 $FeaturedSdkVersions.Count -lt $AllSdkVersions.Count) {
                 $ShowAllVersions = -not $ShowAllVersions
+                $ClearSdkScreen = $true
                 continue
             }
 
@@ -1737,6 +1769,7 @@ function Install-IsolatedSdk {
     }
 
     if ($SelectedInteractively) {
+        Clear-InteractiveScreen
         Write-ToolDisplay
     }
 
@@ -2025,8 +2058,13 @@ function Remove-IsolatedSdk {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param([switch]$Yes)
 
+    $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
     if (-not (Resolve-RemoveVersion)) {
         return
+    }
+
+    if ($SelectedInteractively) {
+        Clear-InteractiveScreen
     }
 
     $InstallDir = Join-Path $SdkRoot $SdkVersion
@@ -2093,6 +2131,7 @@ function Invoke-SelectedAction {
                 if (-not (Select-VerifyVersion)) {
                     return
                 }
+                Clear-InteractiveScreen
             }
             Test-IsolatedSdk
         }
@@ -2132,6 +2171,7 @@ Push-Location $SdkRoot
 try {
     try {
         if ($script:InteractiveSession) {
+            Clear-InteractiveScreen
             while ($true) {
                 $script:Action = $null
                 $script:SdkVersion = $null
@@ -2144,6 +2184,7 @@ try {
                     return
                 }
 
+                Clear-InteractiveScreen
                 while ($true) {
                     Write-ToolDisplay
                     Invoke-SelectedAction
@@ -2154,6 +2195,7 @@ try {
 
                     if ($script:BackToMain) {
                         Write-ToolDisplay
+                        Clear-InteractiveScreen
                         break
                     }
 
@@ -2161,6 +2203,7 @@ try {
                         [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
                         Wait-ForInteractiveResultAcknowledgement -Destination 'Main'
                         Write-ToolDisplay
+                        Clear-InteractiveScreen
                         break
                     }
 
@@ -2180,6 +2223,7 @@ try {
 
                     Wait-ForInteractiveResultAcknowledgement -Destination $Destination
                     Write-ToolDisplay
+                    Clear-InteractiveScreen
 
                     if ($script:Action -in @('List', 'Audit') -or
                         ($script:Action -eq 'Remove' -and $Destination -eq 'Main')) {
