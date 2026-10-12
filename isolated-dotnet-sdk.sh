@@ -438,15 +438,15 @@ sort_sdk_versions() {
 
 sort_sdk_version_lines() {
     local version
-    local versions=()
+    local ordered_versions=()
 
     while IFS= read -r version; do
         [[ -n "$version" ]] || continue
-        versions+=("$version")
+        ordered_versions+=("$version")
     done
 
-    if (( ${#versions[@]} > 0 )); then
-        sort_sdk_versions "${versions[@]}"
+    if (( ${#ordered_versions[@]} > 0 )); then
+        sort_sdk_versions "${ordered_versions[@]}"
     fi
 }
 
