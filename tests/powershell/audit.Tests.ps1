@@ -252,7 +252,7 @@ Describe 'PowerShell SDK Audit' {
         $result = Invoke-TestAudit
 
         $result.ExitCode | Should -Be 0
-        $result.Text | Should -Match '10\.0\.999 +LTS +Newer than known metadata +EOS: 2028-11-14'
+        $result.Text | Should -Match '10\.0\.999 +LTS +Active +Newer than known metadata +EOS: 2028-11-14'
         $result.Text | Should -Not -Match '10\.0\.999  Update available'
     }
 
@@ -279,7 +279,7 @@ Describe 'PowerShell SDK Audit' {
         $result = Invoke-TestAudit
 
         $result.ExitCode | Should -Be 0
-        $result.Text | Should -Match '11\.0\.100-rc\.1\.111 +STS +Update available -> 11\.0\.100-rc\.2\.999 +RC1 +Release: 2026-09-01'
+        $result.Text | Should -Match '11\.0\.100-rc\.1\.111 +STS +RC1 +Update available -> 11\.0\.100-rc\.2\.999 +Release: 2026-09-01'
         $result.Text | Should -Not -Match 'Go Live:'
     }
 
