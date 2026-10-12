@@ -150,6 +150,14 @@ read_tool_input() {
     fi
 }
 
+wait_for_interactive_result_acknowledgement() {
+    [[ "$INTERACTIVE_SESSION" == "true" ]] || return 0
+
+    echo
+    printf '%s\n' 'Press Enter to return to Main...'
+    read_tool_input ""
+}
+
 bootstrap_if_needed() {
     mkdir -p "$SDK_ROOT"
 
@@ -1102,6 +1110,7 @@ select_install_version() {
                 ;;
             [bB])
                 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    BACK_TO_MAIN="true"
                     return 2
                 fi
                 ;;
@@ -1334,6 +1343,7 @@ select_remove_version() {
         case "$selection" in
             [bB])
                 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    BACK_TO_MAIN="true"
                     return 2
                 fi
                 ;;
@@ -1407,7 +1417,10 @@ select_verify_version() {
         selection="$TOOL_INPUT"
 
         case "$selection" in
-            [bB]) return 1 ;;
+            [bB])
+                BACK_TO_MAIN="true"
+                return 1
+                ;;
             [eE])
                 EXIT_REQUESTED="true"
                 tool_exit
@@ -2032,6 +2045,7 @@ VERSION=""
 YES="false"
 INTERACTIVE_SESSION="false"
 EXIT_REQUESTED="false"
+BACK_TO_MAIN="false"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2095,6 +2109,7 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
         ACTION=""
         VERSION=""
         EXIT_REQUESTED="false"
+        BACK_TO_MAIN="false"
 
         if ! select_action; then
             exit 0
@@ -2104,6 +2119,9 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
         run_selected_action
         if [[ "$EXIT_REQUESTED" == "true" ]]; then
             exit 0
+        fi
+        if [[ "$BACK_TO_MAIN" != "true" ]]; then
+            wait_for_interactive_result_acknowledgement
         fi
         echo
     done
