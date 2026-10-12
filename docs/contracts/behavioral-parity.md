@@ -56,7 +56,7 @@ Release metadata, downloaded payload archives, and staging directories are trans
 
 Invocation mode is determined from the caller's arguments, not from later menu choices.
 
-When no action or exact version is supplied, the tool enters a persistent interactive session. The session shows Main, performs one selected operation, and returns to Main after a normal completion or a normal cancellation/no-change outcome. `E`/`e` is the global Exit command from Main and persistent selection menus. The session remains active until the user selects Exit or an operational failure terminates the process.
+When no action or exact version is supplied, the tool enters a persistent interactive session. The session shows Main, performs one selected operation, keeps a normal completed or cancellation/no-change result visible at `Press Enter to return to Main...`, and returns to Main only after Enter acknowledgement. `E`/`e` is the global Exit command from Main and persistent selection menus. Back and Exit navigation do not gain a completed-result acknowledgement step. The session remains active until the user selects Exit or an operational failure terminates the process.
 
 When the caller supplies an explicit action, or supplies an exact version through the supported bare-version convenience form, the tool remains one-shot. It performs that requested operation once and exits after success, cancellation/no-change, or failure. Explicit invocation never enters the persistent Main loop after the operation.
 
@@ -71,7 +71,7 @@ Interactive navigation is deliberately limited:
 - persistent selection menus do not expose redundant `Q. Cancel` actions when Back already provides the relevant workflow navigation;
 - explicit one-shot interactive selection may retain `Q. Cancel` as a successful no-change outcome.
 
-Back is a selection-menu concept only. Ordinary yes/no install and removal confirmations retain their existing default-no cancellation behavior and do not become navigation menus. In a persistent interactive session, declining such a confirmation is a successful no-change result and returns to Main.
+Back is a selection-menu concept only. Ordinary yes/no install and removal confirmations retain their existing default-no cancellation behavior and do not become navigation menus. In a persistent interactive session, declining such a confirmation is a successful no-change result that waits for Enter acknowledgement before returning to Main.
 
 Operational failures are never converted into navigation results. Metadata, filesystem, payload acquisition/checksum/extraction, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
 

@@ -26,7 +26,7 @@ The same exact SDK version can appear in both groups. The tool preserves that ov
 
 List does not accept an SDK version. Supplying a version with an explicit List action is invalid input rather than a filter request.
 
-List selected from a persistent interactive session returns to Main after completion. Explicit List is one-shot.
+List selected from a persistent interactive session keeps its completed result visible until `Press Enter to return to Main...` is acknowledged. Explicit List is one-shot and never waits for that acknowledgement.
 
 ## Ownership boundary
 
