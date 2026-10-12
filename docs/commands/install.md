@@ -12,6 +12,8 @@ Install can resolve a version in three ways:
 - the interactive channel and SDK picker; or
 - manual exact-version entry from the picker.
 
+Displayed SDK version choices use the shared SDK-aware newest-to-oldest ordering; the compact picker still promotes the current latest SDK and newest feature-band representatives before the expanded full list.
+
 A bare version with no explicit action is treated as an Install request.
 
 Supplying an exact version bypasses interactive release-index/channel discovery, but it does **not** bypass the Microsoft release metadata required to identify the exact platform archive and its published SHA-512.

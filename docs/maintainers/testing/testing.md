@@ -64,7 +64,7 @@ The Bash suites cover, among other focused reliability cases:
 - bare-version install resolution, removal picker cancellation/no-installed behavior, and unavailable required picker input;
 - rejection of an invalid SDK version;
 - release-metadata transport/shape failures, required selection fields, no-SDK channel data, first-seen duplicate ordering, and exact-version metadata independence;
-- Audit servicing/lifecycle states, security precedence, preview and Go Live behavior, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List/Verify network independence;
+- Audit release type, exact SDK release dates, lifecycle states, internal security-servicing precedence, compact update-tail presentation, exact Preview/RC labels, optional Go-Live schedule fallback, end-of-support dates, newest-first ownership ordering, status styling, redirected ANSI-free output, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List/Verify network independence;
 - system and isolated-host native-command failures;
 - unavailable interactive input versus explicit default-no cancellation;
 - build-server shutdown failure context and deletion blocking;
@@ -102,7 +102,7 @@ The PowerShell behavioral coverage includes:
 - warning/error stream preservation and prefix-free failure presentation;
 - rejection of an invalid SDK version;
 - release-metadata transport/shape behavior, required selection fields, no-SDK channel data, duplicate normalization, and exact-version metadata independence;
-- Audit servicing/lifecycle states, security precedence, preview and Go Live behavior, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List/Verify network independence;
+- Audit lifecycle/update presentation, security precedence, preview and Go Live behavior, newest-first ownership ordering, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List/Verify network independence;
 - repository-owned unavailable-interactive-input context;
 - repository-owned SDK payload download context;
 - source bootstrap forwarding for `-WhatIf`;

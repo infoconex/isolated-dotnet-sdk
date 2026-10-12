@@ -41,6 +41,31 @@ Describe 'PowerShell CLI presentation contract' {
         $text | Should -Match 'System SDKs:'
     }
 
+    It 'keeps process-level redirected output ANSI-free' {
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = 'pwsh'
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.ArgumentList.Add('-NoProfile')
+        $startInfo.ArgumentList.Add('-File')
+        $startInfo.ArgumentList.Add($script:SourceCopy)
+        $startInfo.ArgumentList.Add('-Action')
+        $startInfo.ArgumentList.Add('List')
+        $startInfo.Environment[$script:HomeVariableName] = $script:TestHome
+
+        $process = [System.Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        [void]$process.Start()
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+
+        $process.ExitCode | Should -Be 0
+        ($stdout + $stderr).Contains([char]27) | Should -BeFalse
+        $stdout | Should -Match 'Installed \.NET SDKs'
+    }
+
     It 'keeps failures on the error stream without restoring the CLI-name prefix' {
         & pwsh -NoProfile -File $script:SourceCopy -Action List *> $null
         $LASTEXITCODE | Should -Be 0

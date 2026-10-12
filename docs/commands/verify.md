@@ -13,7 +13,7 @@ Verify can be reached in two ways:
 
 Both paths run the same underlying health check. Interactive Verify does not define a second verification algorithm.
 
-The interactive picker lists isolated SDKs only. System SDKs are never Verify targets. If no isolated SDKs are installed, the tool reports that state and returns to Main without changing anything.
+The interactive picker lists isolated SDKs only, ordered newest to oldest. System SDKs are never Verify targets. If no isolated SDKs are installed, the tool reports that state and returns to Main without changing anything.
 
 ## Healthy result
 

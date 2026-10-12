@@ -6,7 +6,7 @@ This document records the release-metadata discovery contract shared by the Powe
 
 Interactive SDK version selection uses Microsoft's release index to choose a .NET channel and then uses that channel's release metadata to enumerate exact SDK versions. An install that already supplies an exact SDK version bypasses that release-index/channel discovery path.
 
-Audit is the other intentional online consumer of release metadata. It uses the release index plus each known installed channel's release data to compare both Isolated and System SDKs with current servicing and lifecycle state. List and Verify do not use this online path.
+Audit is the other intentional online consumer of release metadata. It uses the release index plus each known installed channel's release data to compare both Isolated and System SDKs with current servicing and lifecycle state, release type, exact SDK release dates, and channel end-of-support dates. For a `go-live` channel whose JSON metadata does not publish the future GA date, Audit narrowly falls back to Microsoft's official `dotnet/core` release-notes table for that date only. List and Verify do not use this online path.
 
 Once an exact SDK version has been resolved, installation separately retrieves Microsoft's exact-version release metadata to identify the supported platform archive and its published SHA-512. Supplying an exact version therefore bypasses interactive discovery, not the metadata required for payload acquisition and integrity verification.
 

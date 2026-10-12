@@ -186,6 +186,26 @@ EOF
   [[ "$output" != *"Continue?"* ]]
 }
 
+@test "Remove choices are sorted newest to oldest" {
+  bootstrap_tool
+  for version in '8.0.425' '11.0.100-rc.1.26425.128' '10.0.401'; do
+    mkdir -p "$tool_root/$version"
+    cat > "$tool_root/$version/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$tool_root/$version/dotnet"
+  done
+
+  run bash -c 'printf "r\nb\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  remove_section="$(printf '%s\n' "$output" | sed -n '/Select an isolated SDK to remove:/,/B. Back to Main/p')"
+  [[ "$remove_section" == *"1. 11.0.100-rc.1.26425.128"* ]]
+  [[ "$remove_section" == *"2. 10.0.401"* ]]
+  [[ "$remove_section" == *"3. 8.0.425"* ]]
+}
+
 @test "SDK picker shows latest and newest feature bands before older servicing versions" {
   bootstrap_tool
   fake_bin="$test_root/version-list-fake-bin"

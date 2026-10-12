@@ -8,7 +8,7 @@ For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-po
 
 Remove with an exact version targets only that version's directory directly beneath the isolated SDK root.
 
-Remove without a version opens a picker containing recognized Isolated SDKs. System SDKs are not included because they are outside the tool's ownership boundary.
+Remove without a version opens a picker containing recognized Isolated SDKs ordered newest to oldest. System SDKs are not included because they are outside the tool's ownership boundary.
 
 An empty isolated inventory or explicit picker cancellation is a normal no-change result.
 

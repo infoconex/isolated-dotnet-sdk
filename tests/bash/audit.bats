@@ -42,6 +42,9 @@ printf '%s\n' "$url" >> "$AUDIT_NETWORK_LOG"
 if [[ "$url" == *releases-index.json ]]; then
   [[ "${AUDIT_FAIL_INDEX:-false}" != true ]] || exit 71
   source_file="$AUDIT_METADATA_ROOT/releases-index.json"
+elif [[ "$url" == *release-notes/README.md ]]; then
+  [[ "${AUDIT_FAIL_SCHEDULE:-false}" != true ]] || exit 74
+  source_file="$AUDIT_METADATA_ROOT/release-notes.md"
 else
   channel="${url##*/}"
   channel="${channel%.json}"
@@ -70,18 +73,28 @@ write_standard_metadata() {
   "releases-index": [
     { "channel-version": "12.0", "latest-sdk": "12.0.100-preview.2.999", "support-phase": "preview", "release-type": "sts", "releases.json": "https://example.invalid/12.0.json" },
     { "channel-version": "11.0", "latest-sdk": "11.0.100-rc.2.999", "support-phase": "go-live", "release-type": "sts", "releases.json": "https://example.invalid/11.0.json" },
-    { "channel-version": "10.0", "latest-sdk": "10.0.401", "support-phase": "active", "release-type": "lts", "releases.json": "https://example.invalid/10.0.json" },
-    { "channel-version": "9.0", "latest-sdk": "9.0.318", "support-phase": "maintenance", "release-type": "sts", "releases.json": "https://example.invalid/9.0.json" },
-    { "channel-version": "8.0", "latest-sdk": "8.0.425", "support-phase": "maintenance", "release-type": "lts", "releases.json": "https://example.invalid/8.0.json" },
-    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "releases.json": "https://example.invalid/7.0.json" },
+    { "channel-version": "10.0", "latest-sdk": "10.0.401", "support-phase": "active", "release-type": "lts", "eol-date": "2028-11-14", "releases.json": "https://example.invalid/10.0.json" },
+    { "channel-version": "9.0", "latest-sdk": "9.0.318", "support-phase": "maintenance", "release-type": "sts", "eol-date": "2026-11-10", "releases.json": "https://example.invalid/9.0.json" },
+    { "channel-version": "8.0", "latest-sdk": "8.0.425", "support-phase": "maintenance", "release-type": "lts", "eol-date": "2026-11-10", "releases.json": "https://example.invalid/8.0.json" },
+    { "channel-version": "7.0", "latest-sdk": "7.0.410", "support-phase": "eol", "release-type": "sts", "eol-date": "2024-05-14", "releases.json": "https://example.invalid/7.0.json" },
     { "channel-version": "6.0", "latest-sdk": "6.0.428", "support-phase": "unsupported", "release-type": "lts", "releases.json": "https://example.invalid/6.0.json" }
   ]
 }
 JSON
 
+  cat > "$metadata_root/release-notes.md" <<'MARKDOWN'
+# .NET Release Notes
+
+| Version | Release Date | Release type | Support phase | Latest Patch Version | End of Support |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| [.NET 11.0](./11.0/README.md) | November 10, 2026 | [STS][policies] | Go-Live | [11.0.0-rc.1][11.0.0-rc.1] | October 13, 2026 |
+MARKDOWN
+
   cat > "$metadata_root/10.0.json" <<'JSON'
 {"releases":[
-  {"release-date":"2026-09-01","security":false,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
+  {"release-date":"2025-11-11","security":false,"sdk":{"version":"10.0.100","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.100/archive.tgz"}]}},
+  {"release-date":"2026-08-11","security":false,"sdk":{"version":"10.0.303","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.303/archive.tgz"}]}},
+  {"release-date":"2026-09-01","security":true,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
 ]}
 JSON
   cat > "$metadata_root/9.0.json" <<'JSON'
@@ -98,7 +111,7 @@ JSON
 JSON
   cat > "$metadata_root/7.0.json" <<'JSON'
 {"releases":[
-  {"release-date":"2024-05-01","security":true,"sdk":{"version":"7.0.410","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/7.0.410/archive.tgz"}]}}
+  {"release-date":"2024-05-28","security":true,"sdk":{"version":"7.0.410","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/7.0.410/archive.tgz"}]}}
 ]}
 JSON
   cat > "$metadata_root/11.0.json" <<'JSON'
@@ -142,12 +155,15 @@ run_audit() {
     AUDIT_SYSTEM_SDKS="${AUDIT_SYSTEM_SDKS:-}" \
     AUDIT_FAIL_INDEX="${AUDIT_FAIL_INDEX:-false}" \
     AUDIT_FAIL_CHANNEL="${AUDIT_FAIL_CHANNEL:-}" \
+    AUDIT_FAIL_SCHEDULE="${AUDIT_FAIL_SCHEDULE:-false}" \
     "$tool_path" audit
 }
 
-@test "audit reports servicing and lifecycle states for isolated and system SDKs" {
+@test "audit reports compact lifecycle-first rows for isolated and system SDKs" {
   add_isolated_sdk '12.0.100-preview.1.111'
   add_isolated_sdk '11.0.100-rc.1.111'
+  add_isolated_sdk '10.0.100'
+  add_isolated_sdk '10.0.303'
   add_isolated_sdk '10.0.401'
   add_isolated_sdk '9.0.306'
   add_isolated_sdk '8.0.303'
@@ -159,16 +175,63 @@ run_audit() {
 
   [ "$status" -eq 0 ]
   [[ "$output" == *".NET SDK audit"* ]]
-  [[ "$output" == *$'Isolated SDKs:\n  10.0.401  Current'* ]]
-  [[ "$output" == *"9.0.306  Security update available -> 9.0.318  Maintenance"* ]]
-  [[ "$output" == *"8.0.303  Update available -> 8.0.425  Maintenance"* ]]
-  [[ "$output" == *"7.0.410  End of life"* ]]
-  [[ "$output" == *"12.0.100-preview.1.111  Update available -> 12.0.100-preview.2.999  Preview"* ]]
-  [[ "$output" == *"11.0.100-rc.1.111  Update available -> 11.0.100-rc.2.999  Go Live"* ]]
-  [[ "$output" == *"6.0.428  Unsupported"* ]]
-  [[ "$output" == *$'System SDKs:\n  10.0.401  Current'* ]]
-  [[ "$output" == *"8.0.425  Maintenance"* ]]
+  [[ "$output" == *"Isolated SDKs:"* ]]
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.100 +LTS +Active +Release: 2025-11-11 +EOS: 2028-11-14 +Update -> 10\.0\.401$'
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.303 +LTS +Active +Release: 2026-08-11 +EOS: 2028-11-14 +Update -> 10\.0\.401$'
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +Release: 2026-09-01 +EOS: 2028-11-14$'
+  printf '%s\n' "$output" | grep -Eq '^  9\.0\.306 +STS +Maintenance +Release: 2026-07-01 +EOS: 2026-11-10 +Update -> 9\.0\.318$'
+  printf '%s\n' "$output" | grep -Eq '^  8\.0\.303 +LTS +Maintenance +Release: 2026-06-01 +EOS: 2026-11-10 +Update -> 8\.0\.425$'
+  printf '%s\n' "$output" | grep -Eq '^  7\.0\.410 +STS +EOL +Release: 2024-05-28 +EOS: 2024-05-14$'
+  printf '%s\n' "$output" | grep -Eq '^  12\.0\.100-preview\.1\.111 +STS +Preview 1 +Release: 2026-09-01 +Update -> 12\.0\.100-preview\.2\.999$'
+  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +RC1 +Release: 2026-09-01 +Go Live: 2026-11-10 +Update -> 11\.0\.100-rc\.2\.999$'
+  printf '%s\n' "$output" | grep -Eq '^  6\.0\.428 +LTS +Unsupported +Release: 2024-11-01$'
+  [[ "$output" == *"System SDKs:"* ]]
+  printf '%s\n' "$output" | grep -Eq '^  8\.0\.425 +LTS +Maintenance +Release: 2026-09-01 +EOS: 2026-11-10$'
   [[ "$output" != *"Vulnerable"* ]]
+  [[ "$output" != *$'\033['* ]]
+
+  active_line="$(printf '%s\n' "$output" | grep '^  10\.0\.100[[:space:]]' | head -n 1)"
+  current_line="$(printf '%s\n' "$output" | grep '^  10\.0\.401[[:space:]]' | head -n 1)"
+  maintenance_line="$(printf '%s\n' "$output" | grep '^  8\.0\.425[[:space:]]' | head -n 1)"
+  update_line="$(printf '%s\n' "$output" | grep '^  8\.0\.303[[:space:]]' | head -n 1)"
+  security_line="$(printf '%s\n' "$output" | grep '^  9\.0\.306[[:space:]]' | head -n 1)"
+  preview_line="$(printf '%s\n' "$output" | grep '^  12\.0\.100-preview\.1\.111[[:space:]]' | head -n 1)"
+  rc_line="$(printf '%s\n' "$output" | grep '^  11\.0\.100-rc\.1\.111[[:space:]]' | head -n 1)"
+  eol_line="$(printf '%s\n' "$output" | grep '^  7\.0\.410[[:space:]]' | head -n 1)"
+
+  current_release_type_prefix="${current_line%%LTS*}"
+  maintenance_release_type_prefix="${maintenance_line%%LTS*}"
+  preview_release_type_prefix="${preview_line%%STS*}"
+  [ "${#current_release_type_prefix}" -eq "${#maintenance_release_type_prefix}" ]
+  [ "${#current_release_type_prefix}" -eq "${#preview_release_type_prefix}" ]
+
+  active_lifecycle_prefix="${active_line%%Active*}"
+  current_lifecycle_prefix="${current_line%%Current*}"
+  maintenance_lifecycle_prefix="${maintenance_line%%Maintenance*}"
+  preview_lifecycle_prefix="${preview_line%%Preview\ 1*}"
+  rc_lifecycle_prefix="${rc_line%%RC1*}"
+  eol_lifecycle_prefix="${eol_line%%EOL*}"
+  [ "${#current_lifecycle_prefix}" -eq "${#active_lifecycle_prefix}" ]
+  [ "${#current_lifecycle_prefix}" -eq "${#maintenance_lifecycle_prefix}" ]
+  [ "${#current_lifecycle_prefix}" -eq "${#preview_lifecycle_prefix}" ]
+  [ "${#current_lifecycle_prefix}" -eq "${#rc_lifecycle_prefix}" ]
+  [ "${#current_lifecycle_prefix}" -eq "${#eol_lifecycle_prefix}" ]
+
+  [[ "$active_line" == *"Active"*"Release: 2025-11-11"*"EOS: 2028-11-14"*"Update -> 10.0.401" ]]
+  [[ "$update_line" == *"Maintenance"*"Release: 2026-06-01"*"EOS: 2026-11-10"*"Update -> 8.0.425" ]]
+  [[ "$security_line" == *"Maintenance"*"Release: 2026-07-01"*"EOS: 2026-11-10"*"Update -> 9.0.318" ]]
+  [[ "$preview_line" == *"Preview 1"*"Release: 2026-09-01"*"Update -> 12.0.100-preview.2.999" ]]
+  [[ "$rc_line" == *"RC1"*"Release: 2026-09-01"*"Go Live: 2026-11-10"*"Update -> 11.0.100-rc.2.999" ]]
+  [[ "$current_line" == *"Current"*"Release: 2026-09-01"*"EOS: 2028-11-14" ]]
+  [[ "$output" != *"Security update available"* ]]
+  [[ "$output" != *"Update available"* ]]
+  [[ "$output" != *"Release date:"* ]]
+  [[ "$output" != *"End of support:"* ]]
+
+  isolated_section="$(printf '%s\n' "$output" | sed -n '/^Isolated SDKs:$/,/^System SDKs:$/p')"
+  system_section="$(printf '%s\n' "$output" | sed -n '/^System SDKs:$/,$p')"
+  [[ "$isolated_section" == *"12.0.100-preview.1.111"*"11.0.100-rc.1.111"*"10.0.401"*"10.0.303"*"10.0.100"* ]]
+  [[ "$system_section" == *"10.0.401"*"8.0.425"* ]]
 }
 
 @test "audit preserves duplicate versions across ownership groups" {
@@ -178,7 +241,7 @@ run_audit() {
   run_audit
 
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c '  10.0.401  Current')" -eq 2 ]
+  [ "$(printf '%s\n' "$output" | grep -Ec '^  10\.0\.401 +LTS +Current +Release: 2026-09-01 +EOS: 2028-11-14$')" -eq 2 ]
 }
 
 @test "audit does not mark an SDK newer than known metadata as outdated" {
@@ -187,17 +250,86 @@ run_audit() {
   run_audit
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"10.0.999  Newer than known metadata"* ]]
-  [[ "$output" != *"10.0.999  Update available"* ]]
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.999 +LTS +Active +EOS: 2028-11-14 +Newer than known metadata$'
+  [[ "$output" != *"10.0.999  Update ->"* ]]
 }
 
-@test "audit reports an unrecognized installed channel without fabricating lifecycle data" {
+@test "audit reports an unrecognized installed channel in the lifecycle status column without fabricated metadata" {
   add_isolated_sdk '13.0.100'
+  add_isolated_sdk '10.0.401'
 
   run_audit
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"13.0.100  Unknown channel"* ]]
+  unknown_line="$(printf '%s\n' "$output" | grep '^  13\.0\.100[[:space:]]' | head -n 1)"
+  current_line="$(printf '%s\n' "$output" | grep '^  10\.0\.401[[:space:]]' | head -n 1)"
+
+  [[ "$unknown_line" == *"Unknown channel"* ]]
+  [[ "$unknown_line" != *"LTS"* ]]
+  [[ "$unknown_line" != *"STS"* ]]
+  [[ "$unknown_line" != *"Release:"* ]]
+  [[ "$unknown_line" != *"Go Live:"* ]]
+  [[ "$unknown_line" != *"EOS:"* ]]
+
+  unknown_lifecycle_prefix="${unknown_line%%Unknown\ channel*}"
+  current_lifecycle_prefix="${current_line%%Current*}"
+  [ "${#unknown_lifecycle_prefix}" -eq "${#current_lifecycle_prefix}" ]
+}
+
+@test "audit treats the Go Live schedule fallback as optional" {
+  add_isolated_sdk '11.0.100-rc.1.111'
+  export AUDIT_FAIL_SCHEDULE=true
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +RC1 +Release: 2026-09-01 +Update -> 11\.0\.100-rc\.2\.999$'
+  [[ "$output" != *"Go Live:"* ]]
+}
+
+@test "audit omits a missing optional exact release date without fabricating one" {
+  add_isolated_sdk '10.0.401'
+  cat > "$metadata_root/10.0.json" <<'JSON'
+{"releases":[
+  {"security":false,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
+]}
+JSON
+
+  run_audit
+
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +EOS: 2028-11-14$'
+  [[ "$output" != *"Release:"* ]]
+}
+
+@test "audit colors only Current Maintenance and EOL lifecycle tokens on a terminal" {
+  add_isolated_sdk '10.0.401'
+  add_isolated_sdk '9.0.318'
+  add_isolated_sdk '7.0.410'
+  wrapper="$test_root/audit-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+export PATH="$fake_bin:\$PATH"
+export AUDIT_METADATA_ROOT="$metadata_root"
+export AUDIT_NETWORK_LOG="$network_log"
+exec "$tool_path" audit
+EOF
+  chmod +x "$wrapper"
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    run script -q /dev/null "$wrapper"
+  else
+    run script -q -c "$wrapper" /dev/null
+  fi
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033[0;32mCurrent\033[0m'* ]]
+  [[ "$output" == *$'\033[0;33mMaintenance\033[0m'* ]]
+  [[ "$output" == *$'\033[0;31mEOL\033[0m'* ]]
+  [[ "$output" != *$'\033[0;32m10.0.401'* ]]
+  [[ "$output" != *$'\033[0;33m9.0.318'* ]]
+  [[ "$output" != *$'\033[0;31m7.0.410'* ]]
 }
 
 @test "audit fails clearly when the release index cannot be obtained" {
@@ -219,7 +351,7 @@ run_audit() {
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"Unable to load release metadata for .NET 10.0."* ]]
-  [[ "$output" != *"10.0.401  Current"* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
 }
 
 @test "audit fails clearly when required channel metadata is malformed" {
@@ -230,7 +362,7 @@ run_audit() {
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"Invalid release metadata for .NET 10.0."* ]]
-  [[ "$output" != *"10.0.401  Current"* ]]
+  ! printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
 }
 
 @test "audit rejects an SDK version argument" {
@@ -248,7 +380,7 @@ run_audit() {
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"A. Audit installed SDKs"* ]]
-  [[ "$output" == *"10.0.401  Current"* ]]
+  printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
   [ "$(printf '%s\n' "$output" | grep -c 'What would you like to do?')" -eq 2 ]
   [[ "$output" == *"Exiting."* ]]
 }
