@@ -2153,6 +2153,7 @@ try {
                     }
 
                     if ($script:BackToMain) {
+                        Write-ToolDisplay
                         break
                     }
 
@@ -2165,7 +2166,14 @@ try {
 
                     $Destination = switch ($script:Action) {
                         'Install' { $script:InstallResultParent }
-                        'Remove' { 'Remove' }
+                        'Remove' {
+                            if (@(Get-IsolatedSdkVersion).Count -gt 0) {
+                                'Remove'
+                            }
+                            else {
+                                'Main'
+                            }
+                        }
                         'Verify' { 'Verify' }
                         default { 'Main' }
                     }
@@ -2173,7 +2181,8 @@ try {
                     Wait-ForInteractiveResultAcknowledgement -Destination $Destination
                     Write-ToolDisplay
 
-                    if ($script:Action -in @('List', 'Audit')) {
+                    if ($script:Action -in @('List', 'Audit') -or
+                        ($script:Action -eq 'Remove' -and $Destination -eq 'Main')) {
                         break
                     }
 
