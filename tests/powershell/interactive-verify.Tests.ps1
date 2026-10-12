@@ -106,11 +106,11 @@ Describe 'PowerShell interactive Verify' {
         $version = '99.0.100'
         Install-FakeInteractiveVerifyHost -Version $version -ReportedVersion $version | Out-Null
 
-        $result = Invoke-InteractiveVerifyTool -InputLines @('v', '1', '', 'e')
+        $result = Invoke-InteractiveVerifyTool -InputLines @('v', '1', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
-        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'V\. Verify an isolated SDK'
         $result.Output | Should -Match 'Select an isolated SDK to verify:'
         $result.Output | Should -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
@@ -118,11 +118,11 @@ Describe 'PowerShell interactive Verify' {
     }
 
     It 'treats no isolated SDKs as a normal no-change result' {
-        $result = Invoke-InteractiveVerifyTool -InputLines @('v', '', 'e')
+        $result = Invoke-InteractiveVerifyTool -InputLines @('v', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
-        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'No isolated SDKs are installed under'
         $result.Output | Should -Not -Match 'Select an isolated SDK to verify:'
     }
