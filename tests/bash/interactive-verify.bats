@@ -23,6 +23,10 @@ count_main_prompts() {
   printf '%s\n' "$1" | grep -c 'What would you like to do?' || true
 }
 
+count_acknowledgement_prompts() {
+  printf '%s\n' "$1" | grep -c 'Press Enter to return to Main...' || true
+}
+
 install_fake_host() {
   local version="$1"
   local reported_version="${2:-$1}"
@@ -42,10 +46,11 @@ EOF
   version='99.0.100'
   install_fake_host "$version"
 
-  run bash -c 'printf "v\n1\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "v\n1\n\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   [[ "$output" == *"V. Verify an isolated SDK"* ]]
   [[ "$output" == *"Select an isolated SDK to verify:"* ]]
   [[ "$output" == *"Isolated SDK $version is healthy."* ]]
@@ -53,10 +58,11 @@ EOF
 }
 
 @test "interactive Verify with no isolated SDK is a normal no-change result" {
-  run bash -c 'printf "v\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "v\n\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   [[ "$output" == *"No isolated SDKs are installed under $tool_root."* ]]
   [[ "$output" != *"Select an isolated SDK to verify:"* ]]
 }
@@ -69,6 +75,7 @@ EOF
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"B. Back to Main"* ]]
   [[ "$output" == *"E. Exit"* ]]
   [[ "$output" == *"Exiting."* ]]
@@ -120,6 +127,7 @@ EOF
 
   [ "$status" -ne 0 ]
   [ "$(count_main_prompts "$output")" -eq 1 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"Isolated SDK $version failed verification: the host did not report SDK $version."* ]]
   [[ "$output" != *"Exiting."* ]]
 }

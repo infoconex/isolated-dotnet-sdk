@@ -165,6 +165,31 @@ EOF
   [[ "$output" == *"B. Back to Main"* ]]
 }
 
+
+@test "already-installed interactive Install waits for acknowledgement" {
+  bootstrap_tool
+  fake_bin="$test_root/install-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  version='99.0.100'
+  mkdir -p "$tool_root/$version"
+  cat > "$tool_root/$version/dotnet" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf '%s [/fake/sdk]\n' '$version'
+fi
+exit 0
+EOF
+  chmod +x "$tool_root/$version/dotnet"
+
+  run bash -c 'printf "i\nm\n%s\n\ne\n" "$4" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$version"
+
+  [ "$status" -eq 0 ]
+  [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
+  [[ "$output" == *"Isolated SDK:"*"Already installed"* ]]
+}
+
 @test "Install SDK Back returns to channel selection" {
   bootstrap_tool
   fake_bin="$test_root/version-back-fake-bin"

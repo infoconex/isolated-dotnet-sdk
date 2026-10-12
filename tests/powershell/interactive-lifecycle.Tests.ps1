@@ -52,6 +52,19 @@ Describe 'PowerShell interactive lifecycle' {
             param([string]$Output)
             return ([regex]::Matches($Output, 'Press Enter to return to Main\.\.\.')).Count
         }
+
+        function Install-FakeInteractiveHost {
+            param([string]$Version)
+
+            $installDirectory = Join-Path $script:ToolRoot $Version
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            Copy-Item `
+                -Path (Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT '*') `
+                -Destination $installDirectory `
+                -Recurse `
+                -Force
+            $env:FAKE_DOTNET_SDK_VERSION = $Version
+        }
     }
 
     BeforeEach {
@@ -76,6 +89,7 @@ Describe 'PowerShell interactive lifecycle' {
     }
 
     AfterEach {
+        Remove-Item Env:FAKE_DOTNET_SDK_VERSION -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -155,6 +169,35 @@ function Invoke-RestMethod { return $releaseIndex }
         $result.Output | Should -Match 'B\. Back to Main'
     }
 
+
+    It 'holds an already-installed interactive Install result until acknowledgement' {
+        $version = '99.0.100'
+        Install-FakeInteractiveHost -Version $version
+
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+function Invoke-RestMethod { return $releaseIndex }
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('i', 'm', $version, '', 'e') `
+            -Command $command
+
+        $result.ExitCode | Should -Be 0
+        (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 1
+        $result.Output | Should -Match 'Isolated SDK:.*Already installed'
+        $result.Output | Should -Match 'Press Enter to return to Main\.\.\.'
+    }
     It 'returns from Install SDK selection to channel selection with Back' {
         $command = @'
 $releaseIndex = [pscustomobject]@{

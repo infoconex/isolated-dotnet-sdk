@@ -374,6 +374,7 @@ Describe 'PowerShell SDK Audit' {
             $PSStyle.OutputRendering = "PlainText"
             $global:responses = [System.Collections.Generic.Queue[string]]::new()
             $global:responses.Enqueue("A")
+            $global:responses.Enqueue("")
             $global:responses.Enqueue("E")
             function Read-Host { param([string]$Prompt) $global:responses.Dequeue() }
             function Invoke-RestMethod {
@@ -392,6 +393,7 @@ Describe 'PowerShell SDK Audit' {
         $text | Should -Match 'A\. Audit installed SDKs'
         $text | Should -Match '10\.0\.401 +LTS +Current'
         ([regex]::Matches($text, 'What would you like to do\?')).Count | Should -Be 2
+        ([regex]::Matches($text, 'Press Enter to return to Main\.\.\.')).Count | Should -Be 1
         $text | Should -Match 'Exiting\.'
     }
 
