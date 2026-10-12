@@ -120,10 +120,13 @@ try {
         $channelSelection,
         'M',
         $sdkVersion,
+        'B',
+        'B',
         'l',
         'a',
         'v',
         '1',
+        'B',
         'r',
         '1',
         'e'
@@ -151,7 +154,7 @@ try {
 
     $acknowledgementCount = ([regex]::Matches(
         $interactive.Output,
-        [regex]::Escape('Press Enter to return to Main...'))).Count
+        'Press Enter to return to [^\r\n]+\.\.\.')).Count
     if ($acknowledgementCount -ne 0) {
         throw "Captured E2E execution must not wait for result acknowledgement; observed $acknowledgementCount prompts."
     }
