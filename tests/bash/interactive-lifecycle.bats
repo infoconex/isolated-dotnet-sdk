@@ -30,7 +30,7 @@ count_main_prompts() {
 }
 
 count_acknowledgement_prompts() {
-  printf '%s\n' "$1" | grep -c 'Press Enter to return to Main...' || true
+  printf '%s\n' "$1" | grep -Ec 'Press Enter to return to .+\.\.\.' || true
 }
 
 write_metadata_fake_curl() {
@@ -188,6 +188,31 @@ EOF
 }
 
 
+@test "completed Install returns to the selected channel SDK list" {
+  bootstrap_tool
+  fake_bin="$test_root/install-parent-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  version='10.0.401'
+  mkdir -p "$tool_root/$version"
+  cat > "$tool_root/$version/dotnet" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf '%s [/fake/sdk]\n' '$version'
+fi
+exit 0
+EOF
+  chmod +x "$tool_root/$version/dotnet"
+
+  run bash -c 'printf "i\n1\n1\nb\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Available .NET 10.0 SDKs:' || true)" -eq 2 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Select a supported or development .NET channel:' || true)" -eq 2 ]
+  [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
+}
+
 @test "captured already-installed interactive Install returns without acknowledgement" {
   bootstrap_tool
   fake_bin="$test_root/install-fake-bin"
@@ -241,6 +266,26 @@ EOF
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [[ "$output" == *"B. Back to Main"* ]]
   [[ "$output" != *"Continue?"* ]]
+}
+
+@test "completed Remove returns to the Remove SDK list" {
+  bootstrap_tool
+  for version in '99.0.100' '98.0.100'; do
+    mkdir -p "$tool_root/$version"
+    cat > "$tool_root/$version/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$tool_root/$version/dotnet"
+  done
+
+  run bash -c 'printf "r\n1\nb\ne\n" | env HOME="$1" "$2" --yes' _ "$test_home" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Select an isolated SDK to remove:' || true)" -eq 2 ]
+  [[ "$output" == *"Isolated SDK 99.0.100 was removed."* ]]
+  [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
 }
 
 @test "Remove choices are sorted newest to oldest" {
