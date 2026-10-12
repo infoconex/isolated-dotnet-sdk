@@ -1008,6 +1008,7 @@ select_install_version() {
     local selection=""
     local channel=""
     local latest_sdk=""
+    local current_sdk=""
     local phase=""
     local release_type=""
     local releases_url=""
@@ -1214,7 +1215,17 @@ select_install_version() {
 
         all_versions="$(sort_sdk_versions "${discovered_versions[@]}")"
         compact_versions="$(build_compact_sdk_versions "$all_versions" "$latest_sdk")"
+        # Trust the channel's latest SDK only when it was actually discovered.
+        # Otherwise classify the highest SDK-aware sorted release, not a made-up
+        # latest marker or an older prerelease from a stable channel's history.
+        current_sdk="$latest_sdk"
+        if [[ -z "$current_sdk" ]] || ! contains_line "$all_versions" "$current_sdk"; then
+            current_sdk="${all_versions%%$'\n'*}"
+        fi
         show_all_versions="false"
+        if [[ "$current_sdk" =~ -(preview|rc)\.[0-9]+(\.|$) ]]; then
+            show_all_versions="true"
+        fi
 
         system_versions="$(get_system_sdk_versions)"
         isolated_versions="$(get_isolated_sdk_versions)"

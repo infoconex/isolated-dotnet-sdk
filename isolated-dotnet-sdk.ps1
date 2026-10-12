@@ -1406,7 +1406,17 @@ function Select-InstallVersion {
         $FeaturedSdkVersions = @(Get-FeaturedSdkVersion `
                 -OrderedSdkVersions $AllSdkVersions `
                 -LatestSdk $LatestSdk)
-        $ShowAllVersions = $false
+        # The selected channel's latest SDK is authoritative only when it is in
+        # that channel's discovered release set. Otherwise classify the newest
+        # discovered SDK, without fabricating an authoritative latest marker.
+        $CurrentSdk = if (-not [string]::IsNullOrWhiteSpace($LatestSdk) -and
+            $AllSdkVersions -contains $LatestSdk) {
+            $LatestSdk
+        }
+        else {
+            $AllSdkVersions[0]
+        }
+        $ShowAllVersions = $CurrentSdk -match '-(?:preview|rc)\.[0-9]+(?:\.|$)'
         $SystemVersions = @(Get-SystemSdkVersion)
         $IsolatedVersions = @(Get-IsolatedSdkVersion)
         $ClearSdkScreen = $true

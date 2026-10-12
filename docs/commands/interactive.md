@@ -104,18 +104,16 @@ Channel menu numbers are derived from current metadata rather than fixed product
 
 ## SDK version selection
 
-The default Install SDK picker is intentionally compact:
+The default Install SDK picker depends on whether the selected channel is currently prerelease:
 
-- Microsoft's `latest-sdk` is shown first and marked `latest` when that metadata is present and resolves to an SDK in the selected channel;
-- the newest SDK from each other available feature band is also shown;
-- older servicing releases remain available through **Show all versions**;
-- the expanded view is deterministically newest-first;
-- Back remains available from compact and expanded views; and
-- manual exact-version entry remains available.
+- **Prerelease channels** (whose current SDK is a Preview or RC) show **all SDK versions** by default, newest first, so individual Preview/RC milestones can be selected without another step.
+- **Stable channels** start with the compact **featured** list: Microsoft's `latest-sdk` if it occurs in the channel's releases, plus the newest SDK from each other available feature band. Older servicing versions are accessible through **Show all versions**.
+- Where the two lists differ, `S` switches between **Show featured versions** and **Show all versions**, describing the view it will open. When the lists are identical, there is no `S` option.
+- Back and manual exact-version entry remain available in both views.
 
-Install choices may be marked `latest`, `isolated`, and/or `system` to describe current metadata and ownership state.
+Classification uses Microsoft's latest SDK for the channel when it is present in the discovered versions. If that field is missing or disagrees with discovered releases, the newest discovered SDK determines the default view; no missing `latest` marker is invented. A stable channel is not classified as prerelease merely because older Preview/RC versions remain in its history.
 
-The Install picker does not depend on fixed numeric positions for a particular SDK version.
+Install choices may be marked `latest`, `isolated`, and/or `system` to describe current metadata and ownership state. The picker uses SDK-aware ordering rather than fixed menu positions. The same defaults apply if an explicit, one-shot Install command needs to open a picker.
 
 ## Verify selection
 

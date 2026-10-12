@@ -83,16 +83,15 @@ An explicit user decision to cancel is different from input failure. A blank/no 
 
 ### SDK version picker
 
-For a selected channel, the default SDK picker prioritizes likely choices without removing exact-version access:
+For a selected channel, the Install picker has two version views:
 
-- when Microsoft release-index metadata supplies a `latest-sdk` value that is present in the selected channel data, that SDK is displayed first and marked `latest`;
-- the default list also contains the newest SDK from every other available feature band;
-- older servicing releases are hidden behind `Show all versions`;
-- the expanded list contains every discovered SDK version in deterministic newest-first order;
-- Back remains available from both compact and expanded version views;
-- manual exact-version entry remains available and explicit exact-version command invocation continues to bypass release-index/channel discovery while retaining the exact-version artifact metadata lookup required for installation.
+- **Currently prerelease channels** initially show **all** discovered SDK versions in deterministic SDK-aware newest-first order, including distinct Preview and RC milestones within the same feature band.
+- **Stable channels** initially show the featured view: Microsoft's `latest-sdk` (when it identifies an SDK in that channel's releases), then the newest SDK from each other available feature band. Older servicing releases remain accessible.
+- The picker offers `S. Show featured versions` from the complete view or `S. Show all versions` from the featured view **only if the two lists differ**. A channel with one SDK does not show `S`.
 
-Feature-band grouping is derived from SDK version data rather than menu positions. Preview and release-candidate labels are part of deterministic version ordering; fixed numeric menu positions are not a product contract. `latest-sdk` remains optional display metadata: its absence does not invalidate an otherwise usable channel and does not cause the tool to invent an authoritative `latest` marker.
+Classify the **selected channel's current SDK**, not its historical release list: prefer the release-index `latest-sdk` when it is present in the discovered channel SDK versions; otherwise use the SDK-aware newest discovered version as the deterministic fallback. A `-preview.N` or `-rc.N` suffix identifies a currently prerelease SDK. Do not use a hard-coded channel number, or classify a stable channel as prerelease because it contains older previews or an inconsistent support-phase label. An absent or nonmatching `latest-sdk` does not create a fabricated `latest` marker.
+
+Both views preserve the existing `latest`, `system`, and `isolated` markers; Back, Exit, and manual exact-version entry; and numbered selection of any displayed version. The complete view reuses SDK-aware newest-first ordering. Feature-band grouping and Preview/RC ordering are derived from SDK version data, not fixed menu positions. Explicit exact-version command invocation continues to bypass release-index/channel discovery while retaining the exact-version artifact metadata lookup needed for installation. These picker rules apply in persistent interactive and one-shot Install picker contexts.
 
 ## Intentional runtime and platform differences
 

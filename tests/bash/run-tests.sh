@@ -26,6 +26,7 @@ bats \
   "$repo_root/tests/bash/audit.bats" \
   "$repo_root/tests/bash/interactive-verify.bats" \
   "$repo_root/tests/bash/interactive-lifecycle.bats" \
+  "$repo_root/tests/bash/prerelease-picker.bats" \
   "$repo_root/tests/bash/global-exit.bats" \
   "$repo_root/tests/bash/cross-platform.bats" \
   "$repo_root/tests/bash/presentation.bats" \
