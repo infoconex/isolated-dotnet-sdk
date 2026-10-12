@@ -254,7 +254,7 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   assert_operation_view 'B. Back to .NET channels' 'Target SDK:' \
-    'Isolated SDK: Already installed' 'Press Enter to return to SDK selection...' \
+    'Already installed' 'Press Enter to return to SDK selection...' \
     'Available .NET 10.0 SDKs:'
 
   run bash -c 'printf "v\n1\n\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
