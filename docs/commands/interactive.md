@@ -53,6 +53,10 @@ The return hierarchy is deliberate:
 - Install from a channel's SDK picker returns to that same channel's SDK list.
 - A no-inventory result that never displayed a Verify or Remove picker returns to Main.
 
+Persistent interactive navigation clears the previous screen before the destination menu or completed operation view when the terminal supports clearing. After a completed result, clearing occurs **only after** its Enter acknowledgement and immediately before returning to the indicated parent screen. Back clears on the way to its parent without an acknowledgement. Switching between channel or SDK-picker views also clears when supported. Invalid-selection feedback and in-progress output remain visible rather than being erased by automatic redraws. Unsupported terminal capabilities fall back to normal scrolling, and starting the tool does not erase bootstrap diagnostics.
+
+Screen clearing is strictly a persistent, terminal-backed presentation feature. Explicit one-shot commands, redirected or captured input/output, pipes, CI, and automation do not emit clearing controls.
+
 This acknowledgement is a completed-result boundary, not another decision menu. It is enabled only when both input and output are attached to an interactive terminal. Redirected input, redirected/captured output, pipes, CI, and automation never wait for it; they still follow the same parent-screen navigation without pausing. Back and Exit navigation do not require acknowledgement. A genuine operational failure terminates nonzero rather than navigating to a parent screen where a later successful Exit could mask it.
 
 ## One-shot commands

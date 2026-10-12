@@ -160,6 +160,19 @@ wait_for_interactive_result_acknowledgement() {
     read_tool_input ""
 }
 
+clear_interactive_screen() {
+    # A navigation presentation action, never a requirement for correct operation.
+    [[ "$INTERACTIVE_SESSION" == "true" && -t 0 && -t 1 ]] || return 0
+    [[ -n "${TERM:-}" && "$TERM" != "dumb" ]] || return 0
+    command -v tput >/dev/null 2>&1 || return 0
+
+    local sequence=""
+    if sequence="$(tput clear 2>/dev/null)" && [[ -n "$sequence" ]]; then
+        printf '%s' "$sequence"
+    fi
+    return 0
+}
+
 bootstrap_if_needed() {
     mkdir -p "$SDK_ROOT"
 
@@ -1012,6 +1025,7 @@ select_install_version() {
     local resume_channel="$INSTALL_RESUME_CHANNEL"
     local resume_latest_sdk="$INSTALL_RESUME_LATEST_SDK"
     local resume_releases_url="$INSTALL_RESUME_RELEASES_URL"
+    local clear_channel_screen="true"
 
     INSTALL_RESUME_CHANNEL=""
     INSTALL_RESUME_LATEST_SDK=""
@@ -1037,6 +1051,10 @@ select_install_version() {
             releases_url="$resume_releases_url"
             resume_channel=""
         else
+        if [[ "$clear_channel_screen" == "true" ]]; then
+            clear_interactive_screen
+            clear_channel_screen="false"
+        fi
         echo
         if [[ "$show_archived" == "true" ]]; then
             tool_heading "Select an end-of-life .NET channel:"
@@ -1136,6 +1154,7 @@ select_install_version() {
                 else
                     show_archived="true"
                 fi
+                clear_channel_screen="true"
                 continue
                 ;;
         esac
@@ -1199,8 +1218,13 @@ select_install_version() {
 
         system_versions="$(get_system_sdk_versions)"
         isolated_versions="$(get_isolated_sdk_versions)"
+        local clear_sdk_screen="true"
 
         while true; do
+            if [[ "$clear_sdk_screen" == "true" ]]; then
+                clear_interactive_screen
+                clear_sdk_screen="false"
+            fi
             echo
             tool_heading "Available .NET $channel SDKs:"
             echo
@@ -1262,6 +1286,7 @@ select_install_version() {
                     INSTALL_RESUME_CHANNEL=""
                     INSTALL_RESUME_LATEST_SDK=""
                     INSTALL_RESUME_RELEASES_URL=""
+                    clear_channel_screen="true"
                     break
                     ;;
                 [sS])
@@ -1271,6 +1296,7 @@ select_install_version() {
                         else
                             show_all_versions="true"
                         fi
+                        clear_sdk_screen="true"
                         continue
                     fi
                     ;;
@@ -2153,6 +2179,7 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
             exit 0
         fi
 
+        clear_interactive_screen
         while true; do
             echo
             run_selected_action
@@ -2163,12 +2190,14 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
 
             if [[ "$BACK_TO_MAIN" == "true" ]]; then
                 echo
+                clear_interactive_screen
                 break
             fi
 
             if [[ ( "$ACTION" == "remove" || "$ACTION" == "verify" ) && -z "$VERSION" ]]; then
                 wait_for_interactive_result_acknowledgement "Main"
                 echo
+                clear_interactive_screen
                 break
             fi
 
@@ -2193,6 +2222,7 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
 
             wait_for_interactive_result_acknowledgement "$destination"
             echo
+            clear_interactive_screen
 
             if [[ "$ACTION" == "list" || "$ACTION" == "audit" ||
                   ( "$ACTION" == "remove" && "$destination" == "Main" ) ]]; then

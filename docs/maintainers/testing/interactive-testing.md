@@ -9,6 +9,9 @@ Both product implementations have behavioral coverage for:
 - no-action invocation remaining in the interactive session until Exit;
 - case-insensitive Main commands `I`, `R`, `L`, `V`, and `E`, with the old numeric Main aliases rejected;
 - terminal-backed normal operation/no-change outcomes remaining visible until contextual Enter acknowledgement before returning to the immediate parent screen;
+- capability-aware screen clearing at persistent navigation and picker-view boundaries, including Back and only *after* completed-result acknowledgement;
+- unsupported terminals retaining scrolling, and captured/redirected/one-shot execution staying free of clearing controls;
+- invalid-selection feedback and active operation progress not being erased by a generic menu redraw;
 - redirected/captured persistent execution skipping acknowledgement so pipes, CI, and automation never wait;
 - completed Install, List, Audit, Verify, and Remove transitions sharing the same terminal acknowledgement boundary while returning to the correct parent screen;
 - Back and Exit navigation returning/leaving immediately without completed-result acknowledgement;
