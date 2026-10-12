@@ -92,7 +92,7 @@ picker_view() {
   [[ "$view" == *"3. 99.0.100-preview.6.6"* ]]
   [[ "$view" == *"4. 99.0.100-preview.5.5"* ]]
   [[ "$view" == *"S. Show featured versions"* ]]
-  [[ "$view" == *"Q. Cancel"* ]]
+  [[ "$output" == *"Q. Cancel"* ]]
 }
 
 @test "prerelease view toggle is reciprocal and returns to complete view" {
