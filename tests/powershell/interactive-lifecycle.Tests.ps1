@@ -142,6 +142,12 @@ Describe 'PowerShell interactive lifecycle' {
         $script:AcknowledgementReadCount | Should -Be 0
     }
 
+    It 'clears once before the first persistent Main menu without entering the operation loop first' {
+        $source = Get-Content -LiteralPath $script:ToolScript -Raw
+        $source | Should -Match '(?s)if \(\$script:InteractiveSession\) \{\s*Clear-InteractiveScreen\s*while \(\$true\) \{'
+        $source | Should -Not -Match '(?s)while \(\$true\) \{\s*Clear-InteractiveScreen\s*\$script:Action = \$null'
+    }
+
     It 'clears only a capable persistent terminal and ignores clear failures' {
         $tokens = $null
         $parseErrors = $null

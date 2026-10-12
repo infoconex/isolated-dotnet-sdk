@@ -94,6 +94,36 @@ EOF
   chmod +x "$fake_bin/curl"
 }
 
+@test "first bootstrap clears exactly once before the first Main menu" {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    skip "BSD script does not deterministically drive bidirectional PTY input in CI"
+  fi
+
+  # Invoke the original source, not the installed copy, to cover first-run bootstrap.
+  prepare_source
+  wrapper="$test_root/first-run-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+exec "$source_copy"
+EOF
+  chmod +x "$wrapper"
+
+  run bash -c 'printf "e\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Tool installed."* ]]
+  [[ "$output" == *"What would you like to do?"* ]]
+  after_bootstrap="${output#*Tool installed.}"
+  before_main="${after_bootstrap%%What would you like to do?*}"
+  [[ "$before_main" == *$'\e[H\e[2J'* ]]
+  without_clear="${before_main//$'\e[H\e[2J'/}"
+  [ "$(( (${#before_main} - ${#without_clear}) / 7 ))" -eq 1 ]
+  after_main="${after_bootstrap#*What would you like to do?}"
+  [[ "$after_main" != *$'\e[H\e[2J'* ]]
+  [[ "$after_main" == *"Exiting."* ]]
+}
+
 @test "terminal interactive List waits for Enter before returning to Main" {
   if [[ "$(uname -s)" == "Darwin" ]]; then
     skip "BSD script does not deterministically drive bidirectional PTY input in CI"
@@ -326,7 +356,7 @@ EOF
   [ "$(( (${#output} - ${#clear_sequences}) / 7 ))" -ge 7 ]
 }
 
-@test "terminal invalid Main selection and one-shot List never clear" {
+@test "terminal invalid Main retry does not clear again, and one-shot List never clears" {
   if [[ "$(uname -s)" == "Darwin" ]]; then
     skip "BSD script does not deterministically drive bidirectional PTY input in CI"
   fi
@@ -344,7 +374,11 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"A selection is required."* ]]
   [[ "$output" == *"Invalid selection: 6."* ]]
-  [[ "$output" != *$'\e[H\e[2J'* ]]
+  # One clear before the initial Main; no additional clear for either invalid selection.
+  without_clear="${output//$'\e[H\e[2J'/}"
+  [ "$(( (${#output} - ${#without_clear}) / 7 ))" -eq 1 ]
+  after_first_main="${output#*What would you like to do?}"
+  [[ "$after_first_main" != *$'\e[H\e[2J'* ]]
 
   run bash -c 'TERM=xterm script -q -c "$1 list" /dev/null' _ "$wrapper"
   [ "$status" -eq 0 ]
