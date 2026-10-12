@@ -2162,6 +2162,7 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
             fi
 
             if [[ "$BACK_TO_MAIN" == "true" ]]; then
+                echo
                 break
             fi
 
@@ -2172,16 +2173,29 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
             fi
 
             case "$ACTION" in
-                install) destination="$INSTALL_RESULT_PARENT" ;;
-                remove) destination="Remove" ;;
-                verify) destination="Verify" ;;
-                *) destination="Main" ;;
+                install)
+                    destination="$INSTALL_RESULT_PARENT"
+                    ;;
+                remove)
+                    if [[ -n "$(get_isolated_sdk_versions)" ]]; then
+                        destination="Remove"
+                    else
+                        destination="Main"
+                    fi
+                    ;;
+                verify)
+                    destination="Verify"
+                    ;;
+                *)
+                    destination="Main"
+                    ;;
             esac
 
             wait_for_interactive_result_acknowledgement "$destination"
             echo
 
-            if [[ "$ACTION" == "list" || "$ACTION" == "audit" ]]; then
+            if [[ "$ACTION" == "list" || "$ACTION" == "audit" ||
+                  ( "$ACTION" == "remove" && "$destination" == "Main" ) ]]; then
                 break
             fi
 
