@@ -49,7 +49,7 @@ The return hierarchy is deliberate:
 
 - List and Audit return to Main.
 - Verify returns to the Verify SDK list.
-- Remove returns to the Remove SDK list when a selection was available.
+- Remove returns to the Remove SDK list while isolated SDKs remain; removing the final isolated SDK returns to Main.
 - Install from a channel's SDK picker returns to that same channel's SDK list.
 - A no-inventory result that never displayed a Verify or Remove picker returns to Main.
 
