@@ -24,7 +24,7 @@ count_main_prompts() {
 }
 
 count_acknowledgement_prompts() {
-  printf '%s\n' "$1" | grep -c 'Press Enter to return to Main...' || true
+  printf '%s\n' "$1" | grep -Ec 'Press Enter to return to .+\.\.\.' || true
 }
 
 install_fake_host() {
@@ -42,17 +42,17 @@ EOF
   chmod +x "$install_dir/dotnet"
 }
 
-@test "Main exposes Verify and a healthy interactive Verify returns to Main" {
+@test "healthy interactive Verify returns to the Verify SDK list" {
   version='99.0.100'
   install_fake_host "$version"
 
-  run bash -c 'printf "v\n1\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  run bash -c 'printf "v\n1\nb\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"V. Verify an isolated SDK"* ]]
-  [[ "$output" == *"Select an isolated SDK to verify:"* ]]
+  [ "$(printf '%s\n' "$output" | grep -c 'Select an isolated SDK to verify:' || true)" -eq 2 ]
   [[ "$output" == *"Isolated SDK $version is healthy."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
