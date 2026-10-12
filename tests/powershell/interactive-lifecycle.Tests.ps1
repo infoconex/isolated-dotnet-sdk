@@ -142,6 +142,41 @@ Describe 'PowerShell interactive lifecycle' {
         $script:AcknowledgementReadCount | Should -Be 0
     }
 
+    It 'clears only a capable persistent terminal and ignores clear failures' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $script:ToolScript,
+            [ref]$tokens,
+            [ref]$parseErrors)
+        $parseErrors | Should -BeNullOrEmpty
+
+        $functionAst = $ast.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Clear-InteractiveScreen'
+            }, $true)
+        $functionAst | Should -Not -BeNullOrEmpty
+        . ([scriptblock]::Create($functionAst.Extent.Text))
+
+        $script:InteractiveSession = $true
+        $script:ClearCallCount = 0
+        function Clear-Host { $script:ClearCallCount++ }
+
+        Clear-InteractiveScreen -InputRedirected:$false -OutputRedirected:$false
+        $script:ClearCallCount | Should -Be 1
+
+        Clear-InteractiveScreen -InputRedirected:$true -OutputRedirected:$false
+        Clear-InteractiveScreen -InputRedirected:$false -OutputRedirected:$true
+        $script:InteractiveSession = $false
+        Clear-InteractiveScreen -InputRedirected:$false -OutputRedirected:$false
+        $script:ClearCallCount | Should -Be 1
+
+        $script:InteractiveSession = $true
+        function Clear-Host { throw 'unsupported terminal host' }
+        { Clear-InteractiveScreen -InputRedirected:$false -OutputRedirected:$false } | Should -Not -Throw
+    }
+
     It 'captured persistent List returns to Main without acknowledgement' {
         $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', 'e')
 
@@ -152,6 +187,7 @@ Describe 'PowerShell interactive lifecycle' {
         $result.Output | Should -Match 'Isolated SDKs:'
         $result.Output | Should -Match 'System SDKs:'
         $result.Output | Should -Match 'Exiting\.'
+        $result.Output.Contains([char]27) | Should -BeFalse
     }
 
     It 'captured persistent Remove no-change returns without acknowledgement' {

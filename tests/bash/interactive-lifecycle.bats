@@ -108,13 +108,42 @@ exec "$tool_path"
 EOF
   chmod +x "$wrapper"
 
-  run bash -c 'printf "l\n\ne\n" | script -q -c "$1" /dev/null' _ "$wrapper"
+  run bash -c 'printf "l\n\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
 
   [ "$status" -eq 0 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   [[ "$output" == *"Press Enter to return to Main..."* ]]
   [[ "$output" == *"Exiting."* ]]
+
+  # The completed result precedes Enter; the cleared parent screen follows it.
+  before_ack="${output%%Press Enter to return to Main...*}"
+  after_ack="${output#*Press Enter to return to Main...}"
+  [[ "$before_ack" == *$'\e[H\e[2J'* ]]
+  [[ "$after_ack" == *$'\e[H\e[2J'* ]]
+  [[ "$after_ack" == *"What would you like to do?"* ]]
+}
+
+@test "terminal without clearing capability retains scrolling and acknowledgement" {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    skip "BSD script does not deterministically drive bidirectional PTY input in CI"
+  fi
+
+  bootstrap_tool
+  wrapper="$test_root/interactive-dumb-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+exec "$tool_path"
+EOF
+  chmod +x "$wrapper"
+
+  run bash -c 'printf "l\n\ne\n" | TERM=dumb script -q -c "$1" /dev/null' _ "$wrapper"
+
+  [ "$status" -eq 0 ]
+  [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
+  [[ "$output" != *$'\e[H\e[2J'* ]]
 }
 
 @test "captured persistent List returns to Main without acknowledgement" {
@@ -128,6 +157,7 @@ EOF
   [[ "$output" == *"Isolated SDKs:"* ]]
   [[ "$output" == *"System SDKs:"* ]]
   [[ "$output" == *"Exiting."* ]]
+  [[ "$output" != *$'\e[H\e[2J'* ]]
 }
 
 @test "captured persistent Remove no-change returns without acknowledgement" {
@@ -171,6 +201,87 @@ EOF
   [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
   [[ "$output" != *"Exiting."* ]]
+}
+
+@test "terminal nested Install Back clears each destination without waiting" {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    skip "BSD script does not deterministically drive bidirectional PTY input in CI"
+  fi
+
+  bootstrap_tool
+  fake_bin="$test_root/channel-back-tty-bin"
+  write_metadata_fake_curl "$fake_bin"
+  wrapper="$test_root/interactive-channel-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+export PATH="$fake_bin:$PATH"
+exec "$tool_path"
+EOF
+  chmod +x "$wrapper"
+
+  run bash -c 'printf "i\n1\nb\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
+
+  [ "$status" -eq 0 ]
+  [ "$(count_main_prompts "$output")" -eq 2 ]
+  [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
+  [[ "$output" == *"Available .NET 10.0 SDKs:"* ]]
+  [[ "$output" == *$'\e[H\e[2J'* ]]
+  clear_sequences="${output//$'\e[H\e[2J'/}"
+  [ "$(( (${#output} - ${#clear_sequences}) / 7 ))" -ge 4 ]
+}
+
+@test "terminal Install view toggles clear only changed selection views" {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    skip "BSD script does not deterministically drive bidirectional PTY input in CI"
+  fi
+
+  bootstrap_tool
+  fake_bin="$test_root/channel-view-tty-bin"
+  write_metadata_fake_curl "$fake_bin"
+  wrapper="$test_root/interactive-view-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+export PATH="$fake_bin:$PATH"
+exec "$tool_path"
+EOF
+  chmod +x "$wrapper"
+
+  run bash -c 'printf "i\ns\ns\n1\ns\nb\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Select an end-of-life .NET channel:"* ]]
+  [[ "$output" == *"S. Show all versions"* ]]
+  [[ "$output" == *"S. Show featured versions"* ]]
+  clear_sequences="${output//$'\e[H\e[2J'/}"
+  [ "$(( (${#output} - ${#clear_sequences}) / 7 ))" -ge 7 ]
+}
+
+@test "terminal invalid Main selection and one-shot List never clear" {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    skip "BSD script does not deterministically drive bidirectional PTY input in CI"
+  fi
+
+  bootstrap_tool
+  wrapper="$test_root/interactive-retry-tty.sh"
+  cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+export HOME="$test_home"
+exec "$tool_path" "\$@"
+EOF
+  chmod +x "$wrapper"
+
+  run bash -c 'printf "\n6\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"A selection is required."* ]]
+  [[ "$output" == *"Invalid selection: 6."* ]]
+  [[ "$output" != *$'\e[H\e[2J'* ]]
+
+  run bash -c 'TERM=xterm script -q -c "$1 list" /dev/null' _ "$wrapper"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Installed .NET SDKs"* ]]
+  [[ "$output" != *$'\e[H\e[2J'* ]]
 }
 
 @test "Install channel Back returns to Main" {
