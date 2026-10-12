@@ -40,7 +40,7 @@ After a successful Install, List, Audit, Remove, or Verify operation, or after a
 Press Enter to return to Main...
 ```
 
-Pressing Enter then returns to Main. This acknowledgement is a completed-result boundary, not another decision menu. Back and Exit navigation do not require it. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
+Pressing Enter then returns to Main. This acknowledgement is a completed-result boundary, not another decision menu. It is enabled only when both input and output are attached to an interactive terminal. Redirected input, redirected/captured output, pipes, CI, and automation never wait for it. Back and Exit navigation do not require it. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
 
 ## One-shot commands
 
