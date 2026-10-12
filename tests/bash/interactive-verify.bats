@@ -75,6 +75,20 @@ EOF
   [[ "$output" != *"Isolated SDK $version is healthy."* ]]
 }
 
+@test "Verify choices are sorted newest to oldest" {
+  install_fake_host '8.0.425'
+  install_fake_host '11.0.100-rc.1.26425.128'
+  install_fake_host '10.0.401'
+
+  run bash -c 'printf "v\nb\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  verify_section="$(printf '%s\n' "$output" | sed -n '/Select an isolated SDK to verify:/,/B. Back to Main/p')"
+  [[ "$verify_section" == *"1. 11.0.100-rc.1.26425.128"* ]]
+  [[ "$verify_section" == *"2. 10.0.401"* ]]
+  [[ "$verify_section" == *"3. 8.0.425"* ]]
+}
+
 @test "Verify selection never offers System SDKs" {
   isolated_version='99.0.100'
   system_version='88.0.100'
