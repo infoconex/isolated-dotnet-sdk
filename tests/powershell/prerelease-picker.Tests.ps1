@@ -76,13 +76,13 @@ function Invoke-RestMethod {
 
         function Get-PickerView {
             param([string]$Output, [int]$Number = 1)
-            $matches = [regex]::Matches(
+            $viewMatches = [regex]::Matches(
                 $Output,
                 '(?s)Available \.NET 99\.0 SDKs:(.*?)B\. Back to \.NET channels')
-            if ($matches.Count -lt $Number) {
-                throw "Expected SDK picker view $Number, found $($matches.Count). Output: $Output"
+            if ($viewMatches.Count -lt $Number) {
+                throw "Expected SDK picker view $Number, found $($viewMatches.Count). Output: $Output"
             }
-            return $matches[$Number - 1].Value
+            return $viewMatches[$Number - 1].Value
         }
     }
 
