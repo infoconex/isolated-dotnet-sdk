@@ -34,48 +34,49 @@ The same exact version may appear in both groups. Audit keeps both entries rathe
 For a recognized channel, Audit uses this compact semantic order:
 
 ```text
-<version>  <LTS|STS>  <lifecycle/status>  <servicing>  <date tail>
+<version>  <LTS|STS>  <lifecycle/status>  <date facts>  <optional update/detail>
 ```
 
-Version, release type, and lifecycle/status are aligned across the complete Audit result. Servicing text follows only when present; it does not reserve a wide blank column on rows without a servicing result.
+Version, release type, and lifecycle/status are aligned across the complete Audit result. Each ownership group is sorted by SDK version newest to oldest.
 
-Date facts remain at the end in this order when present:
+Date facts remain compact and appear in this order when present:
 
 ```text
 Release: <date>  Go Live: <date>  EOS: <date>
 ```
 
-Absent date facts do not reserve blank columns.
+Absent date facts do not reserve blank columns. When Microsoft metadata identifies a newer SDK, Audit appends `Update -> <version>` at the end of the row without reserving width on rows that are already current.
 
 For example:
 
 ```text
 Isolated SDKs:
-  10.0.100                 LTS  Active       Security update available -> 10.0.401  Release: 2025-11-11  EOS: 2028-11-14
-  10.0.401                 LTS  Current                                             Release: 2026-09-08  EOS: 2028-11-14
-  11.0.100-rc.1.26425.128  STS  RC1                                                 Release: 2026-09-08  Go Live: 2026-11-10
+  11.0.100-rc.1.26425.128  STS  RC1      Release: 2026-09-08  Go Live: 2026-11-10  Update -> 11.0.100-rc.2.999
+  10.0.401                 LTS  Current  Release: 2026-09-08  EOS: 2028-11-14
+  10.0.100                 LTS  Active   Release: 2025-11-11  EOS: 2028-11-14  Update -> 10.0.401
 
 System SDKs:
-  8.0.425                  LTS  Maintenance                                         Release: 2026-09-08  EOS: 2026-11-10
-  9.0.318                  STS  Maintenance                                         Release: 2026-09-08  EOS: 2026-11-10
-  10.0.401                 LTS  Current                                             Release: 2026-09-08  EOS: 2028-11-14
+  10.0.401                 LTS  Current      Release: 2026-09-08  EOS: 2028-11-14
+  9.0.318                  STS  Maintenance  Release: 2026-09-08  EOS: 2026-11-10
+  8.0.425                  LTS  Maintenance  Release: 2026-09-08  EOS: 2026-11-10
 ```
 
-`Current` is reserved for the exact SDK that matches Microsoft's current `latest-sdk` on an active channel. Other installed SDKs in that active channel use `Active`, with servicing or security-update information reported separately.
+`Current` is reserved for the exact SDK that matches Microsoft's current `latest-sdk` on an active channel. Other installed SDKs in that active channel use `Active`.
 
 ## Statuses
 
 Audit can report:
 
 - `Current` — the installed SDK equals Microsoft's known latest SDK for an active channel;
-- `Update available -> <version>` — Microsoft metadata identifies a newer SDK in the channel;
-- `Security update available -> <version>` — a newer release in Microsoft channel metadata is marked as a security release;
-- `Maintenance` — the channel is in maintenance; when an older SDK also has an update, the servicing result appears before this token;
+- `Active` — the channel is active, but the installed SDK is not the current `latest-sdk`;
+- `Maintenance` — the channel is in maintenance;
 - exact prerelease labels such as `Preview 5`, `RC1`, or `RC2`, derived from the installed SDK version;
-- `EOL` — the channel is end of life; this lifecycle state takes precedence over update wording;
+- `EOL` — the channel is end of life;
 - `Unsupported` — Microsoft metadata exposes a lifecycle phase the tool does not classify as supported;
 - `Newer than known metadata` — the installed version sorts newer than Microsoft's current `latest-sdk`; and
 - `Unknown channel` — the installed SDK's channel is not present in the current release index.
+
+When a newer SDK is available, Audit appends `Update -> <version>` after the date facts. Audit intentionally uses the same concise presentation whether Microsoft marks that newer release as an ordinary servicing release or a security release. The structured classification retains that distinction for other command logic.
 
 In styled terminal output, only the `Current`, `Maintenance`, or `EOL` status token receives lifecycle color: green, yellow, or red respectively. Captured and redirected output remains ANSI-free.
 
@@ -87,11 +88,9 @@ In styled terminal output, only the `Current`, `Maintenance`, or `EOL` status to
 
 Release date and end-of-support date are independent facts. Audit does not assume that an SDK's release date must precede the channel's end-of-support date.
 
-## Security wording
+## Update wording
 
-`Security update available` is intentionally narrower than a vulnerability claim. It means Microsoft release metadata marks a newer release containing the applicable SDK version as a security release. Audit does **not** claim that the installed SDK is vulnerable, map the installed SDK to a specific CVE, or perform an independent vulnerability scan.
-
-Prerelease movement is not promoted to `Security update available`; preview/release-candidate SDKs can still report an ordinary update plus their lifecycle state.
+`Update -> <version>` means Microsoft metadata identifies a newer SDK for the channel. Audit does **not** claim that the installed SDK is vulnerable, map it to a specific CVE, or perform an independent vulnerability scan.
 
 ## Metadata and failures
 
