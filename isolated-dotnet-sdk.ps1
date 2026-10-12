@@ -433,8 +433,8 @@ function Get-IsolatedSdkVersion {
 }
 
 function Show-InstalledSdk {
-    $IsolatedVersions = @(Get-IsolatedSdkVersion)
-    $SystemSdks = @(Get-SystemSdkInventory)
+    $IsolatedVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
+    $SystemSdks = @(Get-OrderedSdkInventory @(Get-SystemSdkInventory))
 
     Write-ToolHeading 'Installed .NET SDKs'
     Write-ToolDisplay
@@ -551,6 +551,24 @@ function Get-OrderedSdkVersion {
             @{ Expression = 'SortKey'; Descending = $true }, `
             @{ Expression = 'Version'; Descending = $true } |
             ForEach-Object { $_.Version }
+    )
+}
+
+function Get-OrderedSdkInventory {
+    param([object[]]$Inventory)
+
+    return @(
+        $Inventory |
+            ForEach-Object {
+                [pscustomobject]@{
+                    Item    = $_
+                    SortKey = Get-SdkVersionSortKey ([string]$_.Version)
+                }
+            } |
+            Sort-Object `
+            @{ Expression = 'SortKey'; Descending = $true }, `
+            @{ Expression = { [string]$_.Item.Version }; Descending = $true } |
+            ForEach-Object { $_.Item }
     )
 }
 
@@ -1062,9 +1080,6 @@ function Format-SdkAuditRow {
         $Line += ' ' * [Math]::Max(0, ($Layout.Lifecycle - $Lifecycle.Length))
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($Servicing)) {
-        $Line += '  ' + $Servicing
-    }
     if (-not [string]::IsNullOrWhiteSpace([string]$Classification.ReleaseDate)) {
         $Line += "  Release: $($Classification.ReleaseDate)"
     }
@@ -1075,12 +1090,23 @@ function Format-SdkAuditRow {
         $Line += "  EOS: $($Classification.EndOfSupportDate)"
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($Servicing)) {
+        $ServicingDisplay = $Servicing
+        $ServicingMatch = [regex]::Match(
+            $Servicing,
+            '^(?:Security update available|Update available) -> (?<version>\S+)$')
+        if ($ServicingMatch.Success) {
+            $ServicingDisplay = "Update -> $($ServicingMatch.Groups['version'].Value)"
+        }
+        $Line += '  ' + $ServicingDisplay
+    }
+
     return $Line.TrimEnd()
 }
 
 function Invoke-SdkAudit {
-    $IsolatedVersions = @(Get-IsolatedSdkVersion)
-    $SystemSdks = @(Get-SystemSdkInventory)
+    $IsolatedVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
+    $SystemSdks = @(Get-OrderedSdkInventory @(Get-SystemSdkInventory))
 
     if (-not $IsolatedVersions -and -not $SystemSdks) {
         Write-ToolHeading '.NET SDK audit'
@@ -1441,7 +1467,7 @@ function Select-InstallVersion {
 
 function Select-RemoveVersion {
     $script:BackToMain = $false
-    $SdkVersions = @(Get-IsolatedSdkVersion)
+    $SdkVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
 
     if (-not $SdkVersions) {
         Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
@@ -1505,7 +1531,7 @@ function Select-RemoveVersion {
 }
 
 function Select-VerifyVersion {
-    $SdkVersions = @(Get-IsolatedSdkVersion)
+    $SdkVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
 
     if (-not $SdkVersions) {
         Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
