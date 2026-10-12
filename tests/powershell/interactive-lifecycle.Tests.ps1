@@ -108,7 +108,8 @@ Describe 'PowerShell interactive lifecycle' {
                 $node.Name -eq 'Wait-ForInteractiveResultAcknowledgement'
             }, $true)
         $functionAst | Should -Not -BeNullOrEmpty
-        Invoke-Expression $functionAst.Extent.Text
+        $functionDefinition = [scriptblock]::Create($functionAst.Extent.Text)
+        . $functionDefinition
 
         $script:InteractiveSession = $true
         $script:AcknowledgementOutput = [System.Collections.Generic.List[string]]::new()
@@ -123,10 +124,6 @@ Describe 'PowerShell interactive lifecycle' {
         }
 
         function Read-ToolInput {
-            param(
-                [AllowEmptyString()]
-                [string]$Prompt = ''
-            )
             $script:AcknowledgementReadCount++
             return ''
         }
