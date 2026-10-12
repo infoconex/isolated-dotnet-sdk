@@ -13,7 +13,7 @@ Verify can be reached in two ways:
 
 Both paths run the same underlying health check. Interactive Verify does not define a second verification algorithm.
 
-The interactive picker lists isolated SDKs only, ordered newest to oldest. System SDKs are never Verify targets. If no isolated SDKs are installed, the tool reports that state, keeps it visible until Enter acknowledgement, and then returns to Main without changing anything.
+The interactive picker lists isolated SDKs only, ordered newest to oldest. System SDKs are never Verify targets. In a terminal-backed persistent session, if no isolated SDKs are installed, the tool reports that state, keeps it visible until Enter acknowledgement, and then returns to Main without changing anything. Redirected or captured persistent execution skips that pause.
 
 ## Healthy result
 
@@ -24,7 +24,7 @@ A healthy result establishes that:
 - that host's `--list-sdks` command succeeds; and
 - the host reports the requested exact SDK version.
 
-Healthy direct verification exits successfully. Healthy interactive verification keeps the completed result visible at `Press Enter to return to Main...` and returns to Main after Enter acknowledgement.
+Healthy direct verification exits successfully. Healthy terminal-backed interactive verification keeps the completed result visible at `Press Enter to return to Main...` and returns to Main after Enter acknowledgement. Redirected or captured persistent execution continues without waiting.
 
 ## Failure results
 

@@ -30,6 +30,6 @@ After deletion, the tool verifies the selected version directory is gone before 
 
 ## Interactive versus one-shot
 
-Remove selected from the persistent Main menu keeps a normal completed or cancellation/no-change result visible until `Press Enter to return to Main...` is acknowledged. An explicit Remove invocation is one-shot; if it opens a picker, normal cancellation ends that command successfully without entering Main or waiting for persistent-session acknowledgement.
+Remove selected from a terminal-backed persistent Main session keeps a normal completed or cancellation/no-change result visible until `Press Enter to return to Main...` is acknowledged. Redirected or captured persistent execution skips that pause. An explicit Remove invocation is one-shot; if it opens a picker, normal cancellation ends that command successfully without entering Main or waiting for persistent-session acknowledgement.
 
 See [Interactive mode](interactive.md), [Filesystem safety](../concepts/filesystem-safety.md), and [Native-command failure boundaries](../contracts/native-command-failures.md) for the detailed contracts.
