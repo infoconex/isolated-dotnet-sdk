@@ -24,7 +24,7 @@ A healthy result establishes that:
 - that host's `--list-sdks` command succeeds; and
 - the host reports the requested exact SDK version.
 
-Healthy direct verification exits successfully. Healthy terminal-backed interactive verification keeps the completed result visible at `Press Enter to return to Main...` and returns to Main after Enter acknowledgement. Redirected or captured persistent execution continues without waiting.
+Healthy direct verification exits successfully. Healthy terminal-backed interactive verification keeps the completed result visible at `Press Enter to return to Verify...` and returns to the Verify SDK list after Enter acknowledgement. Redirected or captured persistent execution continues without waiting but follows the same return-to-Verify navigation.
 
 ## Failure results
 
