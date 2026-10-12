@@ -151,11 +151,12 @@ read_tool_input() {
 }
 
 wait_for_interactive_result_acknowledgement() {
+    local destination="${1:-Main}"
     [[ "$INTERACTIVE_SESSION" == "true" ]] || return 0
     [[ -t 0 && -t 1 ]] || return 0
 
     echo
-    printf '%s\n' 'Press Enter to return to Main...'
+    printf 'Press Enter to return to %s...\n' "$destination"
     read_tool_input ""
 }
 
@@ -1008,6 +1009,13 @@ select_install_version() {
     local isolated_versions=""
     local line=""
     local i=0
+    local resume_channel="$INSTALL_RESUME_CHANNEL"
+    local resume_latest_sdk="$INSTALL_RESUME_LATEST_SDK"
+    local resume_releases_url="$INSTALL_RESUME_RELEASES_URL"
+
+    INSTALL_RESUME_CHANNEL=""
+    INSTALL_RESUME_LATEST_SDK=""
+    INSTALL_RESUME_RELEASES_URL=""
 
     tool_info "Loading available .NET SDK releases from Microsoft..."
     index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
@@ -1023,6 +1031,12 @@ select_install_version() {
         tool_fail "No selectable .NET channels were found in Microsoft release metadata."
 
     while true; do
+        if [[ -n "$resume_channel" ]]; then
+            channel="$resume_channel"
+            latest_sdk="$resume_latest_sdk"
+            releases_url="$resume_releases_url"
+            resume_channel=""
+        else
         echo
         if [[ "$show_archived" == "true" ]]; then
             tool_heading "Select an end-of-life .NET channel:"
@@ -1095,6 +1109,7 @@ select_install_version() {
                 VERSION="$TOOL_INPUT"
                 [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                 validate_version
+                INSTALL_RESULT_PARENT=".NET channels"
                 return 0
                 ;;
             [eE])
@@ -1142,6 +1157,7 @@ select_install_version() {
             fi
             warn_invalid_selection "$selection" "$channel_choices"
             continue
+        fi
         fi
 
         metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
@@ -1242,7 +1258,12 @@ select_install_version() {
             selection="$TOOL_INPUT"
 
             case "$selection" in
-                [bB]) break ;;
+                [bB])
+                    INSTALL_RESUME_CHANNEL=""
+                    INSTALL_RESUME_LATEST_SDK=""
+                    INSTALL_RESUME_RELEASES_URL=""
+                    break
+                    ;;
                 [sS])
                     if [[ "$compact_versions" != "$all_versions" ]]; then
                         if [[ "$show_all_versions" == "true" ]]; then
@@ -1258,6 +1279,10 @@ select_install_version() {
                     VERSION="$TOOL_INPUT"
                     [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                     validate_version
+                    INSTALL_RESUME_CHANNEL="$channel"
+                    INSTALL_RESUME_LATEST_SDK="$latest_sdk"
+                    INSTALL_RESUME_RELEASES_URL="$releases_url"
+                    INSTALL_RESULT_PARENT="SDK selection"
                     return 0
                     ;;
                 [eE])
@@ -1278,6 +1303,10 @@ select_install_version() {
                (( selection >= 1 && selection <= ${#sdk_versions[@]} )); then
                 VERSION="${sdk_versions[$((selection - 1))]}"
                 validate_version
+                INSTALL_RESUME_CHANNEL="$channel"
+                INSTALL_RESUME_LATEST_SDK="$latest_sdk"
+                INSTALL_RESUME_RELEASES_URL="$releases_url"
+                INSTALL_RESULT_PARENT="SDK selection"
                 return 0
             fi
 
@@ -1997,7 +2026,7 @@ Options:
   --help, -h         Show this help text.
 
 Behavior:
-  No command         Start a persistent session; terminal results wait for Enter before Main.
+  No command         Start a persistent session; terminal results wait for Enter before their parent screen.
   SDK version        --sdk-version <version> and a bare positional version select the same exact SDK.
   Bare version       Treat the positional version as a one-shot install request.
   Explicit actions   Run once and exit without entering the persistent Main loop.
@@ -2047,6 +2076,10 @@ YES="false"
 INTERACTIVE_SESSION="false"
 EXIT_REQUESTED="false"
 BACK_TO_MAIN="false"
+INSTALL_RESUME_CHANNEL=""
+INSTALL_RESUME_LATEST_SDK=""
+INSTALL_RESUME_RELEASES_URL=""
+INSTALL_RESULT_PARENT="Main"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2111,20 +2144,50 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
         VERSION=""
         EXIT_REQUESTED="false"
         BACK_TO_MAIN="false"
+        INSTALL_RESUME_CHANNEL=""
+        INSTALL_RESUME_LATEST_SDK=""
+        INSTALL_RESUME_RELEASES_URL=""
+        INSTALL_RESULT_PARENT="Main"
 
         if ! select_action; then
             exit 0
         fi
 
-        echo
-        run_selected_action
-        if [[ "$EXIT_REQUESTED" == "true" ]]; then
-            exit 0
-        fi
-        if [[ "$BACK_TO_MAIN" != "true" ]]; then
-            wait_for_interactive_result_acknowledgement
-        fi
-        echo
+        while true; do
+            echo
+            run_selected_action
+
+            if [[ "$EXIT_REQUESTED" == "true" ]]; then
+                exit 0
+            fi
+
+            if [[ "$BACK_TO_MAIN" == "true" ]]; then
+                break
+            fi
+
+            if [[ ( "$ACTION" == "remove" || "$ACTION" == "verify" ) && -z "$VERSION" ]]; then
+                wait_for_interactive_result_acknowledgement "Main"
+                echo
+                break
+            fi
+
+            case "$ACTION" in
+                install) destination="$INSTALL_RESULT_PARENT" ;;
+                remove) destination="Remove" ;;
+                verify) destination="Verify" ;;
+                *) destination="Main" ;;
+            esac
+
+            wait_for_interactive_result_acknowledgement "$destination"
+            echo
+
+            if [[ "$ACTION" == "list" || "$ACTION" == "audit" ]]; then
+                break
+            fi
+
+            VERSION=""
+            BACK_TO_MAIN="false"
+        done
     done
 fi
 
