@@ -152,6 +152,7 @@ read_tool_input() {
 
 wait_for_interactive_result_acknowledgement() {
     [[ "$INTERACTIVE_SESSION" == "true" ]] || return 0
+    [[ -t 0 && -t 1 ]] || return 0
 
     echo
     printf '%s\n' 'Press Enter to return to Main...'

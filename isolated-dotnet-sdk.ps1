@@ -283,7 +283,12 @@ function Read-ToolInput {
 }
 
 function Wait-ForInteractiveResultAcknowledgement {
-    if (-not $script:InteractiveSession) {
+    param(
+        [bool]$InputRedirected = [Console]::IsInputRedirected,
+        [bool]$OutputRedirected = [Console]::IsOutputRedirected
+    )
+
+    if (-not $script:InteractiveSession -or $InputRedirected -or $OutputRedirected) {
         return
     }
 
