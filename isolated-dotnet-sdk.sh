@@ -556,11 +556,7 @@ AUDIT_GO_LIVE_DATE=""
 AUDIT_END_OF_SUPPORT_DATE=""
 AUDIT_VERSION_WIDTH=0
 AUDIT_RELEASE_TYPE_WIDTH=0
-AUDIT_SERVICING_WIDTH=0
 AUDIT_LIFECYCLE_WIDTH=0
-AUDIT_RELEASE_WIDTH=0
-AUDIT_GO_LIVE_WIDTH=0
-AUDIT_END_OF_SUPPORT_WIDTH=0
 
 load_audit_channel_metadata() {
     local channel="$1"
@@ -738,6 +734,8 @@ resolve_audit_classification() {
             active)
                 if [[ "$AUDIT_SERVICING_STATUS" == "Current" ]]; then
                     AUDIT_STATUS_TOKEN="Current"
+                else
+                    AUDIT_STATUS_TOKEN="Active"
                 fi
                 ;;
             *) AUDIT_STATUS_TOKEN="Unsupported" ;;
@@ -761,13 +759,6 @@ audit_status_color() {
 
 update_audit_layout_widths() {
     local version="$1"
-    local release_text=""
-    local go_live_text=""
-    local eos_text=""
-
-    [[ -n "$AUDIT_RELEASE_DATE" ]] && release_text="Release: $AUDIT_RELEASE_DATE"
-    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && go_live_text="Go Live: $AUDIT_GO_LIVE_DATE"
-    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && eos_text="EOS: $AUDIT_END_OF_SUPPORT_DATE"
 
     if (( ${#version} > AUDIT_VERSION_WIDTH )); then
         AUDIT_VERSION_WIDTH=${#version}
@@ -775,41 +766,19 @@ update_audit_layout_widths() {
     if (( ${#AUDIT_RELEASE_TYPE} > AUDIT_RELEASE_TYPE_WIDTH )); then
         AUDIT_RELEASE_TYPE_WIDTH=${#AUDIT_RELEASE_TYPE}
     fi
-    if (( ${#AUDIT_SERVICING_STATUS} > AUDIT_SERVICING_WIDTH )); then
-        AUDIT_SERVICING_WIDTH=${#AUDIT_SERVICING_STATUS}
-    fi
     if (( ${#AUDIT_STATUS_TOKEN} > AUDIT_LIFECYCLE_WIDTH )); then
         AUDIT_LIFECYCLE_WIDTH=${#AUDIT_STATUS_TOKEN}
-    fi
-    if (( ${#release_text} > AUDIT_RELEASE_WIDTH )); then
-        AUDIT_RELEASE_WIDTH=${#release_text}
-    fi
-    if (( ${#go_live_text} > AUDIT_GO_LIVE_WIDTH )); then
-        AUDIT_GO_LIVE_WIDTH=${#go_live_text}
-    fi
-    if (( ${#eos_text} > AUDIT_END_OF_SUPPORT_WIDTH )); then
-        AUDIT_END_OF_SUPPORT_WIDTH=${#eos_text}
     fi
 }
 
 format_audit_row() {
     local version="$1"
     local color=""
-    local release_text=""
-    local go_live_text=""
-    local eos_text=""
     local lifecycle_padding=0
-
-    [[ -n "$AUDIT_RELEASE_DATE" ]] && release_text="Release: $AUDIT_RELEASE_DATE"
-    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && go_live_text="Go Live: $AUDIT_GO_LIVE_DATE"
-    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && eos_text="EOS: $AUDIT_END_OF_SUPPORT_DATE"
 
     printf '  %-*s' "$AUDIT_VERSION_WIDTH" "$version"
     if (( AUDIT_RELEASE_TYPE_WIDTH > 0 )); then
         printf '  %-*s' "$AUDIT_RELEASE_TYPE_WIDTH" "$AUDIT_RELEASE_TYPE"
-    fi
-    if (( AUDIT_SERVICING_WIDTH > 0 )); then
-        printf '  %-*s' "$AUDIT_SERVICING_WIDTH" "$AUDIT_SERVICING_STATUS"
     fi
     if (( AUDIT_LIFECYCLE_WIDTH > 0 )); then
         printf '  '
@@ -827,15 +796,11 @@ format_audit_row() {
             printf '%*s' "$lifecycle_padding" ''
         fi
     fi
-    if (( AUDIT_RELEASE_WIDTH > 0 )) && [[ -n "$release_text$go_live_text$eos_text" ]]; then
-        printf '  %-*s' "$AUDIT_RELEASE_WIDTH" "$release_text"
-    fi
-    if (( AUDIT_GO_LIVE_WIDTH > 0 )) && [[ -n "$go_live_text$eos_text" ]]; then
-        printf '  %-*s' "$AUDIT_GO_LIVE_WIDTH" "$go_live_text"
-    fi
-    if (( AUDIT_END_OF_SUPPORT_WIDTH > 0 )) && [[ -n "$eos_text" ]]; then
-        printf '  %s' "$eos_text"
-    fi
+
+    [[ -n "$AUDIT_SERVICING_STATUS" ]] && printf '  %s' "$AUDIT_SERVICING_STATUS"
+    [[ -n "$AUDIT_RELEASE_DATE" ]] && printf '  Release: %s' "$AUDIT_RELEASE_DATE"
+    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && printf '  Go Live: %s' "$AUDIT_GO_LIVE_DATE"
+    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && printf '  EOS: %s' "$AUDIT_END_OF_SUPPORT_DATE"
 }
 
 audit_installed_sdks() {
@@ -887,11 +852,7 @@ audit_installed_sdks() {
     AUDIT_RELEASE_SCHEDULE=""
     AUDIT_VERSION_WIDTH=0
     AUDIT_RELEASE_TYPE_WIDTH=0
-    AUDIT_SERVICING_WIDTH=0
     AUDIT_LIFECYCLE_WIDTH=0
-    AUDIT_RELEASE_WIDTH=0
-    AUDIT_GO_LIVE_WIDTH=0
-    AUDIT_END_OF_SUPPORT_WIDTH=0
 
     for version in "${audit_isolated_versions[@]+"${audit_isolated_versions[@]}"}"; do
         resolve_audit_classification "$version" "$channel_data"
