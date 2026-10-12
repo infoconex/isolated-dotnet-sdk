@@ -1716,6 +1716,7 @@ install_isolated_sdk() {
     resolve_install_version || return 0
 
     if [[ "$selected_interactively" == "true" ]]; then
+        clear_interactive_screen
         echo
     fi
 
@@ -1952,7 +1953,15 @@ verify_isolated_sdk() {
 }
 
 remove_isolated_sdk() {
+    local selected_interactively="false"
+    if [[ -z "$VERSION" ]]; then
+        selected_interactively="true"
+    fi
+
     resolve_remove_version || return 0
+    if [[ "$selected_interactively" == "true" ]]; then
+        clear_interactive_screen
+    fi
 
     # Removal is intentionally scoped to the selected version directory under SDK_ROOT.
     local install_dir="$SDK_ROOT/$VERSION"
@@ -2008,6 +2017,7 @@ run_selected_action() {
         verify)
             if [[ "$INTERACTIVE_SESSION" == "true" && -z "$VERSION" ]]; then
                 select_verify_version || return 0
+                clear_interactive_screen
             fi
             verify_isolated_sdk
             ;;

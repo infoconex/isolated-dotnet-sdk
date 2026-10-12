@@ -1769,6 +1769,7 @@ function Install-IsolatedSdk {
     }
 
     if ($SelectedInteractively) {
+        Clear-InteractiveScreen
         Write-ToolDisplay
     }
 
@@ -2057,8 +2058,13 @@ function Remove-IsolatedSdk {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param([switch]$Yes)
 
+    $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
     if (-not (Resolve-RemoveVersion)) {
         return
+    }
+
+    if ($SelectedInteractively) {
+        Clear-InteractiveScreen
     }
 
     $InstallDir = Join-Path $SdkRoot $SdkVersion
@@ -2125,6 +2131,7 @@ function Invoke-SelectedAction {
                 if (-not (Select-VerifyVersion)) {
                     return
                 }
+                Clear-InteractiveScreen
             }
             Test-IsolatedSdk
         }
