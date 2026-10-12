@@ -5,7 +5,7 @@ Installs and manages isolated .NET SDK versions on Windows with PowerShell 7.
 .DESCRIPTION
 Installs exact .NET SDK versions under the current user's dotnet-sdks directory without modifying the system-wide .NET installation or PATH. Isolated SDKs remain under that user-owned root and are not added to PATH.
 
-Supported product actions are Install, Remove, List, Verify, and Audit. Audit is an explicit online, read-only lifecycle and servicing assessment for installed Isolated and System SDKs. When Action and SdkVersion are both omitted, the tool starts a persistent interactive session and returns to the main menu after normal completion or cancellation. When Action is omitted and SdkVersion is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with SdkVersion is invalid. Direct Verify requires an exact SdkVersion; interactive Verify selects an installed isolated SDK from Main and runs the same read-only health check. Install or Remove without a resolved version may require interactive selection.
+Supported product actions are Install, Remove, List, Verify, and Audit. Audit is an explicit online, read-only lifecycle and servicing assessment for installed Isolated and System SDKs. When Action and SdkVersion are both omitted, the tool starts a persistent interactive session. With interactive terminal input and output, a normal completed result or cancellation/no-change result remains visible until Enter is pressed, then the session returns to the immediate parent screen that launched the result. List and Audit return to Main; Verify and Remove return to their SDK lists; Install returns to the selected channel's SDK list. Redirected, piped, or captured execution never waits for that acknowledgement. When Action is omitted and SdkVersion is supplied, Install is selected. Explicit actions and exact-version requests remain one-shot. Explicit List with SdkVersion is invalid. Direct Verify requires an exact SdkVersion; interactive Verify selects an installed isolated SDK from Main and runs the same read-only health check. Install or Remove without a resolved version may require interactive selection.
 
 Yes skips supported confirmation prompts only; it does not choose a missing action or version. PowerShell WhatIf and Confirm are supported only for Remove. Required interactive input that is unavailable is an operational failure. Explicit cancellation is a successful no-change result. Operational failures return a nonzero exit status.
 
@@ -96,6 +96,8 @@ $script:SdkVersionWasSpecified = $PSBoundParameters.ContainsKey('SdkVersion')
 $script:InteractiveSession = -not $script:ActionWasSpecified -and -not $script:SdkVersionWasSpecified
 $script:BackToMain = $false
 $script:ExitRequested = $false
+$script:InstallResumeChannel = $null
+$script:InstallResultParent = 'Main'
 $script:ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
 $script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParameters['Confirm'] } else { $false }
 $script:WhatIfWasSpecified = $PSBoundParameters.ContainsKey('WhatIf')
@@ -265,14 +267,37 @@ function Assert-ValidSdkVersion {
 }
 
 function Read-ToolInput {
-    param([string]$Prompt)
+    param(
+        [AllowEmptyString()]
+        [string]$Prompt = ''
+    )
 
     try {
+        if ([string]::IsNullOrEmpty($Prompt)) {
+            return Read-Host
+        }
+
         return Read-Host $Prompt
     }
     catch {
         throw 'Interactive input is unavailable.'
     }
+}
+
+function Wait-ForInteractiveResultAcknowledgement {
+    param(
+        [string]$Destination = 'Main',
+        [bool]$InputRedirected = [Console]::IsInputRedirected,
+        [bool]$OutputRedirected = [Console]::IsOutputRedirected
+    )
+
+    if (-not $script:InteractiveSession -or $InputRedirected -or $OutputRedirected) {
+        return
+    }
+
+    Write-ToolDisplay
+    Write-ToolDisplay "Press Enter to return to $Destination..."
+    [void](Read-ToolInput)
 }
 
 function Confirm-Action {
@@ -1222,106 +1247,115 @@ function Select-InstallVersion {
     }
 
     $ShowArchived = $false
+    $ResumeChannel = $script:InstallResumeChannel
+    $script:InstallResumeChannel = $null
 
     while ($true) {
-        Write-ToolDisplay
-
-        if ($ShowArchived) {
-            Write-ToolHeading 'Select an end-of-life .NET channel:'
-            $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
+        if ($null -ne $ResumeChannel) {
+            $SelectedChannel = $ResumeChannel
+            $ResumeChannel = $null
         }
         else {
-            Write-ToolHeading 'Select a supported or development .NET channel:'
-            $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
-        }
+            Write-ToolDisplay
 
-        Write-ToolDisplay
-
-        for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
-            $Channel = $Channels[$Index]
-            $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
-            $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
-            $LatestSdk = [string]$Channel.'latest-sdk'
-
-            if ([string]::IsNullOrWhiteSpace($LatestSdk)) {
-                Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}" -f `
-                    ($Index + 1), `
-                        $Channel.'channel-version', `
-                        $ReleaseType, `
-                        $SupportPhase)
+            if ($ShowArchived) {
+                Write-ToolHeading 'Select an end-of-life .NET channel:'
+                $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
             }
             else {
-                Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
-                    ($Index + 1), `
-                        $Channel.'channel-version', `
-                        $ReleaseType, `
-                        $SupportPhase, `
-                        $LatestSdk)
+                Write-ToolHeading 'Select a supported or development .NET channel:'
+                $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
             }
-        }
 
-        Write-ToolDisplay
-        if ($ShowArchived) {
-            Write-ToolDisplay '  S. Show supported/development channels'
-        }
-        else {
-            Write-ToolDisplay '  S. Show end-of-life channels'
-        }
-        if ($script:InteractiveSession) {
-            Write-ToolDisplay '  B. Back to Main'
-        }
-        Write-ToolDisplay '  M. Enter an exact SDK version manually'
-        if ($script:InteractiveSession) {
-            Write-ToolDisplay '  E. Exit'
-        }
-        else {
-            Write-ToolDisplay '  Q. Cancel'
-        }
-        Write-ToolDisplay
+            Write-ToolDisplay
 
-        $Selection = Read-ToolInput 'Selection'
+            for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
+                $Channel = $Channels[$Index]
+                $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
+                $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
+                $LatestSdk = [string]$Channel.'latest-sdk'
 
-        if ($Selection -match '^[Mm]$') {
-            Read-ManualVersion
-            return $true
-        }
+                if ([string]::IsNullOrWhiteSpace($LatestSdk)) {
+                    Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}" -f `
+                        ($Index + 1), `
+                            $Channel.'channel-version', `
+                            $ReleaseType, `
+                            $SupportPhase)
+                }
+                else {
+                    Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
+                        ($Index + 1), `
+                            $Channel.'channel-version', `
+                            $ReleaseType, `
+                            $SupportPhase, `
+                            $LatestSdk)
+                }
+            }
 
-        if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
-            $script:ExitRequested = $true
-            Write-ToolExit
-            return $false
-        }
-
-        if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
-            return $false
-        }
-
-        if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
-            $script:BackToMain = $true
-            return $false
-        }
-
-        if ($Selection -match '^[Ss]$') {
-            $ShowArchived = -not $ShowArchived
-            continue
-        }
-
-        $Number = 0
-        if (-not [int]::TryParse($Selection, [ref]$Number) -or
-            $Number -lt 1 -or
-            $Number -gt $Channels.Count) {
-            $SelectionRange = Get-SelectionRange -Count $Channels.Count
-            $Choices = if ($script:InteractiveSession) {
-                "Choose $SelectionRange, S, B, M, or E."
+            Write-ToolDisplay
+            if ($ShowArchived) {
+                Write-ToolDisplay '  S. Show supported/development channels'
             }
             else {
-                "Choose $SelectionRange, S, M, or Q."
+                Write-ToolDisplay '  S. Show end-of-life channels'
             }
-            Write-InvalidSelection -Selection $Selection -Choices $Choices
-            continue
-        }
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  B. Back to Main'
+            }
+            Write-ToolDisplay '  M. Enter an exact SDK version manually'
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  E. Exit'
+            }
+            else {
+                Write-ToolDisplay '  Q. Cancel'
+            }
+            Write-ToolDisplay
 
-        $SelectedChannel = $Channels[$Number - 1]
+            $Selection = Read-ToolInput 'Selection'
+
+            if ($Selection -match '^[Mm]$') {
+                Read-ManualVersion
+                $script:InstallResultParent = '.NET channels'
+                return $true
+            }
+
+            if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+                $script:ExitRequested = $true
+                Write-ToolExit
+                return $false
+            }
+
+            if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
+                return $false
+            }
+
+            if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
+                $script:BackToMain = $true
+                return $false
+            }
+
+            if ($Selection -match '^[Ss]$') {
+                $ShowArchived = -not $ShowArchived
+                continue
+            }
+
+            $Number = 0
+            if (-not [int]::TryParse($Selection, [ref]$Number) -or
+                $Number -lt 1 -or
+                $Number -gt $Channels.Count) {
+                $SelectionRange = Get-SelectionRange -Count $Channels.Count
+                $Choices = if ($script:InteractiveSession) {
+                    "Choose $SelectionRange, S, B, M, or E."
+                }
+                else {
+                    "Choose $SelectionRange, S, M, or Q."
+                }
+                Write-InvalidSelection -Selection $Selection -Choices $Choices
+                continue
+            }
+
+            $SelectedChannel = $Channels[$Number - 1]
+        }
         $ChannelVersion = [string]$SelectedChannel.'channel-version'
         $LatestSdk = [string]$SelectedChannel.'latest-sdk'
         $ChannelMetadataUrl = [string]$SelectedChannel.'releases.json'
@@ -1409,6 +1443,7 @@ function Select-InstallVersion {
             $Selection = Read-ToolInput 'Selection'
 
             if ($Selection -match '^[Bb]$') {
+                $script:InstallResumeChannel = $null
                 break
             }
 
@@ -1420,6 +1455,8 @@ function Select-InstallVersion {
 
             if ($Selection -match '^[Mm]$') {
                 Read-ManualVersion
+                $script:InstallResumeChannel = $SelectedChannel
+                $script:InstallResultParent = 'SDK selection'
                 return $true
             }
 
@@ -1439,6 +1476,8 @@ function Select-InstallVersion {
                 $Number -le $SdkVersions.Count) {
                 $script:SdkVersion = $SdkVersions[$Number - 1]
                 Assert-ValidSdkVersion
+                $script:InstallResumeChannel = $SelectedChannel
+                $script:InstallResultParent = 'SDK selection'
                 return $true
             }
 
@@ -1554,6 +1593,7 @@ function Select-VerifyVersion {
         $Selection = Read-ToolInput 'Selection'
 
         if ($Selection -match '^[Bb]$') {
+            $script:BackToMain = $true
             return $false
         }
 
@@ -2097,17 +2137,58 @@ try {
                 $script:SdkVersion = $null
                 $script:BackToMain = $false
                 $script:ExitRequested = $false
+                $script:InstallResumeChannel = $null
+                $script:InstallResultParent = 'Main'
 
                 if (-not (Select-Action)) {
                     return
                 }
 
-                Write-ToolDisplay
-                Invoke-SelectedAction
-                if ($script:ExitRequested) {
-                    return
+                while ($true) {
+                    Write-ToolDisplay
+                    Invoke-SelectedAction
+
+                    if ($script:ExitRequested) {
+                        return
+                    }
+
+                    if ($script:BackToMain) {
+                        Write-ToolDisplay
+                        break
+                    }
+
+                    if ($script:Action -in @('Remove', 'Verify') -and
+                        [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+                        Wait-ForInteractiveResultAcknowledgement -Destination 'Main'
+                        Write-ToolDisplay
+                        break
+                    }
+
+                    $Destination = switch ($script:Action) {
+                        'Install' { $script:InstallResultParent }
+                        'Remove' {
+                            if (@(Get-IsolatedSdkVersion).Count -gt 0) {
+                                'Remove'
+                            }
+                            else {
+                                'Main'
+                            }
+                        }
+                        'Verify' { 'Verify' }
+                        default { 'Main' }
+                    }
+
+                    Wait-ForInteractiveResultAcknowledgement -Destination $Destination
+                    Write-ToolDisplay
+
+                    if ($script:Action -in @('List', 'Audit') -or
+                        ($script:Action -eq 'Remove' -and $Destination -eq 'Main')) {
+                        break
+                    }
+
+                    $script:SdkVersion = $null
+                    $script:BackToMain = $false
                 }
-                Write-ToolDisplay
             }
         }
 

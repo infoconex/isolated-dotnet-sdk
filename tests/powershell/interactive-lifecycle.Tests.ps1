@@ -47,6 +47,24 @@ Describe 'PowerShell interactive lifecycle' {
             param([string]$Output)
             return ([regex]::Matches($Output, 'What would you like to do\?')).Count
         }
+
+        function Get-AcknowledgementPromptCount {
+            param([string]$Output)
+            return ([regex]::Matches($Output, 'Press Enter to return to [^\r\n]+\.\.\.')).Count
+        }
+
+        function Install-FakeInteractiveHost {
+            param([string]$Version)
+
+            $installDirectory = Join-Path $script:ToolRoot $Version
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            Copy-Item `
+                -Path (Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT '*') `
+                -Destination $installDirectory `
+                -Recurse `
+                -Force
+            $env:FAKE_DOTNET_SDK_VERSION = $Version
+        }
     }
 
     BeforeEach {
@@ -71,36 +89,89 @@ Describe 'PowerShell interactive lifecycle' {
     }
 
     AfterEach {
+        Remove-Item Env:FAKE_DOTNET_SDK_VERSION -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'returns to Main after interactive List and exits explicitly' {
+    It 'waits for Enter only when persistent input and output are terminal-capable' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $script:ToolScript,
+            [ref]$tokens,
+            [ref]$parseErrors)
+        $parseErrors | Should -BeNullOrEmpty
+
+        $functionAst = $ast.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Wait-ForInteractiveResultAcknowledgement'
+            }, $true)
+        $functionAst | Should -Not -BeNullOrEmpty
+        $functionDefinition = [scriptblock]::Create($functionAst.Extent.Text)
+        . $functionDefinition
+
+        $script:InteractiveSession = $true
+        $script:AcknowledgementOutput = [System.Collections.Generic.List[string]]::new()
+        $script:AcknowledgementReadCount = 0
+
+        function Write-ToolDisplay {
+            param(
+                [AllowEmptyString()]
+                [string]$Message = ''
+            )
+            $script:AcknowledgementOutput.Add($Message)
+        }
+
+        function Read-ToolInput {
+            $script:AcknowledgementReadCount++
+            return ''
+        }
+
+        Wait-ForInteractiveResultAcknowledgement -Destination 'Verify' -InputRedirected:$false -OutputRedirected:$false
+
+        $script:AcknowledgementOutput | Should -Contain 'Press Enter to return to Verify...'
+        $script:AcknowledgementReadCount | Should -Be 1
+
+        $script:AcknowledgementOutput.Clear()
+        $script:AcknowledgementReadCount = 0
+        Wait-ForInteractiveResultAcknowledgement -InputRedirected:$true -OutputRedirected:$false
+        Wait-ForInteractiveResultAcknowledgement -InputRedirected:$false -OutputRedirected:$true
+
+        $script:AcknowledgementOutput.Count | Should -Be 0
+        $script:AcknowledgementReadCount | Should -Be 0
+    }
+
+    It 'captured persistent List returns to Main without acknowledgement' {
         $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('l', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'L\. List installed SDKs'
         $result.Output | Should -Match 'Isolated SDKs:'
         $result.Output | Should -Match 'System SDKs:'
         $result.Output | Should -Match 'Exiting\.'
     }
 
-    It 'returns to Main after normal interactive Remove no-change' {
+    It 'captured persistent Remove no-change returns without acknowledgement' {
         $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'No isolated SDKs are installed'
         $result.Output | Should -Match 'Removal cancelled\.'
     }
 
-    It 'keeps explicit List one-shot' {
+    It 'keeps explicit List one-shot without acknowledgement' {
         $result = Invoke-InteractiveToolProcess `
             -ToolPath $script:ToolPath `
             -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List'
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 0
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'Installed \.NET SDKs'
     }
 
@@ -116,6 +187,7 @@ function Invoke-RestMethod { throw 'transport failure' }
 
         $result.ExitCode | Should -Not -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'Unable to load .NET release metadata from Microsoft\.'
         $result.Output | Should -Not -Match 'Exiting\.'
     }
@@ -141,9 +213,74 @@ function Invoke-RestMethod { return $releaseIndex }
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'B\. Back to Main'
     }
 
+
+    It 'returns an acknowledged Install result to the selected channel SDK list' {
+        $version = '10.0.401'
+        Install-FakeInteractiveHost -Version $version
+
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+$channelMetadata = [pscustomobject]@{
+    releases = @([pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.401' } })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    if ($Uri -like '*releases-index.json') { return $releaseIndex }
+    return $channelMetadata
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('i', '1', '1', 'b', 'b', 'e') `
+            -Command $command
+
+        $result.ExitCode | Should -Be 0
+        ([regex]::Matches($result.Output, 'Available \.NET 10\.0 SDKs:')).Count | Should -Be 2
+        ([regex]::Matches($result.Output, 'Select a supported or development \.NET channel:')).Count | Should -Be 2
+        (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
+    }
+
+    It 'captured already-installed interactive Install returns without acknowledgement' {
+        $version = '99.0.100'
+        Install-FakeInteractiveHost -Version $version
+
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+function Invoke-RestMethod { return $releaseIndex }
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('i', 'm', $version, 'b', 'e') `
+            -Command $command
+
+        $result.ExitCode | Should -Be 0
+        (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
+        $result.Output | Should -Match 'Isolated SDK:.*Already installed'
+    }
     It 'returns from Install SDK selection to channel selection with Back' {
         $command = @'
 $releaseIndex = [pscustomobject]@{
@@ -188,6 +325,23 @@ function Invoke-RestMethod {
         (Get-MainPromptCount $result.Output) | Should -Be 2
         $result.Output | Should -Match 'B\. Back to Main'
         $result.Output | Should -Not -Match 'Continue\?'
+    }
+
+    It 'returns a completed Remove result to the Remove SDK list' {
+        foreach ($version in @('99.0.100', '98.0.100')) {
+            Install-FakeInteractiveHost -Version $version
+        }
+
+        $result = Invoke-InteractiveToolProcess `
+            -ToolPath $script:ToolPath `
+            -InputLines @('r', '1', 'b', 'e') `
+            -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Yes'
+
+        $result.ExitCode | Should -Be 0
+        ([regex]::Matches($result.Output, 'Select an isolated SDK to remove:')).Count | Should -Be 2
+        $result.Output | Should -Match 'Isolated SDK 99\.0\.100 was removed\.'
+        (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
     }
 
     It 'sorts Remove choices newest to oldest' {

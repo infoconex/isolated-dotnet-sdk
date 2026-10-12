@@ -48,7 +48,7 @@ PowerShell `-Yes` and Bash `--yes` bypass supported confirmation prompts only. T
 
 ## Interactive versus one-shot
 
-Install selected from the persistent Main menu returns to Main after normal completion or cancellation. An explicit Install invocation is one-shot; if it opens a picker, normal cancellation ends that one-shot command rather than entering Main.
+Install selected from a terminal-backed persistent Main session keeps a normal completed or cancellation/no-change result visible until Enter acknowledgement. A result launched from a selected channel's SDK picker returns to that same SDK list (`Press Enter to return to SDK selection...`); manual exact-version entry launched from the channel list returns to the channel list. Redirected or captured persistent execution skips the pause but follows the same parent navigation. An explicit Install invocation is one-shot; if it opens a picker, normal cancellation ends that one-shot command rather than entering Main or waiting for persistent-session acknowledgement.
 
 See [Interactive mode](interactive.md) for channel/version picker and navigation behavior.
 

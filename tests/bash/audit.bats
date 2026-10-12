@@ -382,6 +382,7 @@ EOF
   [[ "$output" == *"A. Audit installed SDKs"* ]]
   printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
   [ "$(printf '%s\n' "$output" | grep -c 'What would you like to do?')" -eq 2 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Press Enter to return to Main...')" -eq 0 ]
   [[ "$output" == *"Exiting."* ]]
 }
 

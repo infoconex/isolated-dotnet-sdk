@@ -30,6 +30,6 @@ After deletion, the tool verifies the selected version directory is gone before 
 
 ## Interactive versus one-shot
 
-Remove selected from the persistent Main menu returns to Main after normal completion or cancellation. An explicit Remove invocation is one-shot; if it opens a picker, normal cancellation ends that command successfully without entering Main.
+Remove selected from a terminal-backed persistent Main session keeps a normal completed or cancellation/no-change result visible until Enter acknowledgement. A result launched from the Remove SDK picker returns to that picker (`Press Enter to return to Remove...`) while isolated SDKs remain. Removing the final isolated SDK returns directly to Main after acknowledgement because there is no remaining Remove list. If no isolated SDK exists and therefore no picker is displayed, the no-inventory result also returns to Main. Redirected or captured persistent execution skips the pause but follows the same parent navigation. An explicit Remove invocation is one-shot; if it opens a picker, normal cancellation ends that command successfully without entering Main or waiting for persistent-session acknowledgement.
 
 See [Interactive mode](interactive.md), [Filesystem safety](../concepts/filesystem-safety.md), and [Native-command failure boundaries](../contracts/native-command-failures.md) for the detailed contracts.

@@ -120,10 +120,13 @@ try {
         $channelSelection,
         'M',
         $sdkVersion,
+        'B',
+        'B',
         'l',
         'a',
         'v',
         '1',
+        'B',
         'r',
         '1',
         'e'
@@ -147,6 +150,13 @@ try {
         [regex]::Escape('Isolated .NET SDK development (main)'))).Count
     if ($identityCount -ne $mainPromptCount) {
         throw "Expected one development identity heading per Main prompt; observed $identityCount identities for $mainPromptCount prompts."
+    }
+
+    $acknowledgementCount = ([regex]::Matches(
+        $interactive.Output,
+        'Press Enter to return to [^\r\n]+\.\.\.')).Count
+    if ($acknowledgementCount -ne 0) {
+        throw "Captured E2E execution must not wait for result acknowledgement; observed $acknowledgementCount prompts."
     }
 
     $requiredFragments = @(
