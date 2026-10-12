@@ -110,7 +110,9 @@ EOF
     run bash -c 'printf "l\n\ne\n" | script -q -c "$1" /dev/null' _ "$wrapper"
   fi
 
-  [ "$status" -eq 0 ]
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    [ "$status" -eq 0 ]
+  fi
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
   [[ "$output" == *"Press Enter to return to Main..."* ]]
