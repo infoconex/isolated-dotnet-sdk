@@ -18,7 +18,7 @@ Bash:
 "$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" audit
 ```
 
-Audit does not accept an SDK-version argument. In a persistent interactive session, `A` runs the same assessment and returns to Main after success.
+Audit does not accept an SDK-version argument. In a persistent interactive session, `A` runs the same assessment and keeps the completed report visible at `Press Enter to return to Main...` until Enter returns to Main.
 
 ## Output groups
 
