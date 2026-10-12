@@ -436,6 +436,36 @@ sort_sdk_versions() {
     done | LC_ALL=C sort -t "$tab" -k1,1r -k2,2n | cut -f3-
 }
 
+sort_sdk_version_lines() {
+    local version
+    local versions=()
+
+    while IFS= read -r version; do
+        [[ -n "$version" ]] || continue
+        versions+=("$version")
+    done
+
+    if (( ${#versions[@]} > 0 )); then
+        sort_sdk_versions "${versions[@]}"
+    fi
+}
+
+sort_sdk_inventory() {
+    local line
+    local version
+    local key
+    local index=0
+    local tab=$'\t'
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        version="${line%%[[:space:]]*}"
+        key="$(sdk_version_sort_key "$version")"
+        printf '%s\t%09d\t%s\n' "$key" "$index" "$line"
+        index=$((index + 1))
+    done | LC_ALL=C sort -t "$tab" -k1,1r -k2,2n | cut -f3-
+}
+
 sdk_feature_band() {
     local version="$1"
     local core="${version%%-*}"
@@ -775,6 +805,15 @@ format_audit_row() {
     local version="$1"
     local color=""
     local lifecycle_padding=0
+    local servicing_display="$AUDIT_SERVICING_STATUS"
+    local update_target=""
+
+    case "$servicing_display" in
+        "Update available -> "*|"Security update available -> "*)
+            update_target="${servicing_display##* -> }"
+            servicing_display="Update -> $update_target"
+            ;;
+    esac
 
     printf '  %-*s' "$AUDIT_VERSION_WIDTH" "$version"
     if (( AUDIT_RELEASE_TYPE_WIDTH > 0 )); then
@@ -797,9 +836,6 @@ format_audit_row() {
         fi
     fi
 
-    if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
-        printf '  %s' "$AUDIT_SERVICING_STATUS"
-    fi
     if [[ -n "$AUDIT_RELEASE_DATE" ]]; then
         printf '  Release: %s' "$AUDIT_RELEASE_DATE"
     fi
@@ -808,6 +844,9 @@ format_audit_row() {
     fi
     if [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]]; then
         printf '  EOS: %s' "$AUDIT_END_OF_SUPPORT_DATE"
+    fi
+    if [[ -n "$servicing_display" ]]; then
+        printf '  %s' "$servicing_display"
     fi
 }
 
@@ -824,6 +863,12 @@ audit_installed_sdks() {
 
     isolated_output="$(get_isolated_sdk_versions)"
     system_output="$(get_system_sdk_inventory)"
+    if [[ -n "$isolated_output" ]]; then
+        isolated_output="$(printf '%s\n' "$isolated_output" | sort_sdk_version_lines)"
+    fi
+    if [[ -n "$system_output" ]]; then
+        system_output="$(printf '%s\n' "$system_output" | sort_sdk_inventory)"
+    fi
 
     while IFS= read -r line; do
         [[ -n "$line" ]] && audit_isolated_versions+=("$line")
@@ -1260,6 +1305,7 @@ select_remove_version() {
         tool_info "No isolated SDKs are installed under $SDK_ROOT."
         return 1
     fi
+    versions="$(printf '%s\n' "$versions" | sort_sdk_version_lines)"
 
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
@@ -1338,6 +1384,7 @@ select_verify_version() {
         tool_info "No isolated SDKs are installed under $SDK_ROOT."
         return 1
     fi
+    versions="$(printf '%s\n' "$versions" | sort_sdk_version_lines)"
 
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
@@ -1439,6 +1486,12 @@ list_installed_sdks() {
 
     isolated_versions="$(get_isolated_sdk_versions)"
     system_inventory="$(get_system_sdk_inventory)"
+    if [[ -n "$isolated_versions" ]]; then
+        isolated_versions="$(printf '%s\n' "$isolated_versions" | sort_sdk_version_lines)"
+    fi
+    if [[ -n "$system_inventory" ]]; then
+        system_inventory="$(printf '%s\n' "$system_inventory" | sort_sdk_inventory)"
+    fi
 
     tool_heading "Installed .NET SDKs"
     echo
