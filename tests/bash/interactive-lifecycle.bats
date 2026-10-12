@@ -228,7 +228,7 @@ exit 0
 EOF
   chmod +x "$tool_root/$version/dotnet"
 
-  run bash -c 'printf "i\nm\n%s\ne\n" "$4" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\nm\n%s\nb\ne\n" "$4" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path" "$version"
 
   [ "$status" -eq 0 ]
@@ -341,7 +341,7 @@ exit 0
 EOF
   chmod +x "$install_dir/dotnet"
 
-  run bash -c 'printf "i\n1\n1\nl\nr\n1\ny\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
+  run bash -c 'printf "i\n1\n1\nb\nb\nl\nr\n1\ny\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
     "$test_home" "$fake_bin" "$tool_path"
 
   [ "$status" -eq 0 ]
