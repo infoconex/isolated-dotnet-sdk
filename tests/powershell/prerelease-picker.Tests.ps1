@@ -118,7 +118,7 @@ function Invoke-RestMethod {
         $view | Should -Match '3\. 99\.0\.100-preview\.6\.6'
         $view | Should -Match '4\. 99\.0\.100-preview\.5\.5'
         $view | Should -Match 'S\. Show featured versions'
-        $view | Should -Match 'Q\. Cancel'
+        $result.Output | Should -Match 'Q\. Cancel'
     }
 
     It 'toggles to featured and back to all with reciprocal labels' {
