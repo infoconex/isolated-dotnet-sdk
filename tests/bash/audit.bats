@@ -375,14 +375,14 @@ EOF
 @test "interactive Audit returns to Main after completion" {
   add_isolated_sdk '10.0.401'
 
-  run bash -c 'printf "a\n\ne\n" | env HOME="$1" PATH="$2:$PATH" AUDIT_METADATA_ROOT="$3" AUDIT_NETWORK_LOG="$4" "$5"' _ \
+  run bash -c 'printf "a\ne\n" | env HOME="$1" PATH="$2:$PATH" AUDIT_METADATA_ROOT="$3" AUDIT_NETWORK_LOG="$4" "$5"' _ \
     "$test_home" "$fake_bin" "$metadata_root" "$network_log" "$tool_path"
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"A. Audit installed SDKs"* ]]
   printf '%s\n' "$output" | grep -Eq '10\.0\.401 +LTS +Current'
   [ "$(printf '%s\n' "$output" | grep -c 'What would you like to do?')" -eq 2 ]
-  [ "$(printf '%s\n' "$output" | grep -c 'Press Enter to return to Main...')" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Press Enter to return to Main...')" -eq 0 ]
   [[ "$output" == *"Exiting."* ]]
 }
 
