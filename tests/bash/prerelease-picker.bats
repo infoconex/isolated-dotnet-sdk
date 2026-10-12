@@ -35,24 +35,24 @@ JSON
   https://example.invalid/99.0/releases.json)
     if [[ "${FAKE_SINGLE:-0}" == "1" ]]; then
       cat > "$out_file" <<'JSON'
-{"releases":[{"sdk":{"version":"99.0.100-rc.2.22","files":[{"url":"https://example.invalid/Sdk/99.0.100-rc.2.22/a"}]}}]}
+{"releases":[{"sdk":{"version":"99.0.100-rc.2.22","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100-rc.2.22/a"}]}}]}
 JSON
     elif [[ "${FAKE_STABLE:-0}" == "1" ]]; then
       cat > "$out_file" <<'JSON'
 {"releases":[
-{"sdk":{"version":"99.0.100-preview.5.5","files":[{"url":"https://example.invalid/Sdk/99.0.100-preview.5.5/a"}]}},
-{"sdk":{"version":"99.0.101","files":[{"url":"https://example.invalid/Sdk/99.0.101/a"}]}},
-{"sdk":{"version":"99.0.100-rc.2.22","files":[{"url":"https://example.invalid/Sdk/99.0.100-rc.2.22/a"}]}},
-{"sdk":{"version":"99.0.100","files":[{"url":"https://example.invalid/Sdk/99.0.100/a"}]}}
+{"sdk":{"version":"99.0.100-preview.5.5","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100-preview.5.5/a"}]}},
+{"sdk":{"version":"99.0.101","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.101/a"}]}},
+{"sdk":{"version":"99.0.100-rc.2.22","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100-rc.2.22/a"}]}},
+{"sdk":{"version":"99.0.100","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100/a"}]}}
 ]}
 JSON
     else
       cat > "$out_file" <<'JSON'
 {"releases":[
-{"sdk":{"version":"99.0.100-preview.5.5","files":[{"url":"https://example.invalid/Sdk/99.0.100-preview.5.5/a"}]}},
-{"sdk":{"version":"99.0.100-rc.1.11","files":[{"url":"https://example.invalid/Sdk/99.0.100-rc.1.11/a"}]}},
-{"sdk":{"version":"99.0.100-preview.6.6","files":[{"url":"https://example.invalid/Sdk/99.0.100-preview.6.6/a"}]}},
-{"sdk":{"version":"99.0.100-rc.2.22","files":[{"url":"https://example.invalid/Sdk/99.0.100-rc.2.22/a"}]}}
+{"sdk":{"version":"99.0.100-preview.5.5","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100-preview.5.5/a"}]}},
+{"sdk":{"version":"99.0.100-rc.1.11","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100-rc.1.11/a"}]}},
+{"sdk":{"version":"99.0.100-preview.6.6","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100-preview.6.6/a"}]}},
+{"sdk":{"version":"99.0.100-rc.2.22","files":[{"url":"https://example.invalid/dotnet/Sdk/99.0.100-rc.2.22/a"}]}}
 ]}
 JSON
     fi
