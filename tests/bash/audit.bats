@@ -92,7 +92,9 @@ MARKDOWN
 
   cat > "$metadata_root/10.0.json" <<'JSON'
 {"releases":[
-  {"release-date":"2026-09-01","security":false,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
+  {"release-date":"2025-11-11","security":false,"sdk":{"version":"10.0.100","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.100/archive.tgz"}]}},
+  {"release-date":"2026-08-11","security":false,"sdk":{"version":"10.0.303","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.303/archive.tgz"}]}},
+  {"release-date":"2026-09-01","security":true,"sdk":{"version":"10.0.401","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/archive.tgz"}]}}
 ]}
 JSON
   cat > "$metadata_root/9.0.json" <<'JSON'
@@ -157,9 +159,11 @@ run_audit() {
     "$tool_path" audit
 }
 
-@test "audit reports servicing and lifecycle states for isolated and system SDKs" {
+@test "audit reports compact lifecycle-first rows for isolated and system SDKs" {
   add_isolated_sdk '12.0.100-preview.1.111'
   add_isolated_sdk '11.0.100-rc.1.111'
+  add_isolated_sdk '10.0.100'
+  add_isolated_sdk '10.0.303'
   add_isolated_sdk '10.0.401'
   add_isolated_sdk '9.0.306'
   add_isolated_sdk '8.0.303'
@@ -172,18 +176,21 @@ run_audit() {
   [ "$status" -eq 0 ]
   [[ "$output" == *".NET SDK audit"* ]]
   [[ "$output" == *"Isolated SDKs:"* ]]
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.100 +LTS +Active +Security update available -> 10\.0\.401 +Release: 2025-11-11 +EOS: 2028-11-14$'
+  printf '%s\n' "$output" | grep -Eq '^  10\.0\.303 +LTS +Active +Security update available -> 10\.0\.401 +Release: 2026-08-11 +EOS: 2028-11-14$'
   printf '%s\n' "$output" | grep -Eq '^  10\.0\.401 +LTS +Current +Release: 2026-09-01 +EOS: 2028-11-14$'
-  printf '%s\n' "$output" | grep -Eq '^  9\.0\.306 +STS +Security update available -> 9\.0\.318 +Maintenance +Release: 2026-07-01 +EOS: 2026-11-10$'
-  printf '%s\n' "$output" | grep -Eq '^  8\.0\.303 +LTS +Update available -> 8\.0\.425 +Maintenance +Release: 2026-06-01 +EOS: 2026-11-10$'
+  printf '%s\n' "$output" | grep -Eq '^  9\.0\.306 +STS +Maintenance +Security update available -> 9\.0\.318 +Release: 2026-07-01 +EOS: 2026-11-10$'
+  printf '%s\n' "$output" | grep -Eq '^  8\.0\.303 +LTS +Maintenance +Update available -> 8\.0\.425 +Release: 2026-06-01 +EOS: 2026-11-10$'
   printf '%s\n' "$output" | grep -Eq '^  7\.0\.410 +STS +EOL +Release: 2024-05-28 +EOS: 2024-05-14$'
-  printf '%s\n' "$output" | grep -Eq '^  12\.0\.100-preview\.1\.111 +STS +Update available -> 12\.0\.100-preview\.2\.999 +Preview 1 +Release: 2026-09-01$'
-  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +Update available -> 11\.0\.100-rc\.2\.999 +RC1 +Release: 2026-09-01 +Go Live: 2026-11-10$'
+  printf '%s\n' "$output" | grep -Eq '^  12\.0\.100-preview\.1\.111 +STS +Preview 1 +Update available -> 12\.0\.100-preview\.2\.999 +Release: 2026-09-01$'
+  printf '%s\n' "$output" | grep -Eq '^  11\.0\.100-rc\.1\.111 +STS +RC1 +Update available -> 11\.0\.100-rc\.2\.999 +Release: 2026-09-01 +Go Live: 2026-11-10$'
   printf '%s\n' "$output" | grep -Eq '^  6\.0\.428 +LTS +Unsupported +Release: 2024-11-01$'
   [[ "$output" == *"System SDKs:"* ]]
   printf '%s\n' "$output" | grep -Eq '^  8\.0\.425 +LTS +Maintenance +Release: 2026-09-01 +EOS: 2026-11-10$'
   [[ "$output" != *"Vulnerable"* ]]
   [[ "$output" != *$'\033['* ]]
 
+  active_line="$(printf '%s\n' "$output" | grep '^  10\.0\.100[[:space:]]' | head -n 1)"
   current_line="$(printf '%s\n' "$output" | grep '^  10\.0\.401[[:space:]]' | head -n 1)"
   maintenance_line="$(printf '%s\n' "$output" | grep '^  8\.0\.425[[:space:]]' | head -n 1)"
   update_line="$(printf '%s\n' "$output" | grep '^  8\.0\.303[[:space:]]' | head -n 1)"
@@ -198,40 +205,27 @@ run_audit() {
   [ "${#current_release_type_prefix}" -eq "${#maintenance_release_type_prefix}" ]
   [ "${#current_release_type_prefix}" -eq "${#preview_release_type_prefix}" ]
 
-  update_servicing_prefix="${update_line%%Update\ available*}"
-  security_servicing_prefix="${security_line%%Security\ update\ available*}"
-  preview_servicing_prefix="${preview_line%%Update\ available*}"
-  [ "${#update_servicing_prefix}" -eq "${#security_servicing_prefix}" ]
-  [ "${#update_servicing_prefix}" -eq "${#preview_servicing_prefix}" ]
-
+  active_lifecycle_prefix="${active_line%%Active*}"
   current_lifecycle_prefix="${current_line%%Current*}"
   maintenance_lifecycle_prefix="${maintenance_line%%Maintenance*}"
   preview_lifecycle_prefix="${preview_line%%Preview\ 1*}"
   rc_lifecycle_prefix="${rc_line%%RC1*}"
   eol_lifecycle_prefix="${eol_line%%EOL*}"
+  [ "${#current_lifecycle_prefix}" -eq "${#active_lifecycle_prefix}" ]
   [ "${#current_lifecycle_prefix}" -eq "${#maintenance_lifecycle_prefix}" ]
   [ "${#current_lifecycle_prefix}" -eq "${#preview_lifecycle_prefix}" ]
   [ "${#current_lifecycle_prefix}" -eq "${#rc_lifecycle_prefix}" ]
   [ "${#current_lifecycle_prefix}" -eq "${#eol_lifecycle_prefix}" ]
-  [ "${#update_servicing_prefix}" -lt "${#current_lifecycle_prefix}" ]
 
-  current_release_date_prefix="${current_line%%Release:*}"
-  maintenance_release_date_prefix="${maintenance_line%%Release:*}"
-  preview_release_date_prefix="${preview_line%%Release:*}"
-  rc_release_date_prefix="${rc_line%%Release:*}"
-  [ "${#current_release_date_prefix}" -eq "${#maintenance_release_date_prefix}" ]
-  [ "${#current_release_date_prefix}" -eq "${#preview_release_date_prefix}" ]
-  [ "${#current_release_date_prefix}" -eq "${#rc_release_date_prefix}" ]
+  [[ "$active_line" == *"Active"*"Security update available"* ]]
+  [[ "$update_line" == *"Maintenance"*"Update available"* ]]
+  [[ "$security_line" == *"Maintenance"*"Security update available"* ]]
+  [[ "$preview_line" == *"Preview 1"*"Update available"* ]]
+  [[ "$rc_line" == *"RC1"*"Update available"* ]]
 
-  rc_go_live_prefix="${rc_line%%Go\ Live:*}"
-  [ "${#rc_go_live_prefix}" -gt "${#rc_release_date_prefix}" ]
-
-  current_eos_prefix="${current_line%%EOS:*}"
-  maintenance_eos_prefix="${maintenance_line%%EOS:*}"
-  eol_eos_prefix="${eol_line%%EOS:*}"
-  [ "${#current_eos_prefix}" -eq "${#maintenance_eos_prefix}" ]
-  [ "${#current_eos_prefix}" -eq "${#eol_eos_prefix}" ]
-  [ "${#current_eos_prefix}" -gt "${#rc_go_live_prefix}" ]
+  [[ "$active_line" == *"Security update available -> 10.0.401  Release: 2025-11-11  EOS: 2028-11-14" ]]
+  [[ "$current_line" == *"Current"*"Release: 2026-09-01  EOS: 2028-11-14" ]]
+  [[ "$rc_line" == *"Release: 2026-09-01  Go Live: 2026-11-10" ]]
   [[ "$output" != *"Release date:"* ]]
   [[ "$output" != *"End of support:"* ]]
 }
