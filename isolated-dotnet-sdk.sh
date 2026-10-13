@@ -2041,9 +2041,8 @@ validate_local_isolated_sdk() {
     verify_check "SDK resolution" "OK" "$resolved_version"
 }
 
-# Use Audit's existing classification and formatting in a protected subprocess.
-# Metadata failures are supplemental and never determine Verify's exit status.
-verify_audit_row() {
+# Metadata is optional; reuse Audit's classification in a protected subprocess.
+verify_audit_details() {
     local version="$1"
     local index_json=""
     local channel_data=""
@@ -2063,8 +2062,79 @@ verify_audit_row() {
     AUDIT_RELEASE_TYPE_WIDTH=0
     AUDIT_LIFECYCLE_WIDTH=0
     resolve_audit_classification "$version" "$channel_data"
-    update_audit_layout_widths "$version"
-    format_audit_row "$version"
+    [[ -n "$AUDIT_RELEASE_TYPE" ]] && printf '  %-19s %s\n' 'Support type' "$AUDIT_RELEASE_TYPE"
+    local status_color=""
+    status_color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
+    printf '  %-19s %b%s%b\n' 'Status' "$status_color" "$AUDIT_STATUS_TOKEN" "$RESET"
+    [[ -n "$AUDIT_RELEASE_DATE" ]] && printf '  %-19s %s\n' 'SDK release date' "$AUDIT_RELEASE_DATE"
+    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && printf '  %-19s %s\n' 'Go Live date' "$AUDIT_GO_LIVE_DATE"
+    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && printf '  %-19s %s\n' 'Channel EOS date' "$AUDIT_END_OF_SUPPORT_DATE"
+    if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
+        case "$AUDIT_SERVICING_STATUS" in
+            "Update available -> "*|"Security update available -> "*)
+                printf '  %-19s %s\n' 'Update available' "${AUDIT_SERVICING_STATUS##* -> }"
+                ;;
+            *)
+                printf '  %-19s %s\n' 'Update available' "$AUDIT_SERVICING_STATUS"
+                ;;
+        esac
+    fi
+}
+
+# Best-effort component diagnostics. Never import runtimes from system installations.
+verify_installed_components() {
+    local install_dir="$1"
+    local dotnet="$install_dir/dotnet"
+    local work_dir="" info="" runtimes="" section=""
+    local host_version="" architecture="" rid=""
+    local line="" name="" runtime_version="" runtime_root="" expected_root=""
+    local count=0
+
+    if [[ -x "$dotnet" ]] && work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-components.XXXXXX")"; then
+        info="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --info 2>/dev/null)" || info=""
+        runtimes="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --list-runtimes 2>/dev/null)" || runtimes=""
+        rm -rf -- "$work_dir"
+    fi
+
+    while IFS= read -r line; do
+        case "$line" in
+            'Runtime Environment:') section="runtime"; continue ;;
+            'Host:') section="host"; continue ;;
+        esac
+        if [[ "$line" =~ ^[^[:space:]][^:]*:[[:space:]]*$ ]]; then
+            section=""
+            continue
+        fi
+        if [[ "$section" == "host" && "$line" =~ ^[[:space:]]*Version:[[:space:]]*([^[:space:]]+) ]]; then
+            host_version="${BASH_REMATCH[1]}"
+        elif [[ "$section" == "host" && "$line" =~ ^[[:space:]]*Architecture:[[:space:]]*([^[:space:]]+) ]]; then
+            architecture="${BASH_REMATCH[1]}"
+        elif [[ "$section" == "runtime" && "$line" =~ ^[[:space:]]*RID:[[:space:]]*([^[:space:]]+) ]]; then
+            rid="${BASH_REMATCH[1]}"
+        fi
+    done <<< "$info"
+
+    printf '  %-19s %s\n' 'Host version' "${host_version:-Unavailable}"
+    printf '  %-19s %s\n' 'Architecture' "${architecture:-Unavailable}"
+    printf '  %-19s %s\n' 'Runtime identifier' "${rid:-Unavailable}"
+    echo
+    printf '  .NET runtimes:\n'
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+\[(.*)\][[:space:]]*$ ]]; then
+            name="${BASH_REMATCH[1]}"
+            runtime_version="${BASH_REMATCH[2]}"
+            runtime_root="${BASH_REMATCH[3]}"
+            expected_root="$install_dir/shared/$name"
+            if [[ -d "$runtime_root" && -d "$expected_root" ]] &&
+               [[ "$(cd "$runtime_root" && pwd -P)" == "$(cd "$expected_root" && pwd -P)" ]]; then
+                printf '    %-31s %s\n' "$name" "$runtime_version"
+                count=$((count + 1))
+            fi
+        fi
+    done <<< "$runtimes"
+    if (( count == 0 )); then
+        printf '    Unavailable\n'
+    fi
 }
 
 verify_isolated_sdk() {
@@ -2072,11 +2142,7 @@ verify_isolated_sdk() {
     validate_version
 
     local install_dir="$SDK_ROOT/$VERSION"
-    local row=""
-    local label=""
-    local result=""
-    local detail=""
-    local check=""
+    local details="" label="" result="" detail="" check=""
     local is_valid="true"
 
     if validate_local_isolated_sdk "$VERSION"; then
@@ -2087,18 +2153,35 @@ verify_isolated_sdk() {
 
     tool_heading "Verify isolated .NET SDK"
     echo
-    if row="$(verify_audit_row "$VERSION" 2>/dev/null)"; then
-        printf '%s\n' "$row"
+    tool_heading "SDK information:"
+    printf '  %-19s %s\n' 'SDK version' "$VERSION"
+    printf '  %-19s %s\n' '.NET channel' "$(sdk_channel_from_version "$VERSION")"
+    if details="$(verify_audit_details "$VERSION" 2>/dev/null)"; then
+        printf '%s\n' "$details"
     else
-        tool_info "Release/lifecycle information: Unavailable (Microsoft metadata could not be loaded)."
+        printf '  Release/lifecycle   Unavailable (Microsoft metadata could not be loaded).\n'
     fi
     echo
-    tool_label_value "Location:" "$install_dir"
+    tool_heading "Installed components:"
+    if [[ "$is_valid" == "true" ]]; then
+        verify_installed_components "$install_dir"
+    else
+        printf '  %-19s %s\n' 'Host version' 'Unavailable'
+        printf '  %-19s %s\n' 'Architecture' 'Unavailable'
+        printf '  %-19s %s\n' 'Runtime identifier' 'Unavailable'
+        echo
+        printf '  .NET runtimes:\n    Unavailable\n'
+    fi
     echo
     tool_heading "Verification:"
     for check in "${VERIFY_CHECKS[@]}"; do
         IFS='|' read -r label result detail <<< "$check"
         if [[ "$result" == "OK" ]]; then
+            case "$label" in
+                '.NET host') detail='Host executable found and launched' ;;
+                'SDK inventory') detail='Exact SDK found in isolated installation' ;;
+                'SDK resolution') detail='Correct SDK selected' ;;
+            esac
             printf '  %-23s %bOK%b  %s\n' "$label" "$GREEN" "$RESET" "$detail"
         else
             printf '  %-23s FAIL  %s\n' "$label" "$detail"
