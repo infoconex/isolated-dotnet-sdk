@@ -29,6 +29,7 @@ Describe 'PowerShell SDK Audit' {
             $installDirectory = Join-Path $script:ToolRoot $Version
             New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
             if ($Runnable) {
+                New-Item -ItemType Directory -Path (Join-Path $installDirectory 'sdk') -Force | Out-Null
                 Copy-Item `
                     -Path (Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT '*') `
                     -Destination $installDirectory `
