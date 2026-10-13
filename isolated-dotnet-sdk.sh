@@ -1937,7 +1937,8 @@ verify_check() {
 
 validate_local_isolated_sdk() {
     local version="$1"
-    local install_dir="$SDK_ROOT/$version"
+    # Optional explicit installation/staging directory allows later Install reuse.
+    local install_dir="${2:-$SDK_ROOT/$version}"
     local isolated_dotnet="$install_dir/dotnet"
     local work_dir=""
     local inventory=""
