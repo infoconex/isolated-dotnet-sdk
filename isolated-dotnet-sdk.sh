@@ -1695,27 +1695,130 @@ get_sdk_rid() {
     printf '%s-%s' "$os" "$arch"
 }
 
+# Select archives only from exact-version SDK objects, never Runtime records.
+# Release metadata publishes a portable artifact name, RID, URL and hash.
+# Earlier SDKs put the version before the archive extension in the URL.
 extract_sdk_artifact_metadata() {
-    local expected_url="$1"
+    local version="$1"
+    local rid="$2"
 
-    awk -v expected="$expected_url" '
-        /"url"[[:space:]]*:/ {
-            value=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", value)
+    awk -v expected_version="$version" -v expected_rid="$rid" '
+        function json_string(line, key, marker, value) {
+            marker = "\"" key "\"[[:space:]]*:[[:space:]]*\""
+            if (!match(line, marker)) return ""
+            value = substr(line, RSTART + RLENGTH)
             sub(/".*$/, "", value)
-            if (value == expected) {
-                candidate=value
+            return value
+        }
+        # Track object/array nesting outside quoted JSON strings. This avoids
+        # treating Runtime files and other releases as SDK file candidates.
+        function depth_delta(line, opening, closing, i, char, in_string, escaped, difference) {
+            in_string=escaped=difference=0
+            for (i=1; i<=length(line); i++) {
+                char=substr(line, i, 1)
+                if (escaped) { escaped=0; continue }
+                if (in_string && char == "\\") { escaped=1; continue }
+                if (char == "\"") { in_string=!in_string; continue }
+                if (!in_string && char == opening) difference++
+                if (!in_string && char == closing) difference--
             }
-            next
+            return difference
         }
-        candidate != "" && /"hash"[[:space:]]*:/ {
-            hash=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", hash)
-            sub(/".*$/, "", hash)
-            print candidate "|" hash
-            candidate=""
+        function eligible(name, url, hash, stem, expected_url, legacy_url, key, extension, base) {
+            extension = (expected_rid ~ /^win-/ ? ".zip" : ".tar.gz")
+            base = "https://builds.dotnet.microsoft.com/dotnet/Sdk/" expected_version "/"
+            expected_url = base "dotnet-sdk-" expected_version "-" expected_rid extension
+
+            if (name == "" && url != expected_url) return
+            if (name != "" &&
+                name != "dotnet-sdk-" expected_rid extension &&
+                name != "dotnet-dev-" expected_rid extension) return
+
+            if (name != "") {
+                stem = substr(name, 1, length(name) - length(extension))
+                legacy_url = base stem "." expected_version extension
+            } else {
+                legacy_url = ""
+            }
+
+            if (url != legacy_url &&
+                !(url == expected_url && (name == "" || name == "dotnet-sdk-" expected_rid extension))) return
+
+            key = url "|" hash
+            if (!seen[key]++) print key
         }
-    ' | awk '!seen[$0]++'
+        {
+            line=$0
+            if (!sdks_active && line ~ /"sdks"[[:space:]]*:[[:space:]]*\[/) {
+                sdks_active=1
+                sdks_depth=array_depth+1
+            }
+
+            if (!sdk_active && line ~ /"sdk"[[:space:]]*:[[:space:]]*\{/) {
+                sdk_active=1
+                sdk_depth=object_depth+1
+                sdk_version=""
+                file_count=0
+            }
+            else if (!sdk_active && sdks_active && line ~ /^[[:space:]]*\{[[:space:]]*,?[[:space:]]*$/) {
+                sdk_active=1
+                sdk_depth=object_depth+1
+                sdk_version=""
+                file_count=0
+            }
+
+            if (sdk_active) {
+                if (object_depth == sdk_depth) {
+                    value=json_string(line, "version")
+                    if (value != "") sdk_version=value
+                    if (!files_active && line ~ /"files"[[:space:]]*:[[:space:]]*\[/) {
+                        files_active=1
+                        files_depth=array_depth+1
+                    }
+                }
+                if (files_active && !file_active && line ~ /^[[:space:]]*\{/) {
+                    file_active=1
+                    file_depth=object_depth+1
+                    file_name=file_rid=file_url=file_hash=""
+                }
+                if (file_active) {
+                    value=json_string(line, "name")
+                    if (value != "") file_name=value
+                    value=json_string(line, "rid")
+                    if (value != "") file_rid=value
+                    value=json_string(line, "url")
+                    if (value != "") file_url=value
+                    value=json_string(line, "hash")
+                    if (value != "") file_hash=value
+                }
+            }
+
+            object_depth += depth_delta(line, "{", "}")
+            array_depth += depth_delta(line, "[", "]")
+
+            if (file_active && object_depth < file_depth) {
+                if (file_rid == expected_rid) {
+                    file_count++
+                    file_names[file_count]=file_name
+                    file_urls[file_count]=file_url
+                    file_hashes[file_count]=file_hash
+                }
+                file_active=0
+            }
+            if (files_active && array_depth < files_depth) files_active=0
+
+            if (sdk_active && object_depth < sdk_depth) {
+                if (sdk_version == expected_version) {
+                    for (i=1; i<=file_count; i++) {
+                        eligible(file_names[i], file_urls[i], file_hashes[i])
+                    }
+                }
+                sdk_active=0
+                file_active=files_active=0
+            }
+            if (sdks_active && array_depth < sdks_depth) sdks_active=0
+        }
+    '
 }
 
 install_isolated_sdk() {
@@ -1745,7 +1848,6 @@ install_isolated_sdk() {
     local channel=""
     local rid=""
     local metadata_url=""
-    local expected_artifact_url=""
     local artifact_data=""
     local artifact_count=0
     local artifact_url=""
@@ -1819,7 +1921,6 @@ install_isolated_sdk() {
     channel="$(get_sdk_channel)"
     rid="$(get_sdk_rid)"
     metadata_url="https://builds.dotnet.microsoft.com/dotnet/release-metadata/$channel/releases.json"
-    expected_artifact_url="https://builds.dotnet.microsoft.com/dotnet/Sdk/$VERSION/dotnet-sdk-$VERSION-$rid.tar.gz"
     metadata_file="$(mktemp "$SDK_ROOT/.release-metadata-$VERSION.XXXXXX")"
     archive_file="$(mktemp "$SDK_ROOT/.sdk-payload-$VERSION.XXXXXX")"
     trap 'cleanup_install_transaction "$metadata_file" "$archive_file" "$staging_dir" || true' EXIT
@@ -1837,16 +1938,13 @@ install_isolated_sdk() {
         tool_fail "Invalid Microsoft release metadata for SDK $VERSION."
     fi
 
-    artifact_data="$(extract_sdk_artifact_metadata "$expected_artifact_url" < "$metadata_file")"
+    artifact_data="$(extract_sdk_artifact_metadata "$VERSION" "$rid" < "$metadata_file")"
     artifact_count="$(printf '%s\n' "$artifact_data" | awk 'NF { count++ } END { print count + 0 }')"
     if (( artifact_count != 1 )); then
         tool_fail "Microsoft release metadata did not contain exactly one SDK archive for $VERSION and $rid."
     fi
 
     IFS='|' read -r artifact_url expected_hash <<< "$artifact_data"
-    if [[ "$artifact_url" != "$expected_artifact_url" ]]; then
-        tool_fail "Microsoft release metadata returned an unexpected SDK archive URL for $VERSION and $rid."
-    fi
     if [[ ! "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
         tool_fail "Microsoft release metadata contained an invalid SHA-512 hash for SDK $VERSION and $rid."
     fi
