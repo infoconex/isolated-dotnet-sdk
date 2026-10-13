@@ -1837,13 +1837,13 @@ function Test-LegacySdkHost {
         $VersionLines = @($VersionOutput | ForEach-Object { ([string]$_).Trim() } |
                 Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         if ($VersionExitCode -ne 0 -or $VersionLines.Count -ne 1 -or $VersionLines[0] -cne $Version) {
-            throw "Unable to verify isolated SDK $Version: legacy host did not report the requested exact SDK version."
+            throw "Unable to verify isolated SDK $($Version): legacy host did not report the requested exact SDK version."
         }
 
         $InfoOutput = @(& $DotNetPath --info 2>&1)
         $InfoExitCode = $LASTEXITCODE
         if ($InfoExitCode -ne 0) {
-            throw "Unable to verify isolated SDK $Version: legacy host --info exited with code $InfoExitCode."
+            throw "Unable to verify isolated SDK $($Version): legacy host --info exited with code $InfoExitCode."
         }
 
         $BasePaths = @($InfoOutput | ForEach-Object {
@@ -1852,19 +1852,19 @@ function Test-LegacySdkHost {
                 }
             })
         if ($BasePaths.Count -ne 1) {
-            throw "Unable to verify isolated SDK $Version: legacy host did not report one SDK Base Path."
+            throw "Unable to verify isolated SDK $($Version): legacy host did not report one SDK Base Path."
         }
 
         try {
             $ActualBasePath = [System.IO.Path]::GetFullPath($BasePaths[0]).TrimEnd('\', '/')
         }
         catch {
-            throw "Unable to verify isolated SDK $Version: legacy host reported an invalid SDK Base Path."
+            throw "Unable to verify isolated SDK $($Version): legacy host reported an invalid SDK Base Path."
         }
         if (-not [string]::Equals(
                 $ActualBasePath, $ExpectedBasePath, [System.StringComparison]::OrdinalIgnoreCase
             )) {
-            throw "Unable to verify isolated SDK $Version: legacy host SDK Base Path does not match the isolated directory."
+            throw "Unable to verify isolated SDK $($Version): legacy host SDK Base Path does not match the isolated directory."
         }
     }
     finally {
