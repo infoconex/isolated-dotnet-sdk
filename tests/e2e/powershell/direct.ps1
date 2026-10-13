@@ -143,7 +143,7 @@ try {
     if ($verify.Output -notmatch 'Exact SDK found in isolated installation') {
         throw 'Verify did not prove exact isolated SDK inventory.'
     }
-    foreach ($fragment in @("SDK release date     $auditReleaseDate", "Channel EOS date    $auditEndOfSupport")) {
+    foreach ($fragment in @("SDK release date    $auditReleaseDate", "Channel EOS date    $auditEndOfSupport")) {
         if ($verify.Output -notmatch [regex]::Escape($fragment)) {
             throw "Verify and Audit classification differed: $fragment"
         }
