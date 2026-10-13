@@ -56,6 +56,18 @@ foreach ($Path in $FormattingPaths) {
 
     $ChangedPaths += $Path
 
+    # Temporary PR diagnosis: show the exact formatter-proposed patch on CI.
+    if ($IsCheck) {
+        $TempFormatted = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-formatter-{0}.ps1" -f [guid]::NewGuid())
+        try {
+            [System.IO.File]::WriteAllText($TempFormatted, $Formatted)
+            & git diff --no-index -- $Path $TempFormatted 2>&1 | ForEach-Object { Write-Output $_ }
+        }
+        finally {
+            Remove-Item -LiteralPath $TempFormatted -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     if (-not $IsCheck) {
         $Output = if ($OriginalUsesCrLf) {
             $NormalizedFormatted.Replace("`n", "`r`n")
