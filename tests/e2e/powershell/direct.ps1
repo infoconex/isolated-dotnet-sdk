@@ -134,8 +134,8 @@ try {
         -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Verify', '-SdkVersion', $sdkVersion)
     Assert-Success -Result $verify -Operation 'Direct verify'
     Write-Host $verify.Output
-    if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion is healthy.")) {
-        throw "Verify output did not report SDK $sdkVersion healthy."
+    if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion verified successfully.")) {
+        throw "Verify output did not report SDK $sdkVersion verified successfully."
     }
 
     $list = Invoke-E2EProcess `
