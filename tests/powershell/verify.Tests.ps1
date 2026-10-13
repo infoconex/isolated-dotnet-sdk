@@ -70,7 +70,7 @@ function Invoke-RestMethod {
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
-        foreach ($name in @('FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT')) {
+        foreach ($name in @('FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -100,6 +100,21 @@ function Invoke-RestMethod {
         $outputText | Should -Not -Match '(?m)^Location:'
         (Get-Content -LiteralPath $sentinelPath -Raw) | Should -Be 'preserve-me'
         @(Get-ChildItem -LiteralPath $installDirectory -File -Recurse -Force).Count | Should -Be $fileCountBefore
+    }
+
+    It 'reads legacy Host information and infers architecture from RID' {
+        $version = '2.2.207'
+        Install-FakeIsolatedHost -Version $version -ReportedVersion $version | Out-Null
+        $env:FAKE_DOTNET_LEGACY_INFO = 'true'
+
+        $verifyOutput = @(Invoke-VerifyTool -Version $version)
+
+        $script:VerifyExitCode | Should -Be 0
+        $outputText = $verifyOutput -join [Environment]::NewLine
+        $outputText | Should -Match 'Host version\s+99\.0\.9'
+        $outputText | Should -Match 'Architecture\s+x64'
+        $outputText | Should -Match 'Runtime identifier\s+win10-x64'
+        $outputText | Should -Match 'Isolated SDK 2\.2\.207 verified successfully'
     }
 
     It 'fails clearly when the selected version is not installed' {
