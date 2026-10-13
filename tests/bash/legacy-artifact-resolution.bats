@@ -109,12 +109,14 @@ EOF
 @test "conflicting SHA-512 values for matching archives fail as ambiguous" {
   write_legacy_metadata "$payload_hash"
   awk -v url="$artifact_url" -v hash="$(printf '%0128d' 0)" '
-    /"name": "dotnet-dev-osx-x64.tar.gz"/ && !seen++ {
+    /"files": \[/ { file_arrays++ }
+    { print }
+    file_arrays == 2 && /"files": \[/ && !inserted++ {
       print "          {\"name\": \"dotnet-dev-osx-x64.tar.gz\", \"rid\": \"osx-x64\", \"url\": \"" url "\", \"hash\": \"" hash "\"},"
     }
-    { print }
   ' "$metadata" > "$metadata.tmp"
   mv "$metadata.tmp" "$metadata"
+  jq -e . "$metadata" >/dev/null
   run_payload_install
   [ "$status" -ne 0 ]
   [[ "$output" == *"did not contain exactly one SDK archive"* ]]
