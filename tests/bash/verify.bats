@@ -46,7 +46,7 @@ if [[ "\${1:-}" == '--list-sdks' ]]; then
   if [[ -n "\${VERIFY_TEST_EXIT_CODE:-}" ]]; then
     exit "\$VERIFY_TEST_EXIT_CODE"
   fi
-  printf '%s [/fake/sdk]\n' "\${VERIFY_TEST_REPORTED_VERSION:-$reported_version}"
+  printf '%s [%s]\\n' "\${VERIFY_TEST_REPORTED_VERSION:-$reported_version}" "\${VERIFY_TEST_ORIGIN:-$install_dir/sdk}"
 fi
 if [[ "\${1:-}" == '--version' ]]; then
   if [[ -n "\${VERIFY_TEST_VERSION_EXIT_CODE:-}" ]]; then
