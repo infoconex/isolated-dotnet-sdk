@@ -417,7 +417,7 @@ Describe 'PowerShell SDK Audit' {
         ($listOutput -join [Environment]::NewLine) | Should -Not -Match 'network-should-not-be-used'
         $verifyExitCode | Should -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 10\.0\.401 verified successfully\.'
-        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Release/lifecycle information: Unavailable'
+        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Release/lifecycle   Unavailable'
         ($verifyOutput -join [Environment]::NewLine) | Should -Not -Match 'network-should-not-be-used'
     }
 }
