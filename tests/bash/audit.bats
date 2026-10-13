@@ -415,6 +415,6 @@ EOF
   run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" verify 10.0.401
   [ "$status" -eq 0 ]
   [[ "$output" == *"Isolated SDK 10.0.401 verified successfully."* ]]
-  [[ "$output" == *"Release/lifecycle information: Unavailable"* ]]
+  [[ "$output" == *"Release/lifecycle   Unavailable"* ]]
   [[ "$output" != *"network-should-not-be-used"* ]]
 }
