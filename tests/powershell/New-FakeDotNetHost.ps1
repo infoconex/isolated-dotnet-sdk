@@ -36,7 +36,25 @@ public static class Program
             }
 
             var version = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
-            Console.WriteLine(version + " [C:\\fake]");
+            var origin = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_ORIGIN") ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sdk");
+            Console.WriteLine(version + " [" + origin + "]");
+        }
+
+        if (args.Length > 0 && args[0] == "--version")
+        {
+            var resolved = Environment.GetEnvironmentVariable("FAKE_DOTNET_RESOLVED_VERSION")
+                ?? Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
+            var expectedLookup = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP");
+            if (!string.IsNullOrEmpty(expectedLookup) && Environment.GetEnvironmentVariable("DOTNET_MULTILEVEL_LOOKUP") != expectedLookup)
+            {
+                return 74;
+            }
+            var forbiddenCwd = Environment.GetEnvironmentVariable("FAKE_DOTNET_FORBIDDEN_WORK_DIR");
+            if (!string.IsNullOrWhiteSpace(forbiddenCwd) && Environment.CurrentDirectory.StartsWith(forbiddenCwd, StringComparison.OrdinalIgnoreCase))
+            {
+                return 75;
+            }
+            Console.WriteLine(resolved);
         }
 
         return 0;
