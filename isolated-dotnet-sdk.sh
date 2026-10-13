@@ -2075,7 +2075,7 @@ verify_audit_details() {
                 printf '  %-19s %s\n' 'Update available' "${AUDIT_SERVICING_STATUS##* -> }"
                 ;;
             *)
-                printf '  %-19s %s\n' 'Update available' "$AUDIT_SERVICING_STATUS"
+                printf '  %-19s %s\n' 'Servicing status' "$AUDIT_SERVICING_STATUS"
                 ;;
         esac
     fi
