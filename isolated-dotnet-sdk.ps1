@@ -2278,13 +2278,12 @@ function Test-IsolatedSdk {
             $UpdateMatch = [regex]::Match(
                 [string]$Classification.ServicingStatus,
                 '^(?:Security update available|Update available) -> (?<version>\S+)$')
-            $UpdateText = if ($UpdateMatch.Success) {
-                $UpdateMatch.Groups['version'].Value
+            if ($UpdateMatch.Success) {
+                Write-ToolDisplay ('  {0,-19} {1}' -f 'Update available', $UpdateMatch.Groups['version'].Value)
             }
             else {
-                [string]$Classification.ServicingStatus
+                Write-ToolDisplay ('  {0,-19} {1}' -f 'Servicing status', $Classification.ServicingStatus)
             }
-            Write-ToolDisplay ('  {0,-19} {1}' -f 'Update available', $UpdateText)
         }
     }
     catch {
