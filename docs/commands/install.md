@@ -18,6 +18,8 @@ A bare version with no explicit action is treated as an Install request.
 
 Supplying an exact version bypasses interactive release-index/channel discovery, but it does **not** bypass the Microsoft release metadata required to identify the exact platform archive and its published SHA-512.
 
+Historical SDK releases may publish archive names such as `dotnet-dev-win-x64.1.1.14.zip` instead of the modern `dotnet-sdk-<version>-<rid>.zip` layout. Install selects only an exact SDK-version and platform/RID archive from Microsoft's structured SDK release metadata. Historical distribution-specific Linux archives are not treated as interchangeable with generic Linux RIDs. Every selected archive must have a Microsoft-published SHA-512; SDK 1.0.4, for example, publishes SHA-256-only metadata and cannot be installed under the current integrity policy.
+
 ## Existing installations
 
 Before downloading a new SDK, Install checks the selected version in both ownership domains and presents Isolated SDK status before System SDK status.
