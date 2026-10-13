@@ -49,7 +49,7 @@ if [[ "\${1:-}" == '--list-sdks' ]]; then
   printf '%s [%s]\\n' "\${VERIFY_TEST_REPORTED_VERSION:-$reported_version}" "\${VERIFY_TEST_ORIGIN:-$install_dir/sdk}"
 fi
 if [[ "\${1:-}" == '--info' ]]; then
-  if [[ "${VERIFY_TEST_LEGACY_INFO:-}" == 'true' ]]; then
+  if [[ "\${VERIFY_TEST_LEGACY_INFO:-}" == 'true' ]]; then
     printf '%s\n' 'Runtime Environment:' ' RID:         linux-x64' '' 'Host (useful for support):' '  Version:      99.0.9'
   else
     printf '%s\n' 'Runtime Environment:' ' RID:         linux-x64' '' 'Host:' '  Version:      99.0.9' '  Architecture: x64'
