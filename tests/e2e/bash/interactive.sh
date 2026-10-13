@@ -107,7 +107,7 @@ required_fragments=(
   "Release: $audit_release_date"
   "EOS: $audit_end_of_support"
   "Select an isolated SDK to verify:"
-  "Isolated SDK $sdk_version is healthy."
+  "Isolated SDK $sdk_version verified successfully."
   "$sdk_version"
   "was removed."
   "Exiting."
