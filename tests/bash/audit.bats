@@ -386,7 +386,7 @@ EOF
   [[ "$output" == *"Exiting."* ]]
 }
 
-@test "List and Verify remain independent of release metadata" {
+@test "List remains network-independent and Verify preserves local results if metadata fails" {
   add_isolated_sdk '10.0.401'
   cat > "$fake_bin/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -399,8 +399,22 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" != *"network-should-not-be-used"* ]]
 
+  mkdir -p "$tool_root/10.0.401/sdk"
+  cat > "$tool_root/10.0.401/dotnet" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf '%s [%s]\\n' '10.0.401' '$tool_root/10.0.401/sdk'
+fi
+if [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\\n' '10.0.401'
+fi
+exit 0
+EOF
+  chmod +x "$tool_root/10.0.401/dotnet"
+
   run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" verify 10.0.401
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Isolated SDK 10.0.401 is healthy."* ]]
+  [[ "$output" == *"Isolated SDK 10.0.401 verified successfully."* ]]
+  [[ "$output" == *"Release/lifecycle information: Unavailable"* ]]
   [[ "$output" != *"network-should-not-be-used"* ]]
 }
