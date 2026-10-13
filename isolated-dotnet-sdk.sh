@@ -1635,16 +1635,31 @@ cleanup_install_transaction() {
     [[ "$cleanup_failed" == "false" ]]
 }
 
-calculate_sha512() {
+calculate_sdk_payload_hash() {
     local path="$1"
+    local algorithm="$2"
+    local coreutils_command=""
+    local shasum_length=""
 
-    if command -v sha512sum >/dev/null 2>&1; then
-        sha512sum "$path" | awk '{print tolower($1)}'
+    case "$algorithm" in
+        SHA512)
+            coreutils_command="sha512sum"
+            shasum_length="512"
+            ;;
+        SHA256)
+            coreutils_command="sha256sum"
+            shasum_length="256"
+            ;;
+        *) return 1 ;;
+    esac
+
+    if command -v "$coreutils_command" >/dev/null 2>&1; then
+        "$coreutils_command" "$path" | awk '{print tolower($1)}'
         return
     fi
 
     if command -v shasum >/dev/null 2>&1; then
-        shasum -a 512 "$path" | awk '{print tolower($1)}'
+        shasum -a "$shasum_length" "$path" | awk '{print tolower($1)}'
         return
     fi
 
@@ -2010,8 +2025,16 @@ install_isolated_sdk() {
     fi
 
     IFS='|' read -r artifact_url expected_hash <<< "$artifact_data"
-    if [[ ! "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
-        tool_fail "Microsoft release metadata contained an invalid SHA-512 hash for SDK $VERSION and $rid."
+    local hash_algorithm=""
+    if [[ "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
+        hash_algorithm="SHA512"
+    elif [[ "$expected_hash" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+        if [[ ! "$VERSION" =~ ^1\. ]]; then
+            tool_fail "Microsoft release metadata published SHA-256 for SDK $VERSION and $rid; SHA-256 is supported only for historical .NET 1.x SDKs."
+        fi
+        hash_algorithm="SHA256"
+    else
+        tool_fail "Microsoft release metadata contained an unsupported or malformed checksum for SDK $VERSION and $rid."
     fi
     expected_hash="$(printf '%s' "$expected_hash" | tr '[:upper:]' '[:lower:]')"
 
@@ -2023,8 +2046,8 @@ install_isolated_sdk() {
         tool_fail "Unable to download the .NET SDK $VERSION payload with exit code $status."
     fi
 
-    if ! actual_hash="$(calculate_sha512 "$archive_file")"; then
-        tool_fail "Unable to verify the .NET SDK $VERSION payload because no SHA-512 utility is available."
+    if ! actual_hash="$(calculate_sdk_payload_hash "$archive_file" "$hash_algorithm")"; then
+        tool_fail "Unable to verify the .NET SDK $VERSION payload because no $hash_algorithm utility is available."
     fi
 
     if [[ "$actual_hash" != "$expected_hash" ]]; then
