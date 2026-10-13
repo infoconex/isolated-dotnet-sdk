@@ -117,9 +117,9 @@ Install choices may be marked `latest`, `isolated`, and/or `system` to describe 
 
 ## Verify selection
 
-Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only health check used by explicit Verify; there is no separate interactive verification implementation.
+Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only detailed report and local origin/resolution checks as direct Verify; there is no separate interactive verification implementation.
 
-A healthy result remains visible until Enter acknowledgement, then returns to the Verify SDK list. `B` from that list returns to Main immediately without running verification or requiring acknowledgement, and `E` exits the session. If no isolated SDKs are installed, no Verify picker exists, so the tool reports that state and waits for Enter before returning to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
+A successfully verified result remains visible until Enter acknowledgement, then returns to the Verify SDK list. `B` from that list returns to Main immediately without running verification or requiring acknowledgement, and `E` exits the session. If no isolated SDKs are installed, no Verify picker exists, so the tool reports that state and waits for Enter before returning to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
 
 ## Input failure versus cancellation
 
