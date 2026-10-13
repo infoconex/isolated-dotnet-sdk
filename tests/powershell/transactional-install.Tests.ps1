@@ -26,14 +26,14 @@ Describe 'PowerShell transactional SDK installation' {
         $env:FAKE_DOTNET_SDK_VERSION = $script:Version
         $env:SDK_TEST_STAGING_TARGET = $script:StagingTargetPath
         $env:SDK_TEST_DOWNLOAD_TARGET = $script:DownloadTargetPath
-        foreach ($name in @('FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN')) {
+        foreach ($name in @('FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN','SDK_TEST_LEGACY_VERSION','FAKE_DOTNET_LEGACY_HOST','FAKE_DOTNET_LEGACY_BASE_PATH','FAKE_DOTNET_RESOLVED_VERSION')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
     }
 
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
-        foreach ($name in @('ISOLATED_DOTNET_SDK_TOOL_PATH','ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE','ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT','FAKE_DOTNET_SDK_VERSION','FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_STAGING_TARGET','SDK_TEST_DOWNLOAD_TARGET','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN')) {
+        foreach ($name in @('ISOLATED_DOTNET_SDK_TOOL_PATH','ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE','ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT','FAKE_DOTNET_SDK_VERSION','FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_STAGING_TARGET','SDK_TEST_DOWNLOAD_TARGET','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN','SDK_TEST_LEGACY_VERSION','FAKE_DOTNET_LEGACY_HOST','FAKE_DOTNET_LEGACY_BASE_PATH','FAKE_DOTNET_RESOLVED_VERSION')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -150,5 +150,50 @@ Describe 'PowerShell transactional SDK installation' {
         $LASTEXITCODE | Should -Be 0
         ($successOutput -join [Environment]::NewLine) | Should -Match 'installation completed successfully'
         Test-Path -LiteralPath (Join-Path $script:InstallDir 'dotnet.exe') | Should -BeTrue
+    }
+
+    It 'verifies and promotes historical SDK 1.1.14 using exact version and isolated Base Path' {
+        $env:SDK_TEST_LEGACY_VERSION = '1.1.14'
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_SDK_VERSION = '1.1.14'
+        $target = Join-Path $script:ToolRoot '1.1.14'
+
+        $successOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 1.1.14 -Yes' 2>&1)
+        $LASTEXITCODE | Should -Be 0
+        ($successOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK installation completed successfully'
+        Test-Path -LiteralPath (Join-Path $target 'dotnet.exe') | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path (Join-Path $target 'sdk') '1.1.14') | Should -BeTrue
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.sdk-host-verify-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
+
+        $secondOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "unexpected-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 1.1.14 -Yes' 2>&1)
+        $LASTEXITCODE | Should -Be 0
+        ($secondOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK: Already installed'
+        ($secondOutput -join [Environment]::NewLine) | Should -Not -Match 'unexpected-download'
+    }
+
+    It 'refuses legacy SDK promotion when the host reports another SDK version' {
+        $env:SDK_TEST_LEGACY_VERSION = '1.1.14'
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_SDK_VERSION = '1.1.14'
+        $env:FAKE_DOTNET_RESOLVED_VERSION = '1.1.13'
+        $output = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 1.1.14 -Yes' 2>&1)
+        $LASTEXITCODE | Should -Not -Be 0
+        ($output -join [Environment]::NewLine) | Should -Match 'legacy host did not report the requested exact SDK version'
+        Test-Path -LiteralPath (Join-Path $script:ToolRoot '1.1.14') | Should -BeFalse
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.sdk-host-verify-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.install-1.1.14-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
+    }
+
+    It 'refuses legacy SDK promotion when the host SDK Base Path is external' {
+        $env:SDK_TEST_LEGACY_VERSION = '1.1.14'
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_SDK_VERSION = '1.1.14'
+        $env:FAKE_DOTNET_LEGACY_BASE_PATH = $script:TestRoot
+        $output = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 1.1.14 -Yes' 2>&1)
+        $LASTEXITCODE | Should -Not -Be 0
+        ($output -join [Environment]::NewLine) | Should -Match 'legacy host SDK Base Path does not match the isolated directory'
+        Test-Path -LiteralPath (Join-Path $script:ToolRoot '1.1.14') | Should -BeFalse
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.sdk-host-verify-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.install-1.1.14-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
     }
 }
