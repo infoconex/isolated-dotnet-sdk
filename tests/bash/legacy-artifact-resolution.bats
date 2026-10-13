@@ -94,14 +94,65 @@ EOF
   ! compgen -G "$tool_root/.install-$version.*" >/dev/null
 }
 
-@test "SDK 1.0.4 SHA-256 metadata is rejected without downloading or extracting" {
+prepare_legacy_sha256_payload() {
   version='1.0.4'
+  install_dir="$tool_root/$version"
   artifact_url="https://builds.dotnet.microsoft.com/dotnet/Sdk/$version/dotnet-dev-$rid.$version.tar.gz"
+  export SDK_TEST_DOTNET_VERSION="$version"
+  mkdir -p "$fixture_root/sdk/$version"
+  /usr/bin/tar -czf "$payload" -C "$fixture_root" dotnet sdk
+  if command -v sha256sum >/dev/null 2>&1; then
+    payload_hash256="$(sha256sum "$payload" | awk '{print $1}')"
+  else
+    payload_hash256="$(shasum -a 256 "$payload" | awk '{print $1}')"
+  fi
+  write_legacy_metadata "$payload_hash256"
+}
+
+@test "SDK 1.0.4 with Microsoft SHA-256 is verified and transactionally promoted" {
+  prepare_legacy_sha256_payload
+  run_payload_install
+  [ "$status" -eq 0 ]
+  [ -x "$install_dir/dotnet" ]
+  [ -d "$install_dir/sdk/$version" ]
+  [[ "$output" == *"Isolated SDK installation completed successfully."* ]]
+  grep -Fq "$artifact_url" "$test_home/curl.log"
+  ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
+  ! compgen -G "$tool_root/.install-$version.*" >/dev/null
+}
+
+@test "SDK 1.0.4 incorrect SHA-256 fails before extraction and cleans download" {
+  prepare_legacy_sha256_payload
   write_legacy_metadata "$(printf '%064d' 0)"
   run_payload_install
   [ "$status" -ne 0 ]
-  [[ "$output" == *"invalid SHA-512 hash for SDK $version and $rid"* ]]
-  [ ! -e "$tool_root/$version" ]
+  [[ "$output" == *"Integrity verification failed"* ]]
+  [ ! -e "$install_dir" ]
+  ! compgen -G "$tool_root/.sdk-payload-$version.*" >/dev/null
+  ! compgen -G "$tool_root/.install-$version.*" >/dev/null
+}
+
+@test "malformed legacy checksum is rejected before download" {
+  prepare_legacy_sha256_payload
+  write_legacy_metadata 'not-a-digest'
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unsupported or malformed checksum"* ]]
+  [ ! -e "$install_dir" ]
+  ! grep -Fq "$artifact_url" "$test_home/curl.log"
+}
+
+@test "modern SDK cannot fall back to SHA-256 metadata" {
+  version='10.0.401'
+  install_dir="$tool_root/$version"
+  artifact_url="https://builds.dotnet.microsoft.com/dotnet/Sdk/$version/dotnet-sdk-$version-$rid.tar.gz"
+  write_legacy_metadata "$(printf '%064d' 0)"
+  sed -i.bak 's/"name": "dotnet-dev-osx-x64.tar.gz"/"name": "dotnet-sdk-osx-x64.tar.gz"/' "$metadata"
+  rm -f "$metadata.bak"
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SHA-256 is supported only for historical"* ]]
+  [ ! -e "$install_dir" ]
   ! grep -Fq "$artifact_url" "$test_home/curl.log"
 }
 
