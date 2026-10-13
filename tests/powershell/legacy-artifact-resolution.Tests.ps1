@@ -41,11 +41,33 @@ Describe 'Legacy SDK artifact resolution' {
             Should -Throw '*did not contain exactly one SDK archive*'
     }
 
-    It 'rejects historical SDK 1.0.4 SHA-256-only metadata under SHA-512 policy' {
+    It 'accepts Microsoft-published SHA-256 for historical SDK 1.0.4' {
         $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/1.0.4/dotnet-dev-win-x64.1.0.4.zip'
         $metadata = Get-ArtifactMetadataFixture -Version '1.0.4' -Name 'dotnet-dev-win-x64.zip' -Url $url -Rid 'win-x64' -Hash ('a' * 64)
-        { Resolve-SdkArtifact -Metadata $metadata -SdkVersion '1.0.4' -Rid 'win-x64' } |
-            Should -Throw '*invalid SHA-512 hash*'
+        $artifact = Resolve-SdkArtifact -Metadata $metadata -SdkVersion '1.0.4' -Rid 'win-x64'
+        $artifact.Url | Should -Be $url
+        $artifact.Algorithm | Should -Be 'SHA256'
+        $artifact.Hash | Should -Be ('a' * 64)
+    }
+
+    It 'continues to select SHA-512 for historical SDKs publishing SHA-512' {
+        $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/1.1.14/dotnet-dev-win-x64.1.1.14.zip'
+        $metadata = Get-ArtifactMetadataFixture -Version '1.1.14' -Name 'dotnet-dev-win-x64.zip' -Url $url
+        (Resolve-SdkArtifact -Metadata $metadata -SdkVersion '1.1.14' -Rid 'win-x64').Algorithm |
+            Should -Be 'SHA512'
+    }
+
+    It 'rejects malformed historical checksums and SHA-256 metadata for modern SDKs' {
+        $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/1.0.4/dotnet-dev-win-x64.1.0.4.zip'
+        foreach ($hash in @('', 'deadbeef', ('z' * 64), ('a' * 63))) {
+            $metadata = Get-ArtifactMetadataFixture -Version '1.0.4' -Name 'dotnet-dev-win-x64.zip' -Url $url -Hash $hash
+            { Resolve-SdkArtifact -Metadata $metadata -SdkVersion '1.0.4' -Rid 'win-x64' } |
+                Should -Throw '*unsupported or malformed checksum*'
+        }
+        $modernUrl = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/dotnet-sdk-10.0.401-win-x64.zip'
+        $metadata = Get-ArtifactMetadataFixture -Version '10.0.401' -Name 'dotnet-sdk-win-x64.zip' -Url $modernUrl -Hash ('a' * 64)
+        { Resolve-SdkArtifact -Metadata $metadata -SdkVersion '10.0.401' -Rid 'win-x64' } |
+            Should -Throw '*SHA-256 is supported only for historical*'
     }
 
     It 'keeps current modern SDK selection and accepts sdks collection entries' {
