@@ -2210,7 +2210,7 @@ Commands:
   install [version]  Install an isolated SDK. Without a version, show the SDK picker.
   remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
   list               List isolated SDKs and SDKs visible through the normal dotnet host. A version is invalid with list.
-  verify <version>   Read-only health check for one exact installed isolated SDK.
+  verify <version>   Detailed SDK report and read-only exact-origin/resolution checks.
   audit              Online read-only lifecycle and servicing assessment for installed SDKs.
 
 Options:
