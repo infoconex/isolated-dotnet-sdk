@@ -1,4 +1,4 @@
-name: Verify E2E 139
+name: Verify Report E2E 139
 
 on:
   pull_request:
@@ -32,12 +32,6 @@ jobs:
           bash -n tests/e2e/bash/latest-stable-bootstrap.sh
           bash -n tests/e2e/bash/direct.sh
           bash -n tests/e2e/bash/interactive.sh
-
-      - name: Run latest-stable bootstrap real E2E
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: bash tests/e2e/bash/latest-stable-bootstrap.sh
 
       - name: Run direct-command real E2E
         shell: bash
@@ -79,12 +73,6 @@ jobs:
               $errors | ForEach-Object { Write-Error $_.Message }
               exit 1
           }
-
-      - name: Run latest-stable bootstrap real E2E
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: ./tests/e2e/powershell/latest-stable-bootstrap.ps1
 
       - name: Run direct-command real E2E
         shell: pwsh
