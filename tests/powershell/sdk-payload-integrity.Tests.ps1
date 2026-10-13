@@ -74,7 +74,7 @@ function Invoke-WebRequest {
 
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) |
-            Should -Match 'invalid SHA-512 hash for SDK 99\.0\.100 and win-x64'
+            Should -Match 'unsupported or malformed checksum for SDK 99\.0\.100 and win-x64'
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
