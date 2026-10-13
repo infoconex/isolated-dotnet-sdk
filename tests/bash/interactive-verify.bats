@@ -39,7 +39,7 @@ install_fake_host() {
   cat > "$install_dir/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s [/fake/sdk]\n' '$reported_version'
+  printf '%s [%s]\\n' '$reported_version' '$install_dir/sdk'
 fi
 if [[ "\${1:-}" == '--version' ]]; then
   printf '%s\\n' '$reported_version'
