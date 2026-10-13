@@ -396,7 +396,7 @@ Describe 'PowerShell SDK Audit' {
         $text | Should -Match 'Exiting\.'
     }
 
-    It 'keeps List and Verify independent of release metadata' {
+    It 'keeps List offline and allows Verify metadata failure with passing local proof' {
         Add-IsolatedSdk -Version '10.0.401' -Runnable
         $listOutput = @(& pwsh -NoProfile -Command '
             $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
