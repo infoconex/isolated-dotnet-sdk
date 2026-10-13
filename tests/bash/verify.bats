@@ -185,10 +185,15 @@ EOF
   version='99.0.100'
   install_fake_host "$version"
   cat > "$metadata_dir/index.json" <<'JSON'
-{"releases-index":[{"channel-version":"99.0","latest-sdk":"99.0.200","support-phase":"maintenance","release-type":"lts","eol-date":"2030-01-01","releases.json":"https://example.invalid/99.0.json"}]}
+{"releases-index":[
+{"channel-version":"99.0","latest-sdk":"99.0.200","support-phase":"maintenance","release-type":"lts","eol-date":"2030-01-01","releases.json":"https://example.invalid/99.0.json"}
+]}
 JSON
   cat > "$metadata_dir/channel.json" <<'JSON'
-{"releases":[{"release-date":"2026-01-01","sdk":{"version":"99.0.100"}},{"release-date":"2026-04-01","sdk":{"version":"99.0.200"}}]}
+{"releases":[
+{"release-date":"2026-01-01","sdk":{"version":"99.0.100","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/99.0.100/archive.tgz"}]}},
+{"release-date":"2026-04-01","sdk":{"version":"99.0.200","files":[{"url":"https://builds.dotnet.microsoft.com/dotnet/Sdk/99.0.200/archive.tgz"}]}}
+]}
 JSON
   run env HOME="$test_home" "$tool_path" verify "$version"
   [ "$status" -eq 0 ]
