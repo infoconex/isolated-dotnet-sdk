@@ -63,6 +63,7 @@ Describe 'PowerShell interactive lifecycle' {
                 -Destination $installDirectory `
                 -Recurse `
                 -Force
+            New-Item -ItemType Directory -Path (Join-Path $installDirectory 'sdk') -Force | Out-Null
             $env:FAKE_DOTNET_SDK_VERSION = $Version
         }
     }
