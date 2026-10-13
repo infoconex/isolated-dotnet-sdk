@@ -26,14 +26,14 @@ Describe 'PowerShell transactional SDK installation' {
         $env:FAKE_DOTNET_SDK_VERSION = $script:Version
         $env:SDK_TEST_STAGING_TARGET = $script:StagingTargetPath
         $env:SDK_TEST_DOWNLOAD_TARGET = $script:DownloadTargetPath
-        foreach ($name in @('FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN','SDK_TEST_LEGACY_VERSION','FAKE_DOTNET_LEGACY_HOST','FAKE_DOTNET_LEGACY_BASE_PATH','FAKE_DOTNET_RESOLVED_VERSION')) {
+        foreach ($name in @('FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN','SDK_TEST_LEGACY_VERSION','FAKE_DOTNET_LEGACY_HOST','FAKE_DOTNET_LEGACY_BASE_PATH','FAKE_DOTNET_RESOLVED_VERSION','SDK_TEST_HASH_MISMATCH')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
     }
 
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
-        foreach ($name in @('ISOLATED_DOTNET_SDK_TOOL_PATH','ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE','ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT','FAKE_DOTNET_SDK_VERSION','FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_STAGING_TARGET','SDK_TEST_DOWNLOAD_TARGET','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN','SDK_TEST_LEGACY_VERSION','FAKE_DOTNET_LEGACY_HOST','FAKE_DOTNET_LEGACY_BASE_PATH','FAKE_DOTNET_RESOLVED_VERSION')) {
+        foreach ($name in @('ISOLATED_DOTNET_SDK_TOOL_PATH','ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE','ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT','FAKE_DOTNET_SDK_VERSION','FAKE_DOTNET_EXIT_CODE','FAKE_DOTNET_CREATE_CONFLICT','SDK_TEST_STAGING_TARGET','SDK_TEST_DOWNLOAD_TARGET','SDK_TEST_METADATA_FAILURE','SDK_TEST_PAYLOAD_FAILURE','SDK_TEST_EXTRACT_FAILURE','SDK_TEST_MISSING_HOST','SDK_TEST_CLEANUP_PATTERN','SDK_TEST_LEGACY_VERSION','FAKE_DOTNET_LEGACY_HOST','FAKE_DOTNET_LEGACY_BASE_PATH','FAKE_DOTNET_RESOLVED_VERSION','SDK_TEST_HASH_MISMATCH')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -195,5 +195,30 @@ Describe 'PowerShell transactional SDK installation' {
         Test-Path -LiteralPath (Join-Path $script:ToolRoot '1.1.14') | Should -BeFalse
         @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.sdk-host-verify-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
         @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.install-1.1.14-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
+    }
+
+    It 'installs historical SDK 1.0.4 with published SHA-256 before promotion' {
+        $env:SDK_TEST_LEGACY_VERSION = '1.0.4'
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_SDK_VERSION = '1.0.4'
+        $target = Join-Path $script:ToolRoot '1.0.4'
+        $output = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 1.0.4 -Yes' 2>&1)
+        $LASTEXITCODE | Should -Be 0
+        ($output -join [Environment]::NewLine) | Should -Match 'Isolated SDK installation completed successfully'
+        Test-Path -LiteralPath (Join-Path $target 'dotnet.exe') | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path (Join-Path $target 'sdk') '1.0.4') | Should -BeTrue
+    }
+
+    It 'rejects a mismatched historical SHA-256 archive before extraction' {
+        $env:SDK_TEST_LEGACY_VERSION = '1.0.4'
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_SDK_VERSION = '1.0.4'
+        $env:SDK_TEST_HASH_MISMATCH = '1'
+        $output = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 1.0.4 -Yes' 2>&1)
+        $LASTEXITCODE | Should -Not -Be 0
+        ($output -join [Environment]::NewLine) | Should -Match 'Integrity verification failed'
+        Test-Path -LiteralPath (Join-Path $script:ToolRoot '1.0.4') | Should -BeFalse
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.sdk-payload-1.0.4-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
+        @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.install-1.0.4-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
     }
 }
