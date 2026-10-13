@@ -8,7 +8,11 @@ setup() {
   tool_path="$tool_root/isolated-dotnet-sdk.sh"
   source_copy="$test_root/isolated-dotnet-sdk-source.sh"
 
-  mkdir -p "$test_home"
+  fake_bin="$test_root/fake-bin"
+  mkdir -p "$test_home" "$fake_bin"
+  printf '#!/usr/bin/env bash\\nexit 76\\n' > "$fake_bin/curl"
+  chmod +x "$fake_bin/curl"
+  export PATH="$fake_bin:$PATH"
   cp "$repo_root/isolated-dotnet-sdk.sh" "$source_copy"
   chmod +x "$source_copy"
   run env HOME="$test_home" "$source_copy" list
@@ -31,18 +35,21 @@ install_fake_host() {
   local version="$1"
   local reported_version="${2:-$1}"
   local install_dir="$tool_root/$version"
-  mkdir -p "$install_dir"
+  mkdir -p "$install_dir/sdk"
   cat > "$install_dir/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s [/fake/sdk]\n' '$reported_version'
+  printf '%s [%s]\\n' '$reported_version' '$install_dir/sdk'
+fi
+if [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\\n' '$reported_version'
 fi
 exit 0
 EOF
   chmod +x "$install_dir/dotnet"
 }
 
-@test "healthy interactive Verify returns to the Verify SDK list" {
+@test "successful interactive Verify returns to the Verify SDK list" {
   version='99.0.100'
   install_fake_host "$version"
 
@@ -53,7 +60,7 @@ EOF
   [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
   [[ "$output" == *"V. Verify an isolated SDK"* ]]
   [ "$(printf '%s\n' "$output" | grep -c 'Select an isolated SDK to verify:' || true)" -eq 2 ]
-  [[ "$output" == *"Isolated SDK $version is healthy."* ]]
+  [[ "$output" == *"Isolated SDK $version verified successfully."* ]]
   [[ "$output" == *"Exiting."* ]]
 }
 
@@ -79,7 +86,7 @@ EOF
   [[ "$output" == *"B. Back to Main"* ]]
   [[ "$output" == *"E. Exit"* ]]
   [[ "$output" == *"Exiting."* ]]
-  [[ "$output" != *"Isolated SDK $version is healthy."* ]]
+  [[ "$output" != *"Isolated SDK $version verified successfully."* ]]
 }
 
 @test "Verify choices are sorted newest to oldest" {

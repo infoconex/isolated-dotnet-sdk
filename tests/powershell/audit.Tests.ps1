@@ -29,6 +29,7 @@ Describe 'PowerShell SDK Audit' {
             $installDirectory = Join-Path $script:ToolRoot $Version
             New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
             if ($Runnable) {
+                New-Item -ItemType Directory -Path (Join-Path $installDirectory 'sdk') -Force | Out-Null
                 Copy-Item `
                     -Path (Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT '*') `
                     -Destination $installDirectory `
@@ -396,7 +397,7 @@ Describe 'PowerShell SDK Audit' {
         $text | Should -Match 'Exiting\.'
     }
 
-    It 'keeps List and Verify independent of release metadata' {
+    It 'keeps List offline and allows Verify metadata failure with passing local proof' {
         Add-IsolatedSdk -Version '10.0.401' -Runnable
         $listOutput = @(& pwsh -NoProfile -Command '
             $env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"
@@ -415,7 +416,8 @@ Describe 'PowerShell SDK Audit' {
         $listExitCode | Should -Be 0
         ($listOutput -join [Environment]::NewLine) | Should -Not -Match 'network-should-not-be-used'
         $verifyExitCode | Should -Be 0
-        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 10\.0\.401 is healthy\.'
+        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Isolated SDK 10\.0\.401 verified successfully\.'
+        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Release/lifecycle   Unavailable'
         ($verifyOutput -join [Environment]::NewLine) | Should -Not -Match 'network-should-not-be-used'
     }
 }

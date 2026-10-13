@@ -26,6 +26,30 @@ public static class Program
             return exitCode;
         }
 
+        if (args.Length > 0 && args[0] == "--info")
+        {
+            Console.WriteLine("Runtime Environment:");
+            Console.WriteLine(" RID:         win10-x64");
+            Console.WriteLine();
+            var legacyInfo = string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_INFO"), "true", StringComparison.OrdinalIgnoreCase);
+            Console.WriteLine(legacyInfo ? "Host (useful for support):" : "Host:");
+            Console.WriteLine("  Version:      99.0.9");
+            if (!legacyInfo)
+            {
+                Console.WriteLine("  Architecture: x64");
+            }
+        }
+        if (args.Length > 0 && args[0] == "--list-runtimes")
+        {
+            var runtimePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "shared", "Microsoft.NETCore.App");
+            Console.WriteLine("Microsoft.NETCore.App 99.0.9 [" + runtimePath + "]");
+            var unrelated = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXTRA_RUNTIME_ROOT");
+            if (!string.IsNullOrEmpty(unrelated))
+            {
+                Console.WriteLine("Microsoft.AspNetCore.App 99.0.9 [" + unrelated + "]");
+            }
+        }
+
         if (args.Length > 0 && args[0] == "--list-sdks")
         {
             var conflictPath = Environment.GetEnvironmentVariable("FAKE_DOTNET_CREATE_CONFLICT");
@@ -36,7 +60,25 @@ public static class Program
             }
 
             var version = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
-            Console.WriteLine(version + " [C:\\fake]");
+            var origin = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_ORIGIN") ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sdk");
+            Console.WriteLine(version + " [" + origin + "]");
+        }
+
+        if (args.Length > 0 && args[0] == "--version")
+        {
+            var resolved = Environment.GetEnvironmentVariable("FAKE_DOTNET_RESOLVED_VERSION")
+                ?? Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
+            var expectedLookup = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP");
+            if (!string.IsNullOrEmpty(expectedLookup) && Environment.GetEnvironmentVariable("DOTNET_MULTILEVEL_LOOKUP") != expectedLookup)
+            {
+                return 74;
+            }
+            var forbiddenCwd = Environment.GetEnvironmentVariable("FAKE_DOTNET_FORBIDDEN_WORK_DIR");
+            if (!string.IsNullOrWhiteSpace(forbiddenCwd) && Environment.CurrentDirectory.StartsWith(forbiddenCwd, StringComparison.OrdinalIgnoreCase))
+            {
+                return 75;
+            }
+            Console.WriteLine(resolved);
         }
 
         return 0;

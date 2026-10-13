@@ -18,7 +18,7 @@ Describe 'PowerShell interactive Verify' {
             $startInfo.RedirectStandardError = $true
             $startInfo.ArgumentList.Add('-NoProfile')
             $startInfo.ArgumentList.Add('-Command')
-            $startInfo.ArgumentList.Add($Command)
+            $startInfo.ArgumentList.Add('function Invoke-RestMethod { throw "Fixture metadata unavailable" }; ' + $Command)
             $startInfo.Environment['ISOLATED_DOTNET_SDK_TOOL_PATH'] = $script:ToolPath
             $startInfo.Environment['HOME'] = $script:TestHome
             $startInfo.Environment['USERPROFILE'] = $script:TestHome
@@ -65,7 +65,7 @@ Describe 'PowerShell interactive Verify' {
             )
 
             $installDirectory = Join-Path $script:ToolRoot $Version
-            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $installDirectory 'sdk') -Force | Out-Null
             Copy-Item `
                 -Path (Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT '*') `
                 -Destination $installDirectory `
@@ -113,7 +113,7 @@ Describe 'PowerShell interactive Verify' {
         (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'V\. Verify an isolated SDK'
         ([regex]::Matches($result.Output, 'Select an isolated SDK to verify:')).Count | Should -Be 2
-        $result.Output | Should -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
+        $result.Output | Should -Match "Isolated SDK $([regex]::Escape($version)) verified successfully\."
         $result.Output | Should -Match 'Exiting\.'
     }
 
@@ -139,7 +139,7 @@ Describe 'PowerShell interactive Verify' {
         $result.Output | Should -Match 'B\. Back to Main'
         $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Match 'Exiting\.'
-        $result.Output | Should -Not -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
+        $result.Output | Should -Not -Match "Isolated SDK $([regex]::Escape($version)) verified successfully\."
     }
 
     It 'sorts Verify choices newest to oldest' {

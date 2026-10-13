@@ -107,7 +107,19 @@ required_fragments=(
   "Release: $audit_release_date"
   "EOS: $audit_end_of_support"
   "Select an isolated SDK to verify:"
-  "Isolated SDK $sdk_version is healthy."
+  "Isolated SDK $sdk_version verified successfully."
+  'Installation directory'
+  '.NET host'
+  'SDK inventory'
+  'SDK resolution'
+  'Exact SDK found in isolated installation'
+  'SDK information:'
+  'Installed components:'
+  'Host version'
+  'Architecture'
+  'Runtime identifier'
+  'Microsoft.NETCore.App'
+  'Verification:'
   "$sdk_version"
   "was removed."
   "Exiting."

@@ -134,8 +134,30 @@ try {
         -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Verify', '-SdkVersion', $sdkVersion)
     Assert-Success -Result $verify -Operation 'Direct verify'
     Write-Host $verify.Output
-    if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion is healthy.")) {
-        throw "Verify output did not report SDK $sdkVersion healthy."
+    foreach ($check in @('Installation directory', '.NET host', 'SDK inventory', 'SDK resolution')) {
+        $pattern = '(?m)^\s*' + [regex]::Escape($check) + '\s+OK\s'
+        if ($verify.Output -notmatch $pattern) {
+            throw "Verify did not report passing local check: $check"
+        }
+    }
+    if ($verify.Output -notmatch 'Exact SDK found in isolated installation') {
+        throw 'Verify did not prove exact isolated SDK inventory.'
+    }
+    foreach ($fragment in @("SDK release date    $auditReleaseDate", "Channel EOS date    $auditEndOfSupport")) {
+        if ($verify.Output -notmatch [regex]::Escape($fragment)) {
+            throw "Verify and Audit classification differed: $fragment"
+        }
+    }
+    foreach ($fragment in @('SDK information:', 'Installed components:', 'Host version', 'Architecture', 'Runtime identifier', 'Microsoft.NETCore.App', 'Verification:')) {
+        if ($verify.Output -notmatch [regex]::Escape($fragment)) {
+            throw "Verify output missing detail: $fragment"
+        }
+    }
+    if ($verify.Output.Contains([char]27)) {
+        throw 'Captured Verify output unexpectedly contained ANSI escape sequences.'
+    }
+    if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion verified successfully.")) {
+        throw "Verify output did not report SDK $sdkVersion verified successfully."
     }
 
     $list = Invoke-E2EProcess `

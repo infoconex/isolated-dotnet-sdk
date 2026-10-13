@@ -242,11 +242,14 @@ EOF
   fake_bin="$test_root/operation-tty-bin"
   write_metadata_fake_curl "$fake_bin"
   for version in '10.0.401' '9.0.318'; do
-    mkdir -p "$tool_root/$version"
+    mkdir -p "$tool_root/$version/sdk"
     cat > "$tool_root/$version/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s\n' '$version [/fake/sdk]'
+  printf '%s [%s]\\n' '$version' '$tool_root/$version/sdk'
+fi
+if [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\\n' '$version'
 fi
 exit 0
 EOF
@@ -290,8 +293,8 @@ EOF
   run bash -c 'printf "v\n1\n\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
   [ "$status" -eq 0 ]
   [ "$(count_acknowledgement_prompts "$output")" -eq 1 ]
-  assert_operation_view 'B. Back to Main' 'Isolated SDK 10.0.401 is healthy.' \
-    'Location:' 'Press Enter to return to Verify...' 'Select an isolated SDK to verify:'
+  assert_operation_view 'B. Back to Main' 'Verify isolated .NET SDK' \
+    'Isolated SDK 10.0.401 verified successfully.' 'Press Enter to return to Verify...' 'Select an isolated SDK to verify:'
 
   run bash -c 'printf "r\n1\ny\n\nb\ne\n" | TERM=xterm script -q -c "$1" /dev/null' _ "$wrapper"
   [ "$status" -eq 0 ]

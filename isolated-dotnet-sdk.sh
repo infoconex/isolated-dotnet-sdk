@@ -1927,40 +1927,276 @@ install_isolated_sdk() {
     tool_label_value "Location:" "$install_dir"
 }
 
+# Shared local proof: keep this separate from Verify's optional online report so
+# Install can reuse the same version-and-origin guarantees in a later issue.
+VERIFY_CHECKS=()
+VERIFY_ERROR=""
+verify_check() {
+    VERIFY_CHECKS+=("$1|$2|$3")
+}
+
+validate_local_isolated_sdk() {
+    local version="$1"
+    # Optional explicit installation/staging directory allows later Install reuse.
+    local install_dir="${2:-$SDK_ROOT/$version}"
+    local isolated_dotnet="$install_dir/dotnet"
+    local work_dir=""
+    local inventory=""
+    local resolved_version=""
+    local origin=""
+    local expected_origin=""
+    local line=""
+    local reported_version=""
+    local reported_origin=""
+    local has_version="false"
+    local has_origin="false"
+    local status=0
+
+    VERIFY_CHECKS=()
+    VERIFY_ERROR=""
+    if [[ ! -d "$install_dir" ]]; then
+        verify_check "Installation directory" "FAIL" "$install_dir"
+        VERIFY_ERROR="Isolated SDK $version is not installed under $SDK_ROOT."
+        return 1
+    fi
+    verify_check "Installation directory" "OK" "$install_dir"
+
+    if [[ ! -e "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Isolated SDK $version is incomplete: expected dotnet host was not found at $isolated_dotnet."
+        return 1
+    fi
+    if [[ ! -x "$isolated_dotnet" ]]; then
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Isolated SDK $version host is not executable: $isolated_dotnet"
+        return 1
+    fi
+
+    # A fresh work directory cannot contain a caller's global.json. On older
+    # Windows hosts, DOTNET_MULTILEVEL_LOOKUP=0 also prevents system SDK lookup.
+    if ! work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-verify.XXXXXX")"; then
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Unable to prepare isolated SDK $version verification directory."
+        return 1
+    fi
+    if inventory="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --list-sdks)"; then
+        :
+    else
+        status=$?
+        rm -rf -- "$work_dir"
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Unable to verify isolated SDK $version with exit code $status."
+        return 1
+    fi
+    verify_check ".NET host" "OK" "$isolated_dotnet"
+
+    if [[ -d "$install_dir/sdk" ]]; then
+        expected_origin="$(cd "$install_dir/sdk" && pwd -P)"
+    fi
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+\[(.*)\][[:space:]]*$ ]]; then
+            reported_version="${BASH_REMATCH[1]}"
+            reported_origin="${BASH_REMATCH[2]}"
+            if [[ "$reported_version" == "$version" ]]; then
+                has_version="true"
+                if [[ -d "$reported_origin" ]]; then
+                    origin="$(cd "$reported_origin" && pwd -P)"
+                    if [[ -n "$expected_origin" && "$origin" == "$expected_origin" ]]; then
+                        has_origin="true"
+                        break
+                    fi
+                fi
+            fi
+        fi
+    done <<< "$inventory"
+    if [[ "$has_version" != "true" ]]; then
+        rm -rf -- "$work_dir"
+        verify_check "SDK inventory" "FAIL" "$version missing"
+        VERIFY_ERROR="Isolated SDK $version failed verification: the host did not report SDK $version."
+        return 1
+    fi
+    if [[ "$has_origin" != "true" ]]; then
+        rm -rf -- "$work_dir"
+        verify_check "SDK inventory" "FAIL" "$version from unexpected SDK root"
+        VERIFY_ERROR="Isolated SDK $version failed verification: SDK $version was not reported from $install_dir/sdk."
+        return 1
+    fi
+    verify_check "SDK inventory" "OK" "$version from $expected_origin"
+
+    if resolved_version="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --version)"; then
+        :
+    else
+        status=$?
+        rm -rf -- "$work_dir"
+        verify_check "SDK resolution" "FAIL" "host exited $status"
+        VERIFY_ERROR="Isolated SDK $version failed verification: --version exited with code $status."
+        return 1
+    fi
+    rm -rf -- "$work_dir"
+    if [[ "$resolved_version" != "$version" ]]; then
+        verify_check "SDK resolution" "FAIL" "$resolved_version"
+        VERIFY_ERROR="Isolated SDK $version failed verification: --version resolved $resolved_version instead of $version."
+        return 1
+    fi
+    verify_check "SDK resolution" "OK" "$resolved_version"
+}
+
+# Metadata is optional; reuse Audit's classification in a protected subprocess.
+verify_audit_details() {
+    local version="$1"
+    local index_json=""
+    local channel_data=""
+    if ! index_json="$(curl -fsSL --connect-timeout 4 --max-time 12 "$RELEASE_INDEX_URL" 2>/dev/null)"; then
+        return 1
+    fi
+    if ! looks_like_json_object "$index_json" || [[ "$index_json" != *'"releases-index"'* ]]; then
+        return 1
+    fi
+    channel_data="$(printf '%s\n' "$index_json" | parse_release_index)"
+    [[ -n "$channel_data" ]] || return 1
+    AUDIT_METADATA_CHANNELS=()
+    AUDIT_METADATA_VALUES=()
+    AUDIT_RELEASE_SCHEDULE_LOADED="false"
+    AUDIT_RELEASE_SCHEDULE=""
+    AUDIT_VERSION_WIDTH=0
+    AUDIT_RELEASE_TYPE_WIDTH=0
+    AUDIT_LIFECYCLE_WIDTH=0
+    resolve_audit_classification "$version" "$channel_data"
+    [[ -n "$AUDIT_RELEASE_TYPE" ]] && printf '  %-19s %s\n' 'Support type' "$AUDIT_RELEASE_TYPE"
+    local status_color=""
+    status_color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
+    printf '  %-19s %b%s%b\n' 'Status' "$status_color" "$AUDIT_STATUS_TOKEN" "$RESET"
+    [[ -n "$AUDIT_RELEASE_DATE" ]] && printf '  %-19s %s\n' 'SDK release date' "$AUDIT_RELEASE_DATE"
+    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && printf '  %-19s %s\n' 'Go Live date' "$AUDIT_GO_LIVE_DATE"
+    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && printf '  %-19s %s\n' 'Channel EOS date' "$AUDIT_END_OF_SUPPORT_DATE"
+    if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
+        case "$AUDIT_SERVICING_STATUS" in
+            "Update available -> "*|"Security update available -> "*)
+                printf '  %-19s %s\n' 'Update available' "${AUDIT_SERVICING_STATUS##* -> }"
+                ;;
+            *)
+                printf '  %-19s %s\n' 'Servicing status' "$AUDIT_SERVICING_STATUS"
+                ;;
+        esac
+    fi
+}
+
+# Best-effort component diagnostics. Never import runtimes from system installations.
+verify_installed_components() {
+    local install_dir="$1"
+    local dotnet="$install_dir/dotnet"
+    local work_dir="" info="" runtimes="" section=""
+    local host_version="" architecture="" rid=""
+    local line="" name="" runtime_version="" runtime_root="" expected_root=""
+    local count=0
+
+    if [[ -x "$dotnet" ]] && work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-components.XXXXXX")"; then
+        info="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --info 2>/dev/null)" || info=""
+        runtimes="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --list-runtimes 2>/dev/null)" || runtimes=""
+        rm -rf -- "$work_dir"
+    fi
+
+    while IFS= read -r line; do
+        case "$line" in
+            'Runtime Environment:') section="runtime"; continue ;;
+            'Host:'|'Host (useful for support):') section="host"; continue ;;
+        esac
+        if [[ "$line" =~ ^[^[:space:]][^:]*:[[:space:]]*$ ]]; then
+            section=""
+            continue
+        fi
+        if [[ "$section" == "host" && "$line" =~ ^[[:space:]]*Version:[[:space:]]*([^[:space:]]+) ]]; then
+            host_version="${BASH_REMATCH[1]}"
+        elif [[ "$section" == "host" && "$line" =~ ^[[:space:]]*Architecture:[[:space:]]*([^[:space:]]+) ]]; then
+            architecture="${BASH_REMATCH[1]}"
+        elif [[ "$section" == "runtime" && "$line" =~ ^[[:space:]]*RID:[[:space:]]*([^[:space:]]+) ]]; then
+            rid="${BASH_REMATCH[1]}"
+        fi
+    done <<< "$info"
+
+    # Legacy hosts expose architecture in the RID but not as a separate field.
+    if [[ -z "$architecture" && "$rid" =~ -(x64|x86|arm64|arm)$ ]]; then
+        architecture="${BASH_REMATCH[1]}"
+    fi
+
+    printf '  %-19s %s\n' 'Host version' "${host_version:-Unavailable}"
+    printf '  %-19s %s\n' 'Architecture' "${architecture:-Unavailable}"
+    printf '  %-19s %s\n' 'Runtime identifier' "${rid:-Unavailable}"
+    echo
+    printf '  .NET runtimes:\n'
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+\[(.*)\][[:space:]]*$ ]]; then
+            name="${BASH_REMATCH[1]}"
+            runtime_version="${BASH_REMATCH[2]}"
+            runtime_root="${BASH_REMATCH[3]}"
+            expected_root="$install_dir/shared/$name"
+            if [[ -d "$runtime_root" && -d "$expected_root" ]] &&
+               [[ "$(cd "$runtime_root" && pwd -P)" == "$(cd "$expected_root" && pwd -P)" ]]; then
+                printf '    %-31s %s\n' "$name" "$runtime_version"
+                count=$((count + 1))
+            fi
+        fi
+    done <<< "$runtimes"
+    if (( count == 0 )); then
+        printf '    Unavailable\n'
+    fi
+}
+
 verify_isolated_sdk() {
     [[ -n "$VERSION" ]] || tool_fail "An exact SDK version is required with verify."
     validate_version
 
     local install_dir="$SDK_ROOT/$VERSION"
-    local isolated_dotnet="$install_dir/dotnet"
-    local isolated_sdks=""
-    local status=0
+    local details="" label="" result="" detail="" check=""
+    local is_valid="true"
 
-    if [[ ! -d "$install_dir" ]]; then
-        tool_fail "Isolated SDK $VERSION is not installed under $SDK_ROOT."
-    fi
-
-    if [[ ! -e "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
-        tool_fail "Isolated SDK $VERSION is incomplete: expected dotnet host was not found at $isolated_dotnet."
-    fi
-
-    if [[ ! -x "$isolated_dotnet" ]]; then
-        tool_fail "Isolated SDK $VERSION host is not executable: $isolated_dotnet"
-    fi
-
-    if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+    if validate_local_isolated_sdk "$VERSION"; then
         :
     else
-        status=$?
-        tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
+        is_valid="false"
     fi
 
-    if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        tool_fail "Isolated SDK $VERSION failed verification: the host did not report SDK $VERSION."
+    tool_heading "Verify isolated .NET SDK"
+    echo
+    tool_heading "SDK information:"
+    printf '  %-19s %s\n' 'SDK version' "$VERSION"
+    printf '  %-19s %s\n' '.NET channel' "$(sdk_channel_from_version "$VERSION")"
+    if details="$(verify_audit_details "$VERSION" 2>/dev/null)"; then
+        printf '%s\n' "$details"
+    else
+        printf '  Release/lifecycle   Unavailable (Microsoft metadata could not be loaded).\n'
     fi
-
-    tool_success "Isolated SDK $VERSION is healthy."
-    tool_label_value "Location:" "$install_dir"
+    echo
+    tool_heading "Installed components:"
+    if [[ "$is_valid" == "true" ]]; then
+        verify_installed_components "$install_dir"
+    else
+        printf '  %-19s %s\n' 'Host version' 'Unavailable'
+        printf '  %-19s %s\n' 'Architecture' 'Unavailable'
+        printf '  %-19s %s\n' 'Runtime identifier' 'Unavailable'
+        echo
+        printf '  .NET runtimes:\n    Unavailable\n'
+    fi
+    echo
+    tool_heading "Verification:"
+    for check in "${VERIFY_CHECKS[@]}"; do
+        IFS='|' read -r label result detail <<< "$check"
+        if [[ "$result" == "OK" ]]; then
+            case "$label" in
+                '.NET host') detail='Host executable found and launched' ;;
+                'SDK inventory') detail='Exact SDK found in isolated installation' ;;
+                'SDK resolution') detail='Correct SDK selected' ;;
+            esac
+            printf '  %-23s %bOK%b  %s\n' "$label" "$GREEN" "$RESET" "$detail"
+        else
+            printf '  %-23s FAIL  %s\n' "$label" "$detail"
+        fi
+    done
+    echo
+    if [[ "$is_valid" != "true" ]]; then
+        tool_fail "$VERIFY_ERROR"
+    fi
+    tool_success "Isolated SDK $VERSION verified successfully."
 }
 
 remove_isolated_sdk() {
@@ -2063,7 +2299,7 @@ Commands:
   install [version]  Install an isolated SDK. Without a version, show the SDK picker.
   remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
   list               List isolated SDKs and SDKs visible through the normal dotnet host. A version is invalid with list.
-  verify <version>   Read-only health check for one exact installed isolated SDK.
+  verify <version>   Detailed SDK report and read-only exact-origin/resolution checks.
   audit              Online read-only lifecycle and servicing assessment for installed SDKs.
 
 Options:

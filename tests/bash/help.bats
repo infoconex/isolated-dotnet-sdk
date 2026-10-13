@@ -23,7 +23,7 @@ teardown() {
   [[ "$output" == *"Linux and macOS with Bash"* ]]
   [[ "$output" == *"not added to PATH"* ]]
   [[ "$output" == *"verify <version>"* ]]
-  [[ "$output" == *"Read-only health check for one exact installed isolated SDK."* ]]
+  [[ "$output" == *"Detailed SDK report and read-only exact-origin/resolution checks."* ]]
   [[ "$output" == *"does not choose a missing action or version"* ]]
   [[ "$output" == *"Required interactive input that is unavailable is an operational failure"* ]]
   [[ "$output" == *"Explicit cancellation is a successful no-change result"* ]]
