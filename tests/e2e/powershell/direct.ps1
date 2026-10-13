@@ -140,12 +140,17 @@ try {
             throw "Verify did not report passing local check: $check"
         }
     }
-    if ($verify.Output -notmatch [regex]::Escape("$sdkVersion from $(Join-Path $sdkRoot 'sdk')")) {
-        throw 'Verify did not prove exact SDK version and isolated origin.'
+    if ($verify.Output -notmatch 'Exact SDK found in isolated installation') {
+        throw 'Verify did not prove exact isolated SDK inventory.'
     }
-    foreach ($fragment in @("Release: $auditReleaseDate", "EOS: $auditEndOfSupport")) {
+    foreach ($fragment in @("SDK release date     $auditReleaseDate", "Channel EOS date    $auditEndOfSupport")) {
         if ($verify.Output -notmatch [regex]::Escape($fragment)) {
             throw "Verify and Audit classification differed: $fragment"
+        }
+    }
+    foreach ($fragment in @('SDK information:', 'Installed components:', 'Host version', 'Architecture', 'Runtime identifier', 'Microsoft.NETCore.App', 'Verification:')) {
+        if ($verify.Output -notmatch [regex]::Escape($fragment)) {
+            throw "Verify output missing detail: $fragment"
         }
     }
     if ($verify.Output.Contains([char]27)) {
