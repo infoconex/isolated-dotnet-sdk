@@ -112,7 +112,14 @@ required_fragments=(
   '.NET host'
   'SDK inventory'
   'SDK resolution'
-  "$sdk_version from $sdk_root/sdk"
+  'Exact SDK found in isolated installation'
+  'SDK information:'
+  'Installed components:'
+  'Host version'
+  'Architecture'
+  'Runtime identifier'
+  'Microsoft.NETCore.App'
+  'Verification:'
   "$sdk_version"
   "was removed."
   "Exiting."
