@@ -41,7 +41,7 @@ Installs .NET SDK 10.0.100 in an isolated directory.
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Verify -SdkVersion 10.0.100
 
-Verifies that the existing isolated .NET SDK 10.0.100 has a launchable host that reports the requested exact version.
+Reports the SDK lifecycle and validates its isolated host, exact SDK origin, and exact SDK resolution. Microsoft metadata unavailability does not fail a locally valid SDK.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 10.0.100 -Yes
