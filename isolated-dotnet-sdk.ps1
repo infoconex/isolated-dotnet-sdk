@@ -2124,12 +2124,12 @@ function Get-VerifyAuditRow {
     $Entry = @($Index.'releases-index' | Where-Object { $_.'channel-version' -eq $ChannelVersion } | Select-Object -First 1)
     if (-not $Entry) {
         $Classification = [pscustomobject]@{
-            Version = $Version
-            ReleaseType = ''
-            ServicingStatus = ''
-            StatusToken = 'Unknown channel'
-            ReleaseDate = ''
-            GoLiveDate = ''
+            Version          = $Version
+            ReleaseType      = ''
+            ServicingStatus  = ''
+            StatusToken      = 'Unknown channel'
+            ReleaseDate      = ''
+            GoLiveDate       = ''
             EndOfSupportDate = ''
         }
     }
