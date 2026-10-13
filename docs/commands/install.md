@@ -38,7 +38,7 @@ A new installation is transactional:
 2. download the SDK archive into operation-owned temporary state;
 3. verify the archive SHA-512 before extraction;
 4. extract into an operation-owned staging directory;
-5. require the staged host to run successfully and report the requested exact SDK version;
+5. require the staged host to run successfully and prove the requested exact SDK version. Hosts from the original .NET Core 1.x SDK generation, which do not support `--list-sdks`, must report the exact version with `--version` and report a `Base Path` inside the staged SDK's own `sdk/<version>` directory with `--info`. These checks run with a temporary pinned `global.json` and disabled multilevel lookup; the temporary verification files are removed. Newer SDK hosts retain `--list-sdks` verification;
 6. promote staging to the final version directory only while that destination remains absent; and
 7. clean operation-owned metadata, payload, and staging state where possible.
 
