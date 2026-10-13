@@ -134,6 +134,23 @@ try {
         -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Verify', '-SdkVersion', $sdkVersion)
     Assert-Success -Result $verify -Operation 'Direct verify'
     Write-Host $verify.Output
+    foreach ($check in @('Installation directory', '.NET host', 'SDK inventory', 'SDK resolution')) {
+        $pattern = '(?m)^\\s*' + [regex]::Escape($check) + '\\s+OK\\s'
+        if ($verify.Output -notmatch $pattern) {
+            throw "Verify did not report passing local check: $check"
+        }
+    }
+    if ($verify.Output -notmatch [regex]::Escape("$sdkVersion from $(Join-Path $sdkRoot 'sdk')")) {
+        throw 'Verify did not prove exact SDK version and isolated origin.'
+    }
+    foreach ($fragment in @("Release: $auditReleaseDate", "EOS: $auditEndOfSupport")) {
+        if ($verify.Output -notmatch [regex]::Escape($fragment)) {
+            throw "Verify and Audit classification differed: $fragment"
+        }
+    }
+    if ($verify.Output.Contains([char]27)) {
+        throw 'Captured Verify output unexpectedly contained ANSI escape sequences.'
+    }
     if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion verified successfully.")) {
         throw "Verify output did not report SDK $sdkVersion verified successfully."
     }
