@@ -21,7 +21,7 @@ function Invoke-WebRequest {
         else {
             'https://builds.dotnet.microsoft.com/dotnet/Sdk/99.0.100/dotnet-sdk-99.0.100-win-x64.zip'
         }
-        $hash = if ($env:SDK_TEST_MALFORMED_HASH) { 'deadbeef' } else { 'a' * 128 }
+        $hash = if ($env:SDK_TEST_MALFORMED_HASH) { 'deadbeef' } elseif ($legacyVersion -eq '1.0.4') { 'a' * 64 } else { 'a' * 128 }
         $files = if ($env:SDK_TEST_MISSING_ARTIFACT) {
             @(@{ rid = 'win-arm64'; url = 'https://builds.dotnet.microsoft.com/example.zip'; hash = $hash })
         }
@@ -46,7 +46,8 @@ function Invoke-WebRequest {
 
 function Get-FileHash {
     param([string]$LiteralPath, [string]$Algorithm)
-    $hash = if ($env:SDK_TEST_HASH_MISMATCH) { 'b' * 128 } else { 'a' * 128 }
+    $length = if ($Algorithm -eq 'SHA256') { 64 } else { 128 }
+    $hash = if ($env:SDK_TEST_HASH_MISMATCH) { 'b' * $length } else { 'a' * $length }
     [pscustomobject]@{ Hash = $hash }
 }
 
