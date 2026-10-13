@@ -1986,7 +1986,6 @@ function Get-LocalIsolatedSdkValidation {
     )
 
     $Checks = [System.Collections.Generic.List[object]]::new()
-    $Failure = ''
     $Result = [ordered]@{ Checks = $Checks; Failure = '' }
 
     if (-not (Test-Path -LiteralPath $InstallDirectory -PathType Container)) {
@@ -2060,7 +2059,8 @@ function Get-LocalIsolatedSdkValidation {
                     }
                 }
                 catch {
-                    # An invalid inventory origin cannot satisfy isolated validation.
+                    # A malformed reported origin cannot satisfy the installed SDK check.
+                    continue
                 }
             }
 
