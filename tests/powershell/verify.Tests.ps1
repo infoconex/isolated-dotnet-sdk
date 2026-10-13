@@ -160,6 +160,17 @@ function Invoke-RestMethod {
         ($verifyOutput -join [Environment]::NewLine) | Should -Match 'SDK inventory'
     }
 
+    It 'rejects missing isolated SDK origin directory even when a host reports that path' {
+        $version = '99.0.100'
+        $installDirectory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+        Remove-Item -LiteralPath (Join-Path $installDirectory 'sdk') -Recurse -Force
+
+        $verifyOutput = @(Invoke-VerifyTool -Version $version)
+        $script:VerifyExitCode | Should -Not -Be 0
+        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'SDK inventory'
+        ($verifyOutput -join [Environment]::NewLine) | Should -Match 'was not reported from'
+    }
+
     It 'rejects --version mismatch and preserves its own failure context' {
         $version = '99.0.100'
         Install-FakeIsolatedHost -Version $version -ReportedVersion $version | Out-Null
