@@ -2178,9 +2178,8 @@ function Test-IsolatedSdk {
     Write-ToolHeading 'Verification:'
     foreach ($Check in $Validation.Checks) {
         $Status = [string]$Check.Status
-        $RenderedStatus = if ($Status -eq 'OK' -and $Host.UI.SupportsVirtualTerminal -and
-            $PSStyle.OutputRendering -ne 'PlainText') {
-            "$($PSStyle.Foreground.Green)OK$($PSStyle.Reset)"
+        $RenderedStatus = if ($Status -eq 'OK') {
+            Format-ToolMessage -Kind Success -Message 'OK'
         }
         else {
             $Status
