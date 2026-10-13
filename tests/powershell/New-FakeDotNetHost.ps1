@@ -31,9 +31,13 @@ public static class Program
             Console.WriteLine("Runtime Environment:");
             Console.WriteLine(" RID:         win10-x64");
             Console.WriteLine();
-            Console.WriteLine("Host:");
+            var legacyInfo = string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_INFO"), "true", StringComparison.OrdinalIgnoreCase);
+            Console.WriteLine(legacyInfo ? "Host (useful for support):" : "Host:");
             Console.WriteLine("  Version:      99.0.9");
-            Console.WriteLine("  Architecture: x64");
+            if (!legacyInfo)
+            {
+                Console.WriteLine("  Architecture: x64");
+            }
         }
         if (args.Length > 0 && args[0] == "--list-runtimes")
         {
