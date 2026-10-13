@@ -2256,11 +2256,22 @@ function Test-IsolatedSdk {
 
     Write-ToolHeading 'Verify isolated .NET SDK'
     Write-ToolDisplay
+    $Classification = $null
+    try {
+        $Classification = Get-VerifyAuditClassification -Version $SdkVersion
+    }
+    catch {
+        # Microsoft lifecycle information is optional; local checks remain authoritative.
+        $Classification = $null
+    }
+    Write-ToolDisplay
     Write-ToolHeading 'SDK information:'
     Write-ToolDisplay ('  {0,-19} {1}' -f 'SDK version', $SdkVersion)
     Write-ToolDisplay ('  {0,-19} {1}' -f '.NET channel', (Get-SdkChannelFromVersion -Version $SdkVersion))
     try {
-        $Classification = Get-VerifyAuditClassification -Version $SdkVersion
+        if ($null -eq $Classification) {
+            throw 'Microsoft metadata unavailable.'
+        }
         if ($Classification.ReleaseType) {
             Write-ToolDisplay ('  {0,-19} {1}' -f 'Support type', $Classification.ReleaseType)
         }
