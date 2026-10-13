@@ -61,6 +61,29 @@ fi
 
 verify_output="$(bash "$saved_tool" verify "$sdk_version")"
 printf '%s\n' "$verify_output"
+for check in 'Installation directory' '.NET host' 'SDK inventory' 'SDK resolution'; do
+  if ! grep -Eq "^[[:space:]]+$check[[:space:]]+OK[[:space:]]" <<<"$verify_output"; then
+    printf 'Verify did not report passing local check: %s\n' "$check" >&2
+    exit 1
+  fi
+done
+if ! grep -Fq "$sdk_version from $sdk_root/sdk" <<<"$verify_output"; then
+  printf 'Verify did not prove exact SDK version and isolated origin.\n' >&2
+  exit 1
+fi
+if ! grep -Fq "Release: $audit_release_date" <<<"$verify_output"; then
+  printf 'Verify and Audit release-date classification differed.\n' >&2
+  exit 1
+fi
+if ! grep -Fq "EOS: $audit_end_of_support" <<<"$verify_output"; then
+  printf 'Verify and Audit end-of-support classification differed.\n' >&2
+  exit 1
+fi
+if grep -q $'\033' <<<"$verify_output"; then
+  printf 'Captured Verify output unexpectedly contained ANSI escape sequences.\n' >&2
+  exit 1
+fi
+
 if ! grep -Fq "Isolated SDK $sdk_version verified successfully." <<<"$verify_output"; then
   printf 'Verify output did not report SDK %s verified successfully.\n' "$sdk_version" >&2
   exit 1
