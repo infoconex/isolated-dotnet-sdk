@@ -135,7 +135,7 @@ try {
     Assert-Success -Result $verify -Operation 'Direct verify'
     Write-Host $verify.Output
     foreach ($check in @('Installation directory', '.NET host', 'SDK inventory', 'SDK resolution')) {
-        $pattern = '(?m)^\\s*' + [regex]::Escape($check) + '\\s+OK\\s'
+        $pattern = '(?m)^\s*' + [regex]::Escape($check) + '\s+OK\s'
         if ($verify.Output -notmatch $pattern) {
             throw "Verify did not report passing local check: $check"
         }
