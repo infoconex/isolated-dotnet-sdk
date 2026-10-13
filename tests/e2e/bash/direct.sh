@@ -71,7 +71,7 @@ if ! grep -Fq 'Exact SDK found in isolated installation' <<<"$verify_output"; th
   printf 'Verify did not prove exact isolated SDK inventory.\n' >&2
   exit 1
 fi
-if ! grep -Fq "SDK release date     $audit_release_date" <<<"$verify_output"; then
+if ! grep -Fq "SDK release date    $audit_release_date" <<<"$verify_output"; then
   printf 'Verify and Audit release-date classification differed.\n' >&2
   exit 1
 fi
