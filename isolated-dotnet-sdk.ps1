@@ -2117,14 +2117,14 @@ function Get-LocalIsolatedSdkValidation {
     return [pscustomobject]$Result
 }
 
-function Get-VerifyAuditRow {
+function Get-VerifyAuditClassification {
     param([string]$Version)
 
     $Index = Get-ReleaseIndex
     $ChannelVersion = Get-SdkChannelFromVersion -Version $Version
     $Entry = @($Index.'releases-index' | Where-Object { $_.'channel-version' -eq $ChannelVersion } | Select-Object -First 1)
     if (-not $Entry) {
-        $Classification = [pscustomobject]@{
+        return [pscustomobject]@{
             Version          = $Version
             ReleaseType      = ''
             ServicingStatus  = ''
@@ -2134,24 +2134,113 @@ function Get-VerifyAuditRow {
             EndOfSupportDate = ''
         }
     }
-    else {
-        $ChannelEntry = $Entry[0]
-        $LatestSdk = [string]$ChannelEntry.'latest-sdk'
-        $MetadataUrl = [string]$ChannelEntry.'releases.json'
-        if ([string]::IsNullOrWhiteSpace($LatestSdk) -or
-            [string]::IsNullOrWhiteSpace($MetadataUrl) -or
-            [string]::IsNullOrWhiteSpace([string]$ChannelEntry.'support-phase')) {
-            throw "Invalid .NET release metadata for .NET $ChannelVersion."
-        }
-        $Metadata = Get-AuditChannelRecord -ChannelVersion $ChannelVersion -MetadataUrl $MetadataUrl -Cache @{}
-        if (@(Get-ChannelSdkVersion $Metadata) -notcontains $LatestSdk) {
-            throw "Invalid release metadata for .NET $ChannelVersion."
-        }
-        $Classification = Get-SdkAuditClassification -Version $Version -ChannelEntry $ChannelEntry -ChannelMetadata $Metadata -GoLiveCache @{}
-    }
 
-    $Layout = Get-SdkAuditDisplayLayout -Classifications @($Classification)
-    return Format-SdkAuditRow -Classification $Classification -Layout $Layout
+    $ChannelEntry = $Entry[0]
+    $LatestSdk = [string]$ChannelEntry.'latest-sdk'
+    $MetadataUrl = [string]$ChannelEntry.'releases.json'
+    if ([string]::IsNullOrWhiteSpace($LatestSdk) -or
+        [string]::IsNullOrWhiteSpace($MetadataUrl) -or
+        [string]::IsNullOrWhiteSpace([string]$ChannelEntry.'support-phase')) {
+        throw "Invalid .NET release metadata for .NET $ChannelVersion."
+    }
+    $Metadata = Get-AuditChannelRecord -ChannelVersion $ChannelVersion -MetadataUrl $MetadataUrl -Cache @{}
+    if (@(Get-ChannelSdkVersion $Metadata) -notcontains $LatestSdk) {
+        throw "Invalid release metadata for .NET $ChannelVersion."
+    }
+    return Get-SdkAuditClassification -Version $Version -ChannelEntry $ChannelEntry -ChannelMetadata $Metadata -GoLiveCache @{}
+}
+
+# Optional local component diagnostics; only runtimes from this isolated root are shown.
+function Get-IsolatedSdkComponents {
+    param(
+        [string]$InstallDirectory,
+        [string]$DotNetPath
+    )
+    $Result = [ordered]@{ HostVersion = ''; Architecture = ''; Rid = ''; Runtimes = @() }
+    $PreviousMulti = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
+    $PreviousRoot = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Process')
+    $WorkDirectory = $null
+    $LocationPushed = $false
+    try {
+        $WorkDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-components-{0}" -f [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $WorkDirectory -ErrorAction Stop | Out-Null
+        Push-Location -LiteralPath $WorkDirectory
+        $LocationPushed = $true
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $InstallDirectory, 'Process')
+
+        $InfoLines = @(& $DotNetPath --info 2>$null)
+        if ($LASTEXITCODE -eq 0) {
+            $Section = ''
+            foreach ($Line in $InfoLines) {
+                $Text = [string]$Line
+                if ($Text -match '^\s*(Host|Runtime Environment):\s*$') {
+                    $Section = $Matches[1]
+                    continue
+                }
+                if ($Text -match '^\S[^:]*:\s*$') {
+                    $Section = ''
+                    continue
+                }
+                if ($Section -eq 'Host' -and $Text -match '^\s*Version:\s*(\S+)') {
+                    $Result.HostVersion = $Matches[1]
+                }
+                if ($Section -eq 'Host' -and $Text -match '^\s*Architecture:\s*(\S+)') {
+                    $Result.Architecture = $Matches[1]
+                }
+                if ($Section -eq 'Runtime Environment' -and $Text -match '^\s*RID:\s*(\S+)') {
+                    $Result.Rid = $Matches[1]
+                }
+            }
+        }
+
+        $RuntimeLines = @(& $DotNetPath --list-runtimes 2>$null)
+        if ($LASTEXITCODE -eq 0) {
+            $Items = [System.Collections.Generic.List[object]]::new()
+            $Comparison = if ($IsWindows) {
+                [System.StringComparison]::OrdinalIgnoreCase
+            }
+            else {
+                [System.StringComparison]::Ordinal
+            }
+            foreach ($Line in $RuntimeLines) {
+                $Match = [regex]::Match([string]$Line, '^(?<name>\S+)\s+(?<version>\S+)\s+\[(?<path>.+)\]\s*$')
+                if (-not $Match.Success) {
+                    continue
+                }
+                try {
+                    $Expected = [System.IO.Path]::GetFullPath((Join-Path (Join-Path $InstallDirectory 'shared') $Match.Groups['name'].Value))
+                    $Reported = [System.IO.Path]::GetFullPath($Match.Groups['path'].Value)
+                    if ([string]::Equals($Expected, $Reported, $Comparison) -and
+                        (Test-Path -LiteralPath $Expected -PathType Container)) {
+                        $Items.Add([pscustomobject]@{
+                                Name    = $Match.Groups['name'].Value
+                                Version = $Match.Groups['version'].Value
+                            })
+                    }
+                }
+                catch {
+                    # Ignore malformed/unrelated runtime roots; these are optional data.
+                    continue
+                }
+            }
+            $Result.Runtimes = @($Items | Sort-Object Name, Version)
+        }
+    }
+    catch {
+        # Older/incomplete hosts may not provide optional diagnostics.
+    }
+    finally {
+        if ($LocationPushed) {
+            Pop-Location
+        }
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', $PreviousMulti, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $PreviousRoot, 'Process')
+        if ($WorkDirectory -and (Test-Path -LiteralPath $WorkDirectory)) {
+            Remove-Item -LiteralPath $WorkDirectory -Force -Recurse -ErrorAction SilentlyContinue
+        }
+    }
+    return [pscustomobject]$Result
 }
 
 function Test-IsolatedSdk {
@@ -2166,15 +2255,68 @@ function Test-IsolatedSdk {
 
     Write-ToolHeading 'Verify isolated .NET SDK'
     Write-ToolDisplay
+    Write-ToolHeading 'SDK information:'
+    Write-ToolDisplay ('  {0,-19} {1}' -f 'SDK version', $SdkVersion)
+    Write-ToolDisplay ('  {0,-19} {1}' -f '.NET channel', (Get-SdkChannelFromVersion -Version $SdkVersion))
     try {
-        $AuditRow = Get-VerifyAuditRow -Version $SdkVersion
-        Write-ToolDisplay $AuditRow
+        $Classification = Get-VerifyAuditClassification -Version $SdkVersion
+        if ($Classification.ReleaseType) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'Support type', $Classification.ReleaseType)
+        }
+        Write-ToolDisplay ('  {0,-19} {1}' -f 'Status', (Format-AuditStatusToken -StatusToken $Classification.StatusToken))
+        if ($Classification.ReleaseDate) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'SDK release date', $Classification.ReleaseDate)
+        }
+        if ($Classification.GoLiveDate) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'Go Live date', $Classification.GoLiveDate)
+        }
+        if ($Classification.EndOfSupportDate) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'Channel EOS date', $Classification.EndOfSupportDate)
+        }
+        if ($Classification.ServicingStatus) {
+            $UpdateMatch = [regex]::Match(
+                [string]$Classification.ServicingStatus,
+                '^(?:Security update available|Update available) -> (?<version>\S+)$')
+            $UpdateText = if ($UpdateMatch.Success) {
+                $UpdateMatch.Groups['version'].Value
+            }
+            else {
+                [string]$Classification.ServicingStatus
+            }
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'Update available', $UpdateText)
+        }
     }
     catch {
-        Write-ToolInfo 'Release/lifecycle information: Unavailable (Microsoft metadata could not be loaded).'
+        Write-ToolDisplay '  Release/lifecycle   Unavailable (Microsoft metadata could not be loaded).'
     }
     Write-ToolDisplay
-    Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
+    Write-ToolHeading 'Installed components:'
+    $Components = if (-not $Validation.Failure) {
+        Get-IsolatedSdkComponents -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet
+    }
+    else {
+        $null
+    }
+    foreach ($Field in @(
+            @{ Label = 'Host version'; Value = $Components.HostVersion },
+            @{ Label = 'Architecture'; Value = $Components.Architecture },
+            @{ Label = 'Runtime identifier'; Value = $Components.Rid }
+        )) {
+        $Value = if ($Field.Value) { $Field.Value } else { 'Unavailable' }
+        Write-ToolDisplay ('  {0,-19} {1}' -f $Field.Label, $Value)
+    }
+    Write-ToolDisplay
+    Write-ToolDisplay '  .NET runtimes:'
+    if ($Components -and @($Components.Runtimes).Count -gt 0) {
+        $Width = ($Components.Runtimes | ForEach-Object { $_.Name.Length } | Measure-Object -Maximum).Maximum
+        foreach ($Runtime in $Components.Runtimes) {
+            $Name = ([string]$Runtime.Name).PadRight($Width)
+            Write-ToolDisplay ("    $Name  $($Runtime.Version)")
+        }
+    }
+    else {
+        Write-ToolDisplay '    Unavailable'
+    }
     Write-ToolDisplay
     Write-ToolHeading 'Verification:'
     foreach ($Check in $Validation.Checks) {
@@ -2185,7 +2327,18 @@ function Test-IsolatedSdk {
         else {
             $Status
         }
-        Write-ToolDisplay ('  {0,-23} {1}  {2}' -f $Check.Label, $RenderedStatus, $Check.Detail)
+        $Detail = if ($Status -eq 'OK') {
+            switch ($Check.Label) {
+                '.NET host' { 'Host executable found and launched' }
+                'SDK inventory' { 'Exact SDK found in isolated installation' }
+                'SDK resolution' { 'Correct SDK selected' }
+                default { $Check.Detail }
+            }
+        }
+        else {
+            $Check.Detail
+        }
+        Write-ToolDisplay ('  {0,-23} {1}  {2}' -f $Check.Label, $RenderedStatus, $Detail)
     }
     Write-ToolDisplay
     if ($Validation.Failure) {
