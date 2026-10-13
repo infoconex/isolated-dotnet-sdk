@@ -169,7 +169,7 @@ try {
         "Release: $auditReleaseDate",
         "EOS: $auditEndOfSupport",
         'Select an isolated SDK to verify:',
-        "Isolated SDK $sdkVersion is healthy.",
+        "Isolated SDK $sdkVersion verified successfully.",
         $sdkVersion,
         'was removed.',
         'Exiting.'
