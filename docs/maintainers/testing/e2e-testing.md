@@ -41,7 +41,7 @@ The direct scenario uses the checked-out repository tool and real Microsoft infr
 1. bootstrap the tool into the job-local home;
 2. install the configured exact SDK;
 3. execute that isolated SDK and require its reported version to equal the configured version;
-4. run the public standalone Verify action and require a healthy result;
+4. run the public standalone Verify action and require explicit successful local checks and an exact-origin result;
 5. run List and require the configured isolated version to appear in the installed-SDK output;
 6. run Audit against live Microsoft metadata and require the configured isolated version to be assessed, without pinning a transient servicing status;
 7. remove the configured SDK;
@@ -62,7 +62,7 @@ The persistent session then:
 5. uses the picker’s semantic manual-version option to enter the configured fixed SDK version;
 6. verifies return to Main after installation;
 7. runs List with `L` and verifies the installed SDK is displayed;
-8. runs Verify with `V`, selects the only job-local isolated SDK, requires a healthy result, and verifies return to Main;
+8. runs Verify with `V`, selects the only job-local isolated SDK, requires a verified-successfully result, and verifies return to Main;
 9. runs Remove with `R` for that isolated SDK and verifies return to Main;
 10. exits explicitly with `E` and requires a successful process result;
 11. verifies the SDK is absent afterward.
