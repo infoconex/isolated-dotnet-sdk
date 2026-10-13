@@ -1,47 +1,54 @@
 # Verify
 
-Verify performs a read-only health check of one exact SDK already installed under the isolated SDK root.
+Verify is the read-only, detailed single-SDK report for one exact SDK already installed under the isolated SDK root. The local validation outcome is authoritative; online Microsoft lifecycle/servicing metadata is best-effort enrichment.
 
 For exact direct-command syntax, see [Windows / PowerShell](../getting-started/windows-powershell.md#verify-an-isolated-sdk) or [Linux and macOS / Bash](../getting-started/linux-macos-bash.md#verify-an-isolated-sdk).
 
 ## Invocation modes
 
-Verify can be reached in two ways:
+Verify is available as a one-shot exact-version command or through `V. Verify an isolated SDK` on the persistent Main menu. The interactive picker lists isolated versions newest to oldest; System SDKs are never targets. Both modes call the same local proof and reporting logic. Terminal-backed interactive results remain visible until Enter acknowledges them and then return to the Verify list. Captured and redirected sessions do not wait for acknowledgement.
 
-- an explicit one-shot Verify command requires an exact SDK version; or
-- persistent interactive mode exposes `V. Verify an isolated SDK` on Main and lets you choose from the installed isolated SDK inventory.
+## Detailed report and successful verification
 
-Both paths run the same underlying health check. Interactive Verify does not define a second verification algorithm.
+Verify presents the same structured release type, prerelease/lifecycle state, servicing/update indication, exact SDK release date (`Release:`), future authoritative Go Live date, and end-of-support date (`EOS:`) as Audit. It uses Audit's classification rules and lifecycle styling, not a separately inferred status.
 
-The interactive picker lists isolated SDKs only, ordered newest to oldest. System SDKs are never Verify targets. In a terminal-backed persistent session, if no isolated SDKs are installed, the tool reports that state, keeps it visible until Enter acknowledgement, and then returns to Main without changing anything. Redirected or captured persistent execution skips that pause.
+A report also includes the isolated location and individual local results:
 
-## Healthy result
+```text
+Verify isolated .NET SDK
 
-A healthy result establishes that:
+  10.0.100  LTS  Active  Release: 2025-11-11  EOS: 2028-11-14  Update -> 10.0.401
 
-- the selected isolated version directory exists;
-- the platform-specific `dotnet` host is present and runnable;
-- that host's `--list-sdks` command succeeds; and
-- the host reports the requested exact SDK version.
+Location: <isolated version directory>
 
-Healthy direct verification exits successfully. Healthy terminal-backed interactive verification keeps the completed result visible at `Press Enter to return to Verify...` and returns to the Verify SDK list after Enter acknowledgement. Redirected or captured persistent execution continues without waiting but follows the same return-to-Verify navigation.
+Verification:
+  Installation directory  OK  <isolated version directory>
+  .NET host               OK  <isolated dotnet host>
+  SDK inventory           OK  10.0.100 from <isolated version directory>/sdk
+  SDK resolution          OK  10.0.100
 
-## Failure results
+Isolated SDK 10.0.100 verified successfully.
+```
 
-Verify returns nonzero with operation-specific context when the isolated installation is missing, the host is missing or non-runnable, the host command fails, or the successful inventory does not contain the requested exact version.
+The example uses illustrative metadata. Actual labels/dates reflect Microsoft's live records. Only `OK` and supported lifecycle-status tokens are styled in interactive terminals; redirected output is ANSI-free.
 
-In a persistent interactive session, an operational Verify failure terminates the session nonzero rather than returning to Main, so a later successful Exit cannot hide the failure.
+Local proof requires:
+
+- the exact tool-owned version directory and platform `dotnet` host to exist (Bash also requires executable permission);
+- the isolated host to launch and `--list-sdks` to succeed;
+- the same inventory entry to contain both the exact requested SDK version and the **expected isolated `sdk` origin directory**; another System SDK with the same version cannot satisfy this;
+- the same host's `--version` to succeed and resolve the exact requested SDK version in a fresh, controlled working directory outside a caller's `global.json`, with older Windows multi-level lookup disabled.
+
+A locally valid SDK exits 0 even when Microsoft lifecycle metadata is unavailable. In that case, Verify explicitly reports `Release/lifecycle information: Unavailable (Microsoft metadata could not be loaded).` rather than inventing release or lifecycle facts. When available, an unknown Microsoft channel is reported as `Unknown channel`.
+
+## Failed verification
+
+The report marks the failed local check `FAIL` with a specific reason and exits nonzero. Failure cases include missing directory/host, non-executable or unlaunchable host, failed SDK inventory, exact version missing, exact version from another root, and `--version` execution or version mismatch. A failed Verify in persistent interactive mode terminates the session nonzero so a subsequent Exit cannot conceal it.
+
+Metadata unavailability is **not** local failure. Audit remains the explicit online fleet assessment and may use stricter required-metadata failure semantics.
 
 ## What Verify does not do
 
-Verify does not:
+Verify does not build projects; repair, reinstall, update, remove, or hash installed SDK trees; verify independent publisher identity; manage System SDKs; or alter the normal PATH. It creates and removes only a temporary verification working directory, never changes the isolated installation. Install-time archive SHA-512 verification remains a separate integrity boundary.
 
-- reinstall, repair, upgrade, downgrade, or remove an SDK;
-- target SDKs that are available only through the system `dotnet` installation;
-- change the normal `PATH` or system `dotnet` installation;
-- re-hash every file in an installed SDK; or
-- check or update the saved `isolated-dotnet-sdk` tool.
-
-Payload checksum verification occurs during installation and is a separate integrity boundary from this installed-SDK health check.
-
-See [Interactive mode](interactive.md) for Main-menu lifecycle and navigation, [Native-command failure boundaries](../contracts/native-command-failures.md) for the host-execution distinction, and [Supply-chain integrity](../concepts/supply-chain-integrity.md) for the install-time checksum model.
+See [Interactive mode](interactive.md), [Native-command failure boundaries](../contracts/native-command-failures.md), and [Supply-chain integrity](../concepts/supply-chain-integrity.md).
