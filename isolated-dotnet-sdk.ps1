@@ -2151,7 +2151,7 @@ function Get-VerifyAuditClassification {
 }
 
 # Optional local component diagnostics; only runtimes from this isolated root are shown.
-function Get-IsolatedSdkComponents {
+function Get-IsolatedSdkComponent {
     param(
         [string]$InstallDirectory,
         [string]$DotNetPath
@@ -2229,6 +2229,7 @@ function Get-IsolatedSdkComponents {
     }
     catch {
         # Older/incomplete hosts may not provide optional diagnostics.
+        return [pscustomobject]$Result
     }
     finally {
         if ($LocationPushed) {
@@ -2292,7 +2293,7 @@ function Test-IsolatedSdk {
     Write-ToolDisplay
     Write-ToolHeading 'Installed components:'
     $Components = if (-not $Validation.Failure) {
-        Get-IsolatedSdkComponents -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet
+        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet
     }
     else {
         $null
