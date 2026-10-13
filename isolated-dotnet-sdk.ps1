@@ -2174,8 +2174,12 @@ function Get-IsolatedSdkComponent {
             $Section = ''
             foreach ($Line in $InfoLines) {
                 $Text = [string]$Line
-                if ($Text -match '^\s*(Host|Runtime Environment):\s*$') {
-                    $Section = $Matches[1]
+                if ($Text -match '^\s*Host(?:\s+\(useful for support\))?:\s*$') {
+                    $Section = 'Host'
+                    continue
+                }
+                if ($Text -match '^\s*Runtime Environment:\s*$') {
+                    $Section = 'Runtime Environment'
                     continue
                 }
                 if ($Text -match '^\S[^:]*:\s*$') {
@@ -2192,6 +2196,12 @@ function Get-IsolatedSdkComponent {
                     $Result.Rid = $Matches[1]
                 }
             }
+        }
+
+        # Legacy hosts expose architecture in the RID but not as a separate field.
+        if ([string]::IsNullOrWhiteSpace($Result.Architecture) -and
+            $Result.Rid -match '-(x64|x86|arm64|arm)$') {
+            $Result.Architecture = $Matches[1]
         }
 
         $RuntimeLines = @(& $DotNetPath --list-runtimes 2>$null)
