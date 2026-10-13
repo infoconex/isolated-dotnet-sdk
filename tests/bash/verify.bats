@@ -160,6 +160,16 @@ EOF
   [[ "$output" == *"was not reported from $tool_root/$version/sdk"* ]]
 }
 
+@test "verify rejects missing isolated SDK origin even when a host reports that path" {
+  version='99.0.100'
+  install_fake_host "$version"
+  rm -rf -- "$tool_root/$version/sdk"
+  run env HOME="$test_home" "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK inventory"*FAIL* ]]
+  [[ "$output" == *"was not reported from"* ]]
+}
+
 @test "verify rejects --version mismatch and native --version failure" {
   version='99.0.100'
   install_fake_host "$version"
