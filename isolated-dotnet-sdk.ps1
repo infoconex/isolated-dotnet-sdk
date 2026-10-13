@@ -2042,6 +2042,7 @@ function Get-LocalIsolatedSdkValidation {
             else {
                 [System.StringComparison]::Ordinal
             }
+            $ExpectedOriginExists = Test-Path -LiteralPath $ExpectedOrigin -PathType Container
             $FoundVersion = $false
             $FoundOrigin = $false
             foreach ($Line in $Inventory) {
@@ -2053,7 +2054,7 @@ function Get-LocalIsolatedSdkValidation {
                 try {
                     $ReportedOrigin = [System.IO.Path]::GetFullPath($InventoryMatch.Groups['path'].Value).TrimEnd(
                         [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-                    if ([string]::Equals($ExpectedOrigin, $ReportedOrigin, $PathComparison)) {
+                    if ($ExpectedOriginExists -and [string]::Equals($ExpectedOrigin, $ReportedOrigin, $PathComparison)) {
                         $FoundOrigin = $true
                         break
                     }
