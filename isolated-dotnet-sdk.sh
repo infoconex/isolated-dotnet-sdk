@@ -2099,7 +2099,7 @@ verify_installed_components() {
     while IFS= read -r line; do
         case "$line" in
             'Runtime Environment:') section="runtime"; continue ;;
-            'Host:') section="host"; continue ;;
+            'Host:'|'Host (useful for support):') section="host"; continue ;;
         esac
         if [[ "$line" =~ ^[^[:space:]][^:]*:[[:space:]]*$ ]]; then
             section=""
@@ -2113,6 +2113,11 @@ verify_installed_components() {
             rid="${BASH_REMATCH[1]}"
         fi
     done <<< "$info"
+
+    # Legacy hosts expose architecture in the RID but not as a separate field.
+    if [[ -z "$architecture" && "$rid" =~ -(x64|x86|arm64|arm)$ ]]; then
+        architecture="${BASH_REMATCH[1]}"
+    fi
 
     printf '  %-19s %s\n' 'Host version' "${host_version:-Unavailable}"
     printf '  %-19s %s\n' 'Architecture' "${architecture:-Unavailable}"
