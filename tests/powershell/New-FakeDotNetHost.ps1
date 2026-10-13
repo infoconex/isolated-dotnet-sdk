@@ -26,6 +26,26 @@ public static class Program
             return exitCode;
         }
 
+        if (args.Length > 0 && args[0] == "--info")
+        {
+            Console.WriteLine("Runtime Environment:");
+            Console.WriteLine(" RID:         win10-x64");
+            Console.WriteLine();
+            Console.WriteLine("Host:");
+            Console.WriteLine("  Version:      99.0.9");
+            Console.WriteLine("  Architecture: x64");
+        }
+        if (args.Length > 0 && args[0] == "--list-runtimes")
+        {
+            var runtimePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "shared", "Microsoft.NETCore.App");
+            Console.WriteLine("Microsoft.NETCore.App 99.0.9 [" + runtimePath + "]");
+            var unrelated = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXTRA_RUNTIME_ROOT");
+            if (!string.IsNullOrEmpty(unrelated))
+            {
+                Console.WriteLine("Microsoft.AspNetCore.App 99.0.9 [" + unrelated + "]");
+            }
+        }
+
         if (args.Length > 0 && args[0] == "--list-sdks")
         {
             var conflictPath = Environment.GetEnvironmentVariable("FAKE_DOTNET_CREATE_CONFLICT");
