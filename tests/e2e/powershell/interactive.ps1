@@ -170,6 +170,11 @@ try {
         "EOS: $auditEndOfSupport",
         'Select an isolated SDK to verify:',
         "Isolated SDK $sdkVersion verified successfully.",
+        'Installation directory',
+        '.NET host',
+        'SDK inventory',
+        'SDK resolution',
+        "$sdkVersion from $(Join-Path $sdkRoot 'sdk')",
         $sdkVersion,
         'was removed.',
         'Exiting.'
