@@ -108,6 +108,11 @@ required_fragments=(
   "EOS: $audit_end_of_support"
   "Select an isolated SDK to verify:"
   "Isolated SDK $sdk_version verified successfully."
+  'Installation directory'
+  '.NET host'
+  'SDK inventory'
+  'SDK resolution'
+  "$sdk_version from $sdk_root/sdk"
   "$sdk_version"
   "was removed."
   "Exiting."
