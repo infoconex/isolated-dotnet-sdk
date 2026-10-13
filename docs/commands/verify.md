@@ -1,54 +1,68 @@
 # Verify
 
-Verify is the read-only, detailed single-SDK report for one exact SDK already installed under the isolated SDK root. The local validation outcome is authoritative; online Microsoft lifecycle/servicing metadata is best-effort enrichment.
+Verify is a read-only, detailed single-SDK report for an exact version already installed under the isolated SDK root. **Local proof determines success or failure**; online Microsoft lifecycle/servicing information and installed-component diagnostics are optional enrichment.
 
-For exact direct-command syntax, see [Windows / PowerShell](../getting-started/windows-powershell.md#verify-an-isolated-sdk) or [Linux and macOS / Bash](../getting-started/linux-macos-bash.md#verify-an-isolated-sdk).
+For direct-command syntax, see [Windows / PowerShell](../getting-started/windows-powershell.md#verify-an-isolated-sdk) or [Linux and macOS / Bash](../getting-started/linux-macos-bash.md#verify-an-isolated-sdk).
 
 ## Invocation modes
 
-Verify is available as a one-shot exact-version command or through `V. Verify an isolated SDK` on the persistent Main menu. The interactive picker lists isolated versions newest to oldest; System SDKs are never targets. Both modes call the same local proof and reporting logic. Terminal-backed interactive results remain visible until Enter acknowledges them and then return to the Verify list. Captured and redirected sessions do not wait for acknowledgement.
+Verify is available as a one-shot exact-version command or through `V. Verify an isolated SDK` on the persistent Main menu. The interactive picker lists isolated versions newest to oldest; System SDKs are never targets. Both modes share the same validation and report. Interactive terminal results remain visible until Enter acknowledges them and return to the Verify list. Captured/redirected execution does not pause.
 
-## Detailed report and successful verification
+## Detailed report
 
-Verify presents the same structured release type, prerelease/lifecycle state, servicing/update indication, exact SDK release date (`Release:`), future authoritative Go Live date, and end-of-support date (`EOS:`) as Audit. It uses Audit's classification rules and lifecycle styling, not a separately inferred status.
+Verify presents labeled information for one SDK rather than Audit's compact multi-SDK row. It uses Audit's exact classification logic, colors, and release facts (including prerelease labels, Go Live, EOL, release date, EOS date, and available updates). Dates and update fields appear only when available.
 
-A report also includes the isolated location and individual local results:
+Example for a real-style Windows installation of SDK 7.0.410 (the local component values reflect the owner's sample; Microsoft metadata is subject to availability):
 
 ```text
 Verify isolated .NET SDK
 
-  10.0.100  LTS  Active  Release: 2025-11-11  EOS: 2028-11-14  Update -> 10.0.401
+SDK information:
+  SDK version         7.0.410
+  .NET channel        7.0
+  Support type        STS
+  Status              EOL
+  SDK release date    2024-05-28
+  Channel EOS date    2024-05-14
 
-Location: <isolated version directory>
+Installed components:
+  Host version        7.0.20
+  Architecture        x64
+  Runtime identifier  win10-x64
+
+  .NET runtimes:
+    Microsoft.AspNetCore.App         7.0.20
+    Microsoft.NETCore.App            7.0.20
+    Microsoft.WindowsDesktop.App     7.0.20
 
 Verification:
-  Installation directory  OK  <isolated version directory>
-  .NET host               OK  <isolated dotnet host>
-  SDK inventory           OK  10.0.100 from <isolated version directory>/sdk
-  SDK resolution          OK  10.0.100
+  Installation directory  OK  C:\Users\jscot\dotnet-sdks\7.0.410
+  .NET host               OK  Host executable found and launched
+  SDK inventory           OK  Exact SDK found in isolated installation
+  SDK resolution          OK  Correct SDK selected
 
-Isolated SDK 10.0.100 verified successfully.
+Isolated SDK 7.0.410 verified successfully.
 ```
 
-The example uses illustrative metadata. Actual labels/dates reflect Microsoft's live records. Only `OK` and supported lifecycle-status tokens are styled in interactive terminals; redirected output is ANSI-free.
+The exact output depends on the installed platform and Microsoft release records. The report intentionally has no standalone `Location:` line; the installation directory appears in the first verification check only. Short successful descriptions avoid repeating the same SDK version/path. Failed checks retain their specific expected/actual/error context.
 
-Local proof requires:
+**SDK information** is Microsoft's online enrichment. It includes SDK version and channel even if Microsoft metadata is unavailable. If the metadata lookup fails, Verify reports `Release/lifecycle   Unavailable (Microsoft metadata could not be loaded).` and continues with local checks. An unknown channel is labeled `Unknown channel`. EOL describes Microsoft support lifecycle, not installation health.
 
-- the exact tool-owned version directory and platform `dotnet` host to exist (Bash also requires executable permission);
-- the isolated host to launch and `--list-sdks` to succeed;
-- the same inventory entry to contain both the exact requested SDK version and the **expected isolated `sdk` origin directory**; another System SDK with the same version cannot satisfy this;
-- the same host's `--version` to succeed and resolve the exact requested SDK version in a fresh, controlled working directory outside a caller's `global.json`, with older Windows multi-level lookup disabled.
+**Installed components** are retrieved using the exact isolated `dotnet --info` and `dotnet --list-runtimes` commands, in temporary work state with the same SDK-root and multilevel-lookup isolation controls. The report shows the host version, architecture, runtime identifier (RID), and only runtimes whose reported directory matches the expected isolated `shared/<framework>` root. System runtime entries are excluded even if the host happens to list them. Missing/unsupported optional component information is displayed as `Unavailable` and does not fail Verify. Runtime versions are discovered, never derived from the SDK version; framework sets vary by platform.
 
-A locally valid SDK exits 0 even when Microsoft lifecycle metadata is unavailable. In that case, Verify explicitly reports `Release/lifecycle information: Unavailable (Microsoft metadata could not be loaded).` rather than inventing release or lifecycle facts. When available, an unknown Microsoft channel is reported as `Unknown channel`.
+**Verification** reports four independent local checks:
 
-## Failed verification
+- Installation directory — the exact tool-owned version directory exists.
+- .NET host — the platform-specific host exists (and is executable on Bash) and successfully runs its SDK inventory command.
+- SDK inventory — `--list-sdks` contains the requested exact SDK **at its actual isolated SDK directory**, not an identical system SDK.
+- SDK resolution — `--version` resolves the exact requested SDK in a temporary, controlled working directory outside any ambient `global.json`, with old Windows multilevel fallback disabled.
 
-The report marks the failed local check `FAIL` with a specific reason and exits nonzero. Failure cases include missing directory/host, non-executable or unlaunchable host, failed SDK inventory, exact version missing, exact version from another root, and `--version` execution or version mismatch. A failed Verify in persistent interactive mode terminates the session nonzero so a subsequent Exit cannot conceal it.
+Only `OK` and applicable lifecycle-status tokens are styled in interactive terminals; redirected/captured output is ANSI-free.
 
-Metadata unavailability is **not** local failure. Audit remains the explicit online fleet assessment and may use stricter required-metadata failure semantics.
+## Failures and non-goals
 
-## What Verify does not do
+A failed local check is shown as `FAIL` with a precise reason and exits nonzero. Failed Verify in persistent interactive mode terminates the session nonzero so a later Exit cannot conceal the problem. Microsoft metadata and optional diagnostic failure never turn successful local verification into failure.
 
-Verify does not build projects; repair, reinstall, update, remove, or hash installed SDK trees; verify independent publisher identity; manage System SDKs; or alter the normal PATH. It creates and removes only a temporary verification working directory, never changes the isolated installation. Install-time archive SHA-512 verification remains a separate integrity boundary.
+Verify does not compile applications, repair/reinstall/update/remove SDKs, calculate installation sizes, hash extracted SDK trees, authenticate independent publishers, scan for CVEs, manage System SDKs, change PATH, or alter SDK content. The SHA-512 verification of the Microsoft archive occurs at install time and is a separate integrity boundary.
 
 See [Interactive mode](interactive.md), [Native-command failure boundaries](../contracts/native-command-failures.md), and [Supply-chain integrity](../concepts/supply-chain-integrity.md).
