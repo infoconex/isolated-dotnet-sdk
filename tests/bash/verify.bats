@@ -39,7 +39,7 @@ install_fake_host() {
   local version="$1"
   local reported_version="${2:-$1}"
   local install_dir="$tool_root/$version"
-  mkdir -p "$install_dir/sdk"
+  mkdir -p "$install_dir/sdk" "$install_dir/shared/Microsoft.NETCore.App"
   cat > "$install_dir/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
@@ -48,7 +48,16 @@ if [[ "\${1:-}" == '--list-sdks' ]]; then
   fi
   printf '%s [%s]\\n' "\${VERIFY_TEST_REPORTED_VERSION:-$reported_version}" "\${VERIFY_TEST_ORIGIN:-$install_dir/sdk}"
 fi
-if [[ "\${1:-}" == '--version' ]]; then
+if [[ "${1:-}" == '--info' ]]; then
+  printf '%s\n' 'Runtime Environment:' ' RID:         linux-x64' '' 'Host:' '  Version:      99.0.9' '  Architecture: x64'
+fi
+if [[ "${1:-}" == '--list-runtimes' ]]; then
+  printf 'Microsoft.NETCore.App 99.0.9 [%s]\n' "$install_dir/shared/Microsoft.NETCore.App"
+  if [[ -n "${VERIFY_TEST_EXTRA_RUNTIME_ROOT:-}" ]]; then
+    printf 'Microsoft.AspNetCore.App 99.0.9 [%s]\n' "$VERIFY_TEST_EXTRA_RUNTIME_ROOT"
+  fi
+fi
+if [[ "${1:-}" == '--version' ]]; then
   if [[ -n "\${VERIFY_TEST_VERSION_EXIT_CODE:-}" ]]; then
     exit "\$VERIFY_TEST_VERSION_EXIT_CODE"
   fi
@@ -73,7 +82,16 @@ EOF
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Isolated SDK $version verified successfully."* ]]
-  [[ "$output" == *"Location: $install_dir"* ]]
+  [[ "$output" == *"SDK information:"* ]]
+  [[ "$output" == *"SDK version"*"$version"* ]]
+  [[ "$output" == *"Installed components:"* ]]
+  [[ "$output" == *"Host version"*'99.0.9'* ]]
+  [[ "$output" == *"Architecture"*'x64'* ]]
+  [[ "$output" == *"Runtime identifier"*'linux-x64'* ]]
+  [[ "$output" == *"Microsoft.NETCore.App"*'99.0.9'* ]]
+  [[ "$output" != *"Location:"* ]]
+  [[ "$output" == *"Exact SDK found in isolated installation"* ]]
+  [[ "$output" == *"Correct SDK selected"* ]]
   [[ "$output" == *"SDK inventory"* ]]
   [[ "$output" == *"SDK resolution"* ]]
   [[ "$output" == *"Release/lifecycle information: Unavailable"* ]]
@@ -207,8 +225,19 @@ JSON
 JSON
   run env HOME="$test_home" "$tool_path" verify "$version"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"99.0.100  LTS  Maintenance"* ]]
-  [[ "$output" == *"Release: 2026-01-01"* ]]
-  [[ "$output" == *"EOS: 2030-01-01"* ]]
-  [[ "$output" == *"Update -> 99.0.200"* ]]
+  [[ "$output" == *"Support type"*'LTS'* ]]
+  [[ "$output" == *"Status"*'Maintenance'* ]]
+  [[ "$output" == *"SDK release date"*'2026-01-01'* ]]
+  [[ "$output" == *"Channel EOS date"*'2030-01-01'* ]]
+  [[ "$output" == *"Update available"*'99.0.200'* ]]
+}
+
+@test "Verify omits unrelated system runtimes" {
+  version='99.0.100'
+  install_fake_host "$version"
+  mkdir -p "$test_root/system/shared/Microsoft.AspNetCore.App"
+  run env HOME="$test_home" VERIFY_TEST_EXTRA_RUNTIME_ROOT="$test_root/system/shared/Microsoft.AspNetCore.App" "$tool_path" verify "$version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Microsoft.NETCore.App"*'99.0.9'* ]]
+  [[ "$output" != *"Microsoft.AspNetCore.App"* ]]
 }
