@@ -48,16 +48,16 @@ if [[ "\${1:-}" == '--list-sdks' ]]; then
   fi
   printf '%s [%s]\\n' "\${VERIFY_TEST_REPORTED_VERSION:-$reported_version}" "\${VERIFY_TEST_ORIGIN:-$install_dir/sdk}"
 fi
-if [[ "${1:-}" == '--info' ]]; then
+if [[ "\${1:-}" == '--info' ]]; then
   printf '%s\n' 'Runtime Environment:' ' RID:         linux-x64' '' 'Host:' '  Version:      99.0.9' '  Architecture: x64'
 fi
-if [[ "${1:-}" == '--list-runtimes' ]]; then
+if [[ "\${1:-}" == '--list-runtimes' ]]; then
   printf 'Microsoft.NETCore.App 99.0.9 [%s]\n' "$install_dir/shared/Microsoft.NETCore.App"
-  if [[ -n "${VERIFY_TEST_EXTRA_RUNTIME_ROOT:-}" ]]; then
-    printf 'Microsoft.AspNetCore.App 99.0.9 [%s]\n' "$VERIFY_TEST_EXTRA_RUNTIME_ROOT"
+  if [[ -n "\${VERIFY_TEST_EXTRA_RUNTIME_ROOT:-}" ]]; then
+    printf 'Microsoft.AspNetCore.App 99.0.9 [%s]\n' "\$VERIFY_TEST_EXTRA_RUNTIME_ROOT"
   fi
 fi
-if [[ "${1:-}" == '--version' ]]; then
+if [[ "\${1:-}" == '--version' ]]; then
   if [[ -n "\${VERIFY_TEST_VERSION_EXIT_CODE:-}" ]]; then
     exit "\$VERIFY_TEST_VERSION_EXIT_CODE"
   fi
@@ -94,7 +94,7 @@ EOF
   [[ "$output" == *"Correct SDK selected"* ]]
   [[ "$output" == *"SDK inventory"* ]]
   [[ "$output" == *"SDK resolution"* ]]
-  [[ "$output" == *"Release/lifecycle information: Unavailable"* ]]
+  [[ "$output" == *"Release/lifecycle   Unavailable"* ]]
   [ "$(cat "$install_dir/verify-sentinel.txt")" = 'preserve-me' ]
   [ "$(find "$install_dir" -type f | wc -l | tr -d ' ')" = "$file_count_before" ]
 }
