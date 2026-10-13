@@ -246,7 +246,7 @@ EOF
     cat > "$tool_root/$version/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s\n' '$version [/fake/sdk]'
+  printf '%s [%s]\\n' '$version' '$tool_root/$version/sdk'
 fi
 if [[ "\${1:-}" == '--version' ]]; then
   printf '%s\\n' '$version'
