@@ -49,7 +49,11 @@ if [[ "\${1:-}" == '--list-sdks' ]]; then
   printf '%s [%s]\\n' "\${VERIFY_TEST_REPORTED_VERSION:-$reported_version}" "\${VERIFY_TEST_ORIGIN:-$install_dir/sdk}"
 fi
 if [[ "\${1:-}" == '--info' ]]; then
-  printf '%s\n' 'Runtime Environment:' ' RID:         linux-x64' '' 'Host:' '  Version:      99.0.9' '  Architecture: x64'
+  if [[ "${VERIFY_TEST_LEGACY_INFO:-}" == 'true' ]]; then
+    printf '%s\n' 'Runtime Environment:' ' RID:         linux-x64' '' 'Host (useful for support):' '  Version:      99.0.9'
+  else
+    printf '%s\n' 'Runtime Environment:' ' RID:         linux-x64' '' 'Host:' '  Version:      99.0.9' '  Architecture: x64'
+  fi
 fi
 if [[ "\${1:-}" == '--list-runtimes' ]]; then
   printf 'Microsoft.NETCore.App 99.0.9 [%s]\n' "$install_dir/shared/Microsoft.NETCore.App"
@@ -97,6 +101,18 @@ EOF
   [[ "$output" == *"Release/lifecycle   Unavailable"* ]]
   [ "$(cat "$install_dir/verify-sentinel.txt")" = 'preserve-me' ]
   [ "$(find "$install_dir" -type f | wc -l | tr -d ' ')" = "$file_count_before" ]
+}
+
+@test "Verify recognizes legacy Host heading and derives architecture from RID" {
+  version='2.2.207'
+  install_fake_host "$version"
+  run env HOME="$test_home" VERIFY_TEST_LEGACY_INFO=true "$tool_path" verify "$version"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Host version"*'99.0.9'* ]]
+  [[ "$output" == *"Architecture"*'x64'* ]]
+  [[ "$output" == *"Runtime identifier"*'linux-x64'* ]]
+  [[ "$output" == *"Isolated SDK $version verified successfully."* ]]
 }
 
 @test "verify fails clearly when the selected version is not installed" {
