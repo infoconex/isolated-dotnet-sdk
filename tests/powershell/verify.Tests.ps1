@@ -25,6 +25,7 @@ Describe 'PowerShell isolated SDK verification' {
                 -Recurse `
                 -Force
             New-Item -ItemType Directory -Path (Join-Path $installDirectory 'sdk') -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $installDirectory 'shared/Microsoft.NETCore.App') -Force | Out-Null
             $env:FAKE_DOTNET_SDK_VERSION = $ReportedVersion
             return $installDirectory
         }
@@ -69,7 +70,7 @@ function Invoke-RestMethod {
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
-        foreach ($name in @('FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION')) {
+        foreach ($name in @('FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -86,7 +87,17 @@ function Invoke-RestMethod {
 
         $script:VerifyExitCode | Should -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match "Isolated SDK $([regex]::Escape($version)) verified successfully\."
-        ($verifyOutput -join [Environment]::NewLine) | Should -Match ([regex]::Escape("Location: $installDirectory"))
+        $outputText = $verifyOutput -join [Environment]::NewLine
+        $outputText | Should -Match 'SDK information:'
+        $outputText | Should -Match 'SDK version\s+99\.0\.100'
+        $outputText | Should -Match 'Installed components:'
+        $outputText | Should -Match 'Host version\s+99\.0\.9'
+        $outputText | Should -Match 'Architecture\s+x64'
+        $outputText | Should -Match 'Runtime identifier\s+win10-x64'
+        $outputText | Should -Match 'Microsoft\.NETCore\.App\s+99\.0\.9'
+        $outputText | Should -Match 'SDK inventory\s+OK\s+Exact SDK found in isolated installation'
+        $outputText | Should -Match 'SDK resolution\s+OK\s+Correct SDK selected'
+        $outputText | Should -Not -Match '(?m)^Location:'
         (Get-Content -LiteralPath $sentinelPath -Raw) | Should -Be 'preserve-me'
         @(Get-ChildItem -LiteralPath $installDirectory -File -Recurse -Force).Count | Should -Be $fileCountBefore
     }
@@ -216,11 +227,26 @@ function Invoke-RestMethod {
         $verifyOutput = @(Invoke-VerifyTool -Version $version)
         $script:VerifyExitCode | Should -Be 0
         $outputText = $verifyOutput -join [Environment]::NewLine
-        $outputText | Should -Match '99\.0\.100\s+LTS\s+Maintenance'
-        $outputText | Should -Match 'Release: 2026-01-01'
-        $outputText | Should -Match 'EOS: 2030-01-01'
-        $outputText | Should -Match 'Update -> 99\.0\.200'
+        $outputText | Should -Match 'Support type\s+LTS'
+        $outputText | Should -Match 'Status\s+Maintenance'
+        $outputText | Should -Match 'SDK release date\s+2026-01-01'
+        $outputText | Should -Match 'Channel EOS date\s+2030-01-01'
+        $outputText | Should -Match 'Update available\s+99\.0\.200'
         $outputText.Contains([char]27) | Should -BeFalse
+    }
+
+    It 'excludes system runtimes from the isolated component inventory' {
+        $version = '99.0.100'
+        Install-FakeIsolatedHost -Version $version -ReportedVersion $version | Out-Null
+        $unrelated = Join-Path $script:TestRoot 'system/shared/Microsoft.AspNetCore.App'
+        New-Item -ItemType Directory -Path $unrelated -Force | Out-Null
+        $env:FAKE_DOTNET_EXTRA_RUNTIME_ROOT = $unrelated
+
+        $verifyOutput = @(Invoke-VerifyTool -Version $version)
+        $script:VerifyExitCode | Should -Be 0
+        $outputText = $verifyOutput -join [Environment]::NewLine
+        $outputText | Should -Match 'Microsoft\.NETCore\.App\s+99\.0\.9'
+        $outputText | Should -Not -Match 'Microsoft\.AspNetCore\.App'
     }
 
     It 'requires an exact version for Verify' {
