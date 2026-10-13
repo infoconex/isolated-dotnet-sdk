@@ -1789,13 +1789,23 @@ function Resolve-SdkArtifact {
     $url = $parts[0]
     $hash = $parts[1]
 
-    if ($hash -notmatch '^[0-9A-Fa-f]{128}$') {
-        throw "Microsoft release metadata contained an invalid SHA-512 hash for SDK $SdkVersion and $Rid."
+    $algorithm = if ($hash -cmatch '^[0-9A-Fa-f]{128}$') {
+        'SHA512'
+    }
+    elseif ($hash -cmatch '^[0-9A-Fa-f]{64}$') {
+        if ($SdkVersion -notmatch '^1\.') {
+            throw "Microsoft release metadata published SHA-256 for SDK $SdkVersion and $Rid; SHA-256 is supported only for historical .NET 1.x SDKs."
+        }
+        'SHA256'
+    }
+    else {
+        throw "Microsoft release metadata contained an unsupported or malformed checksum for SDK $SdkVersion and $Rid."
     }
 
     return [pscustomobject]@{
-        Url  = $url
-        Hash = $hash.ToLowerInvariant()
+        Url       = $url
+        Hash      = $hash.ToLowerInvariant()
+        Algorithm = $algorithm
     }
 }
 
@@ -1989,7 +1999,7 @@ function Install-IsolatedSdk {
         }
 
         try {
-            $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA512).Hash.ToLowerInvariant()
+            $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm $Artifact.Algorithm).Hash.ToLowerInvariant()
         }
         catch {
             throw "Unable to verify the .NET SDK $SdkVersion payload: $($_.Exception.Message)"
