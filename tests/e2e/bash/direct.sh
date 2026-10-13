@@ -61,8 +61,8 @@ fi
 
 verify_output="$(bash "$saved_tool" verify "$sdk_version")"
 printf '%s\n' "$verify_output"
-if ! grep -Fq "Isolated SDK $sdk_version is healthy." <<<"$verify_output"; then
-  printf 'Verify output did not report SDK %s healthy.\n' "$sdk_version" >&2
+if ! grep -Fq "Isolated SDK $sdk_version verified successfully." <<<"$verify_output"; then
+  printf 'Verify output did not report SDK %s verified successfully.\n' "$sdk_version" >&2
   exit 1
 fi
 
