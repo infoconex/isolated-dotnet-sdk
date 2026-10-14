@@ -552,6 +552,22 @@ extract_security_sdk_versions() {
     '
 }
 
+# SDKs 2.1.0-2.1.202 belong to the .NET Core 2.0 channel.
+# .NET Core 2.1 starts with the SDK 2.1.300 feature band.
+is_early_dotnet2_sdk() {
+    local version="$1"
+    local feature=""
+
+    [[ "$version" =~ ^2\.0\. ]] && return 0
+    if [[ "$version" =~ ^2\.1\.([0-9]+)($|-) ]]; then
+        feature="${BASH_REMATCH[1]}"
+        if (( ${#feature} <= 9 )) && (( 10#$feature < 300 )); then
+            return 0
+        fi
+    fi
+    return 1
+}
+
 sdk_channel_from_version() {
     local version="$1"
     local core="${version%%-*}"
@@ -562,6 +578,11 @@ sdk_channel_from_version() {
     IFS='.' read -r major minor rest <<< "$core"
     if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
         return 1
+    fi
+
+    if is_early_dotnet2_sdk "$version"; then
+        printf '2.0'
+        return
     fi
 
     printf '%s.%s' "$major" "$minor"
@@ -1667,17 +1688,9 @@ calculate_sdk_payload_hash() {
 }
 
 get_sdk_channel() {
-    local core="${VERSION%%-*}"
-    local major=""
-    local minor=""
-    local rest=""
-
-    IFS='.' read -r major minor rest <<< "$core"
-    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
+    if ! sdk_channel_from_version "$VERSION"; then
         tool_fail "Unable to determine the .NET release channel for SDK $VERSION."
     fi
-
-    printf '%s.%s' "$major" "$minor"
 }
 
 get_sdk_rid() {
@@ -1946,7 +1959,7 @@ install_isolated_sdk() {
     fi
 
     if [[ -x "$isolated_dotnet" ]]; then
-        if [[ "$VERSION" =~ ^1\. ]]; then
+        if [[ "$VERSION" =~ ^1\. ]] || is_early_dotnet2_sdk "$VERSION"; then
             verify_legacy_sdk_host "$isolated_dotnet" "$install_dir" "$VERSION"
             isolated_installed="true"
         else
@@ -2072,7 +2085,7 @@ install_isolated_sdk() {
         tool_fail "The isolated dotnet executable was not found at $staged_dotnet"
     fi
 
-    if [[ "$VERSION" =~ ^1\. ]]; then
+    if [[ "$VERSION" =~ ^1\. ]] || is_early_dotnet2_sdk "$VERSION"; then
         verify_legacy_sdk_host "$staged_dotnet" "$staging_dir" "$VERSION"
         printf '%s\n' "$VERSION"
     else
