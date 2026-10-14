@@ -2830,7 +2830,11 @@ finally {
                 else {
                     [System.StringComparison]::Ordinal
                 }
-                if (-not [string]::Equals($ActualBase, $ExpectedCanonical, $PathComparison)) {
+                $CanonicalInstall = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $InstallDirectory -ErrorAction Stop).Path).TrimEnd('\', '/')
+                $ContainedBase = [System.IO.Path]::GetFullPath((Join-Path (Join-Path $CanonicalInstall 'sdk') $Version)).TrimEnd('\', '/')
+                # Reject an SDK subdirectory linked outside the isolated tree.
+                if (-not [string]::Equals($ExpectedCanonical, $ContainedBase, $PathComparison) -or
+                    -not [string]::Equals($ActualBase, $ExpectedCanonical, $PathComparison)) {
                     throw 'legacy SDK Base Path does not match the isolated directory.'
                 }
                 $Checks.Add([pscustomobject]@{ Label = 'SDK origin'; Status = 'OK'; Detail = $ExpectedCanonical })
