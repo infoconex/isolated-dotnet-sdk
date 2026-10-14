@@ -150,3 +150,24 @@ EOF
   [[ "$output" == *"Invalid selection: 6. Choose 1, B, or E."* ]]
   [[ "$output" == *$'Invalid selection: 6. Choose 1, B, or E.\n\nSelect an isolated SDK to verify:'* ]]
 }
+
+
+@test "interactive Verify uses the same legacy SDK origin proof" {
+  version='1.1.14'
+  install_fake_host "$version"
+  mkdir -p "$tool_root/$version/sdk/$version"
+  cat > "$tool_root/$version/dotnet" <<EOF
+#!/usr/bin/env bash
+case "${1:-}" in
+  --version) printf '%s\n' '$version' ;;
+  --info) printf 'Runtime Environment:\n Base Path: %s\n' '$tool_root/$version/sdk/$version' ;;
+  --list-sdks|--list-runtimes) printf 'Unknown option: %s\n' "$1" >&2; exit 77 ;;
+esac
+EOF
+  chmod +x "$tool_root/$version/dotnet"
+  run bash -c 'printf "v\n1\nb\ne\n" | env HOME="$1" "$2"' _ "$test_home" "$tool_path"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SDK origin"*"OK"*"Exact SDK Base Path in isolated installation"* ]]
+  [[ "$output" == *"Isolated SDK $version verified successfully."* ]]
+  [[ "$output" != *"Unknown option: --list-sdks"* ]]
+}
