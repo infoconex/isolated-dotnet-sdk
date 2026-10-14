@@ -34,11 +34,20 @@ public static class Program
                     ?? Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "1.1.14";
                 var basePath = Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_BASE_PATH")
                     ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sdk", legacyVersion);
+                var infoExit = Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_INFO_EXIT_CODE");
+                if (!string.IsNullOrEmpty(infoExit)) { return int.Parse(infoExit); }
                 Console.WriteLine(".NET Command Line Tools (" + legacyVersion + ")");
                 Console.WriteLine("Product Information:");
                 Console.WriteLine(" Version: " + legacyVersion);
                 Console.WriteLine("Runtime Environment:");
-                Console.WriteLine(" Base Path: " + basePath);
+                if (!string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_MISSING_BASE_PATH"), "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine(" Base Path: " + basePath);
+                }
+                var extraBasePath = Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH");
+                if (extraBasePath != null) { Console.WriteLine(" Base Path: " + extraBasePath); }
+                var legacyRid = Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_RID");
+                if (!string.IsNullOrEmpty(legacyRid)) { Console.WriteLine(" RID: " + legacyRid); }
                 return 0;
             }
             Console.WriteLine("Runtime Environment:");
@@ -51,6 +60,12 @@ public static class Program
             {
                 Console.WriteLine("  Architecture: x64");
             }
+        }
+        if (args.Length > 0 && args[0] == "--list-runtimes" &&
+            string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_HOST"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("Unknown option: --list-runtimes");
+            return 72;
         }
         if (args.Length > 0 && args[0] == "--list-runtimes")
         {
@@ -96,7 +111,20 @@ public static class Program
             {
                 return 75;
             }
+            if (string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_REQUIRE_PINNED_VERSION"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                var globalJson = Path.Combine(Environment.CurrentDirectory, "global.json");
+                if (!File.Exists(globalJson) ||
+                    !File.ReadAllText(globalJson).Contains("\"version\": \"" + resolved + "\"") ||
+                    Environment.GetEnvironmentVariable("DOTNET_MULTILEVEL_LOOKUP") != "0" ||
+                    Environment.GetEnvironmentVariable("DOTNET_ROOT") != AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar))
+                {
+                    return 76;
+                }
+            }
             Console.WriteLine(resolved);
+            var extraVersion = Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_EXTRA_VERSION");
+            if (extraVersion != null) { Console.WriteLine(extraVersion); }
         }
 
         return 0;
