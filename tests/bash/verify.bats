@@ -383,3 +383,29 @@ HOST
   [[ "$output" == *"Host version"*"Unavailable"* ]]
   [[ "$output" == *".NET runtimes:"*"Unavailable"* ]]
 }
+
+
+@test "legacy Verify cleans pinned work state on failed proof without changing installed files" {
+  local version=1.0.4
+  install_legacy_verify_host "$version"
+  local private_temp="$test_root/private-temp"
+  mkdir -p "$private_temp"
+  printf '%s' keep > "$tool_root/$version/sentinel"
+  run env HOME="$test_home" TMPDIR="$private_temp" VERIFY_LEGACY_INFO_EXIT=79 "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+  [ "$(cat "$tool_root/$version/sentinel")" = keep ]
+  [ -z "$(find "$private_temp" -mindepth 1 -maxdepth 1 -print -quit)" ]
+  [ ! -e "$tool_root/$version/global.json" ]
+}
+
+@test "legacy Verify cannot validate an SDK symlink redirected outside isolated root" {
+  local version=1.1.14
+  install_legacy_verify_host "$version"
+  mkdir -p "$test_root/system/sdk/$version"
+  rm -rf -- "$tool_root/$version/sdk/$version"
+  ln -s "$test_root/system/sdk/$version" "$tool_root/$version/sdk/$version"
+  run env HOME="$test_home" VERIFY_LEGACY_BASE_PATH="$test_root/system/sdk/$version" "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+}
