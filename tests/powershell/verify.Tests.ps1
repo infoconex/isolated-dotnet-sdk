@@ -70,7 +70,7 @@ function Invoke-RestMethod {
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
-        foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO')) {
+        foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_SUPPRESS_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -324,7 +324,8 @@ function Invoke-RestMethod {
         $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
         $script:VerifyExitCode | Should -Not -Be 0
         $text | Should -Match 'SDK resolution\s+FAIL'
-        $env:FAKE_DOTNET_LEGACY_EXTRA_VERSION = ''
+        Remove-Item Env:FAKE_DOTNET_LEGACY_EXTRA_VERSION -ErrorAction SilentlyContinue
+        $env:FAKE_DOTNET_LEGACY_SUPPRESS_VERSION = 'true'
         $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
         $script:VerifyExitCode | Should -Not -Be 0
         $text | Should -Match 'SDK resolution\s+FAIL'
