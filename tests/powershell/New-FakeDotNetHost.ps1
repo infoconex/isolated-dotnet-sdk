@@ -122,7 +122,10 @@ public static class Program
                     return 76;
                 }
             }
-            Console.WriteLine(resolved);
+            if (!string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_SUPPRESS_VERSION"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine(resolved);
+            }
             var extraVersion = Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_EXTRA_VERSION");
             if (extraVersion != null) { Console.WriteLine(extraVersion); }
         }
