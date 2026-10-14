@@ -48,14 +48,15 @@ The exact output depends on the installed platform and Microsoft release records
 
 **SDK information** is Microsoft's online enrichment. It includes SDK version and channel even if Microsoft metadata is unavailable. If the metadata lookup fails, Verify reports `Release/lifecycle   Unavailable (Microsoft metadata could not be loaded).` and continues with local checks. An unknown channel is labeled `Unknown channel`. EOL describes Microsoft support lifecycle, not installation health.
 
-**Installed components** are retrieved using the exact isolated `dotnet --info` and `dotnet --list-runtimes` commands, in temporary work state with the same SDK-root and multilevel-lookup isolation controls. The report shows the host version, architecture, runtime identifier (RID), and only runtimes whose reported directory matches the expected isolated `shared/<framework>` root. System runtime entries are excluded even if the host happens to list them. Missing/unsupported optional component information is displayed as `Unavailable` and does not fail Verify. Runtime versions are discovered, never derived from the SDK version; framework sets vary by platform.
+**Installed components** are optional and read-only. For modern hosts, Verify uses the exact isolated `dotnet --info` and `dotnet --list-runtimes` commands in temporary work state with SDK-root and multilevel-lookup isolation controls. It shows the host version, architecture, runtime identifier (RID), and only runtimes whose reported directory matches the isolated `shared/<framework>` root. System runtime entries are excluded. For original **1.x SDK hosts**, Verify reads only supported fields from isolated `--info`; it does **not** invoke their unsupported `--list-runtimes` command. Historical `--info` SDK product versions are not treated as host/runtime versions. If a field cannot be established (often host version or runtime inventory for 1.x), the report shows `Unavailable`. Missing optional diagnostics never fail Verify; runtime versions are never derived from SDK versions.
 
-**Verification** reports four independent local checks:
+**Verification** reports local checks tailored to the host generation:
 
 - Installation directory — the exact tool-owned version directory exists.
-- .NET host — the platform-specific host exists (and is executable on Bash) and successfully runs its SDK inventory command.
-- SDK inventory — `--list-sdks` contains the requested exact SDK **at its actual isolated SDK directory**, not an identical system SDK.
-- SDK resolution — `--version` resolves the exact requested SDK in a temporary, controlled working directory outside any ambient `global.json`, with old Windows multilevel fallback disabled.
+- .NET host — the platform-specific host exists (and is executable on Bash) and successfully launches the necessary local command.
+- For modern hosts, **SDK inventory** — `--list-sdks` contains the exact requested SDK **at its actual isolated SDK directory**, not an identical system SDK.
+- **SDK resolution** — `--version` resolves the exact requested SDK in a controlled temporary directory with multilevel lookup disabled.
+- For original **1.x hosts**, **SDK origin** replaces the unsupported SDK inventory check. Verify requires exactly one valid SDK `Base Path` from the isolated host's successful `--info`, physically resolving to `<isolated-root>/<version>/sdk/<version>`. The exact `--version` result and origin must both agree; a system-installed SDK of the same version cannot substitute for the isolated SDK. Commands execute with a private `global.json` pinned to the requested version, an isolated SDK root, and disabled multilevel lookup; transient work state is removed afterward. Modern host checks and labels are unchanged.
 
 Only `OK` and applicable lifecycle-status tokens are styled in interactive terminals; redirected/captured output is ANSI-free.
 
