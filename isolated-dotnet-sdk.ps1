@@ -2383,7 +2383,8 @@ function Get-VerifyAuditClassification {
 function Get-IsolatedSdkComponent {
     param(
         [string]$InstallDirectory,
-        [string]$DotNetPath
+        [string]$DotNetPath,
+        [string]$Version = ''
     )
     $Result = [ordered]@{ HostVersion = ''; Architecture = ''; Rid = ''; Runtimes = @() }
     $PreviousMulti = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
@@ -2431,6 +2432,11 @@ function Get-IsolatedSdkComponent {
         if ([string]::IsNullOrWhiteSpace($Result.Architecture) -and
             $Result.Rid -match '-(x64|x86|arm64|arm)$') {
             $Result.Architecture = $Matches[1]
+        }
+
+        # Original 1.x hosts do not support --list-runtimes.
+        if ($Version -match '^1\.') {
+            return [pscustomobject]$Result
         }
 
         $RuntimeLines = @(& $DotNetPath --list-runtimes 2>$null)
@@ -2542,7 +2548,7 @@ function Test-IsolatedSdk {
     Write-ToolDisplay
     Write-ToolHeading 'Installed components:'
     $Components = if (-not $Validation.Failure) {
-        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet
+        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet -Version $SdkVersion
     }
     else {
         $null
@@ -2581,6 +2587,7 @@ function Test-IsolatedSdk {
             switch ($Check.Label) {
                 '.NET host' { 'Host executable found and launched' }
                 'SDK inventory' { 'Exact SDK found in isolated installation' }
+                'SDK origin' { 'Exact SDK Base Path in isolated installation' }
                 'SDK resolution' { 'Correct SDK selected' }
                 default { $Check.Detail }
             }
