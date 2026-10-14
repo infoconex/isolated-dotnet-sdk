@@ -161,7 +161,7 @@ EOF
 case "${1:-}" in
   --version) printf '%s\n' '$version' ;;
   --info) printf 'Runtime Environment:\n Base Path: %s\n' '$tool_root/$version/sdk/$version' ;;
-  --list-sdks|--list-runtimes) printf 'Unknown option: %s\n' "$1" >&2; exit 77 ;;
+  --list-sdks|--list-runtimes) printf 'Unknown option: %s\n' "\$1" >&2; exit 77 ;;
 esac
 EOF
   chmod +x "$tool_root/$version/dotnet"
