@@ -13,10 +13,16 @@ function Invoke-WebRequest {
         if ($env:SDK_TEST_METADATA_FAILURE) {
             throw $env:SDK_TEST_METADATA_FAILURE
         }
+        if ($env:SDK_TEST_METADATA_URL_TARGET) {
+            Set-Content -LiteralPath $env:SDK_TEST_METADATA_URL_TARGET -Value ([string]$Uri)
+        }
         $rid = 'win-x64'
         $legacyVersion = $env:SDK_TEST_LEGACY_VERSION
-        $url = if ($legacyVersion) {
+        $url = if ($legacyVersion -match '^1\.') {
             "https://builds.dotnet.microsoft.com/dotnet/Sdk/$legacyVersion/dotnet-dev-win-x64.$legacyVersion.zip"
+        }
+        elseif ($legacyVersion) {
+            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$legacyVersion/dotnet-sdk-$legacyVersion-win-x64.zip"
         }
         else {
             'https://builds.dotnet.microsoft.com/dotnet/Sdk/99.0.100/dotnet-sdk-99.0.100-win-x64.zip'
@@ -26,7 +32,7 @@ function Invoke-WebRequest {
             @(@{ rid = 'win-arm64'; url = 'https://builds.dotnet.microsoft.com/example.zip'; hash = $hash })
         }
         else {
-            @(@{ name = $(if ($legacyVersion) { 'dotnet-dev-win-x64.zip' } else { 'dotnet-sdk-win-x64.zip' }); rid = $rid; url = $url; hash = $hash })
+            @(@{ name = $(if ($legacyVersion -match '^1\.') { 'dotnet-dev-win-x64.zip' } else { 'dotnet-sdk-win-x64.zip' }); rid = $rid; url = $url; hash = $hash })
         }
         @{ releases = @(@{ sdk = @{ version = $(if ($legacyVersion) { $legacyVersion } else { '99.0.100' }); files = $files } }) } |
             ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutFile
