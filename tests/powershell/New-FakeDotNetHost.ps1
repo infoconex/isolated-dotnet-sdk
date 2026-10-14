@@ -28,6 +28,19 @@ public static class Program
 
         if (args.Length > 0 && args[0] == "--info")
         {
+            if (string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_HOST"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                var legacyVersion = Environment.GetEnvironmentVariable("FAKE_DOTNET_RESOLVED_VERSION")
+                    ?? Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "1.1.14";
+                var basePath = Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_BASE_PATH")
+                    ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sdk", legacyVersion);
+                Console.WriteLine(".NET Command Line Tools (" + legacyVersion + ")");
+                Console.WriteLine("Product Information:");
+                Console.WriteLine(" Version: " + legacyVersion);
+                Console.WriteLine("Runtime Environment:");
+                Console.WriteLine(" Base Path: " + basePath);
+                return 0;
+            }
             Console.WriteLine("Runtime Environment:");
             Console.WriteLine(" RID:         win10-x64");
             Console.WriteLine();
@@ -52,6 +65,11 @@ public static class Program
 
         if (args.Length > 0 && args[0] == "--list-sdks")
         {
+            if (string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_HOST"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine("Unknown option: --list-sdks");
+                return 1;
+            }
             var conflictPath = Environment.GetEnvironmentVariable("FAKE_DOTNET_CREATE_CONFLICT");
             if (!string.IsNullOrWhiteSpace(conflictPath))
             {

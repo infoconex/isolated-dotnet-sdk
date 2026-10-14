@@ -552,6 +552,22 @@ extract_security_sdk_versions() {
     '
 }
 
+# SDKs 2.1.0-2.1.202 belong to the .NET Core 2.0 channel.
+# .NET Core 2.1 starts with the SDK 2.1.300 feature band.
+is_early_dotnet2_sdk() {
+    local version="$1"
+    local feature=""
+
+    [[ "$version" =~ ^2\.0\. ]] && return 0
+    if [[ "$version" =~ ^2\.1\.([0-9]+)($|-) ]]; then
+        feature="${BASH_REMATCH[1]}"
+        if (( ${#feature} <= 9 )) && (( 10#$feature < 300 )); then
+            return 0
+        fi
+    fi
+    return 1
+}
+
 sdk_channel_from_version() {
     local version="$1"
     local core="${version%%-*}"
@@ -562,6 +578,11 @@ sdk_channel_from_version() {
     IFS='.' read -r major minor rest <<< "$core"
     if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
         return 1
+    fi
+
+    if is_early_dotnet2_sdk "$version"; then
+        printf '2.0'
+        return
     fi
 
     printf '%s.%s' "$major" "$minor"
@@ -1635,16 +1656,31 @@ cleanup_install_transaction() {
     [[ "$cleanup_failed" == "false" ]]
 }
 
-calculate_sha512() {
+calculate_sdk_payload_hash() {
     local path="$1"
+    local algorithm="$2"
+    local coreutils_command=""
+    local shasum_length=""
 
-    if command -v sha512sum >/dev/null 2>&1; then
-        sha512sum "$path" | awk '{print tolower($1)}'
+    case "$algorithm" in
+        SHA512)
+            coreutils_command="sha512sum"
+            shasum_length="512"
+            ;;
+        SHA256)
+            coreutils_command="sha256sum"
+            shasum_length="256"
+            ;;
+        *) return 1 ;;
+    esac
+
+    if command -v "$coreutils_command" >/dev/null 2>&1; then
+        "$coreutils_command" "$path" | awk '{print tolower($1)}'
         return
     fi
 
     if command -v shasum >/dev/null 2>&1; then
-        shasum -a 512 "$path" | awk '{print tolower($1)}'
+        shasum -a "$shasum_length" "$path" | awk '{print tolower($1)}'
         return
     fi
 
@@ -1652,17 +1688,9 @@ calculate_sha512() {
 }
 
 get_sdk_channel() {
-    local core="${VERSION%%-*}"
-    local major=""
-    local minor=""
-    local rest=""
-
-    IFS='.' read -r major minor rest <<< "$core"
-    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
+    if ! sdk_channel_from_version "$VERSION"; then
         tool_fail "Unable to determine the .NET release channel for SDK $VERSION."
     fi
-
-    printf '%s.%s' "$major" "$minor"
 }
 
 get_sdk_rid() {
@@ -1695,27 +1723,190 @@ get_sdk_rid() {
     printf '%s-%s' "$os" "$arch"
 }
 
+# Select archives only from exact-version SDK objects, never Runtime records.
+# Release metadata publishes a portable artifact name, RID, URL and hash.
+# Earlier SDKs put the version before the archive extension in the URL.
 extract_sdk_artifact_metadata() {
-    local expected_url="$1"
+    local version="$1"
+    local rid="$2"
 
-    awk -v expected="$expected_url" '
-        /"url"[[:space:]]*:/ {
-            value=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", value)
+    awk -v expected_version="$version" -v expected_rid="$rid" '
+        function json_string(line, key, marker, value) {
+            marker = "\"" key "\"[[:space:]]*:[[:space:]]*\""
+            if (!match(line, marker)) return ""
+            value = substr(line, RSTART + RLENGTH)
             sub(/".*$/, "", value)
-            if (value == expected) {
-                candidate=value
+            return value
+        }
+        # Track object/array nesting outside quoted JSON strings. This avoids
+        # treating Runtime files and other releases as SDK file candidates.
+        function depth_delta(line, opening, closing, i, char, in_string, escaped, difference) {
+            in_string=escaped=difference=0
+            for (i=1; i<=length(line); i++) {
+                char=substr(line, i, 1)
+                if (escaped) { escaped=0; continue }
+                if (in_string && char == "\\") { escaped=1; continue }
+                if (char == "\"") { in_string=!in_string; continue }
+                if (!in_string && char == opening) difference++
+                if (!in_string && char == closing) difference--
             }
-            next
+            return difference
         }
-        candidate != "" && /"hash"[[:space:]]*:/ {
-            hash=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", hash)
-            sub(/".*$/, "", hash)
-            print candidate "|" hash
-            candidate=""
+        function eligible(name, url, hash, stem, expected_url, legacy_url, key, extension, base) {
+            extension = (expected_rid ~ /^win-/ ? ".zip" : ".tar.gz")
+            base = "https://builds.dotnet.microsoft.com/dotnet/Sdk/" expected_version "/"
+            expected_url = base "dotnet-sdk-" expected_version "-" expected_rid extension
+
+            if (name == "" && url != expected_url) return
+            if (name != "" &&
+                name != "dotnet-sdk-" expected_rid extension &&
+                name != "dotnet-dev-" expected_rid extension) return
+
+            if (name != "") {
+                stem = substr(name, 1, length(name) - length(extension))
+                legacy_url = base stem "." expected_version extension
+            } else {
+                legacy_url = ""
+            }
+
+            if (url != legacy_url &&
+                !(url == expected_url && (name == "" || name == "dotnet-sdk-" expected_rid extension))) return
+
+            key = url "|" hash
+            if (!seen[key]++) print key
         }
-    ' | awk '!seen[$0]++'
+        {
+            line=$0
+            if (!sdks_active && line ~ /"sdks"[[:space:]]*:[[:space:]]*\[/) {
+                sdks_active=1
+                sdks_depth=array_depth+1
+            }
+
+            if (!sdk_active && line ~ /"sdk"[[:space:]]*:[[:space:]]*\{/) {
+                sdk_active=1
+                sdk_depth=object_depth+1
+                sdk_version=""
+                file_count=0
+            }
+            else if (!sdk_active && sdks_active && line ~ /^[[:space:]]*\{[[:space:]]*,?[[:space:]]*$/) {
+                sdk_active=1
+                sdk_depth=object_depth+1
+                sdk_version=""
+                file_count=0
+            }
+
+            if (sdk_active) {
+                if (object_depth == sdk_depth) {
+                    value=json_string(line, "version")
+                    if (value != "") sdk_version=value
+                    if (!files_active && line ~ /"files"[[:space:]]*:[[:space:]]*\[/) {
+                        files_active=1
+                        files_depth=array_depth+1
+                    }
+                }
+                if (files_active && !file_active && line ~ /^[[:space:]]*\{/) {
+                    file_active=1
+                    file_depth=object_depth+1
+                    file_name=file_rid=file_url=file_hash=""
+                }
+                if (file_active) {
+                    value=json_string(line, "name")
+                    if (value != "") file_name=value
+                    value=json_string(line, "rid")
+                    if (value != "") file_rid=value
+                    value=json_string(line, "url")
+                    if (value != "") file_url=value
+                    value=json_string(line, "hash")
+                    if (value != "") file_hash=value
+                }
+            }
+
+            object_depth += depth_delta(line, "{", "}")
+            array_depth += depth_delta(line, "[", "]")
+
+            if (file_active && object_depth < file_depth) {
+                if (file_rid == expected_rid) {
+                    file_count++
+                    file_names[file_count]=file_name
+                    file_urls[file_count]=file_url
+                    file_hashes[file_count]=file_hash
+                }
+                file_active=0
+            }
+            if (files_active && array_depth < files_depth) files_active=0
+
+            if (sdk_active && object_depth < sdk_depth) {
+                if (sdk_version == expected_version) {
+                    for (i=1; i<=file_count; i++) {
+                        eligible(file_names[i], file_urls[i], file_hashes[i])
+                    }
+                }
+                sdk_active=0
+                file_active=files_active=0
+            }
+            if (sdks_active && array_depth < sdks_depth) sdks_active=0
+        }
+    '
+}
+
+# Historic CLI hosts cannot run --list-sdks. Require a selected exact SDK
+# version AND the SDK Base Path to originate from the requested isolated root.
+verify_legacy_sdk_host() {
+    local dotnet_path="$1"
+    local sdk_dir="$2"
+    local version="$3"
+    local expected_base="$sdk_dir/sdk/$version"
+    local work_dir=""
+    local reported_version=""
+    local info_output=""
+    local reported_base=""
+    local actual_base=""
+    local canonical_expected=""
+
+    if [[ ! -d "$expected_base" ]]; then
+        tool_fail "SDK $version was not found in the isolated SDK directory."
+    fi
+    canonical_expected="$(cd "$expected_base" && pwd -P)"
+    work_dir="$(mktemp -d "$SDK_ROOT/.sdk-host-verify-$version.XXXXXX")"
+    printf '{"sdk":{"version":"%s"}}\n' "$version" > "$work_dir/global.json"
+
+    if reported_version="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 "$dotnet_path" --version 2>&1)"; then
+        :
+    else
+        rm -rf -- "$work_dir"
+        tool_fail "Unable to verify isolated SDK $version: legacy host --version failed."
+    fi
+    if [[ "$reported_version" != "$version" ]]; then
+        rm -rf -- "$work_dir"
+        tool_fail "Unable to verify isolated SDK $version: legacy host did not report the requested exact SDK version."
+    fi
+
+    if info_output="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 "$dotnet_path" --info 2>&1)"; then
+        :
+    else
+        rm -rf -- "$work_dir"
+        tool_fail "Unable to verify isolated SDK $version: legacy host --info failed."
+    fi
+    reported_base="$(printf '%s\n' "$info_output" | awk '
+        /^[[:space:]]*Base Path:[[:space:]]*/ {
+            sub(/^[[:space:]]*Base Path:[[:space:]]*/, "")
+            sub(/[[:space:]]*$/, "")
+            print
+        }
+    ')"
+    if [[ -z "$reported_base" || "$reported_base" == *$'\n'* || ! -d "$reported_base" ]]; then
+        rm -rf -- "$work_dir"
+        tool_fail "Unable to verify isolated SDK $version: legacy host did not report one valid SDK Base Path."
+    fi
+    actual_base="$(cd "$reported_base" && pwd -P)"
+    if [[ "$actual_base" != "$canonical_expected" ]]; then
+        rm -rf -- "$work_dir"
+        tool_fail "Unable to verify isolated SDK $version: legacy host SDK Base Path does not match the isolated directory."
+    fi
+
+    if ! rm -rf -- "$work_dir"; then
+        tool_fail "Unable to clean temporary legacy SDK verification state for $version."
+    fi
 }
 
 install_isolated_sdk() {
@@ -1745,7 +1936,6 @@ install_isolated_sdk() {
     local channel=""
     local rid=""
     local metadata_url=""
-    local expected_artifact_url=""
     local artifact_data=""
     local artifact_count=0
     local artifact_url=""
@@ -1769,15 +1959,20 @@ install_isolated_sdk() {
     fi
 
     if [[ -x "$isolated_dotnet" ]]; then
-        if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
-            :
-        else
-            status=$?
-            tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
-        fi
-
-        if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+        if [[ "$VERSION" =~ ^1\. ]] || is_early_dotnet2_sdk "$VERSION"; then
+            verify_legacy_sdk_host "$isolated_dotnet" "$install_dir" "$VERSION"
             isolated_installed="true"
+        else
+            if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+                :
+            else
+                status=$?
+                tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
+            fi
+
+            if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+                isolated_installed="true"
+            fi
         fi
     fi
 
@@ -1819,7 +2014,6 @@ install_isolated_sdk() {
     channel="$(get_sdk_channel)"
     rid="$(get_sdk_rid)"
     metadata_url="https://builds.dotnet.microsoft.com/dotnet/release-metadata/$channel/releases.json"
-    expected_artifact_url="https://builds.dotnet.microsoft.com/dotnet/Sdk/$VERSION/dotnet-sdk-$VERSION-$rid.tar.gz"
     metadata_file="$(mktemp "$SDK_ROOT/.release-metadata-$VERSION.XXXXXX")"
     archive_file="$(mktemp "$SDK_ROOT/.sdk-payload-$VERSION.XXXXXX")"
     trap 'cleanup_install_transaction "$metadata_file" "$archive_file" "$staging_dir" || true' EXIT
@@ -1837,18 +2031,23 @@ install_isolated_sdk() {
         tool_fail "Invalid Microsoft release metadata for SDK $VERSION."
     fi
 
-    artifact_data="$(extract_sdk_artifact_metadata "$expected_artifact_url" < "$metadata_file")"
+    artifact_data="$(extract_sdk_artifact_metadata "$VERSION" "$rid" < "$metadata_file")"
     artifact_count="$(printf '%s\n' "$artifact_data" | awk 'NF { count++ } END { print count + 0 }')"
     if (( artifact_count != 1 )); then
         tool_fail "Microsoft release metadata did not contain exactly one SDK archive for $VERSION and $rid."
     fi
 
     IFS='|' read -r artifact_url expected_hash <<< "$artifact_data"
-    if [[ "$artifact_url" != "$expected_artifact_url" ]]; then
-        tool_fail "Microsoft release metadata returned an unexpected SDK archive URL for $VERSION and $rid."
-    fi
-    if [[ ! "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
-        tool_fail "Microsoft release metadata contained an invalid SHA-512 hash for SDK $VERSION and $rid."
+    local hash_algorithm=""
+    if [[ "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
+        hash_algorithm="SHA512"
+    elif [[ "$expected_hash" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+        if [[ ! "$VERSION" =~ ^1\. ]]; then
+            tool_fail "Microsoft release metadata published SHA-256 for SDK $VERSION and $rid; SHA-256 is supported only for historical .NET 1.x SDKs."
+        fi
+        hash_algorithm="SHA256"
+    else
+        tool_fail "Microsoft release metadata contained an unsupported or malformed checksum for SDK $VERSION and $rid."
     fi
     expected_hash="$(printf '%s' "$expected_hash" | tr '[:upper:]' '[:lower:]')"
 
@@ -1860,8 +2059,8 @@ install_isolated_sdk() {
         tool_fail "Unable to download the .NET SDK $VERSION payload with exit code $status."
     fi
 
-    if ! actual_hash="$(calculate_sha512 "$archive_file")"; then
-        tool_fail "Unable to verify the .NET SDK $VERSION payload because no SHA-512 utility is available."
+    if ! actual_hash="$(calculate_sdk_payload_hash "$archive_file" "$hash_algorithm")"; then
+        tool_fail "Unable to verify the .NET SDK $VERSION payload because no $hash_algorithm utility is available."
     fi
 
     if [[ "$actual_hash" != "$expected_hash" ]]; then
@@ -1886,16 +2085,21 @@ install_isolated_sdk() {
         tool_fail "The isolated dotnet executable was not found at $staged_dotnet"
     fi
 
-    if isolated_sdks="$("$staged_dotnet" --list-sdks)"; then
-        :
+    if [[ "$VERSION" =~ ^1\. ]] || is_early_dotnet2_sdk "$VERSION"; then
+        verify_legacy_sdk_host "$staged_dotnet" "$staging_dir" "$VERSION"
+        printf '%s\n' "$VERSION"
     else
-        status=$?
-        tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
-    fi
-    printf "%s\n" "$isolated_sdks"
+        if isolated_sdks="$("$staged_dotnet" --list-sdks)"; then
+            :
+        else
+            status=$?
+            tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
+        fi
+        printf "%s\n" "$isolated_sdks"
 
-    if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        tool_fail "SDK $VERSION was not found after installation."
+        if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+            tool_fail "SDK $VERSION was not found after installation."
+        fi
     fi
 
     if [[ -e "$install_dir" || -L "$install_dir" ]]; then

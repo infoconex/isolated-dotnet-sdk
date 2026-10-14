@@ -158,6 +158,6 @@ EOF
   run_install
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"invalid SHA-512 hash for SDK $version and $rid"* ]]
+  [[ "$output" == *"unsupported or malformed checksum for SDK $version and $rid"* ]]
   [ ! -e "$tool_root/$version" ]
 }

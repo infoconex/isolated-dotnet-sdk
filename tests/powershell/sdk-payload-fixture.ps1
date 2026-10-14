@@ -13,16 +13,28 @@ function Invoke-WebRequest {
         if ($env:SDK_TEST_METADATA_FAILURE) {
             throw $env:SDK_TEST_METADATA_FAILURE
         }
+        if ($env:SDK_TEST_METADATA_URL_TARGET) {
+            Set-Content -LiteralPath $env:SDK_TEST_METADATA_URL_TARGET -Value ([string]$Uri)
+        }
         $rid = 'win-x64'
-        $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/99.0.100/dotnet-sdk-99.0.100-win-x64.zip'
-        $hash = if ($env:SDK_TEST_MALFORMED_HASH) { 'deadbeef' } else { 'a' * 128 }
+        $legacyVersion = $env:SDK_TEST_LEGACY_VERSION
+        $url = if ($legacyVersion -match '^1\.') {
+            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$legacyVersion/dotnet-dev-win-x64.$legacyVersion.zip"
+        }
+        elseif ($legacyVersion) {
+            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$legacyVersion/dotnet-sdk-$legacyVersion-win-x64.zip"
+        }
+        else {
+            'https://builds.dotnet.microsoft.com/dotnet/Sdk/99.0.100/dotnet-sdk-99.0.100-win-x64.zip'
+        }
+        $hash = if ($env:SDK_TEST_MALFORMED_HASH) { 'deadbeef' } elseif ($legacyVersion -eq '1.0.4') { 'a' * 64 } else { 'a' * 128 }
         $files = if ($env:SDK_TEST_MISSING_ARTIFACT) {
             @(@{ rid = 'win-arm64'; url = 'https://builds.dotnet.microsoft.com/example.zip'; hash = $hash })
         }
         else {
-            @(@{ rid = $rid; url = $url; hash = $hash })
+            @(@{ name = $(if ($legacyVersion -match '^1\.') { 'dotnet-dev-win-x64.zip' } else { 'dotnet-sdk-win-x64.zip' }); rid = $rid; url = $url; hash = $hash })
         }
-        @{ releases = @(@{ sdk = @{ version = '99.0.100'; files = $files } }) } |
+        @{ releases = @(@{ sdk = @{ version = $(if ($legacyVersion) { $legacyVersion } else { '99.0.100' }); files = $files } }) } |
             ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutFile
         return
     }
@@ -40,7 +52,8 @@ function Invoke-WebRequest {
 
 function Get-FileHash {
     param([string]$LiteralPath, [string]$Algorithm)
-    $hash = if ($env:SDK_TEST_HASH_MISMATCH) { 'b' * 128 } else { 'a' * 128 }
+    $length = if ($Algorithm -eq 'SHA256') { 64 } else { 128 }
+    $hash = if ($env:SDK_TEST_HASH_MISMATCH) { 'b' * $length } else { 'a' * $length }
     [pscustomobject]@{ Hash = $hash }
 }
 
@@ -55,6 +68,9 @@ function Expand-Archive {
     New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
     if (-not $env:SDK_TEST_MISSING_HOST) {
         Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_FAKE_HOST_ROOT '*') -Destination $DestinationPath -Recurse -Force
+        if ($env:SDK_TEST_LEGACY_VERSION) {
+            New-Item -ItemType Directory -Path (Join-Path (Join-Path $DestinationPath 'sdk') $env:SDK_TEST_LEGACY_VERSION) -Force | Out-Null
+        }
     }
 }
 

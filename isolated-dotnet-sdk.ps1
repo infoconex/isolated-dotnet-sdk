@@ -762,12 +762,34 @@ function Get-ChannelSdkVersion {
 }
 
 
+# SDK 2.1.0-2.1.202 belong to .NET Core 2.0, not the .NET Core 2.1
+# channel (which starts with the SDK 2.1.300 feature band).
+function Test-IsEarlyDotNet2Sdk {
+    param([string]$Version)
+
+    if ($Version -match '^2\.0\.') {
+        return $true
+    }
+
+    $Match = [regex]::Match($Version, '^2\.1\.(?<feature>[0-9]+)(?:-|$)')
+    if (-not $Match.Success) {
+        return $false
+    }
+
+    $Feature = [long]0
+    return ([long]::TryParse($Match.Groups['feature'].Value, [ref]$Feature) -and $Feature -lt 300)
+}
+
 function Get-SdkChannelFromVersion {
     param([string]$Version)
 
     $Match = [regex]::Match($Version, '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.')
     if (-not $Match.Success) {
         return $null
+    }
+
+    if (Test-IsEarlyDotNet2Sdk -Version $Version) {
+        return '2.0'
     }
 
     return "$($Match.Groups['major'].Value).$($Match.Groups['minor'].Value)"
@@ -1693,11 +1715,12 @@ function Resolve-RemoveVersion {
 }
 
 function Get-SdkChannel {
-    if ($SdkVersion -notmatch '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.') {
+    $Channel = Get-SdkChannelFromVersion -Version $SdkVersion
+    if ([string]::IsNullOrWhiteSpace($Channel)) {
         throw "Unable to determine the .NET release channel for SDK $SdkVersion."
     }
 
-    return "$($Matches.major).$($Matches.minor)"
+    return $Channel
 }
 
 function Get-SdkRid {
@@ -1723,8 +1746,13 @@ function Resolve-SdkArtifact {
         [string]$Rid
     )
 
-    $expectedUrl = "https://builds.dotnet.microsoft.com/dotnet/Sdk/$SdkVersion/dotnet-sdk-$SdkVersion-$Rid.zip"
-    $candidates = [System.Collections.Generic.List[string]]::new()
+    # Match the exact SDK entry and RID, not runtime records or URL substrings.
+    # Legacy SDKs use dotnet-dev-<rid>.<version> URLs with an unversioned name.
+    $extension = if ($Rid.StartsWith('win-')) { '.zip' } else { '.tar.gz' }
+    $baseUrl = "https://builds.dotnet.microsoft.com/dotnet/Sdk/$SdkVersion/"
+    $modernUrl = "$($baseUrl)dotnet-sdk-$SdkVersion-$Rid$extension"
+    $validNames = @("dotnet-sdk-$Rid$extension", "dotnet-dev-$Rid$extension")
+    $candidates = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 
     foreach ($release in @($Metadata.releases)) {
         $sdkEntries = [System.Collections.Generic.List[object]]::new()
@@ -1738,37 +1766,146 @@ function Resolve-SdkArtifact {
         }
 
         foreach ($sdk in $sdkEntries) {
-            if ([string]$sdk.version -ne $SdkVersion) {
+            if ([string]$sdk.version -cne $SdkVersion) {
                 continue
             }
 
             foreach ($file in @($sdk.files)) {
-                if ([string]$file.rid -eq $Rid -and [string]$file.url -eq $expectedUrl) {
-                    $candidates.Add("$([string]$file.url)|$([string]$file.hash)")
+                if ([string]$file.rid -cne $Rid) {
+                    continue
                 }
+
+                $name = [string]$file.name
+                $url = [string]$file.url
+                if ($name -and $name -cnotin $validNames) {
+                    continue
+                }
+
+                # Retain modern fixture compatibility when name is absent.
+                # Legacy URLs must have an explicit Microsoft artifact name.
+                $legacyUrl = if ($name) {
+                    $stem = $name.Substring(0, $name.Length - $extension.Length)
+                    "$baseUrl$stem.$SdkVersion$extension"
+                }
+                else {
+                    ''
+                }
+
+                if ($url -cne $modernUrl -and $url -cne $legacyUrl) {
+                    continue
+                }
+                if ($url -ceq $modernUrl -and $name -and
+                    $name -cne "dotnet-sdk-$Rid$extension") {
+                    continue
+                }
+
+                [void]$candidates.Add("$url|$([string]$file.hash)")
             }
         }
     }
 
-    $uniqueCandidates = @($candidates | Sort-Object -Unique)
-    if ($uniqueCandidates.Count -ne 1) {
+    if ($candidates.Count -ne 1) {
         throw "Microsoft release metadata did not contain exactly one SDK archive for $SdkVersion and $Rid."
     }
 
-    $parts = $uniqueCandidates[0].Split('|', 2)
+    $parts = @($candidates)[0].Split('|', 2)
     $url = $parts[0]
     $hash = $parts[1]
 
-    if ($url -ne $expectedUrl) {
-        throw "Microsoft release metadata returned an unexpected SDK archive URL for $SdkVersion and $Rid."
+    $algorithm = if ($hash -cmatch '^[0-9A-Fa-f]{128}$') {
+        'SHA512'
     }
-    if ($hash -notmatch '^[0-9A-Fa-f]{128}$') {
-        throw "Microsoft release metadata contained an invalid SHA-512 hash for SDK $SdkVersion and $Rid."
+    elseif ($hash -cmatch '^[0-9A-Fa-f]{64}$') {
+        if ($SdkVersion -notmatch '^1\.') {
+            throw "Microsoft release metadata published SHA-256 for SDK $SdkVersion and $Rid; SHA-256 is supported only for historical .NET 1.x SDKs."
+        }
+        'SHA256'
+    }
+    else {
+        throw "Microsoft release metadata contained an unsupported or malformed checksum for SDK $SdkVersion and $Rid."
     }
 
     return [pscustomobject]@{
-        Url  = $url
-        Hash = $hash.ToLowerInvariant()
+        Url       = $url
+        Hash      = $hash.ToLowerInvariant()
+        Algorithm = $algorithm
+    }
+}
+
+function Test-LegacySdkHost {
+    param(
+        [Parameter(Mandatory)]
+        [string]$DotNetPath,
+        [Parameter(Mandatory)]
+        [string]$InstallDirectory,
+        [Parameter(Mandatory)]
+        [string]$Version
+    )
+
+    # Historical hosts (including early 2.x) cannot reliably enumerate SDKs with --list-sdks. The requested SDK
+    # must actually be selected by the isolated host from this exact root.
+    $ExpectedBasePath = [System.IO.Path]::GetFullPath(
+        (Join-Path (Join-Path $InstallDirectory 'sdk') $Version)
+    ).TrimEnd('\', '/')
+    if (-not (Test-Path -LiteralPath $ExpectedBasePath -PathType Container)) {
+        throw "SDK $Version was not found in the isolated SDK directory."
+    }
+
+    # A private global.json prevents inherited project settings from selecting
+    # another version. The temporary directory is removed on every path.
+    $WorkDirectory = Join-Path $SdkRoot ('.sdk-host-verify-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
+    $OriginalMultilevel = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
+    $LocationPushed = $false
+    New-Item -ItemType Directory -Path $WorkDirectory -Force | Out-Null
+    try {
+        @{ sdk = @{ version = $Version } } |
+            ConvertTo-Json -Depth 3 |
+            Set-Content -LiteralPath (Join-Path $WorkDirectory 'global.json') -Encoding utf8
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
+        Push-Location -LiteralPath $WorkDirectory
+        $LocationPushed = $true
+
+        $VersionOutput = @(& $DotNetPath --version 2>&1)
+        $VersionExitCode = $LASTEXITCODE
+        $VersionLines = @($VersionOutput | ForEach-Object { ([string]$_).Trim() } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($VersionExitCode -ne 0 -or $VersionLines.Count -ne 1 -or $VersionLines[0] -cne $Version) {
+            throw "Unable to verify isolated SDK $($Version): legacy host did not report the requested exact SDK version."
+        }
+
+        $InfoOutput = @(& $DotNetPath --info 2>&1)
+        $InfoExitCode = $LASTEXITCODE
+        if ($InfoExitCode -ne 0) {
+            throw "Unable to verify isolated SDK $($Version): legacy host --info exited with code $InfoExitCode."
+        }
+
+        $BasePaths = @($InfoOutput | ForEach-Object {
+                if ([string]$_ -match '^\s*Base Path:\s*(.+?)\s*$') {
+                    $Matches[1].Trim()
+                }
+            })
+        if ($BasePaths.Count -ne 1) {
+            throw "Unable to verify isolated SDK $($Version): legacy host did not report one SDK Base Path."
+        }
+
+        try {
+            $ActualBasePath = [System.IO.Path]::GetFullPath($BasePaths[0]).TrimEnd('\', '/')
+        }
+        catch {
+            throw "Unable to verify isolated SDK $($Version): legacy host reported an invalid SDK Base Path."
+        }
+        if (-not [string]::Equals(
+                $ActualBasePath, $ExpectedBasePath, [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+            throw "Unable to verify isolated SDK $($Version): legacy host SDK Base Path does not match the isolated directory."
+        }
+    }
+    finally {
+        if ($LocationPushed) {
+            Pop-Location
+        }
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', $OriginalMultilevel, 'Process')
+        Remove-Item -LiteralPath $WorkDirectory -Recurse -Force -WhatIf:$false -Confirm:$false
     }
 }
 
@@ -1800,14 +1937,20 @@ function Install-IsolatedSdk {
 
     $IsolatedInstalled = $false
     if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
-        $IsolatedSdks = & $IsolatedDotNet --list-sdks
-        $ExitCode = $LASTEXITCODE
-        if ($ExitCode -ne 0) {
-            throw "Unable to inspect existing isolated SDK $SdkVersion with exit code $ExitCode."
+        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
+            Test-LegacySdkHost -DotNetPath $IsolatedDotNet -InstallDirectory $InstallDir -Version $SdkVersion
+            $IsolatedInstalled = $true
         }
+        else {
+            $IsolatedSdks = & $IsolatedDotNet --list-sdks
+            $ExitCode = $LASTEXITCODE
+            if ($ExitCode -ne 0) {
+                throw "Unable to inspect existing isolated SDK $SdkVersion with exit code $ExitCode."
+            }
 
-        $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-        $IsolatedInstalled = $IsolatedVersions -contains $SdkVersion
+            $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+            $IsolatedInstalled = $IsolatedVersions -contains $SdkVersion
+        }
     }
 
     if ($IsolatedInstalled) {
@@ -1879,7 +2022,7 @@ function Install-IsolatedSdk {
         }
 
         try {
-            $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA512).Hash.ToLowerInvariant()
+            $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm $Artifact.Algorithm).Hash.ToLowerInvariant()
         }
         catch {
             throw "Unable to verify the .NET SDK $SdkVersion payload: $($_.Exception.Message)"
@@ -1905,19 +2048,25 @@ function Install-IsolatedSdk {
             throw "The isolated dotnet executable was not found at $StagedDotNet"
         }
 
-        $IsolatedSdks = & $StagedDotNet --list-sdks
-        $ExitCode = $LASTEXITCODE
-        if ($ExitCode -ne 0) {
-            throw "Unable to verify isolated SDK $SdkVersion with exit code $ExitCode."
+        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
+            Test-LegacySdkHost -DotNetPath $StagedDotNet -InstallDirectory $StagingDir -Version $SdkVersion
+            Write-ToolDisplay $SdkVersion
         }
+        else {
+            $IsolatedSdks = & $StagedDotNet --list-sdks
+            $ExitCode = $LASTEXITCODE
+            if ($ExitCode -ne 0) {
+                throw "Unable to verify isolated SDK $SdkVersion with exit code $ExitCode."
+            }
 
-        foreach ($IsolatedSdk in $IsolatedSdks) {
-            Write-ToolDisplay $IsolatedSdk
-        }
+            foreach ($IsolatedSdk in $IsolatedSdks) {
+                Write-ToolDisplay $IsolatedSdk
+            }
 
-        $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-        if ($IsolatedVersions -notcontains $SdkVersion) {
-            throw "SDK $SdkVersion was not found after installation."
+            $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+            if ($IsolatedVersions -notcontains $SdkVersion) {
+                throw "SDK $SdkVersion was not found after installation."
+            }
         }
 
         if (Test-Path -LiteralPath $InstallDir) {

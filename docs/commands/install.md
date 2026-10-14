@@ -16,7 +16,11 @@ Displayed SDK version choices use the shared SDK-aware newest-to-oldest ordering
 
 A bare version with no explicit action is treated as an Install request.
 
-Supplying an exact version bypasses interactive release-index/channel discovery, but it does **not** bypass the Microsoft release metadata required to identify the exact platform archive and its published SHA-512.
+Supplying an exact version bypasses interactive release-index/channel discovery, but it does **not** bypass the Microsoft release metadata required to identify the exact platform archive and its published checksum.
+
+Historical SDK numbers do not always match the Microsoft .NET release channel. In particular, SDKs `2.1.4`, `2.1.105`, and `2.1.202` are in Microsoft's **2.0** release channel; SDK `2.1.300` and later 2.1.* builds belong to **2.1**. Direct exact-version installation resolves the correct published channel before selecting the archive, and Audit/Verify lifecycle lookups use the same historical SDK-to-channel mapping.
+
+Historical SDK releases may publish archive names such as `dotnet-dev-win-x64.1.1.14.zip` instead of the modern `dotnet-sdk-<version>-<rid>.zip` layout. Install selects only an exact SDK-version and platform/RID archive from Microsoft's structured SDK release metadata. Historical distribution-specific Linux archives are not treated as interchangeable with generic Linux RIDs. The installer verifies the Microsoft-published SHA-512 whenever provided. Historical .NET 1.x SDKs with a published SHA-256 instead (including SDK 1.0.4) use SHA-256 verification before extraction. Modern SDKs still require SHA-512. Missing, malformed, ambiguous, or mismatched checksums fail closed; historical checksum support does not guarantee a legacy host will execute on a modern operating system.
 
 ## Existing installations
 
@@ -32,11 +36,11 @@ A pre-existing version destination under the isolated root that is not a valid m
 
 A new installation is transactional:
 
-1. resolve the exact platform artifact and SHA-512 from Microsoft release metadata;
+1. resolve the exact platform artifact and its supported published checksum algorithm (SHA-512, or SHA-256 for historical .NET 1.x SDKs only) from Microsoft release metadata;
 2. download the SDK archive into operation-owned temporary state;
-3. verify the archive SHA-512 before extraction;
+3. verify the archive using that Microsoft-published checksum before extraction;
 4. extract into an operation-owned staging directory;
-5. require the staged host to run successfully and report the requested exact SDK version;
+5. require the staged host to run successfully and prove the requested exact SDK version. Historical .NET Core 1.x and early 2.x SDK hosts (2.0.* and 2.1.* before 2.1.300) cannot reliably support `--list-sdks`. Instead, they must report the exact requested `--version` and an SDK `Base Path` inside the staged SDK's own `sdk/<version>` directory with `--info`. These checks use a private pinned `global.json` and disabled multilevel lookup to prevent accepting a system SDK; temporary verification files are removed. SDK 2.1.300+ and later hosts retain `--list-sdks` verification;
 6. promote staging to the final version directory only while that destination remains absent; and
 7. clean operation-owned metadata, payload, and staging state where possible.
 
