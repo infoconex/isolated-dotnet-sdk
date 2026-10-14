@@ -8,11 +8,11 @@ The tool treats an external command's exit status as correctness-significant whe
 | --- | --- | --- | --- |
 | Bootstrapped saved-tool execution | Explicitly propagate the saved child tool's nonzero exit | `exec` naturally replaces the bootstrap process and preserves the child status | Bootstrap must not return success when the saved tool fails |
 | System `dotnet --list-sdks` inventory | Check `$LASTEXITCODE` | Capture the command status explicitly | Fail instead of treating a failed inventory as empty or continuing installation |
-| Existing isolated host `--list-sdks` | Check `$LASTEXITCODE` | Separate command execution from version matching | Fail instead of treating a broken isolated host as an absent SDK |
+| Existing isolated host SDK proof | For newer hosts, check `--list-sdks` and `$LASTEXITCODE`; for historical 1.x/early 2.x use pinned `--version` and `--info` SDK Base Path | Equivalent modern inventory versus private legacy host proof | An unverified local host is never treated as an already-installed matching SDK; never trust system fallback |
 | SDK payload download | PowerShell web-request failure is caught with SDK/version context | `curl` status is captured explicitly | Stop before checksum verification, extraction, and success output when the payload cannot be acquired |
-| SDK payload hash verification | `Get-FileHash -Algorithm SHA512` must complete and match authoritative metadata | The selected SHA-512 utility must complete and match authoritative metadata | Stop before extraction when hashing fails or the digest does not match |
+| SDK payload hash verification | `Get-FileHash` must use the metadata-selected SHA-512 (or historical 1.x SHA-256) | The selected supported hashing utility must complete and match authoritative metadata | Stop before extraction when hashing fails or the digest does not match |
 | Verified payload extraction | `Expand-Archive` failure is caught with SDK/version context | Archive extraction status is captured explicitly | Stop before staged-host verification and promotion when extraction fails |
-| Post-extraction isolated host `--list-sdks` | Check `$LASTEXITCODE` | Capture the command status explicitly | Report host-command failure separately from a successful inventory that omits the requested SDK |
+| Post-extraction isolated host SDK proof | For newer hosts, check `--list-sdks` exit and inventory; for historical 1.x/early 2.x require exact `--version` plus `--info` SDK Base Path inside staging | Same version-dependent behavior | Fail before promotion when host invocation, exact SDK resolution, or origin verification fails |
 | Standalone Verify isolated host `--list-sdks` | Catch host-launch failure and check `$LASTEXITCODE` | Require the host to be executable and capture command status explicitly | Fail nonzero without mutation when the host cannot run, exits nonzero, or succeeds without reporting the requested exact SDK |
 | Removal build-server shutdown | Check `$LASTEXITCODE` and report SDK/exit context | Capture the command status and report SDK/exit context | Do not remove the SDK after shutdown failure and do not report removal success |
 
@@ -32,8 +32,8 @@ Cross-shell observable behavior and intentional runtime differences are specifie
 
 Payload integrity verification and post-extraction exact-version verification are separate boundaries:
 
-1. Before extraction, the downloaded archive must match the SHA-512 from the exact Microsoft release-metadata artifact entry. Missing/malformed checksum metadata, hash-command failure, or mismatch fails closed before executable payload is exposed.
-2. After extraction, if the isolated host command itself exits nonzero, the tool reports that staged SDK verification could not be performed and includes the exit code.
-3. If the isolated host command succeeds but its SDK inventory does not contain the requested exact version, the existing `SDK <version> was not found after installation.` contract applies.
+1. Before extraction, the downloaded archive must match the supported published checksum from the exact Microsoft release-metadata artifact entry (SHA-512 for all 2.x+ SDKs; historical 1.x SHA-256-only artifacts are the sole exception). Missing/malformed checksum metadata, hash-command failure, or mismatch fails closed before executable payload is exposed.
+2. After extraction, a failed modern SDK inventory command or unsuccessful historical host version/origin proof prevents promotion; the tool reports an operation-specific failure without accepting SDKs from another root.
+3. For modern hosts that support inventory, if the command succeeds but omits the requested exact version, the existing `SDK <version> was not found after installation.` contract applies. For older hosts, exact version and isolated SDK Base Path substitute for unsupported inventory.
 
 Keeping those cases separate prevents a corrupt/mismatched archive from reaching extraction and prevents a broken staged host process from being misreported as a valid inventory that simply lacks the requested SDK. Standalone Verify reuses the host-inventory proof for an already-installed exact version, but it is diagnostic only: it does not repair, reacquire, promote, delete, or update anything.
