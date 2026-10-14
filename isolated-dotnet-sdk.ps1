@@ -762,12 +762,34 @@ function Get-ChannelSdkVersion {
 }
 
 
+# SDK 2.1.0-2.1.202 belong to .NET Core 2.0, not the .NET Core 2.1
+# channel (which starts with the SDK 2.1.300 feature band).
+function Test-IsEarlyDotNet2Sdk {
+    param([string]$Version)
+
+    if ($Version -match '^2\.0\.') {
+        return $true
+    }
+
+    $Match = [regex]::Match($Version, '^2\.1\.(?<feature>[0-9]+)(?:-|$)')
+    if (-not $Match.Success) {
+        return $false
+    }
+
+    $Feature = [long]0
+    return ([long]::TryParse($Match.Groups['feature'].Value, [ref]$Feature) -and $Feature -lt 300)
+}
+
 function Get-SdkChannelFromVersion {
     param([string]$Version)
 
     $Match = [regex]::Match($Version, '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.')
     if (-not $Match.Success) {
         return $null
+    }
+
+    if (Test-IsEarlyDotNet2Sdk -Version $Version) {
+        return '2.0'
     }
 
     return "$($Match.Groups['major'].Value).$($Match.Groups['minor'].Value)"
@@ -1693,11 +1715,12 @@ function Resolve-RemoveVersion {
 }
 
 function Get-SdkChannel {
-    if ($SdkVersion -notmatch '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.') {
+    $Channel = Get-SdkChannelFromVersion -Version $SdkVersion
+    if ([string]::IsNullOrWhiteSpace($Channel)) {
         throw "Unable to determine the .NET release channel for SDK $SdkVersion."
     }
 
-    return "$($Matches.major).$($Matches.minor)"
+    return $Channel
 }
 
 function Get-SdkRid {
@@ -1819,7 +1842,7 @@ function Test-LegacySdkHost {
         [string]$Version
     )
 
-    # Older hosts cannot enumerate SDKs with --list-sdks. The requested SDK
+    # Historical hosts (including early 2.x) cannot reliably enumerate SDKs with --list-sdks. The requested SDK
     # must actually be selected by the isolated host from this exact root.
     $ExpectedBasePath = [System.IO.Path]::GetFullPath(
         (Join-Path (Join-Path $InstallDirectory 'sdk') $Version)
@@ -1914,7 +1937,7 @@ function Install-IsolatedSdk {
 
     $IsolatedInstalled = $false
     if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
-        if ($SdkVersion -match '^1\.') {
+        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
             Test-LegacySdkHost -DotNetPath $IsolatedDotNet -InstallDirectory $InstallDir -Version $SdkVersion
             $IsolatedInstalled = $true
         }
@@ -2025,7 +2048,7 @@ function Install-IsolatedSdk {
             throw "The isolated dotnet executable was not found at $StagedDotNet"
         }
 
-        if ($SdkVersion -match '^1\.') {
+        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
             Test-LegacySdkHost -DotNetPath $StagedDotNet -InstallDirectory $StagingDir -Version $SdkVersion
             Write-ToolDisplay $SdkVersion
         }
