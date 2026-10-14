@@ -2363,7 +2363,10 @@ verify_installed_components() {
 
     if [[ -x "$dotnet" ]] && work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-components.XXXXXX")"; then
         info="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --info 2>/dev/null)" || info=""
-        runtimes="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --list-runtimes 2>/dev/null)" || runtimes=""
+        # Original 1.x hosts do not support --list-runtimes.
+        if [[ "${2:-}" != 1.* ]]; then
+            runtimes="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --list-runtimes 2>/dev/null)" || runtimes=""
+        fi
         rm -rf -- "$work_dir"
     fi
 
@@ -2440,7 +2443,7 @@ verify_isolated_sdk() {
     echo
     tool_heading "Installed components:"
     if [[ "$is_valid" == "true" ]]; then
-        verify_installed_components "$install_dir"
+        verify_installed_components "$install_dir" "$VERSION"
     else
         printf '  %-19s %s\n' 'Host version' 'Unavailable'
         printf '  %-19s %s\n' 'Architecture' 'Unavailable'
@@ -2456,6 +2459,7 @@ verify_isolated_sdk() {
             case "$label" in
                 '.NET host') detail='Host executable found and launched' ;;
                 'SDK inventory') detail='Exact SDK found in isolated installation' ;;
+                'SDK origin') detail='Exact SDK Base Path in isolated installation' ;;
                 'SDK resolution') detail='Correct SDK selected' ;;
             esac
             printf '  %-23s %bOK%b  %s\n' "$label" "$GREEN" "$RESET" "$detail"
