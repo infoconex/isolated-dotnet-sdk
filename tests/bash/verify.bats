@@ -257,3 +257,129 @@ JSON
   [[ "$output" == *"Microsoft.NETCore.App"*'99.0.9'* ]]
   [[ "$output" != *"Microsoft.AspNetCore.App"* ]]
 }
+
+
+# This host models the original 1.x CLI: --version and --info only.
+install_legacy_verify_host() {
+  local version="$1"
+  local install_dir="$tool_root/$version"
+  mkdir -p "$install_dir/sdk/$version" "$install_dir/shared/Microsoft.NETCore.App"
+  cat > "$install_dir/dotnet" <<'HOST'
+#!/usr/bin/env bash
+version="$(basename "$(dirname "$0")")"
+install_dir="$(cd "$(dirname "$0")" && pwd -P)"
+if [[ -n "${VERIFY_LEGACY_CALL_LOG:-}" ]]; then
+  printf '%s\n' "${1:-}" >> "$VERIFY_LEGACY_CALL_LOG"
+fi
+case "${1:-}" in
+  --list-sdks|--list-runtimes)
+    printf 'Unknown option: %s\n' "$1" >&2
+    exit 72 ;;
+  --version|--info)
+    if [[ "${VERIFY_LEGACY_REQUIRE_PIN:-}" == true ]]; then
+      [[ "${DOTNET_MULTILEVEL_LOOKUP:-}" == 0 && "${DOTNET_ROOT:-}" == "$install_dir" ]] || exit 76
+      [[ -f ./global.json ]] && grep -Fq "\"version\":\"$version\"" ./global.json || exit 76
+    fi
+    if [[ "$1" == '--version' ]]; then
+      [[ -z "${VERIFY_LEGACY_VERSION_EXIT:-}" ]] || exit "$VERIFY_LEGACY_VERSION_EXIT"
+      printf '%s\n' "${VERIFY_LEGACY_VERSION_OUTPUT-$version}"
+      if [[ "${VERIFY_LEGACY_EXTRA_VERSION+x}" ]]; then printf '%s\n' "$VERIFY_LEGACY_EXTRA_VERSION"; fi
+    else
+      [[ -z "${VERIFY_LEGACY_INFO_EXIT:-}" ]] || exit "$VERIFY_LEGACY_INFO_EXIT"
+      printf '.NET Command Line Tools (%s)\nProduct Information:\n Version: %s\nRuntime Environment:\n' "$version" "$version"
+      if [[ "${VERIFY_LEGACY_NO_BASE:-}" != true ]]; then
+        printf ' Base Path: %s\n' "${VERIFY_LEGACY_BASE_PATH-$install_dir/sdk/$version}"
+      fi
+      if [[ "${VERIFY_LEGACY_EXTRA_BASE+x}" ]]; then printf ' Base Path: %s\n' "$VERIFY_LEGACY_EXTRA_BASE"; fi
+      if [[ -n "${VERIFY_LEGACY_RID:-}" ]]; then printf ' RID: %s\n' "$VERIFY_LEGACY_RID"; fi
+    fi ;;
+  *) exit 73 ;;
+esac
+HOST
+  chmod +x "$install_dir/dotnet"
+}
+
+@test "legacy 1.x Verify succeeds without unsupported inventory diagnostics" {
+  export VERIFY_LEGACY_CALL_LOG="$test_root/legacy-calls"
+  for version in 1.0.4 1.1.5 1.1.14; do
+    install_legacy_verify_host "$version"
+    : > "$VERIFY_LEGACY_CALL_LOG"
+    run env HOME="$test_home" DOTNET_MULTILEVEL_LOOKUP=1 VERIFY_LEGACY_REQUIRE_PIN=true "$tool_path" verify "$version"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Isolated SDK $version verified successfully."* ]]
+    [[ "$output" == *"SDK resolution"*"OK"*"Correct SDK selected"* ]]
+    [[ "$output" == *"SDK origin"*"OK"*"Exact SDK Base Path in isolated installation"* ]]
+    [[ "$output" != *"SDK inventory"* ]]
+    [[ "$output" == *"Host version"*"Unavailable"* ]]
+    [[ "$output" == *"Runtime identifier"*"Unavailable"* ]]
+    [[ "$output" == *"Release/lifecycle   Unavailable"* ]]
+    grep -Fxq -- '--version' "$VERIFY_LEGACY_CALL_LOG"
+    grep -Fxq -- '--info' "$VERIFY_LEGACY_CALL_LOG"
+    ! grep -Eq '^--list-(sdks|runtimes)$' "$VERIFY_LEGACY_CALL_LOG"
+  done
+}
+
+@test "legacy Verify rejects wrong empty and ambiguous --version results" {
+  local version=1.0.4
+  install_legacy_verify_host "$version"
+  run env HOME="$test_home" VERIFY_LEGACY_VERSION_OUTPUT=1.1.14 "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK resolution"*"FAIL"* ]]
+  run env HOME="$test_home" VERIFY_LEGACY_VERSION_OUTPUT='' "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK resolution"*"FAIL"* ]]
+  run env HOME="$test_home" VERIFY_LEGACY_EXTRA_VERSION="$version" "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK resolution"*"FAIL"* ]]
+}
+
+@test "legacy Verify rejects nonzero host command exits" {
+  local version=1.1.5
+  install_legacy_verify_host "$version"
+  run env HOME="$test_home" VERIFY_LEGACY_VERSION_EXIT=74 "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *".NET host"*"FAIL"* ]]
+  run env HOME="$test_home" VERIFY_LEGACY_INFO_EXIT=75 "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+  [[ "$output" == *"--info exited with code 75"* ]]
+}
+
+@test "legacy Verify rejects missing empty ambiguous and system-only Base Path" {
+  local version=1.1.14
+  install_legacy_verify_host "$version"
+  run env HOME="$test_home" VERIFY_LEGACY_NO_BASE=true "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+  run env HOME="$test_home" VERIFY_LEGACY_BASE_PATH='' "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+  run env HOME="$test_home" VERIFY_LEGACY_EXTRA_BASE="$tool_root/$version/sdk/$version" "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+  mkdir -p "$test_root/system/sdk/$version"
+  run env HOME="$test_home" VERIFY_LEGACY_BASE_PATH="$test_root/system/sdk/$version" "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+  [[ "$output" == *"does not match the isolated directory"* ]]
+}
+
+@test "legacy Verify rejects missing installed SDK Base Path" {
+  local version=1.0.4
+  install_legacy_verify_host "$version"
+  rm -rf -- "$tool_root/$version/sdk/$version"
+  run env HOME="$test_home" "$tool_path" verify "$version"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SDK origin"*"FAIL"* ]]
+}
+
+@test "legacy Verify reports RID and architecture without inventing runtimes" {
+  local version=1.1.5
+  install_legacy_verify_host "$version"
+  run env HOME="$test_home" VERIFY_LEGACY_RID=linux-x64 "$tool_path" verify "$version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Architecture"*"x64"* ]]
+  [[ "$output" == *"Runtime identifier"*"linux-x64"* ]]
+  [[ "$output" == *"Host version"*"Unavailable"* ]]
+  [[ "$output" == *".NET runtimes:"*"Unavailable"* ]]
+}
