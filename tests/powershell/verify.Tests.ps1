@@ -305,7 +305,7 @@ function Invoke-RestMethod {
             }
             finally {
                 Remove-Item Env:DOTNET_MULTILEVEL_LOOKUP -ErrorAction SilentlyContinue
-                Remove-Item Env:DOTNET_ROOT -ErrorAction SilentlyContinue
+                [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $originalRoot, 'Process')
             }
         }
     }
@@ -358,7 +358,7 @@ function Invoke-RestMethod {
         $text | Should -Match 'SDK origin\s+FAIL'
         Remove-Item Env:FAKE_DOTNET_LEGACY_MISSING_BASE_PATH -ErrorAction SilentlyContinue
 
-        $env:FAKE_DOTNET_LEGACY_BASE_PATH = ''
+        $env:FAKE_DOTNET_LEGACY_BASE_PATH = 'relative/sdk/1.1.14'
         $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
         $script:VerifyExitCode | Should -Not -Be 0
         $text | Should -Match 'SDK origin\s+FAIL'
