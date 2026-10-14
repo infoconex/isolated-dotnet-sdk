@@ -277,7 +277,8 @@ case "${1:-}" in
     exit 72 ;;
   --version|--info)
     if [[ "${VERIFY_LEGACY_REQUIRE_PIN:-}" == true ]]; then
-      [[ "${DOTNET_MULTILEVEL_LOOKUP:-}" == 0 && "${DOTNET_ROOT:-}" == "$install_dir" ]] || exit 76
+      [[ "${DOTNET_MULTILEVEL_LOOKUP:-}" == 0 && -d "${DOTNET_ROOT:-}" ]] || exit 76
+      [[ "$(cd "$DOTNET_ROOT" && pwd -P)" == "$install_dir" ]] || exit 76
       [[ -f ./global.json ]] && grep -Fq "\"version\":\"$version\"" ./global.json || exit 76
     fi
     if [[ "$1" == '--version' ]]; then
