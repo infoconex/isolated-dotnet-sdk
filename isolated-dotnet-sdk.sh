@@ -2755,8 +2755,11 @@ run_selected_action\n'* || "$reported_base" != /* || ! -d "$reported_base" ]]; t
         fi
         actual_base="$(cd "$reported_base" && pwd -P)"
         expected_base="$(cd "$expected_base" && pwd -P)"
+        local canonical_install=""
+        canonical_install="$(cd "$install_dir" && pwd -P)"
         rm -rf -- "$work_dir"
-        if [[ "$actual_base" != "$expected_base" ]]; then
+        # Do not accept an SDK directory redirected outside the isolated tree.
+        if [[ "$expected_base" != "$canonical_install/sdk/$version" || "$actual_base" != "$expected_base" ]]; then
             verify_check "SDK origin" "FAIL" "unexpected SDK Base Path"
             VERIFY_ERROR="Isolated SDK $version failed verification: legacy SDK Base Path does not match the isolated directory."
             return 1
