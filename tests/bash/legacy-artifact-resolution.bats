@@ -52,6 +52,10 @@ teardown() { payload_test_teardown; }
 
 write_legacy_metadata() {
   local hash="$1"
+  local artifact_name="dotnet-dev-$rid.tar.gz"
+  if [[ "$version" == 2.* ]]; then
+    artifact_name="dotnet-sdk-$rid.tar.gz"
+  fi
   cat > "$metadata" <<EOF
 {
   "releases": [
@@ -70,7 +74,7 @@ write_legacy_metadata() {
         "version": "$version",
         "files": [
           {
-            "name": "dotnet-dev-$rid.tar.gz",
+            "name": "$artifact_name",
             "rid": "$rid",
             "url": "$artifact_url",
             "hash": "$hash"
@@ -240,4 +244,84 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"Isolated SDK: Already installed"* ]]
   [ "$(grep -Fc "$artifact_url" "$test_home/curl.log")" -eq 1 ]
+}
+
+
+prepare_early2_payload() {
+  version="$1"
+  install_dir="$tool_root/$version"
+  artifact_url="https://builds.dotnet.microsoft.com/dotnet/Sdk/$version/dotnet-sdk-$version-$rid.tar.gz"
+  export SDK_TEST_DOTNET_VERSION="$version"
+  mkdir -p "$fixture_root/sdk/$version"
+  /usr/bin/tar -czf "$payload" -C "$fixture_root" dotnet sdk
+  if command -v sha512sum >/dev/null 2>&1; then
+    payload_hash="$(sha512sum "$payload" | awk '{print $1}')"
+  else
+    payload_hash="$(shasum -a 512 "$payload" | awk '{print $1}')"
+  fi
+  write_legacy_metadata "$payload_hash"
+}
+
+@test "early 2.1 SDK builds use Microsoft 2.0 metadata and exact isolated legacy-host proof" {
+  local current=""
+  for current in 2.1.4 2.1.105 2.1.202; do
+    prepare_early2_payload "$current"
+    run_payload_install
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Isolated SDK installation completed successfully."* ]]
+    grep -Fq "/release-metadata/2.0/releases.json" "$test_home/curl.log"
+    [ -x "$install_dir/dotnet" ]
+    [ -d "$install_dir/sdk/$version" ]
+    ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
+    ! compgen -G "$tool_root/.install-$version.*" >/dev/null
+  done
+}
+
+@test "SDK 2.0.3 uses legacy host proof, not unsupported --list-sdks" {
+  prepare_early2_payload '2.0.3'
+  run_payload_install
+  [ "$status" -eq 0 ]
+  [ -d "$install_dir/sdk/$version" ]
+  [[ "$output" == *"Isolated SDK installation completed successfully."* ]]
+  ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
+}
+
+@test "SDK 2.1.300 continues to use release channel 2.1 and modern host inventory" {
+  prepare_early2_payload '2.1.300'
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to verify isolated SDK $version with exit code"* ]]
+  grep -Fq '/release-metadata/2.1/releases.json' "$test_home/curl.log"
+  [ ! -e "$install_dir" ]
+}
+
+@test "SDK 2.0.3 never accepts a system SDK in place of its exact staged SDK" {
+  prepare_early2_payload '2.0.3'
+  export SDK_TEST_DOTNET_VERSION='10.0.402'
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"legacy host did not report the requested exact SDK version"* ]]
+  [ ! -e "$install_dir" ]
+  ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
+  ! compgen -G "$tool_root/.install-$version.*" >/dev/null
+}
+
+@test "SDK 2.1.105 refuses a host resolving an external Base Path" {
+  prepare_early2_payload '2.1.105'
+  export SDK_TEST_FAKE_BASE_PATH="$test_root"
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"legacy host SDK Base Path does not match the isolated directory"* ]]
+  [ ! -e "$install_dir" ]
+  ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
+}
+
+@test "SHA-256 is still rejected for every 2.0-era SDK" {
+  prepare_early2_payload '2.1.105'
+  write_legacy_metadata "$(printf '%064d' 0)"
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SHA-256 is supported only for historical"* ]]
+  [ ! -e "$install_dir" ]
+  ! grep -Fq "$artifact_url" "$test_home/curl.log"
 }
