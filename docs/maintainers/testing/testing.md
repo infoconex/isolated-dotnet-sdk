@@ -191,6 +191,28 @@ A direct byte-for-byte copy to that scenario's own temporary HOME avoids
 the unrelated setup process. Dedicated bootstrap tests must still start with
 an absent installed tool and execute the actual source entry point.
 
+The interactive lifecycle, interactive Verify, global exit, and prerelease
+picker suites likewise prepare an installed script directly while retaining
+their real child processes. The process-level Behavior suite keeps its
+dedicated source-preservation/bootstrapping and source-color tests, while ten
+other scenarios can use direct installed-tool setup. The installed-SDK
+listing suite's eight scenarios use their own controlled system-dotnet stubs;
+its earlier bootstrap-only stub and launcher were preparation overhead, not
+part of the listing contract. Across those seven suites, this removes **85
+per-case preparatory PowerShell process launches** without removing their
+scenario process executions. Per-case file copies remain inside fresh GUID
+test roots, fail immediately on copy errors, and assert the installed script
+exists.
+
+An intermediate [Issue #174 Draft PR run](https://github.com/infoconex/isolated-dotnet-sdk/actions/runs/38788626227)
+on head `a9a782657500ba41bc5dc88919838bd38156cc37` passed all
+243 Windows Pester tests, with Pester duration **196.57s**, an improvement
+of **16.1%** versus the previous 234.23s reference. Its fake-host
+initialization was **14.18s**, however, versus **1.46s** in the reference;
+the full wall times were **211.31s** versus **236.29s**. Do not mistake
+that variation in unrelated one-time host setup for a Pester regression or
+a test-harness optimization. A later head must be compared separately.
+
 Transactional Install's many `pwsh` calls mostly exercise distinct
 transaction, native-host, failure, and exit-code boundaries. Such execution
 is not redundant just because it is expensive. The shared fake host is
