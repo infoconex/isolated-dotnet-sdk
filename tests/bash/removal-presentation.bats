@@ -202,6 +202,73 @@ EOF
   [ -d "$unknown" ]
 }
 
+@test "early SDK with compiler-server payload cannot bypass shutdown" {
+  version='2.0.3'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir/sdk/$version/Roslyn"
+  touch "$install_dir/sdk/$version/Roslyn/VBCSCompiler.dll"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+exit 97
+EOF
+  chmod +x "$install_dir/dotnet"
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unrecognized compiler-server payload"* ]]
+  [ -d "$install_dir" ]
+}
+
+@test "2.1.105 missing compiler payload fails closed even with opt-in" {
+  version='2.1.105'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir/sdk/$version"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+exit 97
+EOF
+  chmod +x "$install_dir/dotnet"
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Legacy compiler shutdown unavailable"* ]]
+  [ -d "$install_dir" ]
+}
+
+@test "a recognized alternate historical shutdown command must return zero" {
+  version='1.0.4'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir/sdk/$version"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then exit 0; fi
+if [[ "$1 $2" == "buildserver shutdown" ]]; then exit 79; fi
+exit 97
+EOF
+  chmod +x "$install_dir/dotnet"
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [ -d "$install_dir" ]
+}
+
 @test "legacy bypass is Remove-only" {
   run env HOME="$test_home" "$tool_path" list --allow-unsupported-shutdown
   [ "$status" -ne 0 ]
