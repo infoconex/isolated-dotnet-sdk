@@ -20,6 +20,9 @@ Specifies an exact .NET SDK version. When omitted for Install or Remove, the scr
 .PARAMETER Yes
 Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
 
+.PARAMETER AllowUnsupportedShutdown
+Remove-only explicit opt-in for verified historical SDK versions that lack both public build-server shutdown command spellings. This is separate from -Yes and -Confirm. Version 2.1.105 requires a successful SDK-local Roslyn compiler-server shutdown before deletion; any unexpected or actual shutdown failure blocks removal.
+
 .PARAMETER Version
 Shows the isolated-dotnet-sdk release/source identity and exits without bootstrap, network access, SDK discovery, prompting, or mutation. This is distinct from SdkVersion, which selects the .NET SDK to install, verify, or remove.
 
@@ -47,6 +50,11 @@ Reports the SDK lifecycle and validates its isolated host, exact SDK origin, and
 .\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 10.0.100 -Yes
 
 Removes the isolated .NET SDK 10.0.100 without the tool-owned confirmation prompt.
+
+.EXAMPLE
+.\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 1.0.4 -AllowUnsupportedShutdown -Yes
+
+Explicitly authorizes the verified historical unsupported-shutdown exception for SDK 1.0.4, in addition to the usual deletion confirmation bypass.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 10.0.100 -WhatIf
