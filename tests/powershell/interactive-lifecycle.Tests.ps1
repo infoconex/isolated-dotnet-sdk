@@ -83,6 +83,7 @@ Describe 'PowerShell interactive lifecycle' {
 
     AfterEach {
         Remove-Item Env:FAKE_DOTNET_SDK_VERSION -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_TEST_REQUEST_LOG -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -299,6 +300,7 @@ function Invoke-RestMethod { return $releaseIndex }
     It 'returns an acknowledged Install result to the selected channel SDK list' {
         $version = '10.0.401'
         Install-FakeInteractiveHost -Version $version
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
 
         $command = @'
 $releaseIndex = [pscustomobject]@{
@@ -315,6 +317,7 @@ $channelMetadata = [pscustomobject]@{
 }
 function Invoke-RestMethod {
     param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
     if ($Uri -like '*releases-index.json') { return $releaseIndex }
     return $channelMetadata
 }
@@ -330,6 +333,9 @@ function Invoke-RestMethod {
         ([regex]::Matches($result.Output, 'Select a supported or development \.NET channel:')).Count | Should -Be 2
         (Get-MainPromptCount $result.Output) | Should -Be 2
         (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
+        $requests = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG)
+        @($requests | Where-Object { $_ -like '*releases-index.json' }).Count | Should -Be 1
+        @($requests | Where-Object { $_ -like '*/10.0/releases.json' }).Count | Should -Be 1
     }
 
     It 'captured already-installed interactive Install returns without acknowledgement' {
