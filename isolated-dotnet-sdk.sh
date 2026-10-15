@@ -2505,7 +2505,7 @@ remove_isolated_sdk() {
 
             # The four inspected pre-Roslyn-server SDKs must not silently grow
             # a compiler-server payload without a corresponding shutdown step.
-            if server_path="$(find "$sdk_payload" -name 'VBCSCompiler*' -print -quit)"; then
+            if server_path="$(find "$sdk_payload" -name 'VBCSCompiler*' -print)"; then
                 if [[ -n "$server_path" ]]; then
                     printf 'Unrecognized compiler-server payload in SDK %s; removal stopped.\n' "$VERSION" >&2
                     exit 92
