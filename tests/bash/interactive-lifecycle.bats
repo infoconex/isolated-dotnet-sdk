@@ -544,6 +544,34 @@ CURL
   [ "$(grep -c 'releases-index.json' "$request_log" || true)" -eq 2 ]
 }
 
+
+@test "manual SDK entry from the picker reuses discovery on return" {
+  bootstrap_tool
+  fake_bin="$test_root/manual-picker-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  request_log="$test_root/metadata-requests.log"
+  version='10.0.401'
+  mkdir -p "$tool_root/$version/sdk"
+  cat > "$tool_root/$version/dotnet" <<'SDKHOST'
+#!/usr/bin/env bash
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf '%s\n' "10.0.401 [$HOME/dotnet-sdks/10.0.401/sdk]"
+elif [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\n' '10.0.401'
+fi
+exit 0
+SDKHOST
+  chmod +x "$tool_root/$version/dotnet"
+
+  run bash -c 'printf "i\n1\nm\n10.0.401\nb\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" METADATA_REQUEST_LOG="$4" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$request_log"
+
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'Available .NET 10.0 SDKs:' <<< "$output" || true)" -eq 2 ]
+  [ "$(grep -c 'releases-index.json' "$request_log" || true)" -eq 1 ]
+  [ "$(grep -c '/10.0/releases.json' "$request_log" || true)" -eq 1 ]
+}
+
 @test "captured already-installed interactive Install returns without acknowledgement" {
   bootstrap_tool
   fake_bin="$test_root/install-fake-bin"
