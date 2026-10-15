@@ -30,7 +30,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Remove without a version | Present the installed isolated SDK picker. Explicit cancellation or an empty installed set is a normal no-change result. |
 | Remove with a version | Target only that version's directory under the isolated SDK root. |
 | Removal confirmation | Default to no unless approval is explicitly supplied through the shell's supported mechanism. |
-| Build-server shutdown | Must succeed before deletion. Failure identifies the selected SDK and native exit code where available, blocks deletion, and suppresses removal success. |
+| Build-server shutdown | Run the selected isolated host from a neutral temporary working directory with its isolated root set in `DOTNET_ROOT`, multi-level lookup disabled, and first-run state scoped to temporary CLI home. Restore caller state; require a zero native exit and successful temporary-state cleanup before deletion. Unknown or legacy failures still block deletion and suppress success. |
 | Release-metadata / payload / extraction / verification / promotion failure | Return nonzero and do not report install success. |
 | Operational failure | Return a nonzero status. Exact numeric status need not be identical across runtimes unless a narrower contract specifies it. |
 | Diagnostics | Identify the failed product operation. Runtime-specific command/exception detail may be appended when useful. |
