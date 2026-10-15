@@ -78,7 +78,8 @@ param(
     [Parameter(Position = 0)]
     [string]$SdkVersion,
     [switch]$Yes,
-    [switch]$Version
+    [switch]$Version,
+    [switch]$AllowUnsupportedShutdown
 )
 
 $ErrorActionPreference = 'Stop'
@@ -409,6 +410,9 @@ function Install-ToolIfNeeded {
     if ($Yes) {
         $Arguments.Yes = $true
     }
+    if ($AllowUnsupportedShutdown) {
+        $Arguments.AllowUnsupportedShutdown = $true
+    }
     if ($script:ConfirmWasSpecified) {
         $Arguments.Confirm = $script:ConfirmValue
     }
@@ -718,6 +722,10 @@ function Assert-ActionParameterUsage {
 
     if ($script:Action -eq 'Remove') {
         return
+    }
+
+    if ($AllowUnsupportedShutdown) {
+        throw '-AllowUnsupportedShutdown is supported only with -Action Remove.'
     }
 
     if ($script:WhatIfWasSpecified -or $script:ConfirmWasSpecified) {
@@ -2550,15 +2558,17 @@ function Test-IsolatedSdk {
 function Invoke-IsolatedSdkBuildServerShutdown {
     param(
         [string]$DotNetPath,
-        [string]$SdkVersion
+        [string]$SdkVersion,
+        [switch]$AllowUnsupportedShutdown
     )
 
-    # Legacy hosts must not resolve an ambient global.json or System SDK while
-    # preparing build-server shutdown. Treat all nonzero shutdown results as
-    # errors; this environment isolation does not permit deletion on failure.
+    # Historic SDKs must not resolve ambient global.json or System SDKs.
+    # The explicit opt-in is strictly limited to owner-verified early releases;
+    # a supported shutdown failure always prevents deletion.
     $WorkDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-shutdown-{0}" -f [guid]::NewGuid())
+    $IsolatedRoot = Split-Path -Path $DotNetPath -Parent
     $EnvironmentOverrides = @{
-        DOTNET_ROOT                        = (Split-Path -Path $DotNetPath -Parent)
+        DOTNET_ROOT                        = $IsolatedRoot
         DOTNET_MULTILEVEL_LOOKUP           = '0'
         DOTNET_CLI_HOME                    = $WorkDirectory
         DOTNET_SKIP_FIRST_TIME_EXPERIENCE  = '1'
@@ -2582,8 +2592,54 @@ function Invoke-IsolatedSdkBuildServerShutdown {
             [Environment]::SetEnvironmentVariable($Name, $EnvironmentOverrides[$Name], 'Process')
         }
 
-        $null = & $DotNetPath build-server shutdown
-        $ExitCode = $LASTEXITCODE
+        $KnownLegacyVersions = @('1.0.4', '1.1.5', '1.1.14', '2.0.3', '2.1.105')
+        if ($AllowUnsupportedShutdown -and $SdkVersion -in $KnownLegacyVersions) {
+            $SdkPayload = Join-Path (Join-Path $IsolatedRoot 'sdk') $SdkVersion
+            if (-not (Test-Path -LiteralPath $SdkPayload -PathType Container)) {
+                throw "Unable to classify legacy shutdown for SDK $($SdkVersion): SDK payload missing."
+            }
+
+            $SupportedSpelling = $null
+            foreach ($Spelling in @('build-server', 'buildserver')) {
+                $ProbeOutput = @(& $DotNetPath $Spelling '--help' 2>&1)
+                $ProbeStatus = $LASTEXITCODE
+                if ($ProbeStatus -eq 0) {
+                    $SupportedSpelling = $Spelling
+                    break
+                }
+                $ExpectedMissing = 'No executable found matching command "' + "dotnet-$Spelling" + '"'
+                if ($ProbeStatus -ne 1 -or
+                    (($ProbeOutput -join [Environment]::NewLine).Trim() -ne $ExpectedMissing)) {
+                    throw "Unable to classify legacy shutdown for SDK $($SdkVersion): $Spelling probe failed unexpectedly."
+                }
+            }
+
+            if ($SupportedSpelling) {
+                $null = & $DotNetPath $SupportedSpelling shutdown
+                $ExitCode = $LASTEXITCODE
+            }
+            elseif ($SdkVersion -eq '2.1.105') {
+                $Compiler = Join-Path $SdkPayload 'Roslyn/bincore/VBCSCompiler.dll'
+                if (-not (Test-Path -LiteralPath $Compiler -PathType Leaf)) {
+                    throw "Legacy compiler shutdown unavailable for SDK $SdkVersion; removal stopped."
+                }
+                Write-ToolWarning "Legacy SDK $SdkVersion lacks unified shutdown; using SDK-local Roslyn shutdown by explicit opt-in. Other build processes may remain."
+                $null = & $DotNetPath exec $Compiler -shutdown
+                $ExitCode = $LASTEXITCODE
+            }
+            else {
+                $CompilerServers = @(Get-ChildItem -LiteralPath $SdkPayload -File -Recurse -Filter 'VBCSCompiler*' -ErrorAction Stop)
+                if ($CompilerServers.Count -gt 0) {
+                    throw "Unrecognized compiler-server payload in SDK $SdkVersion; removal stopped."
+                }
+                Write-ToolWarning "Legacy SDK $SdkVersion has no supported shutdown command; bypass authorized explicitly. Other build processes may remain."
+                $ExitCode = 0
+            }
+        }
+        else {
+            $null = & $DotNetPath build-server shutdown
+            $ExitCode = $LASTEXITCODE
+        }
     }
     finally {
         foreach ($Name in $PreviousEnvironment.Keys) {
@@ -2628,7 +2684,10 @@ function Invoke-IsolatedSdkDirectoryRemoval {
 # Removal is intentionally scoped to the selected version directory under SDK_ROOT.
 function Remove-IsolatedSdk {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
-    param([switch]$Yes)
+    param(
+        [switch]$Yes,
+        [switch]$AllowUnsupportedShutdown
+    )
 
     $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
     if (-not (Resolve-RemoveVersion)) {
@@ -2669,7 +2728,8 @@ function Remove-IsolatedSdk {
     Write-ToolInfo "Shutting down build servers for SDK $SdkVersion..."
     Invoke-IsolatedSdkBuildServerShutdown `
         -DotNetPath $IsolatedDotNet `
-        -SdkVersion $SdkVersion
+        -SdkVersion $SdkVersion `
+        -AllowUnsupportedShutdown:$AllowUnsupportedShutdown
 
     Write-ToolInfo "Removing $InstallDir..."
     Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $InstallDir
@@ -2686,6 +2746,9 @@ function Invoke-SelectedAction {
             $RemoveArguments = @{}
             if ($Yes) {
                 $RemoveArguments.Yes = $true
+            }
+            if ($AllowUnsupportedShutdown) {
+                $RemoveArguments.AllowUnsupportedShutdown = $true
             }
             if ($script:ConfirmWasSpecified) {
                 $RemoveArguments.Confirm = $script:ConfirmValue
@@ -2714,6 +2777,7 @@ if ($Version) {
     if ($script:ActionWasSpecified -or
         $script:SdkVersionWasSpecified -or
         $Yes -or
+        $AllowUnsupportedShutdown -or
         $script:ConfirmWasSpecified -or
         $script:WhatIfWasSpecified) {
         Write-Error -Message '-Version cannot be combined with action, SDK-version, confirmation, or WhatIf parameters.' -ErrorAction Continue
