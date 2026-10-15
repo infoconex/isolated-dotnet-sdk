@@ -56,19 +56,6 @@ foreach ($Path in $FormattingPaths) {
 
     $ChangedPaths += $Path
 
-    # TEMPORARY DIAGNOSTIC for Issue #169; remove before review.
-    $Marker = '    # Sort complete channel records'
-    $ActualStart = $NormalizedOriginal.IndexOf($Marker, [StringComparison]::Ordinal)
-    $ExpectedStart = $NormalizedFormatted.IndexOf($Marker, [StringComparison]::Ordinal)
-    if ($ActualStart -ge 0 -and $ExpectedStart -ge 0) {
-        [Console]::Error.WriteLine('FORMAT ACTUAL BEGIN')
-        [Console]::Error.WriteLine($NormalizedOriginal.Substring($ActualStart, [Math]::Min(2400, $NormalizedOriginal.Length - $ActualStart)))
-        [Console]::Error.WriteLine('FORMAT ACTUAL END')
-        [Console]::Error.WriteLine('FORMAT EXPECTED BEGIN')
-        [Console]::Error.WriteLine($NormalizedFormatted.Substring($ExpectedStart, [Math]::Min(2400, $NormalizedFormatted.Length - $ExpectedStart)))
-        [Console]::Error.WriteLine('FORMAT EXPECTED END')
-    }
-
     if (-not $IsCheck) {
         $Output = if ($OriginalUsesCrLf) {
             $NormalizedFormatted.Replace("`n", "`r`n")
