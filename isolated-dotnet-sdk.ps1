@@ -1298,8 +1298,8 @@ function Select-InstallVersion {
                 $Major = [long]0
                 $Minor = [long]0
                 $IsNumeric = $Match.Success -and
-                    [long]::TryParse($Match.Groups[1].Value, [ref]$Major) -and
-                    [long]::TryParse($Match.Groups[2].Value, [ref]$Minor)
+                [long]::TryParse($Match.Groups[1].Value, [ref]$Major) -and
+                [long]::TryParse($Match.Groups[2].Value, [ref]$Minor)
                 [pscustomobject]@{
                     Entry   = $Channel
                     Numeric = [int]$IsNumeric
