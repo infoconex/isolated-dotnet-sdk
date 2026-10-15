@@ -439,6 +439,111 @@ EOF
   [ "$(grep -c '/10.0/releases.json' "$request_log" || true)" -eq 1 ]
 }
 
+
+@test "Install picker refreshes system and isolated markers without remote refetch" {
+  bootstrap_tool
+  fake_bin="$test_root/inventory-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  request_log="$test_root/metadata-requests.log"
+  inventory_log="$test_root/system-inventory-requests.log"
+  cat > "$fake_bin/dotnet" <<'DOTNET'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf 'call\n' >> "$INVENTORY_READ_LOG"
+  reads="$(wc -l < "$INVENTORY_READ_LOG")"
+  if (( reads == 2 )); then
+    mkdir -p "$FAKE_HOME/dotnet-sdks/10.0.401/sdk"
+    cat > "$FAKE_HOME/dotnet-sdks/10.0.401/dotnet" <<'SDKHOST'
+#!/usr/bin/env bash
+if [[ "\${1:-}" == '--list-sdks' ]]; then
+  printf '%s\n' "10.0.401 [$FAKE_HOME/dotnet-sdks/10.0.401/sdk]"
+elif [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\n' '10.0.401'
+fi
+exit 0
+SDKHOST
+    chmod +x "$FAKE_HOME/dotnet-sdks/10.0.401/dotnet"
+  fi
+  if (( reads >= 2 )); then
+    printf '%s\n' '10.0.401 [/fake/system/sdk]'
+  fi
+fi
+exit 0
+DOTNET
+  chmod +x "$fake_bin/dotnet"
+
+  run bash -c 'printf "i\n1\n1\nb\nb\ne\n" | env HOME="$1" FAKE_HOME="$1" PATH="$2:$PATH" METADATA_REQUEST_LOG="$4" INVENTORY_READ_LOG="$5" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$request_log" "$inventory_log"
+
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'releases-index.json' "$request_log" || true)" -eq 1 ]
+  [ "$(grep -c '/10.0/releases.json' "$request_log" || true)" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c '10.0.401 (latest)' || true)" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c '10.0.401 (latest, installed system-sdk, installed isolated-sdk)' || true)" -eq 1 ]
+  [ "$(wc -l < "$inventory_log")" -ge 3 ]
+}
+
+@test "a new Main to Install interaction fetches a fresh release index" {
+  bootstrap_tool
+  fake_bin="$test_root/new-interaction-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  request_log="$test_root/metadata-requests.log"
+
+  run bash -c 'printf "i\nb\ni\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" METADATA_REQUEST_LOG="$4" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$request_log"
+
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'releases-index.json' "$request_log" || true)" -eq 2 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'Loading available .NET SDK releases from Microsoft...' || true)" -eq 2 ]
+}
+
+@test "Back to channels refetches metadata for a newly selected channel" {
+  bootstrap_tool
+  fake_bin="$test_root/channel-reselection-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  request_log="$test_root/metadata-requests.log"
+
+  run bash -c 'printf "1\nb\n1\nb\nq\n" | env HOME="$1" PATH="$2:$PATH" METADATA_REQUEST_LOG="$4" "$3" install' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$request_log"
+
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'releases-index.json' "$request_log" || true)" -eq 1 ]
+  [ "$(grep -c '/10.0/releases.json' "$request_log" || true)" -eq 2 ]
+}
+
+@test "new interaction surfaces failure fetching required metadata" {
+  bootstrap_tool
+  fake_bin="$test_root/retry-failure-fake-bin"
+  write_metadata_fake_curl "$fake_bin"
+  request_log="$test_root/metadata-requests.log"
+  # Override only the release-index request with a failure on its second fetch.
+  mv "$fake_bin/curl" "$fake_bin/fixture-curl"
+  cat > "$fake_bin/curl" <<'CURL'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == *'releases-index.json'* ]]; then
+  count=0
+  if [[ -f "$METADATA_REQUEST_LOG" ]]; then
+    count="$(grep -c 'releases-index.json' "$METADATA_REQUEST_LOG" || true)"
+  fi
+  if (( count == 1 )); then
+    printf '%s\n' 'releases-index.json' >> "$METADATA_REQUEST_LOG"
+    exit 89
+  fi
+fi
+exec "$(dirname "$0")/fixture-curl" "$@"
+CURL
+  chmod +x "$fake_bin/curl"
+
+  run bash -c 'printf "i\nb\ni\n" | env HOME="$1" PATH="$2:$PATH" METADATA_REQUEST_LOG="$4" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$request_log"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unable to load .NET release metadata from Microsoft."* ]]
+  [ "$(grep -c 'releases-index.json' "$request_log" || true)" -eq 2 ]
+}
+
 @test "captured already-installed interactive Install returns without acknowledgement" {
   bootstrap_tool
   fake_bin="$test_root/install-fake-bin"
