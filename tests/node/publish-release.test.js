@@ -33,7 +33,10 @@ async function exercise(options = {}) {
     addHeading() { return this; },
     addList() { return this; },
     addCodeBlock() { return this; },
-    async write() { calls.push('summary.write'); }
+    async write() {
+      calls.push('summary.write');
+      if (options.failAt === 'summary.write') throw new Error('injected failure: summary.write');
+    }
   };
   const core = {
     warning(message) { warnings.push(message); },
@@ -189,7 +192,7 @@ async function exercise(options = {}) {
       RELEASE_NOTES_PATH: 'notes.md',
       CHECKSUM_PATH: 'SHA256SUMS',
       MANIFEST_SHA256: options.wrongManifestHash ? '0'.repeat(64) : hash(options.badManifest ? 'incorrect manifest\n' : manifest),
-      POWERSHELL_SHA256: hash(ps),
+      POWERSHELL_SHA256: options.wrongScriptHash ? '0'.repeat(64) : hash(ps),
       BASH_SHA256: hash(sh)
     });
     try {
@@ -246,6 +249,7 @@ for (const scenario of [
   { name: 'duplicate PowerShell identity', options: { duplicateIdentity: true }, error: /PowerShell release source/ },
   { name: 'malformed checksum manifest', options: { badManifest: true }, error: /manifest|checksum/i },
   { name: 'wrong manifest hash', options: { wrongManifestHash: true }, error: /checksum|manifest/i },
+  { name: 'wrong script hash', options: { wrongScriptHash: true }, error: /script SHA-256/i },
   { name: 'wrong derived parent', options: { wrongParent: true }, error: /only parent/ },
   { name: 'wrong derived tree', options: { wrongTree: true }, error: /stamped PowerShell source bytes/ },
   { name: 'unexpected derived change set', options: { wrongDiff: true }, error: /only by the two stamped/ },
@@ -332,6 +336,23 @@ test('incomplete cleanup retains the original error and leaves the tag for inves
 test('ambiguous successful-publication response preserves remote public state', async () => {
   const result = await exercise({ badPublishResponse: true, staleDraftOnPublic: true });
   failed(result, /did not confirm publication/);
+  assert.equal(result.state.release.draft, false);
+  assert.equal(result.state.tag, true);
+  assert.deepEqual(result.state.deleted, []);
+});
+
+test('invalid draft creation response does not fabricate ownership or publish', async () => {
+  const result = await exercise({ responses: {
+    createRelease(response) { return { data: { ...response.data, id: null } }; }
+  } });
+  failed(result, /did not confirm ownership of the draft release/);
+  assert.equal(result.state.tag, false);
+  assert.ok(!result.calls.includes('updateRelease'));
+});
+
+test('summary failure is reported without publishing a success output or deleting public state', async () => {
+  const result = await exercise({ failAt: 'summary.write' });
+  failed(result, /injected failure: summary.write/);
   assert.equal(result.state.release.draft, false);
   assert.equal(result.state.tag, true);
   assert.deepEqual(result.state.deleted, []);
