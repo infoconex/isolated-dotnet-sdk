@@ -2561,6 +2561,7 @@ run_selected_action() {
             if [[ "$INTERACTIVE_SESSION" == "true" && -z "$VERSION" ]]; then
                 select_verify_version || return 0
                 clear_interactive_screen
+                echo
             fi
             verify_isolated_sdk
             ;;
