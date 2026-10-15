@@ -80,7 +80,7 @@ function Invoke-RestMethod {
             }
         }
 
-        function Get-ChannelMenuVersions {
+        function Get-ChannelMenuVersion {
             param([string]$Output, [string]$Heading, [string]$Toggle)
             $start = $Output.IndexOf($Heading, [StringComparison]::Ordinal)
             if ($start -lt 0) { throw "Missing $Heading in: $Output" }
@@ -107,8 +107,8 @@ function Invoke-RestMethod {
     It 'orders shuffled supported and EOL records numerically, retaining malformed records last' {
         $result = Invoke-ShuffledChannelPicker -Selections 's,q'
         $result.ExitCode | Should -Be 0
-        ((Get-ChannelMenuVersions -Output $result.Output -Heading 'Select a supported or development .NET channel:' -Toggle 'S. Show end-of-life channels') -join ',') | Should -Be '10.0,9.0,8.0'
-        ((Get-ChannelMenuVersions -Output $result.Output -Heading 'Select an end-of-life .NET channel:' -Toggle 'S. Show supported/development channels') -join ',') | Should -Be '2.2,2.1,2.0,oops'
+        ((Get-ChannelMenuVersion -Output $result.Output -Heading 'Select a supported or development .NET channel:' -Toggle 'S. Show end-of-life channels') -join ',') | Should -Be '10.0,9.0,8.0'
+        ((Get-ChannelMenuVersion -Output $result.Output -Heading 'Select an end-of-life .NET channel:' -Toggle 'S. Show supported/development channels') -join ',') | Should -Be '2.2,2.1,2.0,oops'
         $result.Output | Should -Not -Match '\.NET 11\.0'
     }
 
