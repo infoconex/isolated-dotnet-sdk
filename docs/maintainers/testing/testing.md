@@ -122,6 +122,83 @@ The PowerShell behavioral coverage includes:
 
 The cross-shell product contract is documented in [PowerShell and Bash behavioral parity](../../contracts/behavioral-parity.md). The authoritative PowerShell-specific removal behavior specification is the [PowerShell removal contract](../../contracts/powershell-removal.md).
 
+## PowerShell behavioral-suite performance measurement
+
+The standard `tests/powershell/run-tests.ps1` entry point is also the performance
+measurement entry point. It runs the repository-pinned Pester suite with
+`-Output Detailed`, reports shared fake-host creation time, and prints the full
+behavioral-validation wall time. Pester's detailed output reports individual
+test durations; the GitHub Actions log timestamps on `Running tests from
+'...Tests.ps1'` identify file start times. Approximate each file's elapsed
+interval by subtracting that timestamp from the next file-start timestamp,
+or from `Tests completed in` for the last file. These intervals include
+Pester fixture setup and teardown, not just test-body time.
+
+To reproduce a comparable measurement:
+
+1. Use the same commit/test files, pinned Pester version, and PowerShell
+   runner/OS family for before-and-after trials. Record the exact commit SHA,
+   runner image and PowerShell version, passed/failed/skipped counts, and whether
+   the PowerShell dependency cache was warm.
+2. Run `pwsh -NoProfile -File ./tests/powershell/run-tests.ps1` as usual, or
+   use the `Run PowerShell behavioral tests` step in the repository's Validate
+   workflow. The runner's printed wall time includes fixture initialization;
+   Pester's `Tests completed in` excludes it.
+3. Inspect the timestamped Actions job log in GitHub. Optionally retrieve it
+   with `gh run view <run-id> --job <job-id> --log` if GitHub CLI is available.
+   Use the `Running tests from` transitions for file-level intervals and the
+   Pester `[+]` lines for selected test durations. Compare file counts and
+   names, not only the overall elapsed total.
+4. Prefer several runs under the same runner class to interpret variance.
+   Treat a warm/cold runner or different number of tests as a separate
+   comparison, and investigate any failure or newly flaky scenario regardless
+   of runtime.
+
+### Historical Windows reference
+
+The successful [Issue #161 Validate run](https://github.com/infoconex/isolated-dotnet-sdk/actions/runs/38745162881)
+used PR-head commit `bf40568410208de8d87947ef13f691e400b0ad3b`,
+`windows-2025`, PowerShell `7.6.6`, and pinned Pester `6.2.0`.
+This was the CI-tested source for the subsequent `release/0.4` squash
+merge `e4c84accb28ab900974bcaa8bc9607d2fb019893`. The merge verification
+confirmed the changed files were identical. The recorded baseline is a
+**prior PR run**, not a run executed against the later squash-merge SHA.
+
+| Measurement | Value |
+| --- | ---: |
+| Passed / failed / skipped | 243 / 0 / 0 |
+| Pester test duration | 234.23s |
+| PowerShell behavioral-validation wall time | 236.29s |
+| Shared fake-host setup | 1.46s |
+| Verify file interval | ~46s |
+| Transactional Install file interval | ~33s |
+| Interactive Lifecycle file interval | ~23s |
+| Process-level Behavior file interval | ~18s |
+| Interactive Verify file interval | ~12s |
+| Global Exit file interval | ~13s |
+| Prerelease Picker file interval | ~11s |
+
+The older Windows local observation (236 tests, ~230.68s) and this hosted
+run (243 tests, 236.29s) are **not** like-for-like measurements.
+
+### Optimization boundaries
+
+Process startup can dominate some test-file time, but repeated setup
+launches must be distinguished from scenario subprocesses. For example,
+the original Verify `BeforeEach` started a PowerShell child merely to copy
+and bootstrap the test tool before starting separate scenario processes.
+A direct byte-for-byte copy to that scenario's own temporary HOME avoids
+the unrelated setup process. Dedicated bootstrap tests must still start with
+an absent installed tool and execute the actual source entry point.
+
+Transactional Install's many `pwsh` calls mostly exercise distinct
+transaction, native-host, failure, and exit-code boundaries. Such execution
+is not redundant just because it is expensive. The shared fake host is
+built once per full suite and should not be rebuilt for each test. Do not
+share mutable HOME, SDK directories, test environment variables, or
+download/staging state across cases, and do not replace process-boundary
+assertions with mocks for the sake of speed.
+
 ## Static analysis
 
 Static-analysis scope and version policy are documented in [Static analysis](static-analysis.md). The authoritative analyzer versions are defined in [`.config/static-analysis.json`](../../../.config/static-analysis.json).
