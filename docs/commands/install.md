@@ -12,6 +12,8 @@ Install can resolve a version in three ways:
 - the interactive channel and SDK picker; or
 - manual exact-version entry from the picker.
 
+The supported/development and end-of-life channel pickers list channels by numeric major/minor version, newest first, regardless of Microsoft's release-index order. The selection number always refers to that channel's own release metadata. Channel ordering is separate from SDK-version ordering; a historical channel such as .NET 2.0 can include SDKs numbered 2.1.*.
+
 Displayed SDK version choices use the shared SDK-aware newest-to-oldest ordering; the compact picker still promotes the current latest SDK and newest feature-band representatives before the expanded full list.
 
 A bare version with no explicit action is treated as an Install request.

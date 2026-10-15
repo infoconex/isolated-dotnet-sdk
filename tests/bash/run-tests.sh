@@ -32,6 +32,7 @@ bats \
   "$repo_root/tests/bash/presentation.bats" \
   "$repo_root/tests/bash/metadata.bats" \
   "$repo_root/tests/bash/sdk-version-ordering.bats" \
+  "$repo_root/tests/bash/channel-ordering.bats" \
   "$repo_root/tests/bash/metadata-boundaries.bats" \
   "$repo_root/tests/bash/public-boundaries.bats" \
   "$repo_root/tests/bash/native-failures.bats" \

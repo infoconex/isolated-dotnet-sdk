@@ -1287,6 +1287,37 @@ function Select-InstallVersion {
         throw 'No selectable .NET channels were found in Microsoft release metadata.'
     }
 
+    # Sort complete channel records, not detached display names or latest SDKs.
+    # Keep malformed channel versions after numeric entries in encounter order.
+    $EncounterIndex = 0
+    $AllChannels = @(
+        $AllChannels |
+            ForEach-Object {
+                $Channel = $_
+                $Match = [regex]::Match([string]$Channel.'channel-version', '^([0-9]+)\.([0-9]+)$')
+                $Major = [long]0
+                $Minor = [long]0
+                $IsNumeric = $Match.Success -and
+                [long]::TryParse($Match.Groups[1].Value, [ref]$Major) -and
+                [long]::TryParse($Match.Groups[2].Value, [ref]$Minor)
+                [pscustomobject]@{
+                    Entry   = $Channel
+                    Numeric = [int]$IsNumeric
+                    Major   = $Major
+                    Minor   = $Minor
+                    Index   = $EncounterIndex
+                }
+                $EncounterIndex++
+            } |
+            Sort-Object -Property @(
+                @{ Expression = 'Numeric'; Descending = $true },
+                @{ Expression = 'Major'; Descending = $true },
+                @{ Expression = 'Minor'; Descending = $true },
+                @{ Expression = 'Index'; Descending = $false }
+            ) |
+            ForEach-Object { $_.Entry }
+    )
+
     $ShowArchived = $false
     $ResumeChannel = $script:InstallResumeChannel
     $script:InstallResumeChannel = $null
