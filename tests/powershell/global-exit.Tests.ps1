@@ -86,20 +86,10 @@ function Invoke-RestMethod {
         $script:TestHome = Join-Path $script:TestRoot 'home'
         $script:ToolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $script:ToolPath = Join-Path $script:ToolRoot 'isolated-dotnet-sdk.ps1'
-        $sourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk-source.ps1'
-        New-Item -ItemType Directory -Path $script:TestHome -Force | Out-Null
-        Copy-Item $script:ToolScript $sourceCopy -Force
-
-        $homeVariable = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
-        $originalHome = [Environment]::GetEnvironmentVariable($homeVariable, 'Process')
-        try {
-            [Environment]::SetEnvironmentVariable($homeVariable, $script:TestHome, 'Process')
-            & pwsh -NoProfile -File $sourceCopy -Action List *> $null
-            $LASTEXITCODE | Should -Be 0
-        }
-        finally {
-            [Environment]::SetEnvironmentVariable($homeVariable, $originalHome, 'Process')
-        }
+        # Each interactive child receives a unique HOME and an installed tool.
+        # Its exit/navigation behavior does not depend on re-running bootstrap.
+        New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
     }
 
     AfterEach {

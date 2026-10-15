@@ -103,18 +103,10 @@ function Invoke-RestMethod {
         $script:TestHome = Join-Path $script:TestRoot 'home'
         $script:ToolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $script:ToolPath = Join-Path $script:ToolRoot 'isolated-dotnet-sdk.ps1'
-        New-Item -ItemType Directory -Path $script:TestHome -Force | Out-Null
-        $sourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk.ps1'
-        Copy-Item $script:ToolScript $sourceCopy
-        $originalHome = [Environment]::GetEnvironmentVariable('USERPROFILE', 'Process')
-        try {
-            [Environment]::SetEnvironmentVariable('USERPROFILE', $script:TestHome, 'Process')
-            & pwsh -NoProfile -File $sourceCopy -Action List *> $null
-            $LASTEXITCODE | Should -Be 0
-        }
-        finally {
-            [Environment]::SetEnvironmentVariable('USERPROFILE', $originalHome, 'Process')
-        }
+        # Picker process tests set their own isolated HOME and validate
+        # interactive selection; no bootstrap process is needed in fixture setup.
+        New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
     }
 
     AfterEach {

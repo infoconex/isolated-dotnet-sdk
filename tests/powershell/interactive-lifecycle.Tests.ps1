@@ -73,20 +73,11 @@ Describe 'PowerShell interactive lifecycle' {
         $script:TestHome = Join-Path $script:TestRoot 'home'
         $script:ToolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $script:ToolPath = Join-Path $script:ToolRoot 'isolated-dotnet-sdk.ps1'
-        $script:SourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk-source.ps1'
-        New-Item -ItemType Directory -Path $script:TestHome -Force | Out-Null
-
-        Copy-Item $script:ToolScript $script:SourceCopy -Force
-        $homeVariable = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
-        $originalHome = [Environment]::GetEnvironmentVariable($homeVariable, 'Process')
-        try {
-            [Environment]::SetEnvironmentVariable($homeVariable, $script:TestHome, 'Process')
-            & pwsh -NoProfile -File $script:SourceCopy -Action List *> $null
-            $LASTEXITCODE | Should -Be 0
-        }
-        finally {
-            [Environment]::SetEnvironmentVariable($homeVariable, $originalHome, 'Process')
-        }
+        # The interactive subprocesses under test use this independently
+        # installed tool; launching an extra bootstrap process per case adds
+        # no coverage to their prompt, input, and exit-code contracts.
+        New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
     }
 
     AfterEach {

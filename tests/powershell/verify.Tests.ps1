@@ -4,12 +4,6 @@ Describe 'PowerShell isolated SDK verification' {
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
         $script:HomeVariableName = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
 
-        function Install-TestTool {
-            Copy-Item $script:ToolScript $script:SourceCopy -Force
-            & pwsh -NoProfile -File $script:SourceCopy -Action List *> $null
-            $LASTEXITCODE | Should -Be 0
-        }
-
         function Install-FakeIsolatedHost {
             param(
                 [Alias('SdkVersion')]
@@ -62,9 +56,12 @@ function Invoke-RestMethod {
         $script:SourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk-source.ps1'
         $script:OriginalHomeValue = [Environment]::GetEnvironmentVariable($script:HomeVariableName, 'Process')
 
-        New-Item -ItemType Directory -Path $script:TestHome -Force | Out-Null
+        # Most Verify scenarios exercise an already-installed tool in a real child process.
+        # Install directly in this unique test HOME instead of running a second,
+        # unrelated bootstrap process before each test.
+        New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:TestHome, 'Process')
-        Install-TestTool
     }
 
     AfterEach {
@@ -108,7 +105,15 @@ function Invoke-RestMethod {
         $env:FAKE_DOTNET_RUNTIME_EXIT_CODE = '72'
         $env:FAKE_DOTNET_RUNTIME_PROBE_MARKER = Join-Path $script:TestRoot 'runtime-probed.txt'
 
+        # Exercise the real bootstrap boundary: the installed tool must be absent
+        # when the source entry point starts, then installed by that process.
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:SourceCopy -Force
+        Remove-Item -LiteralPath $script:ToolPath -Force
+        Test-Path -LiteralPath $script:ToolPath | Should -BeFalse
+
         $output = @(& pwsh -NoProfile -File $script:SourceCopy -Action Verify -SdkVersion $version 2>&1)
+
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
 
         $LASTEXITCODE | Should -Be 0
         $text = $output -join [Environment]::NewLine
@@ -127,7 +132,15 @@ function Invoke-RestMethod {
         $env:FAKE_DOTNET_SDK_VERSION = $version
         $env:FAKE_DOTNET_RUNTIME_PROBE_MARKER = Join-Path $script:TestRoot 'runtime-probed.txt'
 
+        # Exercise the real bootstrap boundary: the installed tool must be absent
+        # when the source entry point starts, then installed by that process.
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:SourceCopy -Force
+        Remove-Item -LiteralPath $script:ToolPath -Force
+        Test-Path -LiteralPath $script:ToolPath | Should -BeFalse
+
         $output = @(& pwsh -NoProfile -File $script:SourceCopy -Action Verify -SdkVersion $version 2>&1)
+
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
 
         $LASTEXITCODE | Should -Be 0
         $text = $output -join [Environment]::NewLine
