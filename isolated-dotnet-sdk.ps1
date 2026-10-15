@@ -1301,11 +1301,11 @@ function Select-InstallVersion {
                     [long]::TryParse($Match.Groups[1].Value, [ref]$Major) -and
                     [long]::TryParse($Match.Groups[2].Value, [ref]$Minor)
                 [pscustomobject]@{
-                    Entry = $Channel
+                    Entry   = $Channel
                     Numeric = [int]$IsNumeric
-                    Major = $Major
-                    Minor = $Minor
-                    Index = $EncounterIndex
+                    Major   = $Major
+                    Minor   = $Minor
+                    Index   = $EncounterIndex
                 }
                 $EncounterIndex++
             } |
