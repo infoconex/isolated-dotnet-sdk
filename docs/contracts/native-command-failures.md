@@ -6,7 +6,7 @@ The tool treats an external command's exit status as correctness-significant whe
 
 | Boundary | PowerShell | Bash | Required behavior |
 | --- | --- | --- | --- |
-| Bootstrapped saved-tool execution | Explicitly propagate the saved child tool's nonzero exit | `exec` naturally replaces the bootstrap process and preserves the child status | Bootstrap must not return success when the saved tool fails |
+| Bootstrapped saved-tool execution | Propagate the saved PowerShell child script's failed invocation; do not treat a stale `$LASTEXITCODE` from optional native diagnostics as child failure | `exec` naturally replaces the bootstrap process and preserves the child status | Bootstrap must not return success when the saved tool fails |
 | System `dotnet --list-sdks` inventory | Check `$LASTEXITCODE` | Capture the command status explicitly | Fail instead of treating a failed inventory as empty or continuing installation |
 | Existing isolated host SDK proof | For newer hosts, check `--list-sdks` and `$LASTEXITCODE`; for historical 1.x/early 2.x use pinned `--version` and `--info` SDK Base Path | Equivalent modern inventory versus private legacy host proof | An unverified local host is never treated as an already-installed matching SDK; never trust system fallback |
 | SDK payload download | PowerShell web-request failure is caught with SDK/version context | `curl` status is captured explicitly | Stop before checksum verification, extraction, and success output when the payload cannot be acquired |
@@ -17,6 +17,8 @@ The tool treats an external command's exit status as correctness-significant whe
 | Removal build-server shutdown | Check `$LASTEXITCODE` and report SDK/exit context | Capture the command status and report SDK/exit context | Do not remove the SDK after shutdown failure and do not report removal success |
 
 Diagnostics at these boundaries identify the failed operation and, where applicable, the SDK version and native exit code. Runtime-specific details may differ, but a shared product failure should not depend only on shell-native failure text when repository-owned context can identify the operation.
+
+Optional component diagnostics (such as `dotnet --list-runtimes` on unsupported or incomplete hosts) must not turn an otherwise successful local Verify operation into a nonzero bootstrap exit. Original 1.x and early 2.x hosts skip unsupported runtime-inventory probes. This exception does not weaken the correctness-significant SDK version and origin proof.
 
 ## Related product boundaries
 
