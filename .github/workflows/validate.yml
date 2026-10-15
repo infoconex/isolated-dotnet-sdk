@@ -65,7 +65,9 @@ jobs:
       - name: Run stable release publisher regression tests
         if: matrix.os == 'ubuntu-24.04'
         shell: bash
-        run: node --test tests/node/publish-release.test.js
+        run: |
+          node --version
+          node --test tests/node/publish-release.test.js
 
   powershell:
     if: ${{ github.event_name != 'push' || github.event.created == false }}
