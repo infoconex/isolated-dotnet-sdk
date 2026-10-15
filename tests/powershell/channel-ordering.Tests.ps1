@@ -66,8 +66,8 @@ function Invoke-RestMethod {
             $startInfo.ArgumentList.Add($command)
             $startInfo.Environment['ISOLATED_DOTNET_SDK_TOOL_PATH'] = $script:ToolPath
             $startInfo.Environment['CHANNEL_TEST_INPUT'] = $Selections
-            $startInfo.Environment['HOME'] = $script:Home
-            $startInfo.Environment['USERPROFILE'] = $script:Home
+            $startInfo.Environment['HOME'] = $script:TestHome
+            $startInfo.Environment['USERPROFILE'] = $script:TestHome
             $process = [System.Diagnostics.Process]::new()
             $process.StartInfo = $startInfo
             [void]$process.Start()
@@ -93,8 +93,8 @@ function Invoke-RestMethod {
 
     BeforeEach {
         $script:Root = Join-Path ([IO.Path]::GetTempPath()) ("isolated-dotnet-channel-sort-{0}" -f [guid]::NewGuid())
-        $script:Home = Join-Path $script:Root 'home'
-        $toolRoot = Join-Path $script:Home 'dotnet-sdks'
+        $script:TestHome = Join-Path $script:Root 'home'
+        $toolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $script:ToolPath = Join-Path $toolRoot 'isolated-dotnet-sdk.ps1'
         New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
         Copy-Item -LiteralPath $script:Source -Destination $script:ToolPath
