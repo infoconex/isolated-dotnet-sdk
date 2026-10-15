@@ -50,14 +50,14 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$1" == "build-server" && "$2" == "shutdown" ]] || exit 81
-[[ "${DOTNET_ROOT:-}" == "$(cd "$(dirname "$0")" && pwd)" ]] || exit 82
+[[ "$(cd "$DOTNET_ROOT" && pwd -P)" == "$(cd "$(dirname "$0")" && pwd -P)" ]] || exit 82
 [[ "${DOTNET_MULTILEVEL_LOOKUP:-}" == "0" ]] || exit 83
 [[ "${DOTNET_SKIP_FIRST_TIME_EXPERIENCE:-}" == "1" ]] || exit 84
 [[ "${DOTNET_CLI_TELEMETRY_OPTOUT:-}" == "1" ]] || exit 85
 [[ "${DOTNET_NOLOGO:-}" == "true" ]] || exit 86
 [[ "${DOTNET_GENERATE_ASPNET_CERTIFICATE:-}" == "false" ]] || exit 87
 [[ "${DOTNET_ADD_GLOBAL_TOOLS_TO_PATH:-}" == "false" ]] || exit 88
-[[ "${DOTNET_CLI_HOME:-}" == "$PWD" ]] || exit 89
+[[ "$(cd "$DOTNET_CLI_HOME" && pwd -P)" == "$(pwd -P)" ]] || exit 89
 [[ ! -e "$PWD/global.json" ]] || exit 90
 printf '%s\n' "$PWD" > "$SDK_TEST_SHUTDOWN_WORK_DIR_MARKER"
 printf '%s\n' 'child shutdown chatter'
@@ -68,6 +68,9 @@ EOF
     run env HOME="$test_home" DOTNET_ROOT="$test_root/wrong-root" DOTNET_MULTILEVEL_LOOKUP=1 DOTNET_CLI_HOME="$test_root/wrong-home" DOTNET_SKIP_FIRST_TIME_EXPERIENCE=0 DOTNET_CLI_TELEMETRY_OPTOUT=0 SDK_TEST_SHUTDOWN_WORK_DIR_MARKER="$marker" "$tool_path" remove "$version" --yes
     cd "$repo_root"
 
+    if [[ "$status" -ne 0 ]]; then
+      printf 'SDK %s shutdown test failed (exit %s): %s\n' "$version" "$status" "$output" >&3
+    fi
     [ "$status" -eq 0 ]
     [[ "$output" == *"Isolated SDK $version was removed."* ]]
     [[ "$output" != *"child shutdown chatter"* ]]
