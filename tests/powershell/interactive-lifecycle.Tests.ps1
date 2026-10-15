@@ -363,8 +363,7 @@ function Invoke-RestMethod {
     return $channelMetadata
 }
 function dotnet {
-    param([string]$Command)
-    if ($Command -ne '--list-sdks') { return }
+    # This fake shadows only the system dotnet command in the test subprocess.
     Add-Content -LiteralPath $env:ISOLATED_TEST_INVENTORY_LOG -Value 'read'
     $count = @(Get-Content -LiteralPath $env:ISOLATED_TEST_INVENTORY_LOG).Count
     if ($count -eq 2) {
