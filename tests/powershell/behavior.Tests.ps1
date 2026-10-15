@@ -11,6 +11,13 @@ Describe 'PowerShell process-level behavior' {
             & pwsh -NoProfile -File $script:SourceCopy -Action List *> $null
             $LASTEXITCODE | Should -Be 0
         }
+
+        function Prepare-InstalledTestTool {
+            # This path prepares an already-installed tool without testing bootstrap.
+            New-Item -ItemType Directory -Path $script:ToolRoot -Force -ErrorAction Stop | Out-Null
+            Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+            Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
+        }
     }
 
     BeforeEach {
@@ -62,7 +69,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'fails with context when system SDK inventory exits nonzero' {
-        Install-TestTool
+        Prepare-InstalledTestTool
         $fakeBin = Join-Path $script:TestRoot 'system-dotnet-fake-bin'
         New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
         Set-Content -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') -Value "@echo off`r`nexit /b 71`r`n"
@@ -78,7 +85,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'lists the isolated SDK root' {
-        Install-TestTool
+        Prepare-InstalledTestTool
 
         $listOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List 2>&1)
 
@@ -87,7 +94,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'keeps presentation output off the success stream and ANSI out of redirected information output' {
-        Install-TestTool
+        Prepare-InstalledTestTool
         $listSuccessOutputPath = Join-Path $script:TestRoot 'list-success.txt'
         $listInformationOutputPath = Join-Path $script:TestRoot 'list-information.txt'
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
@@ -123,7 +130,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'honors NO_COLOR without ANSI escape sequences' {
-        Install-TestTool
+        Prepare-InstalledTestTool
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
         [Environment]::SetEnvironmentVariable('NO_COLOR', '1', 'Process')
 
@@ -133,7 +140,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'rejects an invalid SDK version' {
-        Install-TestTool
+        Prepare-InstalledTestTool
 
         & pwsh -NoProfile -File $script:ToolPath -Action Install -SdkVersion 'invalid/version' -Yes *> $null
 
@@ -141,7 +148,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'reports release-index network failure with deterministic metadata context' {
-        Install-TestTool
+        Prepare-InstalledTestTool
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
 
         $metadataOutput = @(& pwsh -NoProfile -Command 'function Invoke-RestMethod { throw "transport-specific detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install' 2>&1)
@@ -152,7 +159,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It '-Yes does not bypass unresolved install selection' {
-        Install-TestTool
+        Prepare-InstalledTestTool
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
 
         $failureOutput = @(& pwsh -NoProfile -NonInteractive -Command '$releaseIndex = [pscustomobject]@{ "releases-index" = @([pscustomobject]@{ "channel-version" = "99.0"; "latest-sdk" = "99.0.100"; "support-phase" = "active"; "release-type" = "sts"; "releases.json" = "https://example.invalid/releases.json" }) }; function Invoke-RestMethod { return $releaseIndex }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -Yes' 2>&1)
@@ -163,7 +170,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'reports unavailable interactive input with repository-owned context' {
-        Install-TestTool
+        Prepare-InstalledTestTool
         $version = '99.0.100-input-test'
         $installDirectory = Join-Path $script:ToolRoot $version
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
@@ -177,7 +184,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'reports release-metadata download failure with repository-owned context' {
-        Install-TestTool
+        Prepare-InstalledTestTool
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
 
         $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "transport-specific-metadata-detail" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
@@ -188,7 +195,7 @@ Describe 'PowerShell process-level behavior' {
     }
 
     It 'rejects a version with an explicit List action' {
-        Install-TestTool
+        Prepare-InstalledTestTool
 
         $failureOutput = @(& pwsh -NoProfile -File $script:ToolPath -Action List -SdkVersion 99.0.100 2>&1)
 
