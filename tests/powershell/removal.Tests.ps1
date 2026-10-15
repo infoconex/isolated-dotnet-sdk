@@ -88,6 +88,14 @@ Describe 'PowerShell removal behavior' {
             ($unsupportedOutput -join [Environment]::NewLine) | Should -Match 'supported only with.*Remove'
         }
 
+        It 'rejects legacy shutdown approval on actions other than Remove' {
+            Install-TestTool
+            $output = @(& pwsh -NoProfile -File $script:InstalledToolPath -Action List -AllowUnsupportedShutdown 2>&1)
+
+            $LASTEXITCODE | Should -Not -Be 0
+            ($output -join [Environment]::NewLine) | Should -Match 'supported only with.*Remove'
+        }
+
         It 'fails safely for non-interactive removal without explicit approval' {
             Install-TestTool
             $publicInstallDirectory = Join-Path $script:ToolRoot $script:RemovalVersion
@@ -204,6 +212,44 @@ Describe 'PowerShell removal behavior' {
 
             $script:ShutdownCallCount | Should -Be 1
             Test-Path -LiteralPath $installDirectory | Should -BeFalse
+        }
+
+        It 'does not treat -Yes as a legacy bypass and forwards explicit opt-in only when supplied' {
+            $script:SdkVersion = '2.1.105'
+            $installDirectory = Initialize-TestRemovalTarget
+            $script:ShutdownApprovals = [System.Collections.Generic.List[bool]]::new()
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                param(
+                    [string]$DotNetPath,
+                    [string]$SdkVersion,
+                    [switch]$AllowUnsupportedShutdown
+                )
+                $null = $DotNetPath
+                $null = $SdkVersion
+                $script:ShutdownApprovals.Add([bool]$AllowUnsupportedShutdown)
+                if (-not $AllowUnsupportedShutdown) {
+                    throw 'legacy opt-in required'
+                }
+            }
+
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*legacy opt-in required*'
+            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+
+            Remove-IsolatedSdk -Yes -AllowUnsupportedShutdown
+            @($script:ShutdownApprovals) | Should -Be @($false, $true)
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+        }
+
+        It 'gives -WhatIf precedence over explicit legacy approval' {
+            $script:SdkVersion = '2.1.105'
+            $installDirectory = Initialize-TestRemovalTarget
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                throw 'shutdown must never run for WhatIf'
+            }
+
+            Remove-IsolatedSdk -Yes -AllowUnsupportedShutdown -WhatIf
+
+            Test-Path -LiteralPath $installDirectory | Should -BeTrue
         }
 
         It 'gives -WhatIf precedence over -Yes' {
