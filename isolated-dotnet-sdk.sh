@@ -1071,31 +1071,44 @@ select_install_version() {
     local resume_channel="$INSTALL_RESUME_CHANNEL"
     local resume_latest_sdk="$INSTALL_RESUME_LATEST_SDK"
     local resume_releases_url="$INSTALL_RESUME_RELEASES_URL"
+    local resume_channel_data="$INSTALL_RESUME_CHANNEL_DATA"
+    local resume_versions="$INSTALL_RESUME_VERSIONS"
+    local reusable_versions=""
     local clear_channel_screen="true"
 
     INSTALL_RESUME_CHANNEL=""
     INSTALL_RESUME_LATEST_SDK=""
     INSTALL_RESUME_RELEASES_URL=""
+    INSTALL_RESUME_CHANNEL_DATA=""
+    INSTALL_RESUME_VERSIONS=""
 
-    tool_info "Loading available .NET SDK releases from Microsoft..."
-    index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
-        tool_fail "Unable to load .NET release metadata from Microsoft."
+    if [[ -n "$resume_channel" && -n "$resume_channel_data" ]]; then
+        # Consume validated discovery from the acknowledged Install result.
+        channel_data="$resume_channel_data"
+    else
+        tool_info "Loading available .NET SDK releases from Microsoft..."
+        index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
+            tool_fail "Unable to load .NET release metadata from Microsoft."
 
-    if ! looks_like_json_object "$index_json" || \
-       [[ "$index_json" != *'"releases-index"'* ]]; then
-        tool_fail "Invalid .NET release metadata from Microsoft."
+        if ! looks_like_json_object "$index_json" || \
+           [[ "$index_json" != *'"releases-index"'* ]]; then
+            tool_fail "Invalid .NET release metadata from Microsoft."
+        fi
+
+        channel_data="$(printf "%s\n" "$index_json" | parse_release_index | sort_channel_records)"
+        [[ -n "$channel_data" ]] || \
+            tool_fail "No selectable .NET channels were found in Microsoft release metadata."
     fi
 
-    channel_data="$(printf "%s\n" "$index_json" | parse_release_index | sort_channel_records)"
-    [[ -n "$channel_data" ]] || \
-        tool_fail "No selectable .NET channels were found in Microsoft release metadata."
-
     while true; do
+        reusable_versions=""
         if [[ -n "$resume_channel" ]]; then
             channel="$resume_channel"
             latest_sdk="$resume_latest_sdk"
             releases_url="$resume_releases_url"
+            reusable_versions="$resume_versions"
             resume_channel=""
+            resume_versions=""
         else
         if [[ "$clear_channel_screen" == "true" ]]; then
             clear_interactive_screen
@@ -1225,30 +1238,34 @@ select_install_version() {
         fi
         fi
 
-        metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
-        trap 'rm -f "$metadata_file" || true' EXIT
-        trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$$"' TERM
-        trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$$"' INT
-        trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$$"' HUP
+        if [[ -n "$reusable_versions" ]]; then
+            versions="$reusable_versions"
+        else
+            metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
+            trap 'rm -f "$metadata_file" || true' EXIT
+            trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$"' TERM
+            trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$"' INT
+            trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$"' HUP
 
-        if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
+            if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
+                trap - EXIT TERM INT HUP
+                rm -f "$metadata_file" || true
+                tool_fail "Unable to load release metadata for .NET $channel."
+            fi
+
+            metadata_json="$(cat "$metadata_file")"
+            if ! looks_like_json_object "$metadata_json" || \
+               [[ "$metadata_json" != *'"releases"'* ]]; then
+                trap - EXIT TERM INT HUP
+                rm -f "$metadata_file" || true
+                tool_fail "Invalid release metadata for .NET $channel."
+            fi
+
+            versions="$(extract_sdk_versions < "$metadata_file" || true)"
             trap - EXIT TERM INT HUP
             rm -f "$metadata_file" || true
-            tool_fail "Unable to load release metadata for .NET $channel."
+            metadata_file=""
         fi
-
-        metadata_json="$(cat "$metadata_file")"
-        if ! looks_like_json_object "$metadata_json" || \
-           [[ "$metadata_json" != *'"releases"'* ]]; then
-            trap - EXIT TERM INT HUP
-            rm -f "$metadata_file" || true
-            tool_fail "Invalid release metadata for .NET $channel."
-        fi
-
-        versions="$(extract_sdk_versions < "$metadata_file" || true)"
-        trap - EXIT TERM INT HUP
-        rm -f "$metadata_file" || true
-        metadata_file=""
 
         [[ -n "$versions" ]] || tool_fail "No SDK versions were found for .NET $channel."
 
@@ -1364,6 +1381,8 @@ select_install_version() {
                     INSTALL_RESUME_CHANNEL="$channel"
                     INSTALL_RESUME_LATEST_SDK="$latest_sdk"
                     INSTALL_RESUME_RELEASES_URL="$releases_url"
+                    INSTALL_RESUME_CHANNEL_DATA="$channel_data"
+                    INSTALL_RESUME_VERSIONS="$versions"
                     INSTALL_RESULT_PARENT="SDK selection"
                     return 0
                     ;;
@@ -1388,6 +1407,8 @@ select_install_version() {
                 INSTALL_RESUME_CHANNEL="$channel"
                 INSTALL_RESUME_LATEST_SDK="$latest_sdk"
                 INSTALL_RESUME_RELEASES_URL="$releases_url"
+                INSTALL_RESUME_CHANNEL_DATA="$channel_data"
+                INSTALL_RESUME_VERSIONS="$versions"
                 INSTALL_RESULT_PARENT="SDK selection"
                 return 0
             fi
@@ -2661,6 +2682,8 @@ BACK_TO_MAIN="false"
 INSTALL_RESUME_CHANNEL=""
 INSTALL_RESUME_LATEST_SDK=""
 INSTALL_RESUME_RELEASES_URL=""
+INSTALL_RESUME_CHANNEL_DATA=""
+INSTALL_RESUME_VERSIONS=""
 INSTALL_RESULT_PARENT="Main"
 
 while [[ $# -gt 0 ]]; do
@@ -2733,6 +2756,8 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
         INSTALL_RESUME_CHANNEL=""
         INSTALL_RESUME_LATEST_SDK=""
         INSTALL_RESUME_RELEASES_URL=""
+        INSTALL_RESUME_CHANNEL_DATA=""
+        INSTALL_RESUME_VERSIONS=""
         INSTALL_RESULT_PARENT="Main"
 
         if ! select_action; then
