@@ -179,13 +179,28 @@ function Invoke-RestMethod {
         $installDirectory = Join-Path $script:ToolRoot $version
         $hostPath = Join-Path $installDirectory 'dotnet.exe'
         New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
-        Set-Content -LiteralPath $hostPath -Value 'not-a-windows-executable' -NoNewline
 
-        $verifyOutput = @(Invoke-VerifyTool -Version $version)
+        # Lock a valid executable instead of launching malformed executable
+        # bytes, which opens blocking "Unsupported 16-Bit Application" dialogs
+        # on Windows during otherwise unattended test runs.
+        $fixtureHost = Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT 'dotnet.exe'
+        Copy-Item -LiteralPath $fixtureHost -Destination $hostPath
+        $exclusiveLock = [System.IO.File]::Open(
+            $hostPath,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None)
 
-        $script:VerifyExitCode | Should -Not -Be 0
-        ($verifyOutput -join [Environment]::NewLine) | Should -Match "Unable to launch isolated SDK $([regex]::Escape($version)) host"
-        Test-Path -LiteralPath $hostPath -PathType Leaf | Should -BeTrue
+        try {
+            $verifyOutput = @(Invoke-VerifyTool -Version $version)
+
+            $script:VerifyExitCode | Should -Not -Be 0
+            ($verifyOutput -join [Environment]::NewLine) | Should -Match "Unable to launch isolated SDK $([regex]::Escape($version)) host"
+            Test-Path -LiteralPath $hostPath -PathType Leaf | Should -BeTrue
+        }
+        finally {
+            $exclusiveLock.Dispose()
+        }
     }
 
     It 'fails with the native exit code when the host reports execution failure' {
