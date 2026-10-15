@@ -121,6 +121,7 @@ Describe 'PowerShell removal behavior' {
 
             $removeCommand.Parameters.ContainsKey('WhatIf') | Should -BeTrue
             $removeCommand.Parameters.ContainsKey('Confirm') | Should -BeTrue
+            $removeCommand.Parameters.ContainsKey('AllowUnsupportedShutdown') | Should -BeTrue
         }
 
         It 'keeps the SDK and skips shutdown after default cancellation' {
@@ -236,7 +237,7 @@ Describe 'PowerShell removal behavior' {
             Test-Path -LiteralPath $installDirectory | Should -BeTrue
 
             Remove-IsolatedSdk -Yes -AllowUnsupportedShutdown
-            @($script:ShutdownApprovals) | Should -Be @($false, $true)
+            ($script:ShutdownApprovals -join ',') | Should -Be 'False,True'
             Test-Path -LiteralPath $installDirectory | Should -BeFalse
         }
 
