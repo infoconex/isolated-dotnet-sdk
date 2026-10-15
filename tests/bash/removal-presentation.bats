@@ -99,6 +99,115 @@ EOF
   [ -f "$sibling_dir/sentinel.txt" ]
 }
 
+@test "verified early SDKs require distinct explicit unsupported-shutdown approval" {
+  for version in 1.0.4 1.1.5 1.1.14 2.0.3; do
+    install_dir="$tool_root/$version"
+    mkdir -p "$install_dir/sdk/$version"
+    cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+exit 99
+EOF
+    chmod +x "$install_dir/dotnet"
+
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes
+    [ "$status" -ne 0 ]
+    [ -d "$install_dir" ]
+
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Other build processes may remain"* ]]
+    [ ! -d "$install_dir" ]
+  done
+}
+
+@test "2.1.105 requires successful SDK-local Roslyn shutdown before removal" {
+  version='2.1.105'
+  install_dir="$tool_root/$version"
+  compiler="$install_dir/sdk/$version/Roslyn/bincore/VBCSCompiler.dll"
+  mkdir -p "$(dirname "$compiler")"
+  printf 'fixture' > "$compiler"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+if [[ "$1" == exec && "$3" == -shutdown && -f "$2" ]]; then
+  [[ "${SDK_TEST_ROSLYN_FAILURE:-}" == true ]] && exit 77
+  printf '%s' "$2" > "$SDK_TEST_ROSLYN_MARKER"
+  exit 0
+fi
+exit 98
+EOF
+  chmod +x "$install_dir/dotnet"
+  marker="$test_root/roslyn.txt"
+  run env HOME="$test_home" SDK_TEST_ROSLYN_MARKER="$marker" \
+    SDK_TEST_ROSLYN_FAILURE=true "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [ -d "$install_dir" ]
+  [ ! -e "$marker" ]
+
+  run env HOME="$test_home" SDK_TEST_ROSLYN_MARKER="$marker" \
+    "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  [ "$status" -eq 0 ]
+  [ "$(cat "$marker")" = "$compiler" ]
+  [ ! -d "$install_dir" ]
+}
+
+@test "unsupported opt-in never bypasses unexpected errors or supported shutdown failures" {
+  version='1.0.4'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir/sdk/$version"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$2" == --help ]]; then
+  echo 'unrecognized capability error'
+  exit 1
+fi
+exit 73
+EOF
+  chmod +x "$install_dir/dotnet"
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [ -d "$install_dir" ]
+
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then exit 0; fi
+if [[ "$1 $2" == "build-server shutdown" ]]; then exit 74; fi
+exit 1
+EOF
+  chmod +x "$install_dir/dotnet"
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [ -d "$install_dir" ]
+
+  unknown="$tool_root/1.1.99"
+  mkdir -p "$unknown/sdk/1.1.99"
+  cp "$install_dir/dotnet" "$unknown/dotnet"
+  run env HOME="$test_home" "$tool_path" remove 1.1.99 --yes --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [ -d "$unknown" ]
+}
+
+@test "legacy bypass is Remove-only" {
+  run env HOME="$test_home" "$tool_path" list --allow-unsupported-shutdown
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"supported only with Remove"* ]]
+}
+
 @test "destructive warning has explicit blank boundaries in source" {
   warning_line="$(grep -n 'tool_warn "Isolated SDK \$VERSION will be removed from \$install_dir"' "$repo_root/isolated-dotnet-sdk.sh" | cut -d: -f1)"
   [ -n "$warning_line" ]
