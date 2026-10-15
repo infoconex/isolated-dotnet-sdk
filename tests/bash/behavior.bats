@@ -190,12 +190,15 @@ EOF
   mkdir -p "$fake_bin"
   cat > "$fake_bin/rm" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "$*" > "$RM_LOG"
-exit 74
+if [[ "$*" == "-rf $RM_TARGET" ]]; then
+  printf '%s\n' "$*" > "$RM_LOG"
+  exit 74
+fi
+exec /bin/rm "$@"
 EOF
   chmod +x "$fake_bin/rm"
 
-  run env HOME="$test_home" PATH="$fake_bin:$PATH" RM_LOG="$rm_log" \
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" RM_LOG="$rm_log" RM_TARGET="$install_dir" \
     "$tool_path" remove "$version" --yes
 
   [ "$status" -eq 74 ]
