@@ -83,6 +83,8 @@ Describe 'PowerShell interactive lifecycle' {
 
     AfterEach {
         Remove-Item Env:FAKE_DOTNET_SDK_VERSION -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_TEST_REQUEST_LOG -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_TEST_INVENTORY_LOG -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -299,6 +301,7 @@ function Invoke-RestMethod { return $releaseIndex }
     It 'returns an acknowledged Install result to the selected channel SDK list' {
         $version = '10.0.401'
         Install-FakeInteractiveHost -Version $version
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
 
         $command = @'
 $releaseIndex = [pscustomobject]@{
@@ -315,6 +318,7 @@ $channelMetadata = [pscustomobject]@{
 }
 function Invoke-RestMethod {
     param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
     if ($Uri -like '*releases-index.json') { return $releaseIndex }
     return $channelMetadata
 }
@@ -330,6 +334,180 @@ function Invoke-RestMethod {
         ([regex]::Matches($result.Output, 'Select a supported or development \.NET channel:')).Count | Should -Be 2
         (Get-MainPromptCount $result.Output) | Should -Be 2
         (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
+        $requests = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG)
+        @($requests | Where-Object { $_ -like '*releases-index.json' }).Count | Should -Be 1
+        @($requests | Where-Object { $_ -like '*/10.0/releases.json' }).Count | Should -Be 1
+    }
+
+
+    It 'refreshes System and Isolated markers after a local change during Install' {
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
+        $env:ISOLATED_TEST_INVENTORY_LOG = Join-Path $script:TestHome 'inventory-requests.log'
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+$channelMetadata = [pscustomobject]@{
+    releases = @([pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.401' } })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
+    if ($Uri -like '*releases-index.json') { return $releaseIndex }
+    return $channelMetadata
+}
+function dotnet {
+    # This fake shadows only the system dotnet command in the test subprocess.
+    Add-Content -LiteralPath $env:ISOLATED_TEST_INVENTORY_LOG -Value 'read'
+    $count = @(Get-Content -LiteralPath $env:ISOLATED_TEST_INVENTORY_LOG).Count
+    if ($count -eq 2) {
+        $target = Join-Path $env:HOME 'dotnet-sdks/10.0.401'
+        New-Item -ItemType Directory -Path $target -Force | Out-Null
+        Copy-Item -Path (Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT '*') -Destination $target -Recurse -Force
+        New-Item -ItemType Directory -Path (Join-Path $target 'sdk') -Force | Out-Null
+        $env:FAKE_DOTNET_SDK_VERSION = '10.0.401'
+    }
+    $global:LASTEXITCODE = 0
+    if ($count -ge 2) { '10.0.401 [C:\fake\dotnet\sdk]' }
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('i', '1', '1', 'b', 'b', 'e') -Command $command
+
+        $result.ExitCode | Should -Be 0
+        ([regex]::Matches($result.Output, '10\.0\.401 \(latest\)')).Count | Should -Be 1
+        ([regex]::Matches($result.Output, '10\.0\.401 \(latest, installed system-sdk, installed isolated-sdk\)')).Count | Should -Be 1
+        $requests = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG)
+        @($requests | Where-Object { $_ -like '*releases-index.json' }).Count | Should -Be 1
+        @($requests | Where-Object { $_ -like '*/10.0/releases.json' }).Count | Should -Be 1
+        @(Get-Content -LiteralPath $env:ISOLATED_TEST_INVENTORY_LOG).Count | Should -BeGreaterThan 2
+    }
+
+    It 'fetches a fresh index when entering Install from Main again' {
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
+    return $releaseIndex
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('i', 'b', 'i', 'b', 'e') -Command $command
+
+        $result.ExitCode | Should -Be 0
+        $requests = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG)
+        @($requests | Where-Object { $_ -like '*releases-index.json' }).Count | Should -Be 2
+        ([regex]::Matches($result.Output, 'Loading available \.NET SDK releases from Microsoft\.')).Count | Should -Be 2
+    }
+
+    It 'refetches channel metadata after Back and channel reselection' {
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+$channelMetadata = [pscustomobject]@{
+    releases = @([pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.401' } })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
+    if ($Uri -like '*releases-index.json') { return $releaseIndex }
+    return $channelMetadata
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install
+'@
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('1', 'b', '1', 'b', 'q') -Command $command
+
+        $result.ExitCode | Should -Be 0
+        $requests = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG)
+        @($requests | Where-Object { $_ -like '*releases-index.json' }).Count | Should -Be 1
+        @($requests | Where-Object { $_ -like '*/10.0/releases.json' }).Count | Should -Be 2
+    }
+
+    It 'surfaces a required metadata failure on a new Install interaction' {
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
+    $count = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG).Count
+    if ($count -eq 2) { throw 'Injected metadata failure' }
+    return $releaseIndex
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('i', 'b', 'i') -Command $command
+
+        $result.ExitCode | Should -Be 1
+        $result.Output | Should -Match 'Unable to load \.NET release metadata from Microsoft\.'
+        @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG).Count | Should -Be 2
+    }
+
+
+    It 'reuses discovery after manually entering a version from the SDK picker' {
+        $version = '10.0.401'
+        Install-FakeInteractiveHost -Version $version
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+$channelMetadata = [pscustomobject]@{
+    releases = @([pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.401' } })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
+    if ($Uri -like '*releases-index.json') { return $releaseIndex }
+    return $channelMetadata
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('i', '1', 'm', $version, 'b', 'b', 'e') -Command $command
+
+        $result.ExitCode | Should -Be 0
+        ([regex]::Matches($result.Output, 'Available \.NET 10\.0 SDKs:')).Count | Should -Be 2
+        $requests = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG)
+        @($requests | Where-Object { $_ -like '*releases-index.json' }).Count | Should -Be 1
+        @($requests | Where-Object { $_ -like '*/10.0/releases.json' }).Count | Should -Be 1
     }
 
     It 'captured already-installed interactive Install returns without acknowledgement' {
