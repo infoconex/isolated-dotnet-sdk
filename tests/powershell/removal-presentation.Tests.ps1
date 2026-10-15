@@ -169,35 +169,45 @@ Describe 'PowerShell removal presentation' {
         $marker = Join-Path $TestDrive 'roslyn-shutdown-marker.txt'
         New-Item -ItemType Directory -Path (Split-Path $compilerPath -Parent) -Force | Out-Null
         Set-Content -LiteralPath $compilerPath -Value 'fake-compiler'
-        Set-Content -LiteralPath $hostPath -Value (@(
-                '@echo off'
-                'if /I "%1 %2"=="build-server --help" ('
-                '  echo No executable found matching command "dotnet-build-server"'
-                '  exit /b 1'
-                ')'
-                'if /I "%1 %2"=="buildserver --help" ('
-                '  echo No executable found matching command "dotnet-buildserver"'
-                '  exit /b 1'
-                ')'
-                'if /I "%1"=="exec" ('
-                '  if not exist "%~2" exit /b 89'
-                '  if exist "%~2.fail" exit /b 77'
-                '  echo success>"%SDK_TEST_ROSLYN_MARKER%"'
-                '  exit /b 0'
-                ')'
-                'exit /b 88'
-            ) -join "`r`n")
+        $helpLines = @(
+            '@echo off'
+            'if /I "%1 %2"=="build-server --help" ('
+            '  echo No executable found matching command "dotnet-build-server"'
+            '  exit /b 1'
+            ')'
+            'if /I "%1 %2"=="buildserver --help" ('
+            '  echo No executable found matching command "dotnet-buildserver"'
+            '  exit /b 1'
+            ')'
+        )
 
-        $failureMarker = "$compilerPath.fail"
         $previousMarker = [Environment]::GetEnvironmentVariable('SDK_TEST_ROSLYN_MARKER', 'Process')
         try {
             $env:SDK_TEST_ROSLYN_MARKER = $marker
-            Set-Content -LiteralPath $failureMarker -Value 'fail'
+            # Make the native process return a failure unconditionally for the
+            # Roslyn command. First assert the fixture itself really exits 77.
+            $failLines = $helpLines + @(
+                'if /I "%1"=="exec" exit /b 77'
+                'exit /b 88'
+            )
+            Set-Content -LiteralPath $hostPath -Value ($failLines -join "`r`n")
+            $null = & $hostPath exec $compilerPath -shutdown
+            $LASTEXITCODE | Should -Be 77
+
             { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
                 Should -Throw '*exit code 77*'
             Test-Path -LiteralPath $marker | Should -BeFalse
 
-            Remove-Item -LiteralPath $failureMarker -Force
+            # The same SDK-local operation succeeds with the successful host.
+            $successLines = $helpLines + @(
+                'if /I "%1"=="exec" ('
+                '  if not exist "%~2" exit /b 89'
+                '  echo success>"%SDK_TEST_ROSLYN_MARKER%"'
+                '  exit /b 0'
+                ')'
+                'exit /b 88'
+            )
+            Set-Content -LiteralPath $hostPath -Value ($successLines -join "`r`n")
             Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown
             Test-Path -LiteralPath $marker | Should -BeTrue
             Test-Path -LiteralPath $root -PathType Container | Should -BeTrue
