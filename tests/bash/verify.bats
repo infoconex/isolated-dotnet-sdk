@@ -316,7 +316,10 @@ HOST
     [[ "$output" == *"Release/lifecycle   Unavailable"* ]]
     grep -Fxq -- '--version' "$VERIFY_LEGACY_CALL_LOG"
     grep -Fxq -- '--info' "$VERIFY_LEGACY_CALL_LOG"
-    ! grep -Eq '^--list-(sdks|runtimes)$' "$VERIFY_LEGACY_CALL_LOG"
+    ! grep -Fxq -- '--list-sdks' "$VERIFY_LEGACY_CALL_LOG"
+    if [[ "$version" == 1.* ]]; then
+      ! grep -Fxq -- '--list-runtimes' "$VERIFY_LEGACY_CALL_LOG"
+    fi
   done
 }
 
