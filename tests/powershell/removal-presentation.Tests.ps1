@@ -26,6 +26,12 @@ Describe 'PowerShell removal presentation' {
         Set-Item `
             -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown `
             -Value ([scriptblock]::Create($bodyText))
+        # Only the shutdown function is imported from the product script. Its
+        # warning helper must also exist when exercising the legacy fallback.
+        Set-Item -Path Function:script:Write-ToolWarning -Value {
+            param([string]$Message)
+            Write-Warning $Message
+        }
     }
 
     It 'suppresses successful child shutdown chatter and scopes first-run controls' {
