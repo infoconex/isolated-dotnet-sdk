@@ -208,11 +208,15 @@ async function exercise(options = {}) {
   return { error, calls, state, outputs, warnings };
 }
 
-function failed(result, reason) {
+function failed(result, reason, { summaryWriteAttempted = false } = {}) {
   assert.ok(result.error, 'publisher must reject');
   assert.match(result.error.message, reason);
   assert.equal(result.outputs.release_url, undefined, 'no publication success output');
-  assert.ok(!result.calls.includes('summary.write'), 'no publication success summary');
+  assert.equal(result.outputs.release_id, undefined, 'no release id success output');
+  assert.equal(result.outputs.release_commit_sha, undefined, 'no commit success output');
+  if (!summaryWriteAttempted) {
+    assert.ok(!result.calls.includes('summary.write'), 'no publication success summary');
+  }
 }
 
 test('valid transaction verifies the derived identity and checksum asset before publishing', async () => {
@@ -358,7 +362,8 @@ test('invalid draft creation response does not fabricate ownership or publish', 
 
 test('summary failure is reported without publishing a success output or deleting public state', async () => {
   const result = await exercise({ failAt: 'summary.write' });
-  failed(result, /injected failure: summary.write/);
+  failed(result, /injected failure: summary.write/, { summaryWriteAttempted: true });
+  assert.ok(result.calls.includes('summary.write'), 'summary write actually failed');
   assert.equal(result.state.release.draft, false);
   assert.equal(result.state.tag, true);
   assert.deepEqual(result.state.deleted, []);
