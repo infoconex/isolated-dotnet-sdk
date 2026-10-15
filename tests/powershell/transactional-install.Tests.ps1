@@ -167,6 +167,8 @@ Describe 'PowerShell transactional SDK installation' {
         $failureOutput = @(& pwsh -NoProfile -Command '. $env:ISOLATED_DOTNET_SDK_PAYLOAD_FIXTURE; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code 74\.'
+        ($failureOutput -join [Environment]::NewLine) |
+            Should -Match 'Staged SDK verification failed at .*\.install-99\.0\.100-'
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
@@ -192,6 +194,10 @@ Describe 'PowerShell transactional SDK installation' {
         $text = $successOutput -join [Environment]::NewLine
         $text | Should -Match 'Extracting verified \.NET SDK 99\.0\.100 payload'
         $text | Should -Match 'Isolated SDK installation completed successfully\.'
+        $text | Should -Match 'Verifying the isolated SDK\.\.\.'
+        $text | Should -Match ([regex]::Escape("Location: $($script:InstallDir)"))
+        $text | Should -Not -Match '\.install-99\.0\.100-'
+        $text | Should -Not -Match '(?m)^99\.0\.100$'
         Test-Path -LiteralPath (Join-Path $script:InstallDir 'dotnet.exe') | Should -BeTrue
         @(Get-ChildItem -LiteralPath $script:ToolRoot -Filter '.sdk-payload-*' -ErrorAction SilentlyContinue).Count | Should -Be 0
     }

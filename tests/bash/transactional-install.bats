@@ -43,6 +43,7 @@ teardown() { payload_test_teardown; }
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"Unable to verify isolated SDK $version with exit code 74."* ]]
+  [[ "$output" == *"Staged SDK verification failed at $tool_root/.install-$version."* ]]
   [ ! -e "$install_dir" ]
   ! compgen -G "$tool_root/.install-$version.*" >/dev/null
 }
@@ -62,6 +63,10 @@ teardown() { payload_test_teardown; }
   [ "$status" -eq 0 ]
   [ -x "$install_dir/dotnet" ]
   [[ "$output" == *"Isolated SDK installation completed successfully."* ]]
+  [[ "$output" == *"Verifying the isolated SDK..."* ]]
+  [[ "$output" == *"Location: $install_dir"* ]]
+  [[ "$output" != *"/.install-$version."* ]]
+  [[ "$output" != *$'\n'"$version"$'\n'* ]]
   ! compgen -G "$tool_root/.install-$version.*" >/dev/null
   ! compgen -G "$tool_root/.sdk-payload-$version.*" >/dev/null
 }

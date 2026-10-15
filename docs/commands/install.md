@@ -14,7 +14,7 @@ Install can resolve a version in three ways:
 
 The supported/development and end-of-life channel pickers list channels by numeric major/minor version, newest first, regardless of Microsoft's release-index order. The selection number always refers to that channel's own release metadata. Channel ordering is separate from SDK-version ordering; a historical channel such as .NET 2.0 can include SDKs numbered 2.1.*.
 
-Displayed SDK version choices use the shared SDK-aware newest-to-oldest ordering; the compact picker still promotes the current latest SDK and newest feature-band representatives before the expanded full list.
+Displayed SDK version choices use the shared SDK-aware newest-to-oldest ordering; the compact picker still promotes the current latest SDK and newest feature-band representatives before the expanded full list. Picker metadata explicitly identifies ownership with `installed system-sdk` and `installed isolated-sdk`, combining applicable markers with `latest` (for example, `(latest, installed system-sdk)`).
 
 A bare version with no explicit action is treated as an Install request.
 
@@ -30,7 +30,7 @@ Before downloading a new SDK, Install checks the selected version in both owners
 
 Install reports a matching Isolated SDK as already installed only after the same local proof as Verify establishes its exact SDK version and origin. Modern hosts must report that version from this installation's `sdk` directory in `--list-sdks` and resolve it with `--version` from a controlled working directory with older Windows multi-level lookup disabled. An existing valid installation succeeds without downloading.
 
-If the version exists as a System SDK but not as an Isolated SDK, the tool asks before creating a separate isolated copy unless the supported confirmation-bypass option was supplied.
+If the version exists as a System SDK but not as an Isolated SDK, the tool asks before creating a separate isolated copy unless the supported confirmation-bypass option was supplied. Install status styles only the value `Already installed` green in a capable terminal, for either ownership type; `Not installed`, labels, and locations remain neutral. Redirected output contains no ANSI styling.
 
 A pre-existing version destination under the isolated root that is not a valid matching isolated installation is preserved and causes a destination-conflict failure. Install does not automatically delete, merge into, repair, or adopt that state.
 
@@ -45,6 +45,8 @@ A new installation is transactional:
 5. require the staged host to pass that same exact-version, isolated-origin, and controlled-resolution proof against the **staging directory** before promotion. Historical .NET Core 1.x and early 2.x SDK hosts (2.0.* and 2.1.* before 2.1.300) cannot reliably support `--list-sdks`. Instead, they must report the exact requested `--version` and an SDK `Base Path` inside the staged SDK's own `sdk/<version>` directory with `--info`. These checks use a private pinned `global.json` and disabled multilevel lookup to prevent accepting a system SDK; temporary verification files are removed. SDK 2.1.300+ and later hosts must also report that exact SDK from the staging root in `--list-sdks` and resolve it via `--version`;
 6. promote staging to the final version directory only while that destination remains absent; and
 7. clean operation-owned metadata, payload, and staging state where possible.
+
+Successful Install output keeps the staged verification step without echoing a temporary staging inventory/path or a redundant verified-version line. The final isolated installation directory remains visible; staged-host verification failures retain the failed staging directory for diagnosis.
 
 A failed download, checksum, extraction, staged-host verification, or promotion must not be reported as installation success. Clean-start failures do not promote a partial final installation.
 

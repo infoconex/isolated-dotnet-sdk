@@ -9,6 +9,7 @@ Describe 'PowerShell prerelease channel SDK picker' {
                 [string]$SupportPhase = 'preview',
                 [bool]$StableData = $false,
                 [bool]$SingleVersion = $false,
+                [bool]$SystemInstalled = $false,
                 [string[]]$InputLines = @('1', 'q')
             )
 
@@ -57,6 +58,17 @@ function Invoke-RestMethod {
             $info.Environment['FAKE_PHASE'] = $SupportPhase
             $info.Environment['FAKE_STABLE'] = if ($StableData) { '1' } else { '0' }
             $info.Environment['FAKE_SINGLE'] = if ($SingleVersion) { '1' } else { '0' }
+
+            if ($SystemInstalled) {
+                $fakeBin = Join-Path $script:TestRoot 'system-bin'
+                New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
+                Set-Content -LiteralPath (Join-Path $fakeBin 'dotnet.cmd') -Value @(
+                    '@echo off'
+                    'if not "%1"=="--list-sdks" exit /b 91'
+                    'echo 99.0.101 [C:\system\sdk]'
+                )
+                $info.Environment['PATH'] = "$fakeBin$([IO.Path]::PathSeparator)$env:PATH"
+            }
 
             $process = [System.Diagnostics.Process]::new()
             $process.StartInfo = $info
@@ -166,6 +178,22 @@ function Invoke-RestMethod {
         }
     }
 
+    It 'composes latest with system-only and combined ownership markers' {
+        $systemOnly = Invoke-Picker -LatestSdk '99.0.101' -StableData $true -SystemInstalled $true
+        $systemOnly.ExitCode | Should -Be 0
+        $view = Get-PickerView $systemOnly.Output
+        $view | Should -Match '1\. 99\.0\.101 \(latest, installed system-sdk\)'
+        $view | Should -Not -Match 'installed isolated-sdk'
+
+        $sdkDir = Join-Path $script:ToolRoot '99.0.101'
+        New-Item -ItemType Directory -Path $sdkDir -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $sdkDir 'dotnet.exe') -Force | Out-Null
+        $both = Invoke-Picker -LatestSdk '99.0.101' -StableData $true -SystemInstalled $true
+        $both.ExitCode | Should -Be 0
+        (Get-PickerView $both.Output) |
+            Should -Match '1\. 99\.0\.101 \(latest, installed system-sdk, installed isolated-sdk\)'
+    }
+
     It 'falls back to newest discovered stable SDK and preserves isolated marker' {
         $sdkDir = Join-Path $script:ToolRoot '99.0.101'
         New-Item -ItemType Directory -Path $sdkDir -Force | Out-Null
@@ -173,7 +201,7 @@ function Invoke-RestMethod {
         $result = Invoke-Picker -LatestSdk 'not-in-releases' -StableData $true
         $result.ExitCode | Should -Be 0
         $view = Get-PickerView $result.Output
-        $view | Should -Match '1\. 99\.0\.101 \(isolated\)'
+        $view | Should -Match '1\. 99\.0\.101 \(installed isolated-sdk\)'
         $view | Should -Match 'S\. Show all versions'
         $view | Should -Not -Match '\(latest'
     }

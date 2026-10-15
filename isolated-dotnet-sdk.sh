@@ -75,7 +75,12 @@ tool_exit() {
 tool_label_value() {
     local label="$1"
     local value="$2"
-    printf "%b%s%b %s\n" "$CYAN" "$label" "$RESET" "$value"
+    local value_kind="${3:-}"
+    local value_color=""
+    if [[ "$value_kind" == "success" ]]; then
+        value_color="$GREEN"
+    fi
+    printf "%b%s%b %b%s%b\n" "$CYAN" "$label" "$RESET" "$value_color" "$value" "${value_color:+$RESET}"
 }
 
 tool_metadata() {
@@ -1300,10 +1305,10 @@ select_install_version() {
                     markers="latest"
                 fi
                 if contains_line "$system_versions" "$line"; then
-                    markers="${markers:+$markers, }system"
+                    markers="${markers:+$markers, }installed system-sdk"
                 fi
                 if contains_line "$isolated_versions" "$line"; then
-                    markers="${markers:+$markers, }isolated"
+                    markers="${markers:+$markers, }installed isolated-sdk"
                 fi
 
                 if [[ -n "$markers" ]]; then
@@ -1925,7 +1930,7 @@ install_isolated_sdk() {
     fi
 
     if [[ "$isolated_installed" == "true" ]]; then
-        tool_label_value "Isolated SDK:" "Already installed"
+        tool_label_value "Isolated SDK:" "Already installed" success
         tool_label_value "Location:" "$install_dir"
     else
         tool_label_value "Isolated SDK:" "Not installed"
@@ -1934,7 +1939,7 @@ install_isolated_sdk() {
     echo
 
     if [[ -n "$system_sdk_line" ]]; then
-        tool_label_value "System SDK:" "Already installed"
+        tool_label_value "System SDK:" "Already installed" success
         if [[ -n "$system_sdk_path" ]]; then
             tool_label_value "Location:" "$system_sdk_path"
         fi
@@ -2035,9 +2040,8 @@ install_isolated_sdk() {
 
     # One shared proof validates exact origin and resolution before promotion.
     if ! validate_local_isolated_sdk "$VERSION" "$staging_dir"; then
-        tool_fail "$VERIFY_ERROR"
+        tool_fail "Staged SDK verification failed at $staging_dir: $VERIFY_ERROR"
     fi
-    printf '%s\n' "$VERSION"
 
     if [[ -e "$install_dir" || -L "$install_dir" ]]; then
         tool_fail "Isolated SDK destination already exists and cannot be replaced: $install_dir"

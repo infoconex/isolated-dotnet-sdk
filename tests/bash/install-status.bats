@@ -153,3 +153,13 @@ EOF
   [[ "$output" == *"Isolated SDK: Not installed"* ]]
   [[ "$output" != *"$unrelated_version"* ]]
 }
+
+@test "captured Install ownership and paths remain ANSI-free" {
+  make_system_dotnet true
+  make_isolated_dotnet
+  run env HOME="$test_home" PATH="$system_bin:$PATH" "$tool_path" install "$version" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Isolated SDK: Already installed"* ]]
+  [[ "$output" == *"System SDK: Already installed"* ]]
+  [[ "$output" != *$'\033['* ]]
+}
