@@ -1243,9 +1243,9 @@ select_install_version() {
         else
             metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
             trap 'rm -f "$metadata_file" || true' EXIT
-            trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$"' TERM
-            trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$"' INT
-            trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$"' HUP
+            trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$$"' TERM
+            trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$$"' INT
+            trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$$"' HUP
 
             if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
                 trap - EXIT TERM INT HUP
