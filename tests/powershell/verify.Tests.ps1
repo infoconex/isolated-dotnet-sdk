@@ -42,8 +42,27 @@ function Invoke-RestMethod {
 }
 & $env:VERIFY_TOOL_PATH -Action Verify -SdkVersion $env:VERIFY_TARGET_VERSION
 '@
-            $lines = @(& pwsh -NoProfile -Command $command 2>&1)
-            $script:VerifyExitCode = $LASTEXITCODE
+            $tracePath = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH
+            if ([string]::IsNullOrWhiteSpace($tracePath)) {
+                $lines = @(& pwsh -NoProfile -Command $command 2>&1)
+                $script:VerifyExitCode = $LASTEXITCODE
+            }
+            else {
+                $startedUtc = [DateTime]::UtcNow
+                $timer = [System.Diagnostics.Stopwatch]::StartNew()
+                $lines = @(& pwsh -NoProfile -Command $command 2>&1)
+                $exitCode = $LASTEXITCODE
+                $timer.Stop()
+                $script:VerifyExitCode = $exitCode
+                [pscustomobject]@{
+                    StartedUtc = $startedUtc.ToString('o')
+                    EndedUtc = [DateTime]::UtcNow.ToString('o')
+                    CaseId = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE
+                    SdkVersion = $Version
+                    ChildPwshMs = [math]::Round($timer.Elapsed.TotalMilliseconds, 2)
+                    ExitCode = $exitCode
+                } | Export-Csv -LiteralPath $tracePath -Append -NoTypeInformation -Encoding utf8
+            }
             return $lines
         }
     }
@@ -55,6 +74,10 @@ function Invoke-RestMethod {
         $script:ToolPath = Join-Path $script:ToolRoot 'isolated-dotnet-sdk.ps1'
         $script:SourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk-source.ps1'
         $script:OriginalHomeValue = [Environment]::GetEnvironmentVariable($script:HomeVariableName, 'Process')
+        $script:OriginalTraceCase = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE', 'Process')
+        if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH)) {
+            $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE = [IO.Path]::GetFileName($script:TestRoot)
+        }
 
         # Most Verify scenarios exercise an already-installed tool in a real child process.
         # Install directly in this unique test HOME instead of running a second,
@@ -66,6 +89,7 @@ function Invoke-RestMethod {
     }
 
     AfterEach {
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE', $script:OriginalTraceCase, 'Process')
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
         foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_SUPPRESS_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO', 'FAKE_DOTNET_RUNTIME_EXIT_CODE', 'FAKE_DOTNET_RUNTIME_PROBE_MARKER')) {

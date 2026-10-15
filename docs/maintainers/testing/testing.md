@@ -154,6 +154,35 @@ To reproduce a comparable measurement:
    comparison, and investigate any failure or newly flaky scenario regardless
    of runtime.
 
+### Optional Verify child-process tracing
+
+Use the standard test entry point to capture diagnostics for the Verify suite
+without changing production code or permanently altering any tests:
+
+```powershell
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifyProcesses
+```
+
+The switch is **off by default** and requires `-Suite Verify`. A focused run
+still executes every Verify test with its independent temporary HOME and the
+real child PowerShell processes. The runner prints a ZIP path under the user's
+temporary directory containing:
+
+- `test-timings.csv`: test names, timestamps, duration, user time, and Pester overhead;
+- `verify-invocations.csv`: each Verify helper's child PowerShell elapsed time,
+  exit code, requested SDK version, and unique per-case identifier;
+- `fake-host-events.tsv`: UTC start/exit markers, arguments, process IDs and
+  elapsed fake-host main-to-exit time, correlated using the per-case identifier;
+- `summary.json`: versions, commit when Git is available, counts, elapsed time.
+
+Exit codes from negative Verify scenarios are expected and are still asserted
+normally. A fake-host event timestamp starts after native process initialization,
+so fake-host elapsed time does **not** measure native startup overhead. Similarly,
+child PowerShell elapsed time includes startup, script loading, internal native
+probes, and cleanup; it is not merely PowerShell startup time. Tracing creates
+additional file I/O and should not be used as the before/after performance
+benchmark. Normal CI and local runs remain uninstrumented.
+
 ### Historical Windows reference
 
 The successful [Issue #161 Validate run](https://github.com/infoconex/isolated-dotnet-sdk/actions/runs/38745162881)
