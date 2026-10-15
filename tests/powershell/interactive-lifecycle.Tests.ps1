@@ -476,6 +476,41 @@ function Invoke-RestMethod {
         @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG).Count | Should -Be 2
     }
 
+
+    It 'reuses discovery after manually entering a version from the SDK picker' {
+        $version = '10.0.401'
+        Install-FakeInteractiveHost -Version $version
+        $env:ISOLATED_TEST_REQUEST_LOG = Join-Path $script:TestHome 'metadata-requests.log'
+        $command = @'
+$releaseIndex = [pscustomobject]@{
+    'releases-index' = @([pscustomobject]@{
+        'channel-version' = '10.0'
+        'latest-sdk' = '10.0.401'
+        'support-phase' = 'active'
+        'release-type' = 'lts'
+        'releases.json' = 'https://example.invalid/10.0/releases.json'
+    })
+}
+$channelMetadata = [pscustomobject]@{
+    releases = @([pscustomobject]@{ sdk = [pscustomobject]@{ version = '10.0.401' } })
+}
+function Invoke-RestMethod {
+    param($Uri)
+    Add-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG -Value $Uri
+    if ($Uri -like '*releases-index.json') { return $releaseIndex }
+    return $channelMetadata
+}
+& $env:ISOLATED_DOTNET_SDK_TOOL_PATH
+'@
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('i', '1', 'm', $version, 'b', 'b', 'e') -Command $command
+
+        $result.ExitCode | Should -Be 0
+        ([regex]::Matches($result.Output, 'Available \.NET 10\.0 SDKs:')).Count | Should -Be 2
+        $requests = @(Get-Content -LiteralPath $env:ISOLATED_TEST_REQUEST_LOG)
+        @($requests | Where-Object { $_ -like '*releases-index.json' }).Count | Should -Be 1
+        @($requests | Where-Object { $_ -like '*/10.0/releases.json' }).Count | Should -Be 1
+    }
+
     It 'captured already-installed interactive Install returns without acknowledgement' {
         $version = '99.0.100'
         Install-FakeInteractiveHost -Version $version
