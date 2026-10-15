@@ -128,6 +128,107 @@ Describe 'PowerShell removal presentation' {
         }
     }
 
+    It 'requires explicit opt-in to bypass missing shutdown on verified early SDKs' {
+        foreach ($version in @('1.0.4', '1.1.5', '1.1.14', '2.0.3')) {
+            $root = Join-Path $TestDrive $version
+            $hostPath = Join-Path $root 'dotnet.cmd'
+            New-Item -ItemType Directory -Path (Join-Path $root "sdk/$version") -Force | Out-Null
+            Set-Content -LiteralPath $hostPath -Value (@(
+                    '@echo off'
+                    'if /I "%1 %2"=="build-server --help" ('
+                    '  echo No executable found matching command "dotnet-build-server"'
+                    '  exit /b 1'
+                    ')'
+                    'if /I "%1 %2"=="buildserver --help" ('
+                    '  echo No executable found matching command "dotnet-buildserver"'
+                    '  exit /b 1'
+                    ')'
+                    'exit /b 72'
+                ) -join "`r`n")
+
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } |
+                Should -Throw '*exit code 72*'
+
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
+                Should -Not -Throw
+            Test-Path -LiteralPath $root -PathType Container | Should -BeTrue
+        }
+    }
+
+    It 'requires successful SDK-local Roslyn shutdown for 2.1.105' {
+        $version = '2.1.105'
+        $root = Join-Path $TestDrive $version
+        $hostPath = Join-Path $root 'dotnet.cmd'
+        $compilerPath = Join-Path $root "sdk/$version/Roslyn/bincore/VBCSCompiler.dll"
+        $marker = Join-Path $TestDrive 'roslyn-shutdown-marker.txt'
+        New-Item -ItemType Directory -Path (Split-Path $compilerPath -Parent) -Force | Out-Null
+        Set-Content -LiteralPath $compilerPath -Value 'fake-compiler'
+        Set-Content -LiteralPath $hostPath -Value (@(
+                '@echo off'
+                'if /I "%1 %2"=="build-server --help" ('
+                '  echo No executable found matching command "dotnet-build-server"'
+                '  exit /b 1'
+                ')'
+                'if /I "%1 %2"=="buildserver --help" ('
+                '  echo No executable found matching command "dotnet-buildserver"'
+                '  exit /b 1'
+                ')'
+                'if /I "%1"=="exec" ('
+                '  if not exist "%2" exit /b 89'
+                '  if not "%SDK_TEST_ROSLYN_EXIT_CODE%"=="" exit /b %SDK_TEST_ROSLYN_EXIT_CODE%'
+                '  echo success>"%SDK_TEST_ROSLYN_MARKER%"'
+                '  exit /b 0'
+                ')'
+                'exit /b 88'
+            ) -join "`r`n")
+
+        $previousExit = [Environment]::GetEnvironmentVariable('SDK_TEST_ROSLYN_EXIT_CODE', 'Process')
+        $previousMarker = [Environment]::GetEnvironmentVariable('SDK_TEST_ROSLYN_MARKER', 'Process')
+        try {
+            $env:SDK_TEST_ROSLYN_MARKER = $marker
+            $env:SDK_TEST_ROSLYN_EXIT_CODE = '77'
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
+                Should -Throw '*exit code 77*'
+            Test-Path -LiteralPath $marker | Should -BeFalse
+
+            Remove-Item Env:SDK_TEST_ROSLYN_EXIT_CODE -ErrorAction SilentlyContinue
+            Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown
+            Test-Path -LiteralPath $marker | Should -BeTrue
+            Test-Path -LiteralPath $root -PathType Container | Should -BeTrue
+        }
+        finally {
+            [Environment]::SetEnvironmentVariable('SDK_TEST_ROSLYN_EXIT_CODE', $previousExit, 'Process')
+            [Environment]::SetEnvironmentVariable('SDK_TEST_ROSLYN_MARKER', $previousMarker, 'Process')
+        }
+    }
+
+    It 'does not ignore ambiguous capability probes or supported shutdown failures' {
+        $version = '1.0.4'
+        $root = Join-Path $TestDrive $version
+        $hostPath = Join-Path $root 'dotnet.cmd'
+        New-Item -ItemType Directory -Path (Join-Path $root "sdk/$version") -Force | Out-Null
+        Set-Content -LiteralPath $hostPath -Value (@(
+                '@echo off'
+                'if "%2"=="--help" ('
+                '  echo Unexpected host startup failure'
+                '  exit /b 1'
+                ')'
+                'exit /b 77'
+            ) -join "`r`n")
+        { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
+            Should -Throw '*probe failed unexpectedly*'
+
+        Set-Content -LiteralPath $hostPath -Value (@(
+                '@echo off'
+                'if /I "%1 %2"=="build-server --help" exit /b 0'
+                'if /I "%1 %2"=="build-server shutdown" exit /b 78'
+                'exit /b 79'
+            ) -join "`r`n")
+        { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
+            Should -Throw '*exit code 78*'
+        Test-Path -LiteralPath $root -PathType Container | Should -BeTrue
+    }
+
     It 'places blank display boundaries around the destructive warning' {
         $lines = @(Get-Content -LiteralPath $script:ToolScript)
         $warningIndex = -1
