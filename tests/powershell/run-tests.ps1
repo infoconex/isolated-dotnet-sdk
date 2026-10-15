@@ -43,7 +43,7 @@ if ($TraceVerifyProcesses) {
     $env:ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH = Join-Path $traceRoot 'fake-host-events.tsv'
 }
 
-function Get-ProfileTestRows {
+function Get-ProfileTestRow {
     param([object]$Block)
 
     foreach ($test in @($Block.Tests)) {
@@ -59,7 +59,7 @@ function Get-ProfileTestRows {
     }
 
     foreach ($child in @($Block.Blocks)) {
-        if ($null -ne $child) { Get-ProfileTestRows -Block $child }
+        if ($null -ne $child) { Get-ProfileTestRow -Block $child }
     }
 }
 
@@ -95,7 +95,7 @@ try {
         $rows = @(
             foreach ($container in $result.Containers) {
                 foreach ($block in $container.Blocks) {
-                    Get-ProfileTestRows -Block $block
+                    Get-ProfileTestRow -Block $block
                 }
             }
         )
