@@ -105,7 +105,7 @@ Describe 'PowerShell interactive Verify' {
         (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'V\. Verify an isolated SDK'
         ([regex]::Matches($result.Output, 'Select an isolated SDK to verify:')).Count | Should -Be 2
-        $result.Output | Should -Match 'Selection[^\r\n]*\r?\n\r?\nIsolated SDK'
+        $result.Output | Should -Match 'Selection[^\r\n]*\r?\n\r?\nVerify isolated \.NET SDK'
         $result.Output | Should -Match "Isolated SDK $([regex]::Escape($version)) verified successfully\."
         $result.Output | Should -Match 'Exiting\.'
     }
