@@ -359,10 +359,6 @@ module.exports = async ({ github, context, core }) => {
       throw new Error('Workflow checksum output changed before publication summary generation.');
     }
 
-    core.setOutput('release_url', finalRelease.html_url);
-    core.setOutput('release_id', String(releaseId));
-    core.setOutput('release_commit_sha', releaseCommitSha);
-
     await core.summary
       .addHeading(`Published ${tag}`)
       .addList([
@@ -375,6 +371,10 @@ module.exports = async ({ github, context, core }) => {
       ])
       .addCodeBlock(checksumBytes.toString('utf8'), 'text')
       .write();
+
+    core.setOutput('release_url', finalRelease.html_url);
+    core.setOutput('release_id', String(releaseId));
+    core.setOutput('release_commit_sha', releaseCommitSha);
   } catch (error) {
     if (!publicationAttempted) {
       try {
