@@ -1863,83 +1863,6 @@ function Resolve-SdkArtifact {
     }
 }
 
-function Test-LegacySdkHost {
-    param(
-        [Parameter(Mandatory)]
-        [string]$DotNetPath,
-        [Parameter(Mandatory)]
-        [string]$InstallDirectory,
-        [Parameter(Mandatory)]
-        [string]$Version
-    )
-
-    # Historical hosts (including early 2.x) cannot reliably enumerate SDKs with --list-sdks. The requested SDK
-    # must actually be selected by the isolated host from this exact root.
-    $ExpectedBasePath = [System.IO.Path]::GetFullPath(
-        (Join-Path (Join-Path $InstallDirectory 'sdk') $Version)
-    ).TrimEnd('\', '/')
-    if (-not (Test-Path -LiteralPath $ExpectedBasePath -PathType Container)) {
-        throw "SDK $Version was not found in the isolated SDK directory."
-    }
-
-    # A private global.json prevents inherited project settings from selecting
-    # another version. The temporary directory is removed on every path.
-    $WorkDirectory = Join-Path $SdkRoot ('.sdk-host-verify-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
-    $OriginalMultilevel = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
-    $LocationPushed = $false
-    New-Item -ItemType Directory -Path $WorkDirectory -Force | Out-Null
-    try {
-        @{ sdk = @{ version = $Version } } |
-            ConvertTo-Json -Depth 3 |
-            Set-Content -LiteralPath (Join-Path $WorkDirectory 'global.json') -Encoding utf8
-        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
-        Push-Location -LiteralPath $WorkDirectory
-        $LocationPushed = $true
-
-        $VersionOutput = @(& $DotNetPath --version 2>&1)
-        $VersionExitCode = $LASTEXITCODE
-        $VersionLines = @($VersionOutput | ForEach-Object { ([string]$_).Trim() } |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        if ($VersionExitCode -ne 0 -or $VersionLines.Count -ne 1 -or $VersionLines[0] -cne $Version) {
-            throw "Unable to verify isolated SDK $($Version): legacy host did not report the requested exact SDK version."
-        }
-
-        $InfoOutput = @(& $DotNetPath --info 2>&1)
-        $InfoExitCode = $LASTEXITCODE
-        if ($InfoExitCode -ne 0) {
-            throw "Unable to verify isolated SDK $($Version): legacy host --info exited with code $InfoExitCode."
-        }
-
-        $BasePaths = @($InfoOutput | ForEach-Object {
-                if ([string]$_ -match '^\s*Base Path:\s*(.+?)\s*$') {
-                    $Matches[1].Trim()
-                }
-            })
-        if ($BasePaths.Count -ne 1) {
-            throw "Unable to verify isolated SDK $($Version): legacy host did not report one SDK Base Path."
-        }
-
-        try {
-            $ActualBasePath = [System.IO.Path]::GetFullPath($BasePaths[0]).TrimEnd('\', '/')
-        }
-        catch {
-            throw "Unable to verify isolated SDK $($Version): legacy host reported an invalid SDK Base Path."
-        }
-        if (-not [string]::Equals(
-                $ActualBasePath, $ExpectedBasePath, [System.StringComparison]::OrdinalIgnoreCase
-            )) {
-            throw "Unable to verify isolated SDK $($Version): legacy host SDK Base Path does not match the isolated directory."
-        }
-    }
-    finally {
-        if ($LocationPushed) {
-            Pop-Location
-        }
-        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', $OriginalMultilevel, 'Process')
-        Remove-Item -LiteralPath $WorkDirectory -Recurse -Force -WhatIf:$false -Confirm:$false
-    }
-}
-
 function Install-IsolatedSdk {
     $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
     if (-not (Resolve-InstallVersion)) {
@@ -1966,22 +1889,12 @@ function Install-IsolatedSdk {
         Where-Object { $_.Version -eq $SdkVersion } |
         Select-Object -First 1
 
+    # An existing version is owned by this isolated root only if the shared
+    # local proof succeeds. Invalid targets are never replaced below.
     $IsolatedInstalled = $false
     if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
-        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
-            Test-LegacySdkHost -DotNetPath $IsolatedDotNet -InstallDirectory $InstallDir -Version $SdkVersion
-            $IsolatedInstalled = $true
-        }
-        else {
-            $IsolatedSdks = & $IsolatedDotNet --list-sdks
-            $ExitCode = $LASTEXITCODE
-            if ($ExitCode -ne 0) {
-                throw "Unable to inspect existing isolated SDK $SdkVersion with exit code $ExitCode."
-            }
-
-            $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-            $IsolatedInstalled = $IsolatedVersions -contains $SdkVersion
-        }
+        $Validation = Get-LocalIsolatedSdkValidation -Version $SdkVersion -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet
+        $IsolatedInstalled = -not [bool]$Validation.Failure
     }
 
     if ($IsolatedInstalled) {
@@ -2079,26 +1992,13 @@ function Install-IsolatedSdk {
             throw "The isolated dotnet executable was not found at $StagedDotNet"
         }
 
-        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
-            Test-LegacySdkHost -DotNetPath $StagedDotNet -InstallDirectory $StagingDir -Version $SdkVersion
-            Write-ToolDisplay $SdkVersion
+        # Validate the extracted root, not an SDK of the same version
+        # discovered by the staged host elsewhere. Never promote on failure.
+        $Validation = Get-LocalIsolatedSdkValidation -Version $SdkVersion -InstallDirectory $StagingDir -DotNetPath $StagedDotNet
+        if ($Validation.Failure) {
+            throw $Validation.Failure
         }
-        else {
-            $IsolatedSdks = & $StagedDotNet --list-sdks
-            $ExitCode = $LASTEXITCODE
-            if ($ExitCode -ne 0) {
-                throw "Unable to verify isolated SDK $SdkVersion with exit code $ExitCode."
-            }
-
-            foreach ($IsolatedSdk in $IsolatedSdks) {
-                Write-ToolDisplay $IsolatedSdk
-            }
-
-            $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
-            if ($IsolatedVersions -notcontains $SdkVersion) {
-                throw "SDK $SdkVersion was not found after installation."
-            }
-        }
+        Write-ToolDisplay $SdkVersion
 
         if (Test-Path -LiteralPath $InstallDir) {
             throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
@@ -2157,7 +2057,7 @@ function Install-IsolatedSdk {
 }
 
 # Local SDK proof stays independent of online metadata and report presentation.
-# This primitive is designed for later reuse by Install without changing Install here.
+# Used by Verify and both correctness-significant Install boundaries.
 function Get-LocalIsolatedSdkValidation {
     param(
         [string]$Version,
@@ -2195,9 +2095,9 @@ function Get-LocalIsolatedSdkValidation {
         [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
         [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $InstallDirectory, 'Process')
 
-        # Original 1.x hosts cannot enumerate SDKs. Keep Install's exact
-        # --version and --info origin proof, with Verify-specific check labels.
-        if ($Version -match '^1\.') {
+        # Original 1.x and early 2.x hosts cannot enumerate SDKs.
+        # Share exact --version and --info origin proof with Verify's check labels.
+        if ($Version -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $Version)) {
             @{ sdk = @{ version = $Version } } |
                 ConvertTo-Json -Depth 3 |
                 Set-Content -LiteralPath (Join-Path $WorkDirectory 'global.json') -Encoding utf8 -ErrorAction Stop

@@ -63,8 +63,13 @@ if [[ "\${1:-}" == "--list-sdks" ]]; then
   printf '%s\n' '$version [$install_dir/sdk]'
   exit 0
 fi
+if [[ "\${1:-}" == "--version" ]]; then
+  printf '%s\n' '$version'
+  exit 0
+fi
 exit 92
 EOF
+  mkdir -p "$install_dir/sdk"
   chmod +x "$install_dir/dotnet"
 }
 

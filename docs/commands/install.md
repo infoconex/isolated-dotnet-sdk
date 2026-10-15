@@ -28,7 +28,7 @@ Historical SDK releases may publish archive names such as `dotnet-dev-win-x64.1.
 
 Before downloading a new SDK, Install checks the selected version in both ownership domains and presents Isolated SDK status before System SDK status.
 
-If a valid matching Isolated SDK already exists, Install reports it as already installed and succeeds without downloading or reinstalling it.
+Install reports a matching Isolated SDK as already installed only after the same local proof as Verify establishes its exact SDK version and origin. Modern hosts must report that version from this installation's `sdk` directory in `--list-sdks` and resolve it with `--version` from a controlled working directory with older Windows multi-level lookup disabled. An existing valid installation succeeds without downloading.
 
 If the version exists as a System SDK but not as an Isolated SDK, the tool asks before creating a separate isolated copy unless the supported confirmation-bypass option was supplied.
 
@@ -42,7 +42,7 @@ A new installation is transactional:
 2. download the SDK archive into operation-owned temporary state;
 3. verify the archive using that Microsoft-published checksum before extraction;
 4. extract into an operation-owned staging directory;
-5. require the staged host to run successfully and prove the requested exact SDK version. Historical .NET Core 1.x and early 2.x SDK hosts (2.0.* and 2.1.* before 2.1.300) cannot reliably support `--list-sdks`. Instead, they must report the exact requested `--version` and an SDK `Base Path` inside the staged SDK's own `sdk/<version>` directory with `--info`. These checks use a private pinned `global.json` and disabled multilevel lookup to prevent accepting a system SDK; temporary verification files are removed. SDK 2.1.300+ and later hosts retain `--list-sdks` verification;
+5. require the staged host to pass that same exact-version, isolated-origin, and controlled-resolution proof against the **staging directory** before promotion. Historical .NET Core 1.x and early 2.x SDK hosts (2.0.* and 2.1.* before 2.1.300) cannot reliably support `--list-sdks`. Instead, they must report the exact requested `--version` and an SDK `Base Path` inside the staged SDK's own `sdk/<version>` directory with `--info`. These checks use a private pinned `global.json` and disabled multilevel lookup to prevent accepting a system SDK; temporary verification files are removed. SDK 2.1.300+ and later hosts must also report that exact SDK from the staging root in `--list-sdks` and resolve it via `--version`;
 6. promote staging to the final version directory only while that destination remains absent; and
 7. clean operation-owned metadata, payload, and staging state where possible.
 

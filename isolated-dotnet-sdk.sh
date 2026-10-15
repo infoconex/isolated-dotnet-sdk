@@ -1868,66 +1868,6 @@ extract_sdk_artifact_metadata() {
     '
 }
 
-# Historic CLI hosts cannot run --list-sdks. Require a selected exact SDK
-# version AND the SDK Base Path to originate from the requested isolated root.
-verify_legacy_sdk_host() {
-    local dotnet_path="$1"
-    local sdk_dir="$2"
-    local version="$3"
-    local expected_base="$sdk_dir/sdk/$version"
-    local work_dir=""
-    local reported_version=""
-    local info_output=""
-    local reported_base=""
-    local actual_base=""
-    local canonical_expected=""
-
-    if [[ ! -d "$expected_base" ]]; then
-        tool_fail "SDK $version was not found in the isolated SDK directory."
-    fi
-    canonical_expected="$(cd "$expected_base" && pwd -P)"
-    work_dir="$(mktemp -d "$SDK_ROOT/.sdk-host-verify-$version.XXXXXX")"
-    printf '{"sdk":{"version":"%s"}}\n' "$version" > "$work_dir/global.json"
-
-    if reported_version="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 "$dotnet_path" --version 2>&1)"; then
-        :
-    else
-        rm -rf -- "$work_dir"
-        tool_fail "Unable to verify isolated SDK $version: legacy host --version failed."
-    fi
-    if [[ "$reported_version" != "$version" ]]; then
-        rm -rf -- "$work_dir"
-        tool_fail "Unable to verify isolated SDK $version: legacy host did not report the requested exact SDK version."
-    fi
-
-    if info_output="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 "$dotnet_path" --info 2>&1)"; then
-        :
-    else
-        rm -rf -- "$work_dir"
-        tool_fail "Unable to verify isolated SDK $version: legacy host --info failed."
-    fi
-    reported_base="$(printf '%s\n' "$info_output" | awk '
-        /^[[:space:]]*Base Path:[[:space:]]*/ {
-            sub(/^[[:space:]]*Base Path:[[:space:]]*/, "")
-            sub(/[[:space:]]*$/, "")
-            print
-        }
-    ')"
-    if [[ -z "$reported_base" || "$reported_base" == *$'\n'* || ! -d "$reported_base" ]]; then
-        rm -rf -- "$work_dir"
-        tool_fail "Unable to verify isolated SDK $version: legacy host did not report one valid SDK Base Path."
-    fi
-    actual_base="$(cd "$reported_base" && pwd -P)"
-    if [[ "$actual_base" != "$canonical_expected" ]]; then
-        rm -rf -- "$work_dir"
-        tool_fail "Unable to verify isolated SDK $version: legacy host SDK Base Path does not match the isolated directory."
-    fi
-
-    if ! rm -rf -- "$work_dir"; then
-        tool_fail "Unable to clean temporary legacy SDK verification state for $version."
-    fi
-}
-
 install_isolated_sdk() {
     local selected_interactively="false"
     if [[ -z "$VERSION" ]]; then
@@ -1946,7 +1886,6 @@ install_isolated_sdk() {
     local installed_sdks=""
     local system_sdk_line=""
     local system_sdk_path=""
-    local isolated_sdks=""
     local isolated_installed="false"
     local metadata_file=""
     local archive_file=""
@@ -1977,21 +1916,11 @@ install_isolated_sdk() {
         fi
     fi
 
+    # Only a successful local origin-and-resolution proof means this isolated
+    # installation exists. A rejected target is never overwritten.
     if [[ -x "$isolated_dotnet" ]]; then
-        if [[ "$VERSION" =~ ^1\. ]] || is_early_dotnet2_sdk "$VERSION"; then
-            verify_legacy_sdk_host "$isolated_dotnet" "$install_dir" "$VERSION"
+        if validate_local_isolated_sdk "$VERSION" "$install_dir"; then
             isolated_installed="true"
-        else
-            if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
-                :
-            else
-                status=$?
-                tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
-            fi
-
-            if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-                isolated_installed="true"
-            fi
         fi
     fi
 
@@ -2104,22 +2033,11 @@ install_isolated_sdk() {
         tool_fail "The isolated dotnet executable was not found at $staged_dotnet"
     fi
 
-    if [[ "$VERSION" =~ ^1\. ]] || is_early_dotnet2_sdk "$VERSION"; then
-        verify_legacy_sdk_host "$staged_dotnet" "$staging_dir" "$VERSION"
-        printf '%s\n' "$VERSION"
-    else
-        if isolated_sdks="$("$staged_dotnet" --list-sdks)"; then
-            :
-        else
-            status=$?
-            tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
-        fi
-        printf "%s\n" "$isolated_sdks"
-
-        if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-            tool_fail "SDK $VERSION was not found after installation."
-        fi
+    # One shared proof validates exact origin and resolution before promotion.
+    if ! validate_local_isolated_sdk "$VERSION" "$staging_dir"; then
+        tool_fail "$VERIFY_ERROR"
     fi
+    printf '%s\n' "$VERSION"
 
     if [[ -e "$install_dir" || -L "$install_dir" ]]; then
         tool_fail "Isolated SDK destination already exists and cannot be replaced: $install_dir"
@@ -2151,7 +2069,7 @@ install_isolated_sdk() {
 }
 
 # Shared local proof: keep this separate from Verify's optional online report so
-# Install can reuse the same version-and-origin guarantees in a later issue.
+# Install reuses exactly these version-and-origin guarantees at both boundaries.
 VERIFY_CHECKS=()
 VERIFY_ERROR=""
 verify_check() {
@@ -2160,7 +2078,7 @@ verify_check() {
 
 validate_local_isolated_sdk() {
     local version="$1"
-    # Optional explicit installation/staging directory allows later Install reuse.
+    # An explicit root validates staging with the same local Verify proof.
     local install_dir="${2:-$SDK_ROOT/$version}"
     local isolated_dotnet="$install_dir/dotnet"
     local work_dir=""
@@ -2202,9 +2120,9 @@ validate_local_isolated_sdk() {
         VERIFY_ERROR="Unable to prepare isolated SDK $version verification directory."
         return 1
     fi
-    # Original 1.x hosts do not provide --list-sdks. Mirror Install's
-    # exact --version and --info Base Path proof, with granular Verify checks.
-    if [[ "$version" == 1.* ]]; then
+    # Original 1.x and early 2.x hosts lack --list-sdks; share
+    # exact --version plus --info Base Path proof with granular Verify checks.
+    if [[ "$version" == 1.* ]] || is_early_dotnet2_sdk "$version"; then
         local legacy_info="" reported_base="" actual_base="" expected_base=""
         printf '{"sdk":{"version":"%s"}}\n' "$version" > "$work_dir/global.json"
         if resolved_version="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --version 2>&1)"; then

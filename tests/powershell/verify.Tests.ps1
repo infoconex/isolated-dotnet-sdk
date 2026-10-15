@@ -389,6 +389,19 @@ function Invoke-RestMethod {
         $text | Should -Match 'SDK origin\s+FAIL'
     }
 
+    It 'verifies early 2.x isolated hosts via exact legacy Base Path instead of inventory' -ForEach @(
+        @{ Version = '2.0.3' }
+        @{ Version = '2.1.105' }
+    ) {
+        $target = Install-FakeIsolatedHost -Version $Version -ReportedVersion $Version
+        New-Item -ItemType Directory -Path (Join-Path (Join-Path $target 'sdk') $Version) -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $result = @(Invoke-VerifyTool -Version $Version)
+        $script:VerifyExitCode | Should -Be 0
+        ($result -join [Environment]::NewLine) | Should -Match 'SDK origin\s+OK'
+        ($result -join [Environment]::NewLine) | Should -Not -Match 'SDK inventory\s+FAIL'
+    }
+
     It 'reports only supported optional legacy RID and architecture information' {
         $version = '1.1.5'
         $directory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
@@ -409,9 +422,10 @@ Describe 'PowerShell Verify origin, resolution, and metadata boundaries' {
     BeforeAll {
         $script:root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
     }
-    It 'keeps the Verify local proof helper available to later Install work without implementing Install reuse yet' {
+    It 'shares the local proof between Verify and both Install correctness boundaries' {
         $source = Get-Content -LiteralPath (Join-Path $script:root 'isolated-dotnet-sdk.ps1') -Raw
         $source | Should -Match 'function Get-LocalIsolatedSdkValidation'
+        ([regex]::Matches($source, 'Get-LocalIsolatedSdkValidation -Version')).Count | Should -Be 3
         $source | Should -Match 'Get-SdkAuditClassification -Version'
     }
 }
