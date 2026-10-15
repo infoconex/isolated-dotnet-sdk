@@ -33,6 +33,7 @@ module.exports = async ({ github, context, core }) => {
   let bashBlobSha = null;
   let tagCreated = false;
   let releaseId = null;
+  let draftCreationAttempted = false;
   let published = false;
   let publicationAttempted = false;
 
@@ -222,7 +223,13 @@ module.exports = async ({ github, context, core }) => {
   };
 
   const cleanupBeforePublication = async () => {
-    // Do not touch resources if this invocation has not created any known state.
+    // An unacknowledged draft-creation request may have succeeded remotely.
+    // Without its id, no corresponding release/tag deletion can be proven safe.
+    if (draftCreationAttempted && releaseId === null) {
+      core.warning(`Draft creation for ${tag} was not confirmed; leaving remote state for manual investigation.`);
+      return;
+    }
+
     if (!tagCreated && releaseId === null) return;
 
     const releases = await github.paginate(github.rest.repos.listReleases, {
@@ -291,6 +298,7 @@ module.exports = async ({ github, context, core }) => {
     tagCreated = true;
     await verifyTag();
 
+    draftCreationAttempted = true;
     const created = await github.rest.repos.createRelease({
       owner,
       repo,
