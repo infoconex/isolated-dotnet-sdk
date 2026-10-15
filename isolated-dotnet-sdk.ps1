@@ -1287,6 +1287,1600 @@ function Select-InstallVersion {
         throw 'No selectable .NET channels were found in Microsoft release metadata.'
     }
 
+    # Keep each release-index record intact while sorting by its channel number,
+    # not by the SDK feature band or Microsoft's release-index encounter order.
+    # Unexpected channel strings remain selectable after valid numeric channels,
+    # with their original relative order preserved.
+    $EncounterIndex = 0
+    $AllChannels = @(
+        $AllChannels |
+            ForEach-Object {
+                $Channel = $_
+                $Match = [regex]::Match([string]$Channel.'channel-version', '^([0-9]+)\.([0-9]+)
+    $ResumeChannel = $script:InstallResumeChannel
+    $script:InstallResumeChannel = $null
+    $ClearChannelScreen = $true
+
+    while ($true) {
+        if ($null -ne $ResumeChannel) {
+            $SelectedChannel = $ResumeChannel
+            $ResumeChannel = $null
+        }
+        else {
+            if ($ClearChannelScreen) {
+                Clear-InteractiveScreen
+                $ClearChannelScreen = $false
+            }
+            Write-ToolDisplay
+
+            if ($ShowArchived) {
+                Write-ToolHeading 'Select an end-of-life .NET channel:'
+                $Channels = @($AllChannels | Where-Object { $_.'support-phase' -eq 'eol' })
+            }
+            else {
+                Write-ToolHeading 'Select a supported or development .NET channel:'
+                $Channels = @($AllChannels | Where-Object { $_.'support-phase' -ne 'eol' })
+            }
+
+            Write-ToolDisplay
+
+            for ($Index = 0; $Index -lt $Channels.Count; $Index++) {
+                $Channel = $Channels[$Index]
+                $ReleaseType = ([string]$Channel.'release-type').ToUpperInvariant()
+                $SupportPhase = Format-SupportPhase ([string]$Channel.'support-phase')
+                $LatestSdk = [string]$Channel.'latest-sdk'
+
+                if ([string]::IsNullOrWhiteSpace($LatestSdk)) {
+                    Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}" -f `
+                        ($Index + 1), `
+                            $Channel.'channel-version', `
+                            $ReleaseType, `
+                            $SupportPhase)
+                }
+                else {
+                    Write-ToolDisplay ("  {0}. .NET {1}  {2}  {3}  latest SDK {4}" -f `
+                        ($Index + 1), `
+                            $Channel.'channel-version', `
+                            $ReleaseType, `
+                            $SupportPhase, `
+                            $LatestSdk)
+                }
+            }
+
+            Write-ToolDisplay
+            if ($ShowArchived) {
+                Write-ToolDisplay '  S. Show supported/development channels'
+            }
+            else {
+                Write-ToolDisplay '  S. Show end-of-life channels'
+            }
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  B. Back to Main'
+            }
+            Write-ToolDisplay '  M. Enter an exact SDK version manually'
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  E. Exit'
+            }
+            else {
+                Write-ToolDisplay '  Q. Cancel'
+            }
+            Write-ToolDisplay
+
+            $Selection = Read-ToolInput 'Selection'
+
+            if ($Selection -match '^[Mm]$') {
+                Read-ManualVersion
+                $script:InstallResultParent = '.NET channels'
+                return $true
+            }
+
+            if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+                $script:ExitRequested = $true
+                Write-ToolExit
+                return $false
+            }
+
+            if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
+                return $false
+            }
+
+            if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
+                $script:BackToMain = $true
+                return $false
+            }
+
+            if ($Selection -match '^[Ss]$') {
+                $ShowArchived = -not $ShowArchived
+                $ClearChannelScreen = $true
+                continue
+            }
+
+            $Number = 0
+            if (-not [int]::TryParse($Selection, [ref]$Number) -or
+                $Number -lt 1 -or
+                $Number -gt $Channels.Count) {
+                $SelectionRange = Get-SelectionRange -Count $Channels.Count
+                $Choices = if ($script:InteractiveSession) {
+                    "Choose $SelectionRange, S, B, M, or E."
+                }
+                else {
+                    "Choose $SelectionRange, S, M, or Q."
+                }
+                Write-InvalidSelection -Selection $Selection -Choices $Choices
+                continue
+            }
+
+            $SelectedChannel = $Channels[$Number - 1]
+        }
+        $ChannelVersion = [string]$SelectedChannel.'channel-version'
+        $LatestSdk = [string]$SelectedChannel.'latest-sdk'
+        $ChannelMetadataUrl = [string]$SelectedChannel.'releases.json'
+
+        try {
+            $ChannelMetadata = Invoke-RestMethod -Uri $ChannelMetadataUrl
+        }
+        catch {
+            throw "Unable to load release metadata for .NET $ChannelVersion."
+        }
+
+        if ($null -eq $ChannelMetadata -or
+            $null -eq $ChannelMetadata.releases) {
+            throw "Invalid release metadata for .NET $ChannelVersion."
+        }
+
+        $DiscoveredSdkVersions = @(Get-ChannelSdkVersion $ChannelMetadata)
+        if (-not $DiscoveredSdkVersions) {
+            throw "No SDK versions were found for .NET $ChannelVersion."
+        }
+
+        $AllSdkVersions = @(Get-OrderedSdkVersion $DiscoveredSdkVersions)
+        $FeaturedSdkVersions = @(Get-FeaturedSdkVersion `
+                -OrderedSdkVersions $AllSdkVersions `
+                -LatestSdk $LatestSdk)
+        # The selected channel's latest SDK is authoritative only when it is in
+        # that channel's discovered release set. Otherwise classify the newest
+        # discovered SDK, without fabricating an authoritative latest marker.
+        $CurrentSdk = if (-not [string]::IsNullOrWhiteSpace($LatestSdk) -and
+            $AllSdkVersions -contains $LatestSdk) {
+            $LatestSdk
+        }
+        else {
+            $AllSdkVersions[0]
+        }
+        $ShowAllVersions = $CurrentSdk -match '-(?:preview|rc)\.[0-9]+(?:\.|$)'
+        $SystemVersions = @(Get-SystemSdkVersion)
+        $IsolatedVersions = @(Get-IsolatedSdkVersion)
+        $ClearSdkScreen = $true
+
+        while ($true) {
+            if ($ClearSdkScreen) {
+                Clear-InteractiveScreen
+                $ClearSdkScreen = $false
+            }
+            Write-ToolDisplay
+            Write-ToolHeading "Available .NET $ChannelVersion SDKs:"
+            Write-ToolDisplay
+
+            if ($ShowAllVersions) {
+                $SdkVersions = @($AllSdkVersions)
+            }
+            else {
+                $SdkVersions = @($FeaturedSdkVersions)
+            }
+
+            for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
+                $SdkVersion = $SdkVersions[$Index]
+                $Markers = [System.Collections.Generic.List[string]]::new()
+
+                if (-not [string]::IsNullOrWhiteSpace($LatestSdk) -and
+                    $SdkVersion -eq $LatestSdk) {
+                    $Markers.Add('latest')
+                }
+                if ($SystemVersions -contains $SdkVersion) {
+                    $Markers.Add('system')
+                }
+                if ($IsolatedVersions -contains $SdkVersion) {
+                    $Markers.Add('isolated')
+                }
+
+                if ($Markers.Count -gt 0) {
+                    $Metadata = Format-ToolAccent -Message ("({0})" -f ($Markers -join ', '))
+                    Write-ToolDisplay ("  {0}. {1} {2}" -f ($Index + 1), $SdkVersion, $Metadata)
+                }
+                else {
+                    Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersion)
+                }
+            }
+
+            Write-ToolDisplay
+            if ($FeaturedSdkVersions.Count -lt $AllSdkVersions.Count) {
+                if ($ShowAllVersions) {
+                    Write-ToolDisplay '  S. Show featured versions'
+                }
+                else {
+                    Write-ToolDisplay '  S. Show all versions'
+                }
+            }
+            Write-ToolDisplay '  B. Back to .NET channels'
+            Write-ToolDisplay '  M. Enter an exact SDK version manually'
+            if ($script:InteractiveSession) {
+                Write-ToolDisplay '  E. Exit'
+            }
+            else {
+                Write-ToolDisplay '  Q. Cancel'
+            }
+            Write-ToolDisplay
+
+            $Selection = Read-ToolInput 'Selection'
+
+            if ($Selection -match '^[Bb]$') {
+                $script:InstallResumeChannel = $null
+                $ClearChannelScreen = $true
+                break
+            }
+
+            if ($Selection -match '^[Ss]$' -and
+                $FeaturedSdkVersions.Count -lt $AllSdkVersions.Count) {
+                $ShowAllVersions = -not $ShowAllVersions
+                $ClearSdkScreen = $true
+                continue
+            }
+
+            if ($Selection -match '^[Mm]$') {
+                Read-ManualVersion
+                $script:InstallResumeChannel = $SelectedChannel
+                $script:InstallResultParent = 'SDK selection'
+                return $true
+            }
+
+            if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+                $script:ExitRequested = $true
+                Write-ToolExit
+                return $false
+            }
+
+            if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
+                return $false
+            }
+
+            $Number = 0
+            if ([int]::TryParse($Selection, [ref]$Number) -and
+                $Number -ge 1 -and
+                $Number -le $SdkVersions.Count) {
+                $script:SdkVersion = $SdkVersions[$Number - 1]
+                Assert-ValidSdkVersion
+                $script:InstallResumeChannel = $SelectedChannel
+                $script:InstallResultParent = 'SDK selection'
+                return $true
+            }
+
+            $SelectionRange = Get-SelectionRange -Count $SdkVersions.Count
+            $HasViewToggle = $FeaturedSdkVersions.Count -lt $AllSdkVersions.Count
+            if ($script:InteractiveSession) {
+                $Choices = if ($HasViewToggle) {
+                    "Choose $SelectionRange, S, B, M, or E."
+                }
+                else {
+                    "Choose $SelectionRange, B, M, or E."
+                }
+            }
+            else {
+                $Choices = if ($HasViewToggle) {
+                    "Choose $SelectionRange, S, B, M, or Q."
+                }
+                else {
+                    "Choose $SelectionRange, B, M, or Q."
+                }
+            }
+            Write-InvalidSelection -Selection $Selection -Choices $Choices
+        }
+    }
+}
+
+function Select-RemoveVersion {
+    $script:BackToMain = $false
+    $SdkVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
+
+    if (-not $SdkVersions) {
+        Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
+        return $false
+    }
+
+    while ($true) {
+        Write-ToolHeading 'Select an isolated SDK to remove:'
+        Write-ToolDisplay
+
+        for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
+            Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersions[$Index])
+        }
+
+        Write-ToolDisplay
+        if ($script:InteractiveSession) {
+            Write-ToolDisplay '  B. Back to Main'
+            Write-ToolDisplay '  E. Exit'
+        }
+        else {
+            Write-ToolDisplay '  Q. Cancel'
+        }
+        Write-ToolDisplay
+
+        $Selection = Read-ToolInput 'Selection'
+
+        if ($Selection -match '^[Bb]$' -and $script:InteractiveSession) {
+            $script:BackToMain = $true
+            return $false
+        }
+
+        if ($Selection -match '^[Ee]$' -and $script:InteractiveSession) {
+            $script:ExitRequested = $true
+            Write-ToolExit
+            return $false
+        }
+
+        if ($Selection -match '^[Qq]$' -and -not $script:InteractiveSession) {
+            return $false
+        }
+
+        $Number = 0
+        if ([int]::TryParse($Selection, [ref]$Number) -and
+            $Number -ge 1 -and
+            $Number -le $SdkVersions.Count) {
+            $script:SdkVersion = $SdkVersions[$Number - 1]
+            Assert-ValidSdkVersion
+            return $true
+        }
+
+        $SelectionRange = Get-SelectionRange -Count $SdkVersions.Count
+        $Choices = if ($script:InteractiveSession) {
+            "Choose $SelectionRange, B, or E."
+        }
+        else {
+            "Choose $SelectionRange or Q."
+        }
+        Write-InvalidSelection -Selection $Selection -Choices $Choices
+        Write-ToolDisplay
+    }
+}
+
+function Select-VerifyVersion {
+    $SdkVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
+
+    if (-not $SdkVersions) {
+        Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
+        return $false
+    }
+
+    while ($true) {
+        Write-ToolHeading 'Select an isolated SDK to verify:'
+        Write-ToolDisplay
+
+        for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
+            Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersions[$Index])
+        }
+
+        Write-ToolDisplay
+        Write-ToolDisplay '  B. Back to Main'
+        Write-ToolDisplay '  E. Exit'
+        Write-ToolDisplay
+
+        $Selection = Read-ToolInput 'Selection'
+
+        if ($Selection -match '^[Bb]$') {
+            $script:BackToMain = $true
+            return $false
+        }
+
+        if ($Selection -match '^[Ee]$') {
+            $script:ExitRequested = $true
+            Write-ToolExit
+            return $false
+        }
+
+        $Number = 0
+        if ([int]::TryParse($Selection, [ref]$Number) -and
+            $Number -ge 1 -and
+            $Number -le $SdkVersions.Count) {
+            $script:SdkVersion = $SdkVersions[$Number - 1]
+            Assert-ValidSdkVersion
+            return $true
+        }
+
+        $SelectionRange = Get-SelectionRange -Count $SdkVersions.Count
+        Write-InvalidSelection -Selection $Selection -Choices "Choose $SelectionRange, B, or E."
+        Write-ToolDisplay
+    }
+}
+
+function Resolve-InstallVersion {
+    if (-not [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+        Assert-ValidSdkVersion
+        return $true
+    }
+
+    if (-not (Select-InstallVersion)) {
+        if (-not $script:BackToMain -and -not $script:ExitRequested) {
+            Write-ToolInfo 'Installation cancelled.'
+        }
+        return $false
+    }
+
+    return $true
+}
+
+function Resolve-RemoveVersion {
+    if (-not [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+        Assert-ValidSdkVersion
+        return $true
+    }
+
+    if (-not (Select-RemoveVersion)) {
+        if (-not $script:BackToMain -and -not $script:ExitRequested) {
+            Write-ToolInfo 'Removal cancelled.'
+        }
+        return $false
+    }
+
+    return $true
+}
+
+function Get-SdkChannel {
+    $Channel = Get-SdkChannelFromVersion -Version $SdkVersion
+    if ([string]::IsNullOrWhiteSpace($Channel)) {
+        throw "Unable to determine the .NET release channel for SDK $SdkVersion."
+    }
+
+    return $Channel
+}
+
+function Get-SdkRid {
+    $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    $arch = switch ($architecture) {
+        ([System.Runtime.InteropServices.Architecture]::X64) { 'x64'; break }
+        ([System.Runtime.InteropServices.Architecture]::X86) { 'x86'; break }
+        ([System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64'; break }
+        ([System.Runtime.InteropServices.Architecture]::Arm) { 'arm'; break }
+        default { throw "Unable to map architecture $architecture to a Microsoft SDK artifact." }
+    }
+
+    return "win-$arch"
+}
+
+function Resolve-SdkArtifact {
+    param(
+        [Parameter(Mandatory)]
+        [psobject]$Metadata,
+        [Parameter(Mandatory)]
+        [string]$SdkVersion,
+        [Parameter(Mandatory)]
+        [string]$Rid
+    )
+
+    # Match the exact SDK entry and RID, not runtime records or URL substrings.
+    # Legacy SDKs use dotnet-dev-<rid>.<version> URLs with an unversioned name.
+    $extension = if ($Rid.StartsWith('win-')) { '.zip' } else { '.tar.gz' }
+    $baseUrl = "https://builds.dotnet.microsoft.com/dotnet/Sdk/$SdkVersion/"
+    $modernUrl = "$($baseUrl)dotnet-sdk-$SdkVersion-$Rid$extension"
+    $validNames = @("dotnet-sdk-$Rid$extension", "dotnet-dev-$Rid$extension")
+    $candidates = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+
+    foreach ($release in @($Metadata.releases)) {
+        $sdkEntries = [System.Collections.Generic.List[object]]::new()
+        if ($null -ne $release.sdk) {
+            $sdkEntries.Add($release.sdk)
+        }
+        foreach ($sdk in @($release.sdks)) {
+            if ($null -ne $sdk) {
+                $sdkEntries.Add($sdk)
+            }
+        }
+
+        foreach ($sdk in $sdkEntries) {
+            if ([string]$sdk.version -cne $SdkVersion) {
+                continue
+            }
+
+            foreach ($file in @($sdk.files)) {
+                if ([string]$file.rid -cne $Rid) {
+                    continue
+                }
+
+                $name = [string]$file.name
+                $url = [string]$file.url
+                if ($name -and $name -cnotin $validNames) {
+                    continue
+                }
+
+                # Retain modern fixture compatibility when name is absent.
+                # Legacy URLs must have an explicit Microsoft artifact name.
+                $legacyUrl = if ($name) {
+                    $stem = $name.Substring(0, $name.Length - $extension.Length)
+                    "$baseUrl$stem.$SdkVersion$extension"
+                }
+                else {
+                    ''
+                }
+
+                if ($url -cne $modernUrl -and $url -cne $legacyUrl) {
+                    continue
+                }
+                if ($url -ceq $modernUrl -and $name -and
+                    $name -cne "dotnet-sdk-$Rid$extension") {
+                    continue
+                }
+
+                [void]$candidates.Add("$url|$([string]$file.hash)")
+            }
+        }
+    }
+
+    if ($candidates.Count -ne 1) {
+        throw "Microsoft release metadata did not contain exactly one SDK archive for $SdkVersion and $Rid."
+    }
+
+    $parts = @($candidates)[0].Split('|', 2)
+    $url = $parts[0]
+    $hash = $parts[1]
+
+    $algorithm = if ($hash -cmatch '^[0-9A-Fa-f]{128}$') {
+        'SHA512'
+    }
+    elseif ($hash -cmatch '^[0-9A-Fa-f]{64}$') {
+        if ($SdkVersion -notmatch '^1\.') {
+            throw "Microsoft release metadata published SHA-256 for SDK $SdkVersion and $Rid; SHA-256 is supported only for historical .NET 1.x SDKs."
+        }
+        'SHA256'
+    }
+    else {
+        throw "Microsoft release metadata contained an unsupported or malformed checksum for SDK $SdkVersion and $Rid."
+    }
+
+    return [pscustomobject]@{
+        Url       = $url
+        Hash      = $hash.ToLowerInvariant()
+        Algorithm = $algorithm
+    }
+}
+
+function Test-LegacySdkHost {
+    param(
+        [Parameter(Mandatory)]
+        [string]$DotNetPath,
+        [Parameter(Mandatory)]
+        [string]$InstallDirectory,
+        [Parameter(Mandatory)]
+        [string]$Version
+    )
+
+    # Historical hosts (including early 2.x) cannot reliably enumerate SDKs with --list-sdks. The requested SDK
+    # must actually be selected by the isolated host from this exact root.
+    $ExpectedBasePath = [System.IO.Path]::GetFullPath(
+        (Join-Path (Join-Path $InstallDirectory 'sdk') $Version)
+    ).TrimEnd('\', '/')
+    if (-not (Test-Path -LiteralPath $ExpectedBasePath -PathType Container)) {
+        throw "SDK $Version was not found in the isolated SDK directory."
+    }
+
+    # A private global.json prevents inherited project settings from selecting
+    # another version. The temporary directory is removed on every path.
+    $WorkDirectory = Join-Path $SdkRoot ('.sdk-host-verify-{0}-{1}' -f $Version, [guid]::NewGuid().ToString('N'))
+    $OriginalMultilevel = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
+    $LocationPushed = $false
+    New-Item -ItemType Directory -Path $WorkDirectory -Force | Out-Null
+    try {
+        @{ sdk = @{ version = $Version } } |
+            ConvertTo-Json -Depth 3 |
+            Set-Content -LiteralPath (Join-Path $WorkDirectory 'global.json') -Encoding utf8
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
+        Push-Location -LiteralPath $WorkDirectory
+        $LocationPushed = $true
+
+        $VersionOutput = @(& $DotNetPath --version 2>&1)
+        $VersionExitCode = $LASTEXITCODE
+        $VersionLines = @($VersionOutput | ForEach-Object { ([string]$_).Trim() } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($VersionExitCode -ne 0 -or $VersionLines.Count -ne 1 -or $VersionLines[0] -cne $Version) {
+            throw "Unable to verify isolated SDK $($Version): legacy host did not report the requested exact SDK version."
+        }
+
+        $InfoOutput = @(& $DotNetPath --info 2>&1)
+        $InfoExitCode = $LASTEXITCODE
+        if ($InfoExitCode -ne 0) {
+            throw "Unable to verify isolated SDK $($Version): legacy host --info exited with code $InfoExitCode."
+        }
+
+        $BasePaths = @($InfoOutput | ForEach-Object {
+                if ([string]$_ -match '^\s*Base Path:\s*(.+?)\s*$') {
+                    $Matches[1].Trim()
+                }
+            })
+        if ($BasePaths.Count -ne 1) {
+            throw "Unable to verify isolated SDK $($Version): legacy host did not report one SDK Base Path."
+        }
+
+        try {
+            $ActualBasePath = [System.IO.Path]::GetFullPath($BasePaths[0]).TrimEnd('\', '/')
+        }
+        catch {
+            throw "Unable to verify isolated SDK $($Version): legacy host reported an invalid SDK Base Path."
+        }
+        if (-not [string]::Equals(
+                $ActualBasePath, $ExpectedBasePath, [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+            throw "Unable to verify isolated SDK $($Version): legacy host SDK Base Path does not match the isolated directory."
+        }
+    }
+    finally {
+        if ($LocationPushed) {
+            Pop-Location
+        }
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', $OriginalMultilevel, 'Process')
+        Remove-Item -LiteralPath $WorkDirectory -Recurse -Force -WhatIf:$false -Confirm:$false
+    }
+}
+
+function Install-IsolatedSdk {
+    $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
+    if (-not (Resolve-InstallVersion)) {
+        return
+    }
+
+    if ($SelectedInteractively) {
+        Clear-InteractiveScreen
+        Write-ToolDisplay
+    }
+
+    $InstallDir = Join-Path $SdkRoot $SdkVersion
+    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
+
+    Write-ToolLabelValue -Label 'Target SDK:' -Value $SdkVersion
+    Write-ToolLabelValue -Label 'Isolated install directory:' -Value $InstallDir
+    Write-ToolDisplay
+
+    Write-ToolInfo 'Checking existing installations...'
+    Write-ToolDisplay
+
+    $SystemSdks = @(Get-SystemSdkInventory)
+    $SystemSdk = $SystemSdks |
+        Where-Object { $_.Version -eq $SdkVersion } |
+        Select-Object -First 1
+
+    $IsolatedInstalled = $false
+    if (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf) {
+        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
+            Test-LegacySdkHost -DotNetPath $IsolatedDotNet -InstallDirectory $InstallDir -Version $SdkVersion
+            $IsolatedInstalled = $true
+        }
+        else {
+            $IsolatedSdks = & $IsolatedDotNet --list-sdks
+            $ExitCode = $LASTEXITCODE
+            if ($ExitCode -ne 0) {
+                throw "Unable to inspect existing isolated SDK $SdkVersion with exit code $ExitCode."
+            }
+
+            $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+            $IsolatedInstalled = $IsolatedVersions -contains $SdkVersion
+        }
+    }
+
+    if ($IsolatedInstalled) {
+        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'
+        Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
+    }
+    else {
+        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Not installed'
+    }
+
+    Write-ToolDisplay
+
+    if ($SystemSdk) {
+        Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed'
+        if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
+            Write-ToolLabelValue -Label 'Location:' -Value (Join-Path $SystemSdk.Path $SystemSdk.Version)
+        }
+    }
+    else {
+        Write-ToolLabelValue -Label 'System SDK:' -Value 'Not installed'
+    }
+    Write-ToolDisplay
+
+    if ($IsolatedInstalled) {
+        return
+    }
+
+    if (Test-Path -LiteralPath $InstallDir) {
+        throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
+    }
+
+    if ($SystemSdk) {
+        if (-not (Confirm-Action -Prompt 'Install an isolated copy in addition to the System SDK?')) {
+            Write-ToolInfo 'Installation cancelled.'
+            return
+        }
+
+        Write-ToolDisplay
+    }
+
+    $Channel = Get-SdkChannel
+    $Rid = Get-SdkRid
+    $MetadataUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/$Channel/releases.json"
+    $MetadataPath = Join-Path $SdkRoot ('.release-metadata-{0}-{1}.json' -f $SdkVersion, [guid]::NewGuid().ToString('N'))
+    $ArchivePath = Join-Path $SdkRoot ('.sdk-payload-{0}-{1}.zip' -f $SdkVersion, [guid]::NewGuid().ToString('N'))
+    $StagingDir = Join-Path $SdkRoot ('.install-{0}-{1}' -f $SdkVersion, [guid]::NewGuid().ToString('N'))
+    $StagedDotNet = Join-Path $StagingDir 'dotnet.exe'
+    $PrimaryFailure = $null
+    $CleanupFailure = $null
+
+    try {
+        Write-ToolInfo "Loading Microsoft release metadata for SDK $SdkVersion..."
+        try {
+            Invoke-WebRequest $MetadataUrl -OutFile $MetadataPath
+            $Metadata = Get-Content -LiteralPath $MetadataPath -Raw | ConvertFrom-Json -ErrorAction Stop
+        }
+        catch {
+            throw "Unable to load valid Microsoft release metadata for SDK ${SdkVersion}: $($_.Exception.Message)"
+        }
+
+        $Artifact = Resolve-SdkArtifact -Metadata $Metadata -SdkVersion $SdkVersion -Rid $Rid
+
+        Write-ToolInfo "Downloading .NET SDK $SdkVersion payload..."
+        try {
+            Invoke-WebRequest $Artifact.Url -OutFile $ArchivePath
+        }
+        catch {
+            throw "Unable to download the .NET SDK $SdkVersion payload: $($_.Exception.Message)"
+        }
+
+        try {
+            $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm $Artifact.Algorithm).Hash.ToLowerInvariant()
+        }
+        catch {
+            throw "Unable to verify the .NET SDK $SdkVersion payload: $($_.Exception.Message)"
+        }
+
+        if ($ActualHash -ne $Artifact.Hash) {
+            throw "Integrity verification failed for the .NET SDK $SdkVersion payload."
+        }
+
+        New-Item -ItemType Directory -Path $StagingDir -WhatIf:$false -Confirm:$false | Out-Null
+        Write-ToolInfo "Extracting verified .NET SDK $SdkVersion payload..."
+        try {
+            Expand-Archive -LiteralPath $ArchivePath -DestinationPath $StagingDir -Force
+        }
+        catch {
+            throw "Unable to extract the verified .NET SDK $SdkVersion payload: $($_.Exception.Message)"
+        }
+
+        Write-ToolDisplay
+        Write-ToolInfo 'Verifying the isolated SDK...'
+
+        if (-not (Test-Path -LiteralPath $StagedDotNet -PathType Leaf)) {
+            throw "The isolated dotnet executable was not found at $StagedDotNet"
+        }
+
+        if ($SdkVersion -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $SdkVersion)) {
+            Test-LegacySdkHost -DotNetPath $StagedDotNet -InstallDirectory $StagingDir -Version $SdkVersion
+            Write-ToolDisplay $SdkVersion
+        }
+        else {
+            $IsolatedSdks = & $StagedDotNet --list-sdks
+            $ExitCode = $LASTEXITCODE
+            if ($ExitCode -ne 0) {
+                throw "Unable to verify isolated SDK $SdkVersion with exit code $ExitCode."
+            }
+
+            foreach ($IsolatedSdk in $IsolatedSdks) {
+                Write-ToolDisplay $IsolatedSdk
+            }
+
+            $IsolatedVersions = @($IsolatedSdks | ForEach-Object { ($_ -split '\s+')[0] })
+            if ($IsolatedVersions -notcontains $SdkVersion) {
+                throw "SDK $SdkVersion was not found after installation."
+            }
+        }
+
+        if (Test-Path -LiteralPath $InstallDir) {
+            throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"
+        }
+
+        try {
+            Move-Item -LiteralPath $StagingDir -Destination $InstallDir -WhatIf:$false -Confirm:$false
+            $StagingDir = $null
+        }
+        catch {
+            throw "Unable to promote isolated SDK $SdkVersion into ${InstallDir}: $($_.Exception.Message)"
+        }
+    }
+    catch {
+        $PrimaryFailure = $_
+    }
+    finally {
+        foreach ($TemporaryPath in @($MetadataPath, $ArchivePath)) {
+            if ($TemporaryPath -and (Test-Path -LiteralPath $TemporaryPath)) {
+                try {
+                    Remove-Item -LiteralPath $TemporaryPath -Force -WhatIf:$false -Confirm:$false
+                }
+                catch {
+                    Write-ToolWarning "Unable to clean install transaction file ${TemporaryPath}: $($_.Exception.Message)"
+                    if ($null -eq $CleanupFailure) {
+                        $CleanupFailure = $_
+                    }
+                }
+            }
+        }
+
+        if ($StagingDir -and (Test-Path -LiteralPath $StagingDir)) {
+            try {
+                Remove-Item -LiteralPath $StagingDir -Recurse -Force -WhatIf:$false -Confirm:$false
+            }
+            catch {
+                Write-ToolWarning "Unable to clean install staging directory ${StagingDir}: $($_.Exception.Message)"
+                if ($null -eq $CleanupFailure) {
+                    $CleanupFailure = $_
+                }
+            }
+        }
+    }
+
+    if ($null -ne $PrimaryFailure) {
+        throw $PrimaryFailure
+    }
+
+    if ($null -ne $CleanupFailure) {
+        throw "Isolated SDK $SdkVersion was installed, but transaction cleanup failed: $($CleanupFailure.Exception.Message)"
+    }
+
+    Write-ToolDisplay
+    Write-ToolSuccess 'Isolated SDK installation completed successfully.'
+    Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
+}
+
+# Local SDK proof stays independent of online metadata and report presentation.
+# This primitive is designed for later reuse by Install without changing Install here.
+function Get-LocalIsolatedSdkValidation {
+    param(
+        [string]$Version,
+        [string]$InstallDirectory,
+        [string]$DotNetPath
+    )
+
+    $Checks = [System.Collections.Generic.List[object]]::new()
+    $Result = [ordered]@{ Checks = $Checks; Failure = '' }
+
+    if (-not (Test-Path -LiteralPath $InstallDirectory -PathType Container)) {
+        $Checks.Add([pscustomobject]@{ Label = 'Installation directory'; Status = 'FAIL'; Detail = $InstallDirectory })
+        $Result.Failure = "Isolated SDK $Version is not installed under $SdkRoot."
+        return [pscustomobject]$Result
+    }
+    $Checks.Add([pscustomobject]@{ Label = 'Installation directory'; Status = 'OK'; Detail = $InstallDirectory })
+
+    if (-not (Test-Path -LiteralPath $DotNetPath -PathType Leaf)) {
+        $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'FAIL'; Detail = $DotNetPath })
+        $Result.Failure = "Isolated SDK $Version is incomplete: expected dotnet host was not found at $DotNetPath."
+        return [pscustomobject]$Result
+    }
+
+    $WorkDirectory = $null
+    $PreviousMultiLevel = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
+    $PreviousDotNetRoot = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Process')
+    $LocationPushed = $false
+    try {
+        # Avoid ambient global.json (including one under the isolated SDK root)
+        # and disable old Windows multi-level SDK lookup for both host commands.
+        $WorkDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-verify-{0}" -f [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $WorkDirectory -ErrorAction Stop | Out-Null
+        Push-Location -LiteralPath $WorkDirectory
+        $LocationPushed = $true
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $InstallDirectory, 'Process')
+
+        # Original 1.x hosts cannot enumerate SDKs. Keep Install's exact
+        # --version and --info origin proof, with Verify-specific check labels.
+        if ($Version -match '^1\.') {
+            @{ sdk = @{ version = $Version } } |
+                ConvertTo-Json -Depth 3 |
+                Set-Content -LiteralPath (Join-Path $WorkDirectory 'global.json') -Encoding utf8 -ErrorAction Stop
+
+            $VersionOutput = @()
+            $ExitCode = 0
+            try {
+                $VersionOutput = @(& $DotNetPath --version 2>&1)
+                $ExitCode = $LASTEXITCODE
+            }
+            catch {
+                $Result.Failure = "Unable to launch isolated SDK $Version host at ${DotNetPath}: $($_.Exception.Message)"
+            }
+            if (-not $Result.Failure -and $ExitCode -ne 0) {
+                $Result.Failure = "Isolated SDK $Version failed verification: --version exited with code $ExitCode."
+            }
+            if ($Result.Failure) {
+                $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'FAIL'; Detail = $DotNetPath })
+                return [pscustomobject]$Result
+            }
+            $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'OK'; Detail = $DotNetPath })
+
+            $VersionLines = @($VersionOutput | ForEach-Object { ([string]$_).Trim() } |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            if ($VersionLines.Count -ne 1 -or $VersionLines[0] -cne $Version) {
+                $Result.Failure = "Isolated SDK $Version failed verification: legacy --version did not resolve the exact requested SDK."
+                $Checks.Add([pscustomobject]@{ Label = 'SDK resolution'; Status = 'FAIL'; Detail = $Result.Failure })
+                return [pscustomobject]$Result
+            }
+            $Checks.Add([pscustomobject]@{ Label = 'SDK resolution'; Status = 'OK'; Detail = $Version })
+
+            $ExpectedBase = Join-Path (Join-Path $InstallDirectory 'sdk') $Version
+            if (-not (Test-Path -LiteralPath $ExpectedBase -PathType Container)) {
+                $Result.Failure = "Isolated SDK $Version failed verification: isolated SDK Base Path is missing at $ExpectedBase."
+                $Checks.Add([pscustomobject]@{ Label = 'SDK origin'; Status = 'FAIL'; Detail = $Result.Failure })
+                return [pscustomobject]$Result
+            }
+            try {
+                $InfoOutput = @(& $DotNetPath --info 2>&1)
+                $InfoExitCode = $LASTEXITCODE
+                if ($InfoExitCode -ne 0) {
+                    throw "legacy --info exited with code $InfoExitCode."
+                }
+                $BasePaths = @($InfoOutput | ForEach-Object {
+                        if ([string]$_ -match '^\s*Base Path:\s*(.*?)\s*$') { $Matches[1].Trim() }
+                    })
+                if ($BasePaths.Count -ne 1 -or [string]::IsNullOrWhiteSpace($BasePaths[0])) {
+                    throw 'legacy --info did not report exactly one SDK Base Path.'
+                }
+                if (-not [System.IO.Path]::IsPathFullyQualified($BasePaths[0]) -or
+                    -not (Test-Path -LiteralPath $BasePaths[0] -PathType Container)) {
+                    throw 'legacy --info reported an invalid or missing SDK Base Path.'
+                }
+                $ActualBase = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $BasePaths[0] -ErrorAction Stop).Path).TrimEnd('\', '/')
+                $ExpectedCanonical = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $ExpectedBase -ErrorAction Stop).Path).TrimEnd('\', '/')
+                $PathComparison = if ($IsWindows) {
+                    [System.StringComparison]::OrdinalIgnoreCase
+                }
+                else {
+                    [System.StringComparison]::Ordinal
+                }
+                $CanonicalInstall = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $InstallDirectory -ErrorAction Stop).Path).TrimEnd('\', '/')
+                $ContainedBase = [System.IO.Path]::GetFullPath((Join-Path (Join-Path $CanonicalInstall 'sdk') $Version)).TrimEnd('\', '/')
+                # Reject an SDK subdirectory linked outside the isolated tree.
+                if (-not [string]::Equals($ExpectedCanonical, $ContainedBase, $PathComparison) -or
+                    -not [string]::Equals($ActualBase, $ExpectedCanonical, $PathComparison)) {
+                    throw 'legacy SDK Base Path does not match the isolated directory.'
+                }
+                $Checks.Add([pscustomobject]@{ Label = 'SDK origin'; Status = 'OK'; Detail = $ExpectedCanonical })
+            }
+            catch {
+                $Result.Failure = "Isolated SDK $Version failed verification: $($_.Exception.Message)"
+                $Checks.Add([pscustomobject]@{ Label = 'SDK origin'; Status = 'FAIL'; Detail = $Result.Failure })
+            }
+            return [pscustomobject]$Result
+        }
+
+        $Inventory = @()
+        $ExitCode = 0
+        try {
+            $Inventory = @(& $DotNetPath --list-sdks)
+            $ExitCode = $LASTEXITCODE
+        }
+        catch {
+            $Result.Failure = "Unable to launch isolated SDK $Version host at ${DotNetPath}: $($_.Exception.Message)"
+        }
+
+        if (-not $Result.Failure -and $ExitCode -ne 0) {
+            $Result.Failure = "Unable to verify isolated SDK $Version with exit code $ExitCode."
+        }
+
+        if ($Result.Failure) {
+            $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'FAIL'; Detail = $DotNetPath })
+        }
+        else {
+            $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'OK'; Detail = $DotNetPath })
+            $ExpectedOrigin = [System.IO.Path]::GetFullPath((Join-Path $InstallDirectory 'sdk')).TrimEnd(
+                [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+            $PathComparison = if ($IsWindows) {
+                [System.StringComparison]::OrdinalIgnoreCase
+            }
+            else {
+                [System.StringComparison]::Ordinal
+            }
+            $ExpectedOriginExists = Test-Path -LiteralPath $ExpectedOrigin -PathType Container
+            $FoundVersion = $false
+            $FoundOrigin = $false
+            foreach ($Line in $Inventory) {
+                $InventoryMatch = [regex]::Match([string]$Line, '^(?<version>\S+)\s+\[(?<path>.+)\]\s*$')
+                if (-not $InventoryMatch.Success -or $InventoryMatch.Groups['version'].Value -cne $Version) {
+                    continue
+                }
+                $FoundVersion = $true
+                try {
+                    $ReportedOrigin = [System.IO.Path]::GetFullPath($InventoryMatch.Groups['path'].Value).TrimEnd(
+                        [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+                    if ($ExpectedOriginExists -and [string]::Equals($ExpectedOrigin, $ReportedOrigin, $PathComparison)) {
+                        $FoundOrigin = $true
+                        break
+                    }
+                }
+                catch {
+                    # A malformed reported origin cannot satisfy the installed SDK check.
+                    continue
+                }
+            }
+
+            if (-not $FoundVersion) {
+                $Checks.Add([pscustomobject]@{ Label = 'SDK inventory'; Status = 'FAIL'; Detail = "$Version missing" })
+                $Result.Failure = "Isolated SDK $Version failed verification: the host did not report SDK $Version."
+            }
+            elseif (-not $FoundOrigin) {
+                $Checks.Add([pscustomobject]@{ Label = 'SDK inventory'; Status = 'FAIL'; Detail = 'unexpected SDK root' })
+                $Result.Failure = "Isolated SDK $Version failed verification: SDK $Version was not reported from $ExpectedOrigin."
+            }
+            else {
+                $Checks.Add([pscustomobject]@{ Label = 'SDK inventory'; Status = 'OK'; Detail = "$Version from $ExpectedOrigin" })
+                try {
+                    $ResolvedVersion = @(& $DotNetPath --version)
+                    $ExitCode = $LASTEXITCODE
+                    if ($ExitCode -ne 0) {
+                        $Result.Failure = "Isolated SDK $Version failed verification: --version exited with code $ExitCode."
+                    }
+                    elseif (($ResolvedVersion -join '').Trim() -cne $Version) {
+                        $Result.Failure = "Isolated SDK $Version failed verification: --version resolved $($ResolvedVersion -join '') instead of $Version."
+                    }
+                }
+                catch {
+                    $Result.Failure = "Unable to launch isolated SDK $Version host at ${DotNetPath}: $($_.Exception.Message)"
+                }
+
+                if ($Result.Failure) {
+                    $Checks.Add([pscustomobject]@{ Label = 'SDK resolution'; Status = 'FAIL'; Detail = $Result.Failure })
+                }
+                else {
+                    $Checks.Add([pscustomobject]@{ Label = 'SDK resolution'; Status = 'OK'; Detail = $Version })
+                }
+            }
+        }
+    }
+    catch {
+        if (-not $Result.Failure) {
+            $Result.Failure = "Unable to perform isolated SDK $Version verification: $($_.Exception.Message)"
+            $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'FAIL'; Detail = $DotNetPath })
+        }
+    }
+    finally {
+        if ($LocationPushed) {
+            Pop-Location
+        }
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', $PreviousMultiLevel, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $PreviousDotNetRoot, 'Process')
+        if ($WorkDirectory -and (Test-Path -LiteralPath $WorkDirectory)) {
+            Remove-Item -LiteralPath $WorkDirectory -Force -Recurse -ErrorAction SilentlyContinue
+        }
+    }
+    return [pscustomobject]$Result
+}
+
+function Get-VerifyAuditClassification {
+    param([string]$Version)
+
+    $Index = Get-ReleaseIndex
+    $ChannelVersion = Get-SdkChannelFromVersion -Version $Version
+    $Entry = @($Index.'releases-index' | Where-Object { $_.'channel-version' -eq $ChannelVersion } | Select-Object -First 1)
+    if (-not $Entry) {
+        return [pscustomobject]@{
+            Version          = $Version
+            ReleaseType      = ''
+            ServicingStatus  = ''
+            StatusToken      = 'Unknown channel'
+            ReleaseDate      = ''
+            GoLiveDate       = ''
+            EndOfSupportDate = ''
+        }
+    }
+
+    $ChannelEntry = $Entry[0]
+    $LatestSdk = [string]$ChannelEntry.'latest-sdk'
+    $MetadataUrl = [string]$ChannelEntry.'releases.json'
+    if ([string]::IsNullOrWhiteSpace($LatestSdk) -or
+        [string]::IsNullOrWhiteSpace($MetadataUrl) -or
+        [string]::IsNullOrWhiteSpace([string]$ChannelEntry.'support-phase')) {
+        throw "Invalid .NET release metadata for .NET $ChannelVersion."
+    }
+    $Metadata = Get-AuditChannelRecord -ChannelVersion $ChannelVersion -MetadataUrl $MetadataUrl -Cache @{}
+    if (@(Get-ChannelSdkVersion $Metadata) -notcontains $LatestSdk) {
+        throw "Invalid release metadata for .NET $ChannelVersion."
+    }
+    return Get-SdkAuditClassification -Version $Version -ChannelEntry $ChannelEntry -ChannelMetadata $Metadata -GoLiveCache @{}
+}
+
+# Optional local component diagnostics; only runtimes from this isolated root are shown.
+function Get-IsolatedSdkComponent {
+    param(
+        [string]$InstallDirectory,
+        [string]$DotNetPath,
+        [string]$Version = ''
+    )
+    $Result = [ordered]@{ HostVersion = ''; Architecture = ''; Rid = ''; Runtimes = @() }
+    $PreviousMulti = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
+    $PreviousRoot = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Process')
+    $WorkDirectory = $null
+    $LocationPushed = $false
+    try {
+        $WorkDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-components-{0}" -f [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $WorkDirectory -ErrorAction Stop | Out-Null
+        Push-Location -LiteralPath $WorkDirectory
+        $LocationPushed = $true
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $InstallDirectory, 'Process')
+
+        $InfoLines = @(& $DotNetPath --info 2>$null)
+        if ($LASTEXITCODE -eq 0) {
+            $Section = ''
+            foreach ($Line in $InfoLines) {
+                $Text = [string]$Line
+                if ($Text -match '^\s*Host(?:\s+\(useful for support\))?:\s*$') {
+                    $Section = 'Host'
+                    continue
+                }
+                if ($Text -match '^\s*Runtime Environment:\s*$') {
+                    $Section = 'Runtime Environment'
+                    continue
+                }
+                if ($Text -match '^\S[^:]*:\s*$') {
+                    $Section = ''
+                    continue
+                }
+                if ($Section -eq 'Host' -and $Text -match '^\s*Version:\s*(\S+)') {
+                    $Result.HostVersion = $Matches[1]
+                }
+                if ($Section -eq 'Host' -and $Text -match '^\s*Architecture:\s*(\S+)') {
+                    $Result.Architecture = $Matches[1]
+                }
+                if ($Section -eq 'Runtime Environment' -and $Text -match '^\s*RID:\s*(\S+)') {
+                    $Result.Rid = $Matches[1]
+                }
+            }
+        }
+
+        # Legacy hosts expose architecture in the RID but not as a separate field.
+        if ([string]::IsNullOrWhiteSpace($Result.Architecture) -and
+            $Result.Rid -match '-(x64|x86|arm64|arm)$') {
+            $Result.Architecture = $Matches[1]
+        }
+
+        # Original 1.x hosts do not support --list-runtimes.
+        if ($Version -match '^1\.') {
+            return [pscustomobject]$Result
+        }
+
+        $RuntimeLines = @(& $DotNetPath --list-runtimes 2>$null)
+        if ($LASTEXITCODE -eq 0) {
+            $Items = [System.Collections.Generic.List[object]]::new()
+            $Comparison = if ($IsWindows) {
+                [System.StringComparison]::OrdinalIgnoreCase
+            }
+            else {
+                [System.StringComparison]::Ordinal
+            }
+            foreach ($Line in $RuntimeLines) {
+                $Match = [regex]::Match([string]$Line, '^(?<name>\S+)\s+(?<version>\S+)\s+\[(?<path>.+)\]\s*$')
+                if (-not $Match.Success) {
+                    continue
+                }
+                try {
+                    $Expected = [System.IO.Path]::GetFullPath((Join-Path (Join-Path $InstallDirectory 'shared') $Match.Groups['name'].Value))
+                    $Reported = [System.IO.Path]::GetFullPath($Match.Groups['path'].Value)
+                    if ([string]::Equals($Expected, $Reported, $Comparison) -and
+                        (Test-Path -LiteralPath $Expected -PathType Container)) {
+                        $Items.Add([pscustomobject]@{
+                                Name    = $Match.Groups['name'].Value
+                                Version = $Match.Groups['version'].Value
+                            })
+                    }
+                }
+                catch {
+                    # Ignore malformed/unrelated runtime roots; these are optional data.
+                    continue
+                }
+            }
+            $Result.Runtimes = @($Items | Sort-Object Name, Version)
+        }
+    }
+    catch {
+        # Older/incomplete hosts may not provide optional diagnostics.
+        return [pscustomobject]$Result
+    }
+    finally {
+        if ($LocationPushed) {
+            Pop-Location
+        }
+        [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', $PreviousMulti, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $PreviousRoot, 'Process')
+        if ($WorkDirectory -and (Test-Path -LiteralPath $WorkDirectory)) {
+            Remove-Item -LiteralPath $WorkDirectory -Force -Recurse -ErrorAction SilentlyContinue
+        }
+    }
+    return [pscustomobject]$Result
+}
+
+function Test-IsolatedSdk {
+    if ([string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+        throw '-SdkVersion is required with -Action Verify.'
+    }
+    Assert-ValidSdkVersion
+
+    $InstallDir = Join-Path $SdkRoot $SdkVersion
+    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
+    $Validation = Get-LocalIsolatedSdkValidation -Version $SdkVersion -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet
+
+    Write-ToolHeading 'Verify isolated .NET SDK'
+    Write-ToolDisplay
+    $Classification = $null
+    try {
+        $Classification = Get-VerifyAuditClassification -Version $SdkVersion
+    }
+    catch {
+        # Microsoft lifecycle information is optional; local checks remain authoritative.
+        $Classification = $null
+    }
+    Write-ToolDisplay
+    Write-ToolHeading 'SDK information:'
+    Write-ToolDisplay ('  {0,-19} {1}' -f 'SDK version', $SdkVersion)
+    Write-ToolDisplay ('  {0,-19} {1}' -f '.NET channel', (Get-SdkChannelFromVersion -Version $SdkVersion))
+    try {
+        if ($null -eq $Classification) {
+            throw 'Microsoft metadata unavailable.'
+        }
+        if ($Classification.ReleaseType) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'Support type', $Classification.ReleaseType)
+        }
+        Write-ToolDisplay ('  {0,-19} {1}' -f 'Status', (Format-AuditStatusToken -StatusToken $Classification.StatusToken))
+        if ($Classification.ReleaseDate) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'SDK release date', $Classification.ReleaseDate)
+        }
+        if ($Classification.GoLiveDate) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'Go Live date', $Classification.GoLiveDate)
+        }
+        if ($Classification.EndOfSupportDate) {
+            Write-ToolDisplay ('  {0,-19} {1}' -f 'Channel EOS date', $Classification.EndOfSupportDate)
+        }
+        if ($Classification.ServicingStatus) {
+            $UpdateMatch = [regex]::Match(
+                [string]$Classification.ServicingStatus,
+                '^(?:Security update available|Update available) -> (?<version>\S+)$')
+            if ($UpdateMatch.Success) {
+                Write-ToolDisplay ('  {0,-19} {1}' -f 'Update available', $UpdateMatch.Groups['version'].Value)
+            }
+            else {
+                Write-ToolDisplay ('  {0,-19} {1}' -f 'Servicing status', $Classification.ServicingStatus)
+            }
+        }
+    }
+    catch {
+        Write-ToolDisplay '  Release/lifecycle   Unavailable (Microsoft metadata could not be loaded).'
+    }
+    Write-ToolDisplay
+    Write-ToolHeading 'Installed components:'
+    $Components = if (-not $Validation.Failure) {
+        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet -Version $SdkVersion
+    }
+    else {
+        $null
+    }
+    foreach ($Field in @(
+            @{ Label = 'Host version'; Value = $Components.HostVersion },
+            @{ Label = 'Architecture'; Value = $Components.Architecture },
+            @{ Label = 'Runtime identifier'; Value = $Components.Rid }
+        )) {
+        $Value = if ($Field.Value) { $Field.Value } else { 'Unavailable' }
+        Write-ToolDisplay ('  {0,-19} {1}' -f $Field.Label, $Value)
+    }
+    Write-ToolDisplay
+    Write-ToolDisplay '  .NET runtimes:'
+    if ($Components -and @($Components.Runtimes).Count -gt 0) {
+        $Width = ($Components.Runtimes | ForEach-Object { $_.Name.Length } | Measure-Object -Maximum).Maximum
+        foreach ($Runtime in $Components.Runtimes) {
+            $Name = ([string]$Runtime.Name).PadRight($Width)
+            Write-ToolDisplay ("    $Name  $($Runtime.Version)")
+        }
+    }
+    else {
+        Write-ToolDisplay '    Unavailable'
+    }
+    Write-ToolDisplay
+    Write-ToolHeading 'Verification:'
+    foreach ($Check in $Validation.Checks) {
+        $Status = [string]$Check.Status
+        $RenderedStatus = if ($Status -eq 'OK') {
+            Format-ToolMessage -Kind Success -Message 'OK'
+        }
+        else {
+            $Status
+        }
+        $Detail = if ($Status -eq 'OK') {
+            switch ($Check.Label) {
+                '.NET host' { 'Host executable found and launched' }
+                'SDK inventory' { 'Exact SDK found in isolated installation' }
+                'SDK origin' { 'Exact SDK Base Path in isolated installation' }
+                'SDK resolution' { 'Correct SDK selected' }
+                default { $Check.Detail }
+            }
+        }
+        else {
+            $Check.Detail
+        }
+        Write-ToolDisplay ('  {0,-23} {1}  {2}' -f $Check.Label, $RenderedStatus, $Detail)
+    }
+    Write-ToolDisplay
+    if ($Validation.Failure) {
+        throw $Validation.Failure
+    }
+    Write-ToolSuccess "Isolated SDK $SdkVersion verified successfully."
+}
+
+function Invoke-IsolatedSdkBuildServerShutdown {
+    param(
+        [string]$DotNetPath,
+        [string]$SdkVersion
+    )
+
+    $EnvironmentOverrides = @{
+        DOTNET_NOLOGO                      = 'true'
+        DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
+        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH    = 'false'
+    }
+    $PreviousEnvironment = @{}
+
+    try {
+        foreach ($Name in $EnvironmentOverrides.Keys) {
+            $PreviousEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process')
+            [Environment]::SetEnvironmentVariable($Name, $EnvironmentOverrides[$Name], 'Process')
+        }
+
+        $null = & $DotNetPath build-server shutdown
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        foreach ($Name in $EnvironmentOverrides.Keys) {
+            [Environment]::SetEnvironmentVariable($Name, $PreviousEnvironment[$Name], 'Process')
+        }
+    }
+
+    if ($ExitCode -ne 0) {
+        throw "Build-server shutdown failed for SDK $SdkVersion with exit code $ExitCode."
+    }
+}
+
+function Invoke-IsolatedSdkDirectoryRemoval {
+    param([string]$InstallDirectory)
+
+    Remove-Item `
+        -LiteralPath $InstallDirectory `
+        -Recurse `
+        -Force `
+        -WhatIf:$false `
+        -Confirm:$false
+
+    if (Test-Path -LiteralPath $InstallDirectory) {
+        throw "SDK directory still exists after removal: $InstallDirectory"
+    }
+}
+
+# Removal is intentionally scoped to the selected version directory under SDK_ROOT.
+function Remove-IsolatedSdk {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+    param([switch]$Yes)
+
+    $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
+    if (-not (Resolve-RemoveVersion)) {
+        return
+    }
+
+    if ($SelectedInteractively) {
+        Clear-InteractiveScreen
+    }
+
+    $InstallDir = Join-Path $SdkRoot $SdkVersion
+    $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
+
+    if (-not (Test-Path $IsolatedDotNet)) {
+        throw "Isolated SDK $SdkVersion was not found at $InstallDir"
+    }
+
+    Write-ToolDisplay
+    Write-ToolWarning "Isolated SDK $SdkVersion will be removed from $InstallDir"
+    Write-ToolDisplay
+
+    $ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
+    if (-not $PSCmdlet.ShouldProcess($InstallDir, "Remove isolated .NET SDK $SdkVersion")) {
+        return
+    }
+
+    $UseToolConfirmation = -not $Yes -and
+    -not $ConfirmWasSpecified -and
+    $ConfirmPreference -in @(
+        [System.Management.Automation.ConfirmImpact]::High,
+        [System.Management.Automation.ConfirmImpact]::None)
+
+    if ($UseToolConfirmation -and -not (Confirm-Action -Prompt 'Continue?')) {
+        Write-ToolInfo 'Removal cancelled.'
+        return
+    }
+
+    Write-ToolInfo "Shutting down build servers for SDK $SdkVersion..."
+    Invoke-IsolatedSdkBuildServerShutdown `
+        -DotNetPath $IsolatedDotNet `
+        -SdkVersion $SdkVersion
+
+    Write-ToolInfo "Removing $InstallDir..."
+    Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $InstallDir
+
+    Write-ToolSuccess "Isolated SDK $SdkVersion was removed."
+}
+
+function Invoke-SelectedAction {
+    Assert-ActionParameterUsage
+
+    switch ($script:Action) {
+        'Install' { Install-IsolatedSdk }
+        'Remove' {
+            $RemoveArguments = @{}
+            if ($Yes) {
+                $RemoveArguments.Yes = $true
+            }
+            if ($script:ConfirmWasSpecified) {
+                $RemoveArguments.Confirm = $script:ConfirmValue
+            }
+            if ($script:WhatIfWasSpecified) {
+                $RemoveArguments.WhatIf = $script:WhatIfValue
+            }
+
+            Remove-IsolatedSdk @RemoveArguments
+        }
+        'List' { Show-InstalledSdk }
+        'Audit' { Invoke-SdkAudit }
+        'Verify' {
+            if ($script:InteractiveSession -and [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+                if (-not (Select-VerifyVersion)) {
+                    return
+                }
+                Clear-InteractiveScreen
+            }
+            Test-IsolatedSdk
+        }
+    }
+}
+
+if ($Version) {
+    if ($script:ActionWasSpecified -or
+        $script:SdkVersionWasSpecified -or
+        $Yes -or
+        $script:ConfirmWasSpecified -or
+        $script:WhatIfWasSpecified) {
+        Write-Error -Message '-Version cannot be combined with action, SDK-version, confirmation, or WhatIf parameters.' -ErrorAction Continue
+        exit 1
+    }
+
+    Write-Output (Get-ToolVersionText)
+    return
+}
+
+Install-ToolIfNeeded
+
+if ($script:Bootstrapped) {
+    return
+}
+
+New-Item `
+    -ItemType Directory `
+    -Path $SdkRoot `
+    -Force `
+    -WhatIf:$false `
+    -Confirm:$false | Out-Null
+
+# Keep execution outside the caller's repository so a local global.json cannot
+# influence SDK resolution during the tool's work.
+Push-Location $SdkRoot
+try {
+    try {
+        if ($script:InteractiveSession) {
+            Clear-InteractiveScreen
+            while ($true) {
+                $script:Action = $null
+                $script:SdkVersion = $null
+                $script:BackToMain = $false
+                $script:ExitRequested = $false
+                $script:InstallResumeChannel = $null
+                $script:InstallResultParent = 'Main'
+
+                if (-not (Select-Action)) {
+                    return
+                }
+
+                Clear-InteractiveScreen
+                while ($true) {
+                    Write-ToolDisplay
+                    Invoke-SelectedAction
+
+                    if ($script:ExitRequested) {
+                        return
+                    }
+
+                    if ($script:BackToMain) {
+                        Write-ToolDisplay
+                        Clear-InteractiveScreen
+                        break
+                    }
+
+                    if ($script:Action -in @('Remove', 'Verify') -and
+                        [string]::IsNullOrWhiteSpace($script:SdkVersion)) {
+                        Wait-ForInteractiveResultAcknowledgement -Destination 'Main'
+                        Write-ToolDisplay
+                        Clear-InteractiveScreen
+                        break
+                    }
+
+                    $Destination = switch ($script:Action) {
+                        'Install' { $script:InstallResultParent }
+                        'Remove' {
+                            if (@(Get-IsolatedSdkVersion).Count -gt 0) {
+                                'Remove'
+                            }
+                            else {
+                                'Main'
+                            }
+                        }
+                        'Verify' { 'Verify' }
+                        default { 'Main' }
+                    }
+
+                    Wait-ForInteractiveResultAcknowledgement -Destination $Destination
+                    Write-ToolDisplay
+                    Clear-InteractiveScreen
+
+                    if ($script:Action -in @('List', 'Audit') -or
+                        ($script:Action -eq 'Remove' -and $Destination -eq 'Main')) {
+                        break
+                    }
+
+                    $script:SdkVersion = $null
+                    $script:BackToMain = $false
+                }
+            }
+        }
+
+        if (-not (Select-Action)) {
+            return
+        }
+
+        Invoke-SelectedAction
+    }
+    catch {
+        Write-Error -Message $_.Exception.Message -ErrorAction Continue
+        exit 1
+    }
+}
+finally {
+    Pop-Location
+})
+                $Major = [long]0
+                $Minor = [long]0
+                $IsNumeric = $Match.Success -and
+                    [long]::TryParse($Match.Groups[1].Value, [ref]$Major) -and
+                    [long]::TryParse($Match.Groups[2].Value, [ref]$Minor)
+                [pscustomobject]@{
+                    Entry = $Channel
+                    Numeric = [int]$IsNumeric
+                    Major = $Major
+                    Minor = $Minor
+                    Index = $EncounterIndex
+                }
+                $EncounterIndex++
+            } |
+            Sort-Object -Property @(
+                @{ Expression = 'Numeric'; Descending = $true },
+                @{ Expression = 'Major'; Descending = $true },
+                @{ Expression = 'Minor'; Descending = $true },
+                @{ Expression = 'Index'; Descending = $false }
+            ) |
+            ForEach-Object { $_.Entry }
+    )
+
     $ShowArchived = $false
     $ResumeChannel = $script:InstallResumeChannel
     $script:InstallResumeChannel = $null
