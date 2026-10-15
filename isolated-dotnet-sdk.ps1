@@ -2726,10 +2726,14 @@ function Remove-IsolatedSdk {
     }
 
     Write-ToolInfo "Shutting down build servers for SDK $SdkVersion..."
-    Invoke-IsolatedSdkBuildServerShutdown `
-        -DotNetPath $IsolatedDotNet `
-        -SdkVersion $SdkVersion `
-        -AllowUnsupportedShutdown:$AllowUnsupportedShutdown
+    $ShutdownArguments = @{
+        DotNetPath = $IsolatedDotNet
+        SdkVersion = $SdkVersion
+    }
+    if ($AllowUnsupportedShutdown) {
+        $ShutdownArguments.AllowUnsupportedShutdown = $true
+    }
+    Invoke-IsolatedSdkBuildServerShutdown @ShutdownArguments
 
     Write-ToolInfo "Removing $InstallDir..."
     Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $InstallDir
