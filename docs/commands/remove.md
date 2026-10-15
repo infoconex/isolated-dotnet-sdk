@@ -22,9 +22,9 @@ The authoritative PowerShell-specific rules and precedence are documented in the
 
 ## Build-server shutdown and deletion
 
-After removal is approved, the selected isolated SDK is asked to shut down its .NET build servers before directory deletion.
+After removal is approved, the selected isolated SDK is asked to shut down its .NET build servers before directory deletion. The shutdown runs from an operation-owned temporary working directory with the selected SDK as `DOTNET_ROOT`, older Windows multi-level SDK lookup disabled, and first-run CLI state isolated from the caller. The caller's working directory and environment are preserved.
 
-A nonzero build-server shutdown result is an operational failure. It blocks deletion and suppresses removal success.
+A nonzero build-server shutdown result is an operational failure, including on legacy SDKs. It blocks deletion and suppresses removal success; temporary shutdown state setup or cleanup failure also blocks deletion. The tool does not ignore a shutdown failure based on SDK version or exception text.
 
 After deletion, the tool verifies the selected version directory is gone before reporting success. Filesystem or deletion failure returns nonzero and does not broaden cleanup to sibling SDKs or System SDK locations.
 
