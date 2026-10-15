@@ -68,6 +68,7 @@ The Bash suites cover, among other focused reliability cases:
 - system and isolated-host native-command failures;
 - unavailable interactive input versus explicit default-no cancellation;
 - build-server shutdown failure context and deletion blocking;
+- legacy shutdown invocation from neutral temporary working state with pinned isolated `DOTNET_ROOT`, no Windows multi-level lookup, first-run suppression, and cleanup before deletion;
 - transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
 
 ## PowerShell behavioral tests
@@ -113,6 +114,7 @@ The PowerShell behavioral coverage includes:
 - `-Confirm:$false` automation;
 - `-Yes` automation and `-WhatIf` precedence;
 - shutdown-before-delete ordering;
+- shutdown environment isolation, restoration of caller state, and operation-owned temporary-state cleanup;
 - shutdown failure blocking deletion;
 - deletion failure blocking success reporting;
 - transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
