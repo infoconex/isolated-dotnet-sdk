@@ -20,6 +20,7 @@ bats \
   "$repo_root/tests/bash/tool-version.bats" \
   "$repo_root/tests/bash/help.bats" \
   "$repo_root/tests/bash/behavior.bats" \
+  "$repo_root/tests/bash/removal-presentation.bats" \
   "$repo_root/tests/bash/install-status.bats" \
   "$repo_root/tests/bash/installed-sdk-listing.bats" \
   "$repo_root/tests/bash/verify.bats" \

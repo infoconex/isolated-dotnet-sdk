@@ -72,15 +72,25 @@ Non-interactive execution is fail-safe:
 
 After removal is approved, operations occur in this order:
 
-1. request build-server shutdown with the selected isolated `dotnet` host;
-2. require a zero shutdown exit code;
+1. create operation-owned temporary working state and request build-server shutdown with the selected isolated `dotnet` host from that neutral working directory, with `DOTNET_ROOT` scoped to the selected isolated SDK and Windows multi-level lookup disabled;
+2. restore the caller's environment and working directory, clean up temporary shutdown state, and require a zero shutdown exit code (and successful cleanup) before deletion, except for the explicitly authorized legacy compatibility case specified below;
 3. remove only the selected SDK version directory;
 4. verify the directory no longer exists;
 5. report success.
 
-A shutdown failure prevents deletion. A deletion failure or remaining directory prevents success reporting.
+A shutdown failure, temporary shutdown-state setup failure, or temporary shutdown-state cleanup failure prevents deletion. A deletion failure or remaining directory prevents success reporting. Even on legacy hosts, no particular nonzero shutdown result is silently bypassed.
 
 `-WhatIf` and cancellation occur before shutdown.
+
+## Explicit historical unsupported-shutdown opt-in
+
+`-AllowUnsupportedShutdown` is a Remove-only switch separate from `-Yes`, native `-Confirm`, and `-WhatIf`. The opt-in is not inferred from a confirmation or interactive selection, and it is not available for Install, List, Verify, Audit, or `-Version`. The switch is forwarded through the file-based bootstrap boundary without silently authorizing a normal Remove.
+
+This exception is limited to the exact observed installed SDK versions `1.0.4`, `1.1.5`, `1.1.14`, `2.0.3`, and `2.1.105`, not all SDK versions matching a numeric prefix. The SDK-local `sdk/<version>` payload must exist. Both historical command spellings are probed in the isolated environment; a supported command must instead complete its real build-server shutdown successfully. An expected missing-command exit and message for **both** spellings establishes the unsupported case; any unexpected probe result is a blocking failure.
+
+For SDK `2.1.105`, unsupported unified shutdown requires executing the selected SDK's `Roslyn/bincore/VBCSCompiler.dll -shutdown` through its own host with successful native exit. For the four older enumerated SDK versions, the absence of a `VBCSCompiler` component in their payload is additionally required. This is deliberately not a general guarantee that all build-related processes have stopped; warn explicitly that other processes may remain. Even with the opt-in, an available shutdown failure, a failed Roslyn shutdown, or any ambiguous/missing payload condition prevents deletion.
+
+Neither `-AllowUnsupportedShutdown` nor `-Yes` bypasses `-WhatIf`, an unapproved confirmation, cleanup failure, selected-SDK ownership/scope checks, or directory deletion verification.
 
 ## Behavioral scenarios
 

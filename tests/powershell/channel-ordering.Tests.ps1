@@ -124,7 +124,7 @@ function Invoke-RestMethod {
         $result = Invoke-ShuffledChannelPicker -Selections '1,b,q'
         $result.ExitCode | Should -Be 0
         $result.Output | Should -Match 'Available \.NET 10\.0 SDKs:'
-        $result.Output | Should -Match '1\. 10\.0\.402 \(latest\)'
+        $result.Output | Should -Match '1\. 10\.0\.402 \(latest(?:, installed system-sdk)?\)'
         $result.Output | Should -Not -Match 'Available \.NET 9\.0 SDKs:'
     }
 }

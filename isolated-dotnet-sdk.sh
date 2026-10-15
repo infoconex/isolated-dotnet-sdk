@@ -2445,15 +2445,92 @@ remove_isolated_sdk() {
     fi
 
     tool_info "Shutting down build servers for SDK $VERSION..."
-    if DOTNET_NOLOGO=true \
-       DOTNET_GENERATE_ASPNET_CERTIFICATE=false \
-       DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false \
-       "$isolated_dotnet" build-server shutdown >/dev/null; then
+
+    # Always use the selected host with neutral CLI state. An unsupported
+    # command is not the same as an available shutdown command failing.
+    local shutdown_work_dir=""
+    shutdown_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-shutdown.XXXXXX")" ||
+        tool_fail "Unable to create temporary shutdown state for SDK $VERSION."
+    if (
+        cd "$shutdown_work_dir" || exit 92
+        export DOTNET_ROOT="$install_dir"
+        export DOTNET_MULTILEVEL_LOOKUP=0
+        export DOTNET_CLI_HOME="$shutdown_work_dir"
+        export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+        export DOTNET_CLI_TELEMETRY_OPTOUT=1
+        export DOTNET_NOLOGO=true
+        export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
+        export DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
+
+        legacy_version=false
+        case "$VERSION" in
+            1.0.4|1.1.5|1.1.14|2.0.3|2.1.105) legacy_version=true ;;
+        esac
+
+        if [[ "$ALLOW_UNSUPPORTED_SHUTDOWN" == "true" && "$legacy_version" == "true" ]]; then
+            # An exact, owner-verified SDK release and its payload directory are
+            # prerequisites; never classify arbitrary host exit 1 as unsupported.
+            sdk_payload="$install_dir/sdk/$VERSION"
+            if [[ ! -d "$sdk_payload" ]]; then
+                printf 'Unable to classify legacy shutdown for SDK %s: SDK payload missing.\n' "$VERSION" >&2
+                exit 92
+            fi
+
+            for spelling in build-server buildserver; do
+                if probe_output="$("$isolated_dotnet" "$spelling" --help 2>&1)"; then
+                    # A supported command must succeed at shutdown; the opt-in
+                    # switch never converts a real shutdown failure into success.
+                    "$isolated_dotnet" "$spelling" shutdown >/dev/null
+                    exit $?
+                else
+                    probe_status=$?
+                    if [[ "$probe_status" -ne 1 ||
+                          "$probe_output" != "No executable found matching command \"dotnet-$spelling\"" ]]; then
+                        printf 'Unable to classify legacy shutdown for SDK %s: %s probe failed unexpectedly.\n' "$VERSION" "$spelling" >&2
+                        exit 92
+                    fi
+                fi
+            done
+
+            if [[ "$VERSION" == "2.1.105" ]]; then
+                compiler="$sdk_payload/Roslyn/bincore/VBCSCompiler.dll"
+                if [[ ! -f "$compiler" ]]; then
+                    printf 'Legacy compiler shutdown unavailable for SDK %s; removal stopped.\n' "$VERSION" >&2
+                    exit 92
+                fi
+                tool_warn "Legacy SDK $VERSION lacks unified shutdown; using SDK-local Roslyn shutdown by explicit opt-in. Other build processes may remain."
+                "$isolated_dotnet" exec "$compiler" -shutdown >/dev/null
+                exit $?
+            fi
+
+            # The four inspected pre-Roslyn-server SDKs must not silently grow
+            # a compiler-server payload without a corresponding shutdown step.
+            if server_path="$(find "$sdk_payload" -name 'VBCSCompiler*' -print)"; then
+                if [[ -n "$server_path" ]]; then
+                    printf 'Unrecognized compiler-server payload in SDK %s; removal stopped.\n' "$VERSION" >&2
+                    exit 92
+                fi
+            else
+                printf 'Unable to inspect SDK %s compiler-server payload; removal stopped.\n' "$VERSION" >&2
+                exit 92
+            fi
+            tool_warn "Legacy SDK $VERSION has no supported shutdown command; bypass authorized explicitly. Other build processes may remain."
+            exit 0
+        fi
+
+        "$isolated_dotnet" build-server shutdown >/dev/null
+    ); then
         :
     else
         status=$?
+    fi
+
+    if [[ "$status" -ne 0 ]]; then
+        rm -rf "$shutdown_work_dir" || true
         tool_fail "Build-server shutdown failed for SDK $VERSION with exit code $status."
     fi
+    rm -rf "$shutdown_work_dir" ||
+        tool_fail "Unable to clean temporary shutdown state for SDK $VERSION; removal stopped."
 
     tool_info "Removing $install_dir..."
     rm -rf "$install_dir"
@@ -2464,6 +2541,9 @@ remove_isolated_sdk() {
 }
 
 run_selected_action() {
+    if [[ "$ALLOW_UNSUPPORTED_SHUTDOWN" == "true" && "$ACTION" != "remove" ]]; then
+        tool_fail "--allow-unsupported-shutdown is supported only with Remove."
+    fi
     case "$ACTION" in
         install)
             install_isolated_sdk
@@ -2502,7 +2582,7 @@ Supported platform:
 Usage:
   isolated-dotnet-sdk.sh
   isolated-dotnet-sdk.sh install [version] [--yes|-y]
-  isolated-dotnet-sdk.sh remove [version] [--yes|-y]
+  isolated-dotnet-sdk.sh remove [version] [--yes|-y] [--allow-unsupported-shutdown]
   isolated-dotnet-sdk.sh list
   isolated-dotnet-sdk.sh verify <version>
   isolated-dotnet-sdk.sh audit
@@ -2520,6 +2600,7 @@ Commands:
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
+  --allow-unsupported-shutdown  Remove-only explicit authorization for verified early SDKs lacking unified shutdown; never ignores failed shutdown.
   --sdk-version <v>  Select the exact .NET SDK version. Without an action, Install is selected.
   --version          Show the tool release/source identity and exit.
   --help, -h         Show this help text.
@@ -2572,6 +2653,7 @@ cd "$SDK_ROOT"
 ACTION=""
 VERSION=""
 YES="false"
+ALLOW_UNSUPPORTED_SHUTDOWN="false"
 INTERACTIVE_SESSION="false"
 EXIT_REQUESTED="false"
 BACK_TO_MAIN="false"
@@ -2600,6 +2682,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --yes|-y)
             YES="true"
+            ;;
+        --allow-unsupported-shutdown)
+            ALLOW_UNSUPPORTED_SHUTDOWN="true"
             ;;
         -h|--help)
             usage
