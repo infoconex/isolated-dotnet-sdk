@@ -449,16 +449,16 @@ EOF
   cat > "$fake_bin/dotnet" <<'DOTNET'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "\${1:-}" == '--list-sdks' ]]; then
+if [[ "${1:-}" == '--list-sdks' ]]; then
   printf 'call\n' >> "$INVENTORY_READ_LOG"
   reads="$(wc -l < "$INVENTORY_READ_LOG")"
   if (( reads == 2 )); then
     mkdir -p "$FAKE_HOME/dotnet-sdks/10.0.401/sdk"
     cat > "$FAKE_HOME/dotnet-sdks/10.0.401/dotnet" <<'SDKHOST'
 #!/usr/bin/env bash
-if [[ "\${1:-}" == '--list-sdks' ]]; then
+if [[ "${1:-}" == '--list-sdks' ]]; then
   printf '%s\n' "10.0.401 [$FAKE_HOME/dotnet-sdks/10.0.401/sdk]"
-elif [[ "\${1:-}" == '--version' ]]; then
+elif [[ "${1:-}" == '--version' ]]; then
   printf '%s\n' '10.0.401'
 fi
 exit 0
@@ -554,9 +554,9 @@ CURL
   mkdir -p "$tool_root/$version/sdk"
   cat > "$tool_root/$version/dotnet" <<'SDKHOST'
 #!/usr/bin/env bash
-if [[ "\${1:-}" == '--list-sdks' ]]; then
+if [[ "${1:-}" == '--list-sdks' ]]; then
   printf '%s\n' "10.0.401 [$HOME/dotnet-sdks/10.0.401/sdk]"
-elif [[ "\${1:-}" == '--version' ]]; then
+elif [[ "${1:-}" == '--version' ]]; then
   printf '%s\n' '10.0.401'
 fi
 exit 0
