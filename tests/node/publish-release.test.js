@@ -22,7 +22,7 @@ async function exercise(options = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'publisher-test-'));
   const ps = "$ToolReleaseIdentity = '" + (options.badIdentity ? 'v0.0.1' : TAG) + "'\n" +
     (options.duplicateIdentity ? "$ToolReleaseIdentity = '" + TAG + "'\n" : '');
-  const sh = 'TOOL_RELEASE_IDENTITY="' + TAG + '"\n';
+  const sh = 'TOOL_RELEASE_IDENTITY="' + (options.badBashIdentity ? 'v0.0.1' : TAG) + '"\n';
   const manifest = hash(ps) + '  isolated-dotnet-sdk.ps1\n' +
     hash(sh) + '  isolated-dotnet-sdk.sh\n';
   const notes = 'Release notes from the checked-out commit.\n';
@@ -193,7 +193,7 @@ async function exercise(options = {}) {
       CHECKSUM_PATH: 'SHA256SUMS',
       MANIFEST_SHA256: options.wrongManifestHash ? '0'.repeat(64) : hash(options.badManifest ? 'incorrect manifest\n' : manifest),
       POWERSHELL_SHA256: options.wrongScriptHash ? '0'.repeat(64) : hash(ps),
-      BASH_SHA256: hash(sh)
+      BASH_SHA256: options.wrongBashHash ? '0'.repeat(64) : hash(sh)
     });
     try {
       await publish({ github, context: { repo: identity }, core });
@@ -247,9 +247,11 @@ test('ambiguous publication response must not delete an already-public release o
 for (const scenario of [
   { name: 'mismatched PowerShell identity', options: { badIdentity: true }, error: /PowerShell release source/ },
   { name: 'duplicate PowerShell identity', options: { duplicateIdentity: true }, error: /PowerShell release source/ },
+  { name: 'mismatched Bash identity', options: { badBashIdentity: true }, error: /Bash release source/ },
   { name: 'malformed checksum manifest', options: { badManifest: true }, error: /manifest|checksum/i },
   { name: 'wrong manifest hash', options: { wrongManifestHash: true }, error: /checksum|manifest/i },
   { name: 'wrong script hash', options: { wrongScriptHash: true }, error: /script SHA-256/i },
+  { name: 'wrong Bash hash', options: { wrongBashHash: true }, error: /script SHA-256/i },
   { name: 'wrong derived parent', options: { wrongParent: true }, error: /only parent/ },
   { name: 'wrong derived tree', options: { wrongTree: true }, error: /stamped PowerShell source bytes/ },
   { name: 'unexpected derived change set', options: { wrongDiff: true }, error: /only by the two stamped/ },
