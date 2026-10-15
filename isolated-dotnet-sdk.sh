@@ -2445,15 +2445,35 @@ remove_isolated_sdk() {
     fi
 
     tool_info "Shutting down build servers for SDK $VERSION..."
-    if DOTNET_NOLOGO=true \
-       DOTNET_GENERATE_ASPNET_CERTIFICATE=false \
-       DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false \
-       "$isolated_dotnet" build-server shutdown >/dev/null; then
+
+    # Resolve the selected isolated host without ambient global.json/System SDK
+    # lookup or first-run side effects. Never delete after shutdown failure.
+    local shutdown_work_dir=""
+    shutdown_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-shutdown.XXXXXX")" ||
+        tool_fail "Unable to create temporary shutdown state for SDK $VERSION."
+    if (
+        cd "$shutdown_work_dir" &&
+            DOTNET_ROOT="$install_dir" \
+            DOTNET_MULTILEVEL_LOOKUP=0 \
+            DOTNET_CLI_HOME="$shutdown_work_dir" \
+            DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
+            DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+            DOTNET_NOLOGO=true \
+            DOTNET_GENERATE_ASPNET_CERTIFICATE=false \
+            DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false \
+            "$isolated_dotnet" build-server shutdown >/dev/null
+    ); then
         :
     else
         status=$?
+    fi
+
+    if [[ "$status" -ne 0 ]]; then
+        rm -rf "$shutdown_work_dir" || true
         tool_fail "Build-server shutdown failed for SDK $VERSION with exit code $status."
     fi
+    rm -rf "$shutdown_work_dir" ||
+        tool_fail "Unable to clean temporary shutdown state for SDK $VERSION; removal stopped."
 
     tool_info "Removing $install_dir..."
     rm -rf "$install_dir"
