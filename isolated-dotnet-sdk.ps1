@@ -2779,6 +2779,7 @@ function Invoke-SelectedAction {
                     return
                 }
                 Clear-InteractiveScreen
+                Write-ToolDisplay
             }
             Test-IsolatedSdk
         }
