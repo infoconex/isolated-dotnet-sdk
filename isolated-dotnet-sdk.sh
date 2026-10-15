@@ -367,6 +367,25 @@ parse_release_index() {
     '
 }
 
+# Sort whole release-index records by numeric channel major/minor, not SDK.
+# Malformed versions follow valid ones in their original encounter order.
+sort_channel_records() {
+    local line="" channel="" major="" minor="" index=0
+    local tab=$'\t'
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        channel="$(printf '%s\n' "$line" | cut -d '|' -f1)"
+        if [[ "$channel" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            IFS='.' read -r major minor <<< "$channel"
+            printf '1\t%s\t%s\t%09d\t%s\n' "$major" "$minor" "$index" "$line"
+        else
+            printf '0\t0\t0\t%09d\t%s\n' "$index" "$line"
+        fi
+        index=$((index + 1))
+    done | LC_ALL=C sort -t "$tab" -k1,1nr -k2,2nr -k3,3nr -k4,4n | cut -f5-
+}
+
 extract_sdk_versions() {
     grep -oE '/dotnet/Sdk/[^/"[:space:]]+' |
         sed 's#^.*/Sdk/##' |
@@ -1062,7 +1081,7 @@ select_install_version() {
         tool_fail "Invalid .NET release metadata from Microsoft."
     fi
 
-    channel_data="$(printf "%s\n" "$index_json" | parse_release_index)"
+    channel_data="$(printf "%s\n" "$index_json" | parse_release_index | sort_channel_records)"
     [[ -n "$channel_data" ]] || \
         tool_fail "No selectable .NET channels were found in Microsoft release metadata."
 
