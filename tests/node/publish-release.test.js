@@ -283,6 +283,10 @@ for (const stage of [
       assert.equal(result.state.tag, true, 'uncertain tag is retained');
       assert.ok(result.state.release, 'unverified draft is retained');
       assert.ok(result.warnings.some((message) => /cleanup also failed/.test(message)));
+    } else if (stage === 'createRelease') {
+      assert.equal(result.state.tag, true, 'ambiguous draft creation leaves tag for investigation');
+      assert.equal(result.state.release, null, 'no locally confirmed draft');
+      assert.ok(result.warnings.some((message) => /Draft creation .* not confirmed/.test(message)));
     } else {
       assert.equal(result.state.tag, false, 'known owned incomplete tag removed, if created');
       assert.equal(result.state.release, null, 'known owned draft removed, if created');
@@ -346,7 +350,7 @@ test('invalid draft creation response does not fabricate ownership or publish', 
     createRelease(response) { return { data: { ...response.data, id: null } }; }
   } });
   failed(result, /did not confirm ownership of the draft release/);
-  assert.equal(result.state.tag, false);
+  assert.equal(result.state.tag, true, 'unknown remote creation prevents tag cleanup');
   assert.ok(!result.calls.includes('updateRelease'));
 });
 
