@@ -89,7 +89,8 @@ function Invoke-RestMethod {
         # Each interactive child receives a unique HOME and an installed tool.
         # Its exit/navigation behavior does not depend on re-running bootstrap.
         New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
-        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
     }
 
     AfterEach {

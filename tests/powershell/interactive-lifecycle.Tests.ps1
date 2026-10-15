@@ -77,7 +77,8 @@ Describe 'PowerShell interactive lifecycle' {
         # installed tool; launching an extra bootstrap process per case adds
         # no coverage to their prompt, input, and exit-code contracts.
         New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
-        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
     }
 
     AfterEach {

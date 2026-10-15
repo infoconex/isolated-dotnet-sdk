@@ -106,7 +106,8 @@ function Invoke-RestMethod {
         # Picker process tests set their own isolated HOME and validate
         # interactive selection; no bootstrap process is needed in fixture setup.
         New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
-        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
     }
 
     AfterEach {

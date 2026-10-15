@@ -60,7 +60,8 @@ function Invoke-RestMethod {
         # Install directly in this unique test HOME instead of running a second,
         # unrelated bootstrap process before each test.
         New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
-        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:TestHome, 'Process')
     }
 
