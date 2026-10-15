@@ -8,6 +8,8 @@ The tool owns `~/dotnet-sdks` and creates that directory when needed. If the pat
 
 SDK versions are validated before version-scoped destructive work. Removal is limited to the selected version directory directly beneath the isolated SDK root. Failure to remove that directory is an operation failure; sibling SDK directories and unrelated tool-owned files are not cleanup targets.
 
+After Remove confirmation, build-server shutdown uses a fresh operation-owned temporary directory for its working directory and CLI home. That directory is separate from the selected SDK directory and is cleaned before deletion is attempted; a failure to create or clean it prevents SDK deletion. The original working directory and environment are preserved. Shutdown must still succeed even for legacy hosts; the tool never treats an unknown failure or legacy host error as permission to remove an SDK.
+
 ## Saved-tool replacement
 
 Bootstrap replacement is staged in the isolated SDK root, beside the stable saved-tool path. Staging names are collision-resistant and operation-owned.
