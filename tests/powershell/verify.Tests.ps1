@@ -153,6 +153,55 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    It 'preserves success and failure exit codes in optional Verify tracing' {
+        $previousTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', 'Process')
+        $previousChildTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', 'Process')
+        try {
+            # Exercise the actual traced child command even in an ordinary CI run.
+            $tracePath = if ([string]::IsNullOrWhiteSpace($previousTrace)) {
+                Join-Path $script:TestRoot 'verify-invocations.csv'
+            }
+            else {
+                $previousTrace
+            }
+            $childTracePath = if ([string]::IsNullOrWhiteSpace($previousChildTrace)) {
+                Join-Path $script:TestRoot 'verify-child-events.tsv'
+            }
+            else {
+                $previousChildTrace
+            }
+            $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH = $tracePath
+            $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH = $childTracePath
+            $previousCount = if (Test-Path -LiteralPath $tracePath -PathType Leaf) {
+                @(Import-Csv -LiteralPath $tracePath).Count
+            }
+            else {
+                0
+            }
+
+            $missing = @(Invoke-VerifyTool -Version '99.0.100')
+            $script:VerifyExitCode | Should -Be 1
+            ($missing -join [Environment]::NewLine) | Should -Match 'not installed'
+
+            Install-FakeIsolatedHost -Version '99.0.100' | Out-Null
+            $healthy = @(Invoke-VerifyTool -Version '99.0.100')
+            $script:VerifyExitCode | Should -Be 0
+            ($healthy -join [Environment]::NewLine) | Should -Match 'verified successfully'
+
+            $newCalls = @(Import-Csv -LiteralPath $tracePath | Select-Object -Skip $previousCount)
+            $newCalls.Count | Should -Be 2
+            $newCalls[0].ExitCode | Should -Be '1'
+            $newCalls[1].ExitCode | Should -Be '0'
+            (Get-Content -LiteralPath $childTracePath -Raw) | Should -Match 'product-return'
+        }
+        finally {
+            [Environment]::SetEnvironmentVariable(
+                'ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', $previousTrace, 'Process')
+            [Environment]::SetEnvironmentVariable(
+                'ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', $previousChildTrace, 'Process')
+        }
+    }
+
     It 'reports a healthy exact isolated SDK without mutating it' {
         $version = '99.0.100'
         $installDirectory = Install-FakeIsolatedHost -SdkVersion $version -ReportedVersion $version
