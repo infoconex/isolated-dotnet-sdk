@@ -1303,13 +1303,13 @@ function Read-ManualVersion {
 function Select-InstallVersion {
     $script:BackToMain = $false
     # Consume previously validated remote discovery only when resuming this picker.
-    $ReleaseIndex = $script:InstallResumeReleaseIndex
+    $PickerReleaseIndex = $script:InstallResumeReleaseIndex
     $script:InstallResumeReleaseIndex = $null
-    if ($null -eq $ReleaseIndex) {
-        $ReleaseIndex = Get-ReleaseIndex
+    if ($null -eq $PickerReleaseIndex) {
+        $PickerReleaseIndex = Get-ReleaseIndex
     }
     $AllChannels = @(
-        $ReleaseIndex.'releases-index' |
+        $PickerReleaseIndex.'releases-index' |
             Where-Object {
                 -not [string]::IsNullOrWhiteSpace([string]$_.'channel-version') -and
                 -not [string]::IsNullOrWhiteSpace([string]$_.'support-phase') -and
@@ -1360,11 +1360,11 @@ function Select-InstallVersion {
     $ClearChannelScreen = $true
 
     while ($true) {
-        $ChannelMetadata = $null
+        $PickerChannelMetadata = $null
         if ($null -ne $ResumeChannel) {
             $SelectedChannel = $ResumeChannel
             $ResumeChannel = $null
-            $ChannelMetadata = $ResumeMetadata
+            $PickerChannelMetadata = $ResumeMetadata
             $ResumeMetadata = $null
         }
         else {
@@ -1477,21 +1477,21 @@ function Select-InstallVersion {
         $LatestSdk = [string]$SelectedChannel.'latest-sdk'
         $ChannelMetadataUrl = [string]$SelectedChannel.'releases.json'
 
-        if ($null -eq $ChannelMetadata) {
+        if ($null -eq $PickerChannelMetadata) {
             try {
-                $ChannelMetadata = Invoke-RestMethod -Uri $ChannelMetadataUrl
+                $PickerChannelMetadata = Invoke-RestMethod -Uri $ChannelMetadataUrl
             }
             catch {
                 throw "Unable to load release metadata for .NET $ChannelVersion."
             }
         }
 
-        if ($null -eq $ChannelMetadata -or
-            $null -eq $ChannelMetadata.releases) {
+        if ($null -eq $PickerChannelMetadata -or
+            $null -eq $PickerChannelMetadata.releases) {
             throw "Invalid release metadata for .NET $ChannelVersion."
         }
 
-        $DiscoveredSdkVersions = @(Get-ChannelSdkVersion $ChannelMetadata)
+        $DiscoveredSdkVersions = @(Get-ChannelSdkVersion $PickerChannelMetadata)
         if (-not $DiscoveredSdkVersions) {
             throw "No SDK versions were found for .NET $ChannelVersion."
         }
@@ -1592,8 +1592,8 @@ function Select-InstallVersion {
             if ($Selection -match '^[Mm]$') {
                 Read-ManualVersion
                 $script:InstallResumeChannel = $SelectedChannel
-                $script:InstallResumeReleaseIndex = $ReleaseIndex
-                $script:InstallResumeChannelMetadata = $ChannelMetadata
+                $script:InstallResumeReleaseIndex = $PickerReleaseIndex
+                $script:InstallResumeChannelMetadata = $PickerChannelMetadata
                 $script:InstallResultParent = 'SDK selection'
                 return $true
             }
@@ -1615,8 +1615,8 @@ function Select-InstallVersion {
                 $script:SdkVersion = $SdkVersions[$Number - 1]
                 Assert-ValidSdkVersion
                 $script:InstallResumeChannel = $SelectedChannel
-                $script:InstallResumeReleaseIndex = $ReleaseIndex
-                $script:InstallResumeChannelMetadata = $ChannelMetadata
+                $script:InstallResumeReleaseIndex = $PickerReleaseIndex
+                $script:InstallResumeChannelMetadata = $PickerChannelMetadata
                 $script:InstallResultParent = 'SDK selection'
                 return $true
             }
