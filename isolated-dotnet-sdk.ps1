@@ -2558,14 +2558,14 @@ function Invoke-IsolatedSdkBuildServerShutdown {
     # errors; this environment isolation does not permit deletion on failure.
     $WorkDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-shutdown-{0}" -f [guid]::NewGuid())
     $EnvironmentOverrides = @{
-        DOTNET_ROOT                       = (Split-Path -Path $DotNetPath -Parent)
-        DOTNET_MULTILEVEL_LOOKUP          = '0'
-        DOTNET_CLI_HOME                   = $WorkDirectory
-        DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
-        DOTNET_CLI_TELEMETRY_OPTOUT       = '1'
-        DOTNET_NOLOGO                     = 'true'
+        DOTNET_ROOT                        = (Split-Path -Path $DotNetPath -Parent)
+        DOTNET_MULTILEVEL_LOOKUP           = '0'
+        DOTNET_CLI_HOME                    = $WorkDirectory
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE  = '1'
+        DOTNET_CLI_TELEMETRY_OPTOUT        = '1'
+        DOTNET_NOLOGO                      = 'true'
         DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
-        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH   = 'false'
+        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH    = 'false'
     }
     $PreviousEnvironment = @{}
     $LocationPushed = $false
