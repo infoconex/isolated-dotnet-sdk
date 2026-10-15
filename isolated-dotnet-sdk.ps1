@@ -2553,14 +2553,29 @@ function Invoke-IsolatedSdkBuildServerShutdown {
         [string]$SdkVersion
     )
 
+    # Legacy hosts must not resolve an ambient global.json or System SDK while
+    # preparing build-server shutdown. Treat all nonzero shutdown results as
+    # errors; this environment isolation does not permit deletion on failure.
+    $WorkDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-shutdown-{0}" -f [guid]::NewGuid())
     $EnvironmentOverrides = @{
-        DOTNET_NOLOGO                      = 'true'
+        DOTNET_ROOT                       = (Split-Path -Path $DotNetPath -Parent)
+        DOTNET_MULTILEVEL_LOOKUP          = '0'
+        DOTNET_CLI_HOME                   = $WorkDirectory
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
+        DOTNET_CLI_TELEMETRY_OPTOUT       = '1'
+        DOTNET_NOLOGO                     = 'true'
         DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
-        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH    = 'false'
+        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH   = 'false'
     }
     $PreviousEnvironment = @{}
+    $LocationPushed = $false
+    $ExitCode = $null
 
     try {
+        New-Item -ItemType Directory -Path $WorkDirectory -ErrorAction Stop | Out-Null
+        Push-Location -LiteralPath $WorkDirectory
+        $LocationPushed = $true
+
         foreach ($Name in $EnvironmentOverrides.Keys) {
             $PreviousEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process')
             [Environment]::SetEnvironmentVariable($Name, $EnvironmentOverrides[$Name], 'Process')
@@ -2570,8 +2585,14 @@ function Invoke-IsolatedSdkBuildServerShutdown {
         $ExitCode = $LASTEXITCODE
     }
     finally {
-        foreach ($Name in $EnvironmentOverrides.Keys) {
+        foreach ($Name in $PreviousEnvironment.Keys) {
             [Environment]::SetEnvironmentVariable($Name, $PreviousEnvironment[$Name], 'Process')
+        }
+        if ($LocationPushed) {
+            Pop-Location
+        }
+        if (Test-Path -LiteralPath $WorkDirectory) {
+            Remove-Item -LiteralPath $WorkDirectory -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 
