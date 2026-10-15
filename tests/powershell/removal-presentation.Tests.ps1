@@ -181,29 +181,28 @@ Describe 'PowerShell removal presentation' {
                 ')'
                 'if /I "%1"=="exec" ('
                 '  if not exist "%2" exit /b 89'
-                '  if not "%SDK_TEST_ROSLYN_EXIT_CODE%"=="" exit /b %SDK_TEST_ROSLYN_EXIT_CODE%'
+                '  if exist "%2.fail" exit /b 77'
                 '  echo success>"%SDK_TEST_ROSLYN_MARKER%"'
                 '  exit /b 0'
                 ')'
                 'exit /b 88'
             ) -join "`r`n")
 
-        $previousExit = [Environment]::GetEnvironmentVariable('SDK_TEST_ROSLYN_EXIT_CODE', 'Process')
+        $failureMarker = "$compilerPath.fail"
         $previousMarker = [Environment]::GetEnvironmentVariable('SDK_TEST_ROSLYN_MARKER', 'Process')
         try {
             $env:SDK_TEST_ROSLYN_MARKER = $marker
-            $env:SDK_TEST_ROSLYN_EXIT_CODE = '77'
+            Set-Content -LiteralPath $failureMarker -Value 'fail'
             { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
                 Should -Throw '*exit code 77*'
             Test-Path -LiteralPath $marker | Should -BeFalse
 
-            Remove-Item Env:SDK_TEST_ROSLYN_EXIT_CODE -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $failureMarker -Force
             Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown
             Test-Path -LiteralPath $marker | Should -BeTrue
             Test-Path -LiteralPath $root -PathType Container | Should -BeTrue
         }
         finally {
-            [Environment]::SetEnvironmentVariable('SDK_TEST_ROSLYN_EXIT_CODE', $previousExit, 'Process')
             [Environment]::SetEnvironmentVariable('SDK_TEST_ROSLYN_MARKER', $previousMarker, 'Process')
         }
     }
