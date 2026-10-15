@@ -43,21 +43,72 @@ function Invoke-RestMethod {
 & $env:VERIFY_TOOL_PATH -Action Verify -SdkVersion $env:VERIFY_TARGET_VERSION
 '@
             $tracePath = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH
+            if (-not [string]::IsNullOrWhiteSpace($tracePath)) {
+                # Add child-side milestones only for the opt-in trace path.
+                $tracePrefix = @'
+function Write-VerifyChildTraceEvent {
+    param([string]$EventName, [string]$Detail = '')
+    $stamp = [DateTime]::UtcNow.ToString('o')
+    $caseId = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE
+    $invocation = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION
+    $safeDetail = $Detail.Replace("`t", ' ').Replace("`r", ' ').Replace("`n", ' ')
+    [System.IO.File]::AppendAllText(
+        $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH,
+        "$stamp`t$caseId`t$invocation`t$PID`t$EventName`t$safeDetail" + [Environment]::NewLine)
+}
+Write-VerifyChildTraceEvent -EventName 'child-command-start'
+'@
+                $command = $tracePrefix + [Environment]::NewLine + $command
+                $command = $command.Replace(
+                    '    if ($env:VERIFY_METADATA_ROOT) {',
+                    '    Write-VerifyChildTraceEvent -EventName ''metadata-start'' -Detail $Uri' +
+                        [Environment]::NewLine + '    if ($env:VERIFY_METADATA_ROOT) {')
+                $command = $command.Replace(
+                    '            return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json',
+                    '            $metadata = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json' +
+                        [Environment]::NewLine +
+                        '            Write-VerifyChildTraceEvent -EventName ''metadata-success'' -Detail $Uri' +
+                        [Environment]::NewLine +
+                        '            return $metadata')
+                $command = $command.Replace(
+                    '    throw "Synthetic Microsoft metadata unavailable"',
+                    '    Write-VerifyChildTraceEvent -EventName ''metadata-failure'' -Detail $Uri' +
+                        [Environment]::NewLine +
+                        '    throw "Synthetic Microsoft metadata unavailable"')
+                $command = $command.Replace(
+                    '& $env:VERIFY_TOOL_PATH -Action Verify -SdkVersion $env:VERIFY_TARGET_VERSION',
+                    'Write-VerifyChildTraceEvent -EventName ''product-entry''' +
+                        [Environment]::NewLine +
+                        '& $env:VERIFY_TOOL_PATH -Action Verify -SdkVersion $env:VERIFY_TARGET_VERSION' +
+                        [Environment]::NewLine +
+                        'Write-VerifyChildTraceEvent -EventName ''product-return''')
+            }
             if ([string]::IsNullOrWhiteSpace($tracePath)) {
                 $lines = @(& pwsh -NoProfile -Command $command 2>&1)
                 $script:VerifyExitCode = $LASTEXITCODE
             }
             else {
                 $startedUtc = [DateTime]::UtcNow
+                $invocationId = [guid]::NewGuid().ToString('N')
+                $previousInvocation = [Environment]::GetEnvironmentVariable(
+                    'ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', 'Process')
                 $timer = [System.Diagnostics.Stopwatch]::StartNew()
-                $lines = @(& pwsh -NoProfile -Command $command 2>&1)
-                $exitCode = $LASTEXITCODE
-                $timer.Stop()
+                try {
+                    $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION = $invocationId
+                    $lines = @(& pwsh -NoProfile -Command $command 2>&1)
+                    $exitCode = $LASTEXITCODE
+                }
+                finally {
+                    $timer.Stop()
+                    [Environment]::SetEnvironmentVariable(
+                        'ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', $previousInvocation, 'Process')
+                }
                 $script:VerifyExitCode = $exitCode
                 [pscustomobject]@{
                     StartedUtc = $startedUtc.ToString('o')
                     EndedUtc = [DateTime]::UtcNow.ToString('o')
                     CaseId = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE
+                    InvocationId = $invocationId
                     SdkVersion = $Version
                     ChildPwshMs = [math]::Round($timer.Elapsed.TotalMilliseconds, 2)
                     ExitCode = $exitCode

@@ -25,11 +25,12 @@ public static class Program
         {
             var processId = System.Diagnostics.Process.GetCurrentProcess().Id;
             var caseId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "";
+            var invocationId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "";
             var arguments = string.Join(" ", args);
             var clock = System.Diagnostics.Stopwatch.StartNew();
             File.AppendAllText(tracePath,
                 DateTime.UtcNow.ToString("o") + "\t" + caseId + "\t" + processId +
-                "\tstart\t" + arguments + "\t0" + Environment.NewLine);
+                "\tstart\t" + arguments + "\t0\t" + invocationId + Environment.NewLine);
             AppDomain.CurrentDomain.ProcessExit += delegate(object sender, EventArgs e)
             {
                 clock.Stop();
@@ -37,7 +38,7 @@ public static class Program
                     DateTime.UtcNow.ToString("o") + "\t" + caseId + "\t" + processId +
                     "\texit\t" + arguments + "\t" +
                     clock.Elapsed.TotalMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture) +
-                    Environment.NewLine);
+                    "\t" + invocationId + Environment.NewLine);
             };
         }
 

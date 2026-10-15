@@ -172,14 +172,19 @@ temporary directory containing:
 - `verify-invocations.csv`: each Verify helper's child PowerShell elapsed time,
   exit code, requested SDK version, and unique per-case identifier;
 - `fake-host-events.tsv`: UTC start/exit markers, arguments, process IDs and
-  elapsed fake-host main-to-exit time, correlated using the per-case identifier;
+  elapsed fake-host main-to-exit time, correlated by case and invocation ID;
+- `verify-child-events.tsv`: child command entry, product invocation, and
+  synthetic metadata start/success/failure markers, correlated by invocation ID;
 - `summary.json`: versions, commit when Git is available, counts, elapsed time.
 
 Exit codes from negative Verify scenarios are expected and are still asserted
 normally. A fake-host event timestamp starts after native process initialization,
 so fake-host elapsed time does **not** measure native startup overhead. Similarly,
 child PowerShell elapsed time includes startup, script loading, internal native
-probes, and cleanup; it is not merely PowerShell startup time. Tracing creates
+probes, and cleanup; it is not merely PowerShell startup time. Child timeline
+events come from the test-only command wrapper, not the product. Product-return
+markers may be absent when the product intentionally exits the child process.
+Tracing creates
 additional file I/O and should not be used as the before/after performance
 benchmark. Normal CI and local runs remain uninstrumented.
 
