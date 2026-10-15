@@ -274,8 +274,15 @@ for (const stage of [
     const result = await exercise({ failAt: stage });
     failed(result, new RegExp('injected failure: ' + stage));
     assert.ok(!result.calls.includes('updateRelease'), 'no public transition');
-    assert.equal(result.state.tag, false, 'known owned incomplete tag removed, if created');
-    assert.equal(result.state.release, null, 'known owned draft removed, if created');
+    if (stage === 'getRelease') {
+      // A failing ownership check cannot safely authorize destructive cleanup.
+      assert.equal(result.state.tag, true, 'uncertain tag is retained');
+      assert.ok(result.state.release, 'unverified draft is retained');
+      assert.ok(result.warnings.some((message) => /cleanup also failed/.test(message)));
+    } else {
+      assert.equal(result.state.tag, false, 'known owned incomplete tag removed, if created');
+      assert.equal(result.state.release, null, 'known owned draft removed, if created');
+    }
     assert.ok(!result.state.deleted.includes(99));
   });
 }
@@ -304,4 +311,28 @@ test('missing GitHub API response fails without a false publication success', as
     uploadReleaseAsset() { return { data: {} }; }
   } });
   failed(result, /SHA256SUMS upload/);
+});
+
+test('pre-existing releases remain intact even if draft creation fails', async () => {
+  const result = await exercise({ preExistingDraft: true, failAt: 'createRelease' });
+  failed(result, /injected failure: createRelease/);
+  assert.ok(result.state.preExisting);
+  assert.deepEqual(result.state.deleted, []);
+});
+
+test('incomplete cleanup retains the original error and leaves the tag for investigation', async () => {
+  const result = await exercise({ wrongTag: true, responses: {
+    listReleases() { throw new Error('cannot establish remote release state'); }
+  } });
+  failed(result, /Tag .* does not point directly/);
+  assert.equal(result.state.tag, true);
+  assert.ok(result.warnings.some((warning) => /cleanup also failed.*cannot establish remote/.test(warning)));
+});
+
+test('ambiguous successful-publication response preserves remote public state', async () => {
+  const result = await exercise({ badPublishResponse: true, staleDraftOnPublic: true });
+  failed(result, /did not confirm publication/);
+  assert.equal(result.state.release.draft, false);
+  assert.equal(result.state.tag, true);
+  assert.deepEqual(result.state.deleted, []);
 });
