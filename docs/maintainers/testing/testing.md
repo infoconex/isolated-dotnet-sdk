@@ -69,6 +69,7 @@ The Bash suites cover, among other focused reliability cases:
 - unavailable interactive input versus explicit default-no cancellation;
 - build-server shutdown failure context and deletion blocking;
 - legacy shutdown invocation from neutral temporary working state with pinned isolated `DOTNET_ROOT`, no Windows multi-level lookup, first-run suppression, and cleanup before deletion;
+- exact-version legacy `-AllowUnsupportedShutdown` / `--allow-unsupported-shutdown` opt-in boundaries, strict two-spelling missing-command classification, and successful SDK-local Roslyn shutdown for 2.1.105;
 - transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
 
 ## PowerShell behavioral tests
