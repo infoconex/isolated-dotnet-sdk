@@ -19,6 +19,29 @@ public static class Program
 {
     public static int Main(string[] args)
     {
+        // Optional, test-only process markers. Never enabled during normal validation.
+        var tracePath = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH");
+        if (!string.IsNullOrWhiteSpace(tracePath))
+        {
+            var processId = System.Diagnostics.Process.GetCurrentProcess().Id;
+            var caseId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "";
+            var invocationId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "";
+            var arguments = string.Join(" ", args);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            File.AppendAllText(tracePath,
+                DateTime.UtcNow.ToString("o") + "\t" + caseId + "\t" + processId +
+                "\tstart\t" + arguments + "\t0\t" + invocationId + Environment.NewLine);
+            AppDomain.CurrentDomain.ProcessExit += delegate(object sender, EventArgs e)
+            {
+                clock.Stop();
+                File.AppendAllText(tracePath,
+                    DateTime.UtcNow.ToString("o") + "\t" + caseId + "\t" + processId +
+                    "\texit\t" + arguments + "\t" +
+                    clock.Elapsed.TotalMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                    "\t" + invocationId + Environment.NewLine);
+            };
+        }
+
         var exitText = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXIT_CODE");
         int exitCode;
         if (!string.IsNullOrWhiteSpace(exitText) && int.TryParse(exitText, out exitCode) && exitCode != 0)
