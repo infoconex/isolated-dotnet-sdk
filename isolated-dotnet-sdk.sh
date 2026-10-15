@@ -2183,6 +2183,73 @@ validate_local_isolated_sdk() {
         VERIFY_ERROR="Unable to prepare isolated SDK $version verification directory."
         return 1
     fi
+    # Original 1.x hosts do not provide --list-sdks. Mirror Install's
+    # exact --version and --info Base Path proof, with granular Verify checks.
+    if [[ "$version" == 1.* ]]; then
+        local legacy_info="" reported_base="" actual_base="" expected_base=""
+        printf '{"sdk":{"version":"%s"}}\n' "$version" > "$work_dir/global.json"
+        if resolved_version="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --version 2>&1)"; then
+            :
+        else
+            status=$?
+            rm -rf -- "$work_dir"
+            verify_check ".NET host" "FAIL" "$isolated_dotnet"
+            VERIFY_ERROR="Isolated SDK $version failed verification: --version exited with code $status."
+            return 1
+        fi
+        verify_check ".NET host" "OK" "$isolated_dotnet"
+        if [[ "$resolved_version" != "$version" ]]; then
+            rm -rf -- "$work_dir"
+            verify_check "SDK resolution" "FAIL" "wrong or ambiguous --version result"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy --version did not resolve the exact requested SDK."
+            return 1
+        fi
+        verify_check "SDK resolution" "OK" "$version"
+
+        expected_base="$install_dir/sdk/$version"
+        if [[ ! -d "$expected_base" ]]; then
+            rm -rf -- "$work_dir"
+            verify_check "SDK origin" "FAIL" "$expected_base missing"
+            VERIFY_ERROR="Isolated SDK $version failed verification: isolated SDK Base Path is missing at $expected_base."
+            return 1
+        fi
+        if legacy_info="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --info 2>&1)"; then
+            :
+        else
+            status=$?
+            rm -rf -- "$work_dir"
+            verify_check "SDK origin" "FAIL" "--info exited $status"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy --info exited with code $status."
+            return 1
+        fi
+        reported_base="$(printf '%s\n' "$legacy_info" | awk '
+            /^[[:space:]]*Base Path:[[:space:]]*/ {
+                sub(/^[[:space:]]*Base Path:[[:space:]]*/, "")
+                sub(/[[:space:]]*$/, "")
+                print
+            }
+        ')"
+        if [[ -z "$reported_base" || "$reported_base" == *$'\n'* || "$reported_base" != /* || ! -d "$reported_base" ]]; then
+            rm -rf -- "$work_dir"
+            verify_check "SDK origin" "FAIL" "missing or ambiguous SDK Base Path"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy --info did not report one valid SDK Base Path."
+            return 1
+        fi
+        actual_base="$(cd "$reported_base" && pwd -P)"
+        expected_base="$(cd "$expected_base" && pwd -P)"
+        local canonical_install=""
+        canonical_install="$(cd "$install_dir" && pwd -P)"
+        rm -rf -- "$work_dir"
+        # Do not accept an SDK directory redirected outside the isolated tree.
+        if [[ "$expected_base" != "$canonical_install/sdk/$version" || "$actual_base" != "$expected_base" ]]; then
+            verify_check "SDK origin" "FAIL" "unexpected SDK Base Path"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy SDK Base Path does not match the isolated directory."
+            return 1
+        fi
+        verify_check "SDK origin" "OK" "$expected_base"
+        return 0
+    fi
+
     if inventory="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --list-sdks)"; then
         :
     else
@@ -2296,7 +2363,10 @@ verify_installed_components() {
 
     if [[ -x "$dotnet" ]] && work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-components.XXXXXX")"; then
         info="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --info 2>/dev/null)" || info=""
-        runtimes="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --list-runtimes 2>/dev/null)" || runtimes=""
+        # Original 1.x hosts do not support --list-runtimes.
+        if [[ "${2:-}" != 1.* ]]; then
+            runtimes="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --list-runtimes 2>/dev/null)" || runtimes=""
+        fi
         rm -rf -- "$work_dir"
     fi
 
@@ -2373,7 +2443,7 @@ verify_isolated_sdk() {
     echo
     tool_heading "Installed components:"
     if [[ "$is_valid" == "true" ]]; then
-        verify_installed_components "$install_dir"
+        verify_installed_components "$install_dir" "$VERSION"
     else
         printf '  %-19s %s\n' 'Host version' 'Unavailable'
         printf '  %-19s %s\n' 'Architecture' 'Unavailable'
@@ -2389,6 +2459,7 @@ verify_isolated_sdk() {
             case "$label" in
                 '.NET host') detail='Host executable found and launched' ;;
                 'SDK inventory') detail='Exact SDK found in isolated installation' ;;
+                'SDK origin') detail='Exact SDK Base Path in isolated installation' ;;
                 'SDK resolution') detail='Correct SDK selected' ;;
             esac
             printf '  %-23s %bOK%b  %s\n' "$label" "$GREEN" "$RESET" "$detail"

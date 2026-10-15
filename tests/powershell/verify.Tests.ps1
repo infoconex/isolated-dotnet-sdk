@@ -70,7 +70,7 @@ function Invoke-RestMethod {
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
-        foreach ($name in @('FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO')) {
+        foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_SUPPRESS_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -277,6 +277,132 @@ function Invoke-RestMethod {
         $script:VerifyExitCode | Should -Not -Be 0
         ($verifyOutput -join [Environment]::NewLine) | Should -Match 'Invalid SDK version: invalid/version'
     }
+
+    # Historical hosts deliberately reject --list-sdks and --list-runtimes.
+    # Real subprocesses exercise the same CLI entry point as modern Verify.
+    It 'verifies exact isolated 1.x SDK hosts without unsupported inventory commands' {
+        foreach ($version in @('1.0.4', '1.1.5', '1.1.14')) {
+            $directory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+            New-Item -ItemType Directory -Path (Join-Path (Join-Path $directory 'sdk') $version) -Force | Out-Null
+            $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+            $env:FAKE_DOTNET_REQUIRE_PINNED_VERSION = 'true'
+            $env:FAKE_DOTNET_SDK_VERSION = $version
+            $env:DOTNET_MULTILEVEL_LOOKUP = '1'
+            $originalRoot = $env:DOTNET_ROOT
+            try {
+                $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+                $script:VerifyExitCode | Should -Be 0
+                $text | Should -Match 'SDK resolution\s+OK\s+Correct SDK selected'
+                $text | Should -Match 'SDK origin\s+OK\s+Exact SDK Base Path in isolated installation'
+                $text | Should -Not -Match 'SDK inventory'
+                $text | Should -Not -Match 'Unknown option: --list-sdks'
+                $text | Should -Match 'Host version\s+Unavailable'
+                $text | Should -Match 'Runtime identifier\s+Unavailable'
+                $text | Should -Match '(?s)\.NET runtimes:\s+Unavailable'
+                $text | Should -Match 'Release/lifecycle   Unavailable'
+                $env:DOTNET_MULTILEVEL_LOOKUP | Should -Be '1'
+                $env:DOTNET_ROOT | Should -Be $originalRoot
+            }
+            finally {
+                Remove-Item Env:DOTNET_MULTILEVEL_LOOKUP -ErrorAction SilentlyContinue
+                [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $originalRoot, 'Process')
+            }
+        }
+    }
+
+    It 'rejects missing, wrong, or ambiguous exact legacy --version output' {
+        $version = '1.0.4'
+        $directory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+        New-Item -ItemType Directory -Path (Join-Path $directory "sdk/$version") -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_RESOLVED_VERSION = '1.1.14'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK resolution\s+FAIL'
+        $env:FAKE_DOTNET_RESOLVED_VERSION = $version
+        $env:FAKE_DOTNET_LEGACY_EXTRA_VERSION = $version
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK resolution\s+FAIL'
+        Remove-Item Env:FAKE_DOTNET_LEGACY_EXTRA_VERSION -ErrorAction SilentlyContinue
+        $env:FAKE_DOTNET_LEGACY_SUPPRESS_VERSION = 'true'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK resolution\s+FAIL'
+    }
+
+    It 'rejects nonzero legacy host command exits' {
+        $version = '1.1.5'
+        $directory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+        New-Item -ItemType Directory -Path (Join-Path $directory "sdk/$version") -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_EXIT_CODE = '73'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match '\.NET host\s+FAIL'
+        Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
+        $env:FAKE_DOTNET_LEGACY_INFO_EXIT_CODE = '74'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK origin\s+FAIL'
+        $text | Should -Match '--info exited with code 74'
+    }
+
+    It 'fails closed for missing, empty, ambiguous, and system-only SDK Base Paths' {
+        $version = '1.1.14'
+        $directory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+        New-Item -ItemType Directory -Path (Join-Path $directory "sdk/$version") -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_LEGACY_MISSING_BASE_PATH = 'true'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK origin\s+FAIL'
+        Remove-Item Env:FAKE_DOTNET_LEGACY_MISSING_BASE_PATH -ErrorAction SilentlyContinue
+
+        $env:FAKE_DOTNET_LEGACY_BASE_PATH = 'relative/sdk/1.1.14'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK origin\s+FAIL'
+
+        Remove-Item Env:FAKE_DOTNET_LEGACY_BASE_PATH -ErrorAction SilentlyContinue
+        $env:FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH = Join-Path $directory "sdk/$version"
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK origin\s+FAIL'
+
+        Remove-Item Env:FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH -ErrorAction SilentlyContinue
+        $system = Join-Path $script:TestRoot 'system/sdk/1.1.14'
+        New-Item -ItemType Directory -Path $system -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_BASE_PATH = $system
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK origin\s+FAIL'
+        $text | Should -Match 'does not match the isolated directory'
+    }
+
+    It 'rejects an absent installed legacy SDK directory even if the host claims that version' {
+        $version = '1.0.4'
+        Install-FakeIsolatedHost -Version $version -ReportedVersion $version | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Not -Be 0
+        $text | Should -Match 'SDK origin\s+FAIL'
+    }
+
+    It 'reports only supported optional legacy RID and architecture information' {
+        $version = '1.1.5'
+        $directory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+        New-Item -ItemType Directory -Path (Join-Path $directory "sdk/$version") -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_LEGACY_RID = 'win10-x64'
+        $text = (Invoke-VerifyTool -Version $version) -join [Environment]::NewLine
+        $script:VerifyExitCode | Should -Be 0
+        $text | Should -Match 'Architecture\s+x64'
+        $text | Should -Match 'Runtime identifier\s+win10-x64'
+        $text | Should -Match 'Host version\s+Unavailable'
+        $text | Should -Match '(?s)\.NET runtimes:\s+Unavailable'
+    }
+
 }
 
 Describe 'PowerShell Verify origin, resolution, and metadata boundaries' {

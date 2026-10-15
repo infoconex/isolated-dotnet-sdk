@@ -2164,6 +2164,86 @@ function Get-LocalIsolatedSdkValidation {
         [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', '0', 'Process')
         [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $InstallDirectory, 'Process')
 
+        # Original 1.x hosts cannot enumerate SDKs. Keep Install's exact
+        # --version and --info origin proof, with Verify-specific check labels.
+        if ($Version -match '^1\.') {
+            @{ sdk = @{ version = $Version } } |
+                ConvertTo-Json -Depth 3 |
+                Set-Content -LiteralPath (Join-Path $WorkDirectory 'global.json') -Encoding utf8 -ErrorAction Stop
+
+            $VersionOutput = @()
+            $ExitCode = 0
+            try {
+                $VersionOutput = @(& $DotNetPath --version 2>&1)
+                $ExitCode = $LASTEXITCODE
+            }
+            catch {
+                $Result.Failure = "Unable to launch isolated SDK $Version host at ${DotNetPath}: $($_.Exception.Message)"
+            }
+            if (-not $Result.Failure -and $ExitCode -ne 0) {
+                $Result.Failure = "Isolated SDK $Version failed verification: --version exited with code $ExitCode."
+            }
+            if ($Result.Failure) {
+                $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'FAIL'; Detail = $DotNetPath })
+                return [pscustomobject]$Result
+            }
+            $Checks.Add([pscustomobject]@{ Label = '.NET host'; Status = 'OK'; Detail = $DotNetPath })
+
+            $VersionLines = @($VersionOutput | ForEach-Object { ([string]$_).Trim() } |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            if ($VersionLines.Count -ne 1 -or $VersionLines[0] -cne $Version) {
+                $Result.Failure = "Isolated SDK $Version failed verification: legacy --version did not resolve the exact requested SDK."
+                $Checks.Add([pscustomobject]@{ Label = 'SDK resolution'; Status = 'FAIL'; Detail = $Result.Failure })
+                return [pscustomobject]$Result
+            }
+            $Checks.Add([pscustomobject]@{ Label = 'SDK resolution'; Status = 'OK'; Detail = $Version })
+
+            $ExpectedBase = Join-Path (Join-Path $InstallDirectory 'sdk') $Version
+            if (-not (Test-Path -LiteralPath $ExpectedBase -PathType Container)) {
+                $Result.Failure = "Isolated SDK $Version failed verification: isolated SDK Base Path is missing at $ExpectedBase."
+                $Checks.Add([pscustomobject]@{ Label = 'SDK origin'; Status = 'FAIL'; Detail = $Result.Failure })
+                return [pscustomobject]$Result
+            }
+            try {
+                $InfoOutput = @(& $DotNetPath --info 2>&1)
+                $InfoExitCode = $LASTEXITCODE
+                if ($InfoExitCode -ne 0) {
+                    throw "legacy --info exited with code $InfoExitCode."
+                }
+                $BasePaths = @($InfoOutput | ForEach-Object {
+                        if ([string]$_ -match '^\s*Base Path:\s*(.*?)\s*$') { $Matches[1].Trim() }
+                    })
+                if ($BasePaths.Count -ne 1 -or [string]::IsNullOrWhiteSpace($BasePaths[0])) {
+                    throw 'legacy --info did not report exactly one SDK Base Path.'
+                }
+                if (-not [System.IO.Path]::IsPathFullyQualified($BasePaths[0]) -or
+                    -not (Test-Path -LiteralPath $BasePaths[0] -PathType Container)) {
+                    throw 'legacy --info reported an invalid or missing SDK Base Path.'
+                }
+                $ActualBase = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $BasePaths[0] -ErrorAction Stop).Path).TrimEnd('\', '/')
+                $ExpectedCanonical = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $ExpectedBase -ErrorAction Stop).Path).TrimEnd('\', '/')
+                $PathComparison = if ($IsWindows) {
+                    [System.StringComparison]::OrdinalIgnoreCase
+                }
+                else {
+                    [System.StringComparison]::Ordinal
+                }
+                $CanonicalInstall = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $InstallDirectory -ErrorAction Stop).Path).TrimEnd('\', '/')
+                $ContainedBase = [System.IO.Path]::GetFullPath((Join-Path (Join-Path $CanonicalInstall 'sdk') $Version)).TrimEnd('\', '/')
+                # Reject an SDK subdirectory linked outside the isolated tree.
+                if (-not [string]::Equals($ExpectedCanonical, $ContainedBase, $PathComparison) -or
+                    -not [string]::Equals($ActualBase, $ExpectedCanonical, $PathComparison)) {
+                    throw 'legacy SDK Base Path does not match the isolated directory.'
+                }
+                $Checks.Add([pscustomobject]@{ Label = 'SDK origin'; Status = 'OK'; Detail = $ExpectedCanonical })
+            }
+            catch {
+                $Result.Failure = "Isolated SDK $Version failed verification: $($_.Exception.Message)"
+                $Checks.Add([pscustomobject]@{ Label = 'SDK origin'; Status = 'FAIL'; Detail = $Result.Failure })
+            }
+            return [pscustomobject]$Result
+        }
+
         $Inventory = @()
         $ExitCode = 0
         try {
@@ -2303,7 +2383,8 @@ function Get-VerifyAuditClassification {
 function Get-IsolatedSdkComponent {
     param(
         [string]$InstallDirectory,
-        [string]$DotNetPath
+        [string]$DotNetPath,
+        [string]$Version = ''
     )
     $Result = [ordered]@{ HostVersion = ''; Architecture = ''; Rid = ''; Runtimes = @() }
     $PreviousMulti = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
@@ -2351,6 +2432,11 @@ function Get-IsolatedSdkComponent {
         if ([string]::IsNullOrWhiteSpace($Result.Architecture) -and
             $Result.Rid -match '-(x64|x86|arm64|arm)$') {
             $Result.Architecture = $Matches[1]
+        }
+
+        # Original 1.x hosts do not support --list-runtimes.
+        if ($Version -match '^1\.') {
+            return [pscustomobject]$Result
         }
 
         $RuntimeLines = @(& $DotNetPath --list-runtimes 2>$null)
@@ -2462,7 +2548,7 @@ function Test-IsolatedSdk {
     Write-ToolDisplay
     Write-ToolHeading 'Installed components:'
     $Components = if (-not $Validation.Failure) {
-        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet
+        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet -Version $SdkVersion
     }
     else {
         $null
@@ -2501,6 +2587,7 @@ function Test-IsolatedSdk {
             switch ($Check.Label) {
                 '.NET host' { 'Host executable found and launched' }
                 'SDK inventory' { 'Exact SDK found in isolated installation' }
+                'SDK origin' { 'Exact SDK Base Path in isolated installation' }
                 'SDK resolution' { 'Correct SDK selected' }
                 default { $Check.Detail }
             }

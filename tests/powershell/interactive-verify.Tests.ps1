@@ -208,4 +208,22 @@ exit /b 0
         $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.'
         $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.\r?\n\r?\nSelect an isolated SDK to verify:'
     }
+
+    It 'uses the same legacy SDK origin checks in interactive Verify' {
+        $version = '1.1.14'
+        $directory = Install-FakeInteractiveVerifyHost -Version $version -ReportedVersion $version
+        New-Item -ItemType Directory -Path (Join-Path $directory "sdk/$version") -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        try {
+            $result = Invoke-InteractiveVerifyTool -InputLines @('v', '1', 'b', 'e')
+            $result.ExitCode | Should -Be 0
+            $result.Output | Should -Match 'SDK origin\s+OK\s+Exact SDK Base Path in isolated installation'
+            $result.Output | Should -Match 'Isolated SDK 1\.1\.14 verified successfully'
+            $result.Output | Should -Not -Match 'Unknown option: --list-sdks'
+        }
+        finally {
+            Remove-Item Env:FAKE_DOTNET_LEGACY_HOST -ErrorAction SilentlyContinue
+        }
+    }
+
 }
