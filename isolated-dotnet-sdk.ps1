@@ -106,6 +106,8 @@ $script:InteractiveSession = -not $script:ActionWasSpecified -and -not $script:S
 $script:BackToMain = $false
 $script:ExitRequested = $false
 $script:InstallResumeChannel = $null
+$script:InstallResumeReleaseIndex = $null
+$script:InstallResumeChannelMetadata = $null
 $script:InstallResultParent = 'Main'
 $script:ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
 $script:ConfirmValue = if ($script:ConfirmWasSpecified) { [bool]$PSBoundParameters['Confirm'] } else { $false }
@@ -1300,7 +1302,12 @@ function Read-ManualVersion {
 # Select from Microsoft's release index when no exact SDK version was supplied.
 function Select-InstallVersion {
     $script:BackToMain = $false
-    $ReleaseIndex = Get-ReleaseIndex
+    # Consume previously validated remote discovery only when resuming this picker.
+    $ReleaseIndex = $script:InstallResumeReleaseIndex
+    $script:InstallResumeReleaseIndex = $null
+    if ($null -eq $ReleaseIndex) {
+        $ReleaseIndex = Get-ReleaseIndex
+    }
     $AllChannels = @(
         $ReleaseIndex.'releases-index' |
             Where-Object {
@@ -1347,13 +1354,18 @@ function Select-InstallVersion {
 
     $ShowArchived = $false
     $ResumeChannel = $script:InstallResumeChannel
+    $ResumeMetadata = $script:InstallResumeChannelMetadata
     $script:InstallResumeChannel = $null
+    $script:InstallResumeChannelMetadata = $null
     $ClearChannelScreen = $true
 
     while ($true) {
+        $ChannelMetadata = $null
         if ($null -ne $ResumeChannel) {
             $SelectedChannel = $ResumeChannel
             $ResumeChannel = $null
+            $ChannelMetadata = $ResumeMetadata
+            $ResumeMetadata = $null
         }
         else {
             if ($ClearChannelScreen) {
@@ -1465,11 +1477,13 @@ function Select-InstallVersion {
         $LatestSdk = [string]$SelectedChannel.'latest-sdk'
         $ChannelMetadataUrl = [string]$SelectedChannel.'releases.json'
 
-        try {
-            $ChannelMetadata = Invoke-RestMethod -Uri $ChannelMetadataUrl
-        }
-        catch {
-            throw "Unable to load release metadata for .NET $ChannelVersion."
+        if ($null -eq $ChannelMetadata) {
+            try {
+                $ChannelMetadata = Invoke-RestMethod -Uri $ChannelMetadataUrl
+            }
+            catch {
+                throw "Unable to load release metadata for .NET $ChannelVersion."
+            }
         }
 
         if ($null -eq $ChannelMetadata -or
@@ -1578,6 +1592,8 @@ function Select-InstallVersion {
             if ($Selection -match '^[Mm]$') {
                 Read-ManualVersion
                 $script:InstallResumeChannel = $SelectedChannel
+                $script:InstallResumeReleaseIndex = $ReleaseIndex
+                $script:InstallResumeChannelMetadata = $ChannelMetadata
                 $script:InstallResultParent = 'SDK selection'
                 return $true
             }
@@ -1599,6 +1615,8 @@ function Select-InstallVersion {
                 $script:SdkVersion = $SdkVersions[$Number - 1]
                 Assert-ValidSdkVersion
                 $script:InstallResumeChannel = $SelectedChannel
+                $script:InstallResumeReleaseIndex = $ReleaseIndex
+                $script:InstallResumeChannelMetadata = $ChannelMetadata
                 $script:InstallResultParent = 'SDK selection'
                 return $true
             }
@@ -2827,6 +2845,8 @@ try {
                 $script:BackToMain = $false
                 $script:ExitRequested = $false
                 $script:InstallResumeChannel = $null
+                $script:InstallResumeReleaseIndex = $null
+                $script:InstallResumeChannelMetadata = $null
                 $script:InstallResultParent = 'Main'
 
                 if (-not (Select-Action)) {
