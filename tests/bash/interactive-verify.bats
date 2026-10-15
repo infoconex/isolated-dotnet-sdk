@@ -61,7 +61,7 @@ EOF
   [[ "$output" == *"V. Verify an isolated SDK"* ]]
   [ "$(printf '%s\n' "$output" | grep -c 'Select an isolated SDK to verify:' || true)" -eq 2 ]
   [[ "$output" == *"Isolated SDK $version verified successfully."* ]]
-  blank_line=$\'\\n\\n\'
+  blank_line=$'\n\n'
   [[ "$output" == *"${blank_line}Isolated SDK"* ]]
   [[ "$output" == *"Exiting."* ]]
 }
