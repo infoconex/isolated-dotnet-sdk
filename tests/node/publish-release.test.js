@@ -361,3 +361,46 @@ test('summary failure is reported without publishing a success output or deletin
   assert.equal(result.state.tag, true);
   assert.deepEqual(result.state.deleted, []);
 });
+
+test('failure deleting an owned draft preserves the original integrity failure', async () => {
+  const result = await exercise({ badAsset: true, responses: {
+    deleteRelease() { throw new Error('GitHub refused draft deletion'); }
+  } });
+  failed(result, /exactly one uploaded SHA256SUMS asset/);
+  assert.ok(result.warnings.some((message) => /cleanup also failed.*refused draft deletion/.test(message)));
+  assert.ok(result.state.release && result.state.release.draft);
+  assert.equal(result.state.tag, true);
+});
+
+test('an unrelated same-tag draft blocks cleanup even when the current draft is incomplete', async () => {
+  const result = await exercise({ preExistingDraft: true, badAsset: true });
+  failed(result, /exactly one uploaded SHA256SUMS asset/);
+  assert.ok(result.state.preExisting);
+  assert.ok(result.state.release);
+  assert.equal(result.state.tag, true);
+  assert.deepEqual(result.state.deleted, []);
+});
+
+test('failed publication request retains uncertain draft and tag for investigation', async () => {
+  const result = await exercise({ failAt: 'updateRelease' });
+  failed(result, /injected failure: updateRelease/);
+  assert.equal(result.state.release.draft, true);
+  assert.equal(result.state.tag, true);
+  assert.deepEqual(result.state.deleted, []);
+});
+
+test('post-publication tag-read failure cannot trigger rollback', async () => {
+  const result = await exercise({ failAfterPublication: 'getRef' });
+  failed(result, /injected failure: getRef/);
+  assert.equal(result.state.release.draft, false);
+  assert.equal(result.state.tag, true);
+  assert.deepEqual(result.state.deleted, []);
+});
+
+test('missing derived commit identity never reaches tag creation', async () => {
+  const result = await exercise({ responses: {
+    createCommit() { return { data: {} }; }
+  } });
+  failed(result, /verification was requested before the derived release commit/);
+  assert.ok(!result.calls.includes('createRef'));
+});
