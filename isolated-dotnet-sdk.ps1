@@ -410,8 +410,12 @@ function Install-ToolIfNeeded {
     }
 
     & $ToolPath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+    # The child is a PowerShell script, not a native executable. Optional host
+    # diagnostics may leave $LASTEXITCODE nonzero even when the child action
+    # succeeds; use the child invocation's success state instead.
+    if (-not $?) {
+        $ChildExitCode = if ($LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 }
+        exit $ChildExitCode
     }
 
     $script:Bootstrapped = $true
@@ -2365,8 +2369,10 @@ function Get-IsolatedSdkComponent {
             $Result.Architecture = $Matches[1]
         }
 
-        # Original 1.x hosts do not support --list-runtimes.
-        if ($Version -match '^1\.') {
+        # Original 1.x and early 2.x hosts do not support --list-runtimes.
+        # This diagnostic is optional; unsupported commands must not leak a
+        # native failure status into an otherwise successful Verify invocation.
+        if ($Version -match '^1\.' -or (Test-IsEarlyDotNet2Sdk -Version $Version)) {
             return [pscustomobject]$Result
         }
 
