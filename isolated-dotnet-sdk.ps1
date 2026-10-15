@@ -182,7 +182,8 @@ function Write-ToolLabelValue {
     param(
         [string]$Label,
         [AllowEmptyString()]
-        [string]$Value = ''
+        [string]$Value = '',
+        [switch]$SuccessValue
     )
 
     $AccentLabel = Format-ToolMessage -Kind Accent -Message $Label
@@ -191,7 +192,13 @@ function Write-ToolLabelValue {
         return
     }
 
-    Write-ToolDisplay "$AccentLabel $Value"
+    $RenderedValue = if ($SuccessValue) {
+        Format-ToolMessage -Kind Success -Message $Value
+    }
+    else {
+        $Value
+    }
+    Write-ToolDisplay "$AccentLabel $RenderedValue"
 }
 
 function Format-ToolAccent {
@@ -1503,10 +1510,10 @@ function Select-InstallVersion {
                     $Markers.Add('latest')
                 }
                 if ($SystemVersions -contains $SdkVersion) {
-                    $Markers.Add('system')
+                    $Markers.Add('installed system-sdk')
                 }
                 if ($IsolatedVersions -contains $SdkVersion) {
-                    $Markers.Add('isolated')
+                    $Markers.Add('installed isolated-sdk')
                 }
 
                 if ($Markers.Count -gt 0) {
@@ -1902,7 +1909,7 @@ function Install-IsolatedSdk {
     }
 
     if ($IsolatedInstalled) {
-        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed'
+        Write-ToolLabelValue -Label 'Isolated SDK:' -Value 'Already installed' -SuccessValue
         Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
     }
     else {
@@ -1912,7 +1919,7 @@ function Install-IsolatedSdk {
     Write-ToolDisplay
 
     if ($SystemSdk) {
-        Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed'
+        Write-ToolLabelValue -Label 'System SDK:' -Value 'Already installed' -SuccessValue
         if (-not [string]::IsNullOrWhiteSpace($SystemSdk.Path)) {
             Write-ToolLabelValue -Label 'Location:' -Value (Join-Path $SystemSdk.Path $SystemSdk.Version)
         }
@@ -2000,9 +2007,8 @@ function Install-IsolatedSdk {
         # discovered by the staged host elsewhere. Never promote on failure.
         $Validation = Get-LocalIsolatedSdkValidation -Version $SdkVersion -InstallDirectory $StagingDir -DotNetPath $StagedDotNet
         if ($Validation.Failure) {
-            throw $Validation.Failure
+            throw "Staged SDK verification failed at ${StagingDir}: $($Validation.Failure)"
         }
-        Write-ToolDisplay $SdkVersion
 
         if (Test-Path -LiteralPath $InstallDir) {
             throw "Isolated SDK destination already exists and cannot be replaced: $InstallDir"

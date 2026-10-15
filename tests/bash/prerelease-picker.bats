@@ -148,7 +148,29 @@ picker_view() {
   run_picker '1\nq\n' FAKE_LATEST=not-in-releases FAKE_STABLE=1 "$tool_path" install
   [ "$status" -eq 0 ]
   view="$(picker_view 1)"
-  [[ "$view" == *"1. 99.0.101 (isolated)"* ]]
+  [[ "$view" == *"1. 99.0.101 (installed isolated-sdk)"* ]]
   [[ "$view" == *"S. Show all versions"* ]]
   [[ "$view" != *"(latest"* ]]
+}
+
+@test "picker composes latest and ownership markers for system-only and both" {
+  cat > "$fake_bin/dotnet" <<'EOF'
+#!/usr/bin/env bash
+[[ "${1:-}" == "--list-sdks" ]] || exit 91
+printf '%s\n' '99.0.101 [/system/sdk]'
+EOF
+  chmod +x "$fake_bin/dotnet"
+  run_picker '1\nq\n' FAKE_LATEST=99.0.101 FAKE_STABLE=1 "$tool_path" install
+  [ "$status" -eq 0 ]
+  view="$(picker_view 1)"
+  [[ "$view" == *"1. 99.0.101 (latest, installed system-sdk)"* ]]
+  [[ "$view" != *"installed isolated-sdk"* ]]
+
+  mkdir -p "$tool_root/99.0.101"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$tool_root/99.0.101/dotnet"
+  chmod +x "$tool_root/99.0.101/dotnet"
+  run_picker '1\nq\n' FAKE_LATEST=99.0.101 FAKE_STABLE=1 "$tool_path" install
+  [ "$status" -eq 0 ]
+  view="$(picker_view 1)"
+  [[ "$view" == *"1. 99.0.101 (latest, installed system-sdk, installed isolated-sdk)"* ]]
 }
