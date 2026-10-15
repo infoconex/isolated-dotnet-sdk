@@ -34,6 +34,7 @@ module.exports = async ({ github, context, core }) => {
   let tagCreated = false;
   let releaseId = null;
   let published = false;
+  let publicationAttempted = false;
 
   const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -53,11 +54,29 @@ module.exports = async ({ github, context, core }) => {
     const expectedPowerShellMarker = `$ToolReleaseIdentity = '${tag}'`;
     const expectedBashMarker = `TOOL_RELEASE_IDENTITY="${tag}"`;
 
-    if (!powerShell.includes(expectedPowerShellMarker) || powerShell.includes("$ToolReleaseIdentity = 'development'")) {
+    if (powerShell.split(expectedPowerShellMarker).length !== 2 || powerShell.includes("$ToolReleaseIdentity = 'development'")) {
       throw new Error(`PowerShell release source is not stamped exactly for ${tag}.`);
     }
-    if (!bash.includes(expectedBashMarker) || bash.includes('TOOL_RELEASE_IDENTITY="development"')) {
+    if (bash.split(expectedBashMarker).length !== 2 || bash.includes('TOOL_RELEASE_IDENTITY="development"')) {
       throw new Error(`Bash release source is not stamped exactly for ${tag}.`);
+    }
+
+    const powerShellHash = crypto.createHash('sha256').update(powerShellBytes).digest('hex');
+    const bashHash = crypto.createHash('sha256').update(bashBytes).digest('hex');
+    if (powerShellHash !== process.env.POWERSHELL_SHA256 || bashHash !== process.env.BASH_SHA256) {
+      throw new Error('Release script SHA-256 values do not match the workflow inputs.');
+    }
+
+    const expectedManifest = Buffer.from(
+      `${powerShellHash}  isolated-dotnet-sdk.ps1\n${bashHash}  isolated-dotnet-sdk.sh\n`,
+      'utf8'
+    );
+    if (!checksumBytes.equals(expectedManifest)) {
+      throw new Error('Release checksum manifest does not match the stamped script bytes.');
+    }
+    const manifestHash = crypto.createHash('sha256').update(checksumBytes).digest('hex');
+    if (manifestHash !== process.env.MANIFEST_SHA256) {
+      throw new Error('Release checksum manifest SHA-256 does not match the workflow input.');
     }
   };
 
@@ -122,10 +141,14 @@ module.exports = async ({ github, context, core }) => {
 
     const tree = await github.rest.git.getTree({ owner, repo, tree_sha: commit.data.tree.sha });
     const entries = new Map(tree.data.tree.map((entry) => [entry.path, entry]));
-    if (entries.get('isolated-dotnet-sdk.ps1')?.sha !== powerShellBlobSha) {
+    if (entries.get('isolated-dotnet-sdk.ps1')?.sha !== powerShellBlobSha ||
+        entries.get('isolated-dotnet-sdk.ps1')?.type !== 'blob' ||
+        entries.get('isolated-dotnet-sdk.ps1')?.mode !== '100644') {
       throw new Error('Derived release commit does not contain the stamped PowerShell source bytes.');
     }
-    if (entries.get('isolated-dotnet-sdk.sh')?.sha !== bashBlobSha) {
+    if (entries.get('isolated-dotnet-sdk.sh')?.sha !== bashBlobSha ||
+        entries.get('isolated-dotnet-sdk.sh')?.type !== 'blob' ||
+        entries.get('isolated-dotnet-sdk.sh')?.mode !== '100755') {
       throw new Error('Derived release commit does not contain the stamped Bash source bytes.');
     }
 
@@ -199,7 +222,9 @@ module.exports = async ({ github, context, core }) => {
   };
 
   const cleanupBeforePublication = async () => {
-    let publicReleaseExists = false;
+    // Do not touch resources if this invocation has not created any known state.
+    if (!tagCreated && releaseId === null) return;
+
     const releases = await github.paginate(github.rest.repos.listReleases, {
       owner,
       repo,
@@ -207,17 +232,32 @@ module.exports = async ({ github, context, core }) => {
     });
     const matches = releases.filter((release) => release.tag_name === tag);
 
-    for (const release of matches) {
-      if (release.draft) {
-        core.warning(`Deleting incomplete draft release ${release.id}.`);
-        await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
-      } else {
-        publicReleaseExists = true;
-        core.warning(`A public ${tag} release exists; cleanup will not delete the release or tag.`);
-      }
+    // A matching resource with another id, or any public release, is not owned
+    // by this invocation. Avoid changing even the tag while ownership is unclear.
+    if (matches.some((release) => !release.draft || release.id !== releaseId)) {
+      core.warning(`Release state for ${tag} is not exclusively owned and draft; leaving it for manual investigation.`);
+      return;
     }
 
-    if (tagCreated && !publicReleaseExists) {
+    if (releaseId !== null) {
+      const draft = matches.find((release) => release.id === releaseId);
+      if (!draft) {
+        core.warning(`Created release ${releaseId} could not be located safely; leaving ${tag} for manual investigation.`);
+        return;
+      }
+
+      // Check current state by id immediately before deletion rather than
+      // trusting the potentially stale list snapshot.
+      const current = await github.rest.repos.getRelease({ owner, repo, release_id: releaseId });
+      if (current.data.id !== releaseId || current.data.tag_name !== tag || current.data.draft !== true) {
+        core.warning(`Created release ${releaseId} is not confirmed draft; leaving ${tag} untouched.`);
+        return;
+      }
+      core.warning(`Deleting incomplete draft release ${releaseId}.`);
+      await github.rest.repos.deleteRelease({ owner, repo, release_id: releaseId });
+    }
+
+    if (tagCreated) {
       try {
         core.warning(`Deleting incomplete tag ${tag}.`);
         await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` });
@@ -261,6 +301,10 @@ module.exports = async ({ github, context, core }) => {
       draft: true,
       prerelease: false
     });
+    if (!Number.isSafeInteger(created.data?.id) || created.data.id <= 0 ||
+        created.data.tag_name !== tag || created.data.draft !== true) {
+      throw new Error(`GitHub did not confirm ownership of the draft release for ${tag}.`);
+    }
     releaseId = created.data.id;
 
     const upload = await github.rest.repos.uploadReleaseAsset({
@@ -283,6 +327,9 @@ module.exports = async ({ github, context, core }) => {
     await verifyTag();
     await verifyRelease(true);
 
+    // GitHub may complete publication even if the API response is lost.
+    // After attempting this transition, automatic deletion is unsafe.
+    publicationAttempted = true;
     const updated = await github.rest.repos.updateRelease({
       owner,
       repo,
@@ -329,14 +376,16 @@ module.exports = async ({ github, context, core }) => {
       .addCodeBlock(checksumBytes.toString('utf8'), 'text')
       .write();
   } catch (error) {
-    if (!published) {
+    if (!publicationAttempted) {
       try {
         await cleanupBeforePublication();
       } catch (cleanupError) {
         core.warning(`Pre-publication cleanup also failed: ${cleanupError.message}`);
       }
     } else {
-      core.warning('The release is already public; automatic cleanup is intentionally disabled after publication.');
+      core.warning(published
+        ? 'The release is already public; automatic cleanup is intentionally disabled after publication.'
+        : 'Publication was attempted but its remote state is uncertain; automatic cleanup is disabled.');
     }
     throw error;
   }
