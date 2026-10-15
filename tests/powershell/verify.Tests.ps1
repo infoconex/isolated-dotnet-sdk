@@ -81,7 +81,11 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
                         [Environment]::NewLine +
                         '& $env:VERIFY_TOOL_PATH -Action Verify -SdkVersion $env:VERIFY_TARGET_VERSION' +
                         [Environment]::NewLine +
-                        'Write-VerifyChildTraceEvent -EventName ''product-return''')
+                        '$verifyExitCode = $LASTEXITCODE' +
+                        [Environment]::NewLine +
+                        'Write-VerifyChildTraceEvent -EventName ''product-return''' +
+                        [Environment]::NewLine +
+                        'exit $verifyExitCode')
             }
             if ([string]::IsNullOrWhiteSpace($tracePath)) {
                 $lines = @(& pwsh -NoProfile -Command $command 2>&1)
