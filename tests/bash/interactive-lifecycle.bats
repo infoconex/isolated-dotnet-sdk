@@ -57,6 +57,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -n "${METADATA_REQUEST_LOG:-}" ]]; then
+  printf '%s\n' "$url" >> "$METADATA_REQUEST_LOG"
+fi
+
 case "$url" in
   *releases-index.json)
     cat <<'JSON'
@@ -408,6 +412,7 @@ EOF
   bootstrap_tool
   fake_bin="$test_root/install-parent-fake-bin"
   write_metadata_fake_curl "$fake_bin"
+  request_log="$test_root/metadata-requests.log"
   version='10.0.401'
   mkdir -p "$tool_root/$version"
   cat > "$tool_root/$version/dotnet" <<EOF
@@ -422,14 +427,16 @@ EOF
   mkdir -p "$tool_root/$version/sdk"
   chmod +x "$tool_root/$version/dotnet"
 
-  run bash -c 'printf "i\n1\n1\nb\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
-    "$test_home" "$fake_bin" "$tool_path"
+  run bash -c 'printf "i\n1\n1\nb\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" METADATA_REQUEST_LOG="$4" "$3"' _ \
+    "$test_home" "$fake_bin" "$tool_path" "$request_log"
 
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | grep -c 'Available .NET 10.0 SDKs:' || true)" -eq 2 ]
   [ "$(printf '%s\n' "$output" | grep -c 'Select a supported or development .NET channel:' || true)" -eq 2 ]
   [ "$(count_main_prompts "$output")" -eq 2 ]
   [ "$(count_acknowledgement_prompts "$output")" -eq 0 ]
+  [ "$(grep -c 'releases-index.json' "$request_log" || true)" -eq 1 ]
+  [ "$(grep -c '/10.0/releases.json' "$request_log" || true)" -eq 1 ]
 }
 
 @test "captured already-installed interactive Install returns without acknowledgement" {
