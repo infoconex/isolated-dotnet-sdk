@@ -72,13 +72,13 @@ Non-interactive execution is fail-safe:
 
 After removal is approved, operations occur in this order:
 
-1. request build-server shutdown with the selected isolated `dotnet` host;
-2. require a zero shutdown exit code;
+1. create operation-owned temporary working state and request build-server shutdown with the selected isolated `dotnet` host from that neutral working directory, with `DOTNET_ROOT` scoped to the selected isolated SDK and Windows multi-level lookup disabled;
+2. restore the caller's environment and working directory, clean up temporary shutdown state, and require a zero shutdown exit code (and successful cleanup) before deletion;
 3. remove only the selected SDK version directory;
 4. verify the directory no longer exists;
 5. report success.
 
-A shutdown failure prevents deletion. A deletion failure or remaining directory prevents success reporting.
+A shutdown failure, temporary shutdown-state setup failure, or temporary shutdown-state cleanup failure prevents deletion. A deletion failure or remaining directory prevents success reporting. Even on legacy hosts, no particular nonzero shutdown result is silently bypassed.
 
 `-WhatIf` and cancellation occur before shutdown.
 
