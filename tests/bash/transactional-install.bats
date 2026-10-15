@@ -52,7 +52,7 @@ teardown() { payload_test_teardown; }
   run_payload_install
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"SDK $version was not found after installation."* ]]
+  [[ "$output" == *"the host did not report SDK $version"* ]]
   [ ! -e "$install_dir" ]
 }
 
@@ -76,4 +76,58 @@ teardown() { payload_test_teardown; }
   run_payload_install
   [ "$status" -eq 0 ]
   [ -x "$install_dir/dotnet" ]
+}
+
+@test "staged same-version inventory from another origin is rejected and cleaned" {
+  mkdir -p "$test_root/system/sdk"
+  export SDK_TEST_DOTNET_ORIGIN="$test_root/system/sdk"
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"was not reported from"* ]]
+  [ ! -e "$install_dir" ]
+  ! compgen -G "$tool_root/.install-$version.*" >/dev/null
+}
+
+@test "staged mismatched version resolution is rejected before promotion" {
+  export SDK_TEST_RESOLVED_VERSION=98.0.100
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--version resolved 98.0.100 instead of $version"* ]]
+  [ ! -e "$install_dir" ]
+}
+
+@test "valid staged and installed SDK proofs scope lookup and working directory" {
+  export SDK_TEST_REQUIRE_ISOLATION=true
+  export DOTNET_MULTILEVEL_LOOKUP=1
+  printf '%s\n' '{"sdk":{"version":"98.0.100"}}' > "$tool_root/global.json"
+  run_payload_install
+  [ "$status" -eq 0 ]
+  run_payload_install
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Isolated SDK: Already installed"* ]]
+  [ "$DOTNET_MULTILEVEL_LOOKUP" = 1 ]
+}
+
+@test "existing same-version SDK reported from a different root is rejected and preserved" {
+  mkdir -p "$install_dir/sdk" "$test_root/system/sdk"
+  cp "$fixture_root/dotnet" "$install_dir/dotnet"
+  printf '%s\n' keep > "$install_dir/sentinel"
+  export SDK_TEST_DOTNET_ORIGIN="$test_root/system/sdk"
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"destination already exists"* ]]
+  [[ "$output" != *"Isolated SDK: Already installed"* ]]
+  [ "$(cat "$install_dir/sentinel")" = keep ]
+  [ ! -e "$test_home/curl.log" ]
+}
+
+@test "existing exact-version resolution mismatch is rejected and preserved" {
+  mkdir -p "$install_dir/sdk"
+  cp "$fixture_root/dotnet" "$install_dir/dotnet"
+  export SDK_TEST_RESOLVED_VERSION=98.0.100
+  run_payload_install
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"destination already exists"* ]]
+  [[ "$output" != *"Isolated SDK: Already installed"* ]]
+  [ ! -e "$test_home/curl.log" ]
 }

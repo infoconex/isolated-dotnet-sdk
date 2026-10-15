@@ -71,6 +71,9 @@ function Expand-Archive {
         if ($env:SDK_TEST_LEGACY_VERSION) {
             New-Item -ItemType Directory -Path (Join-Path (Join-Path $DestinationPath 'sdk') $env:SDK_TEST_LEGACY_VERSION) -Force | Out-Null
         }
+        else {
+            New-Item -ItemType Directory -Path (Join-Path $DestinationPath 'sdk') -Force | Out-Null
+        }
     }
 }
 

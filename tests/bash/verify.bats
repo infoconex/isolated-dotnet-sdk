@@ -259,7 +259,7 @@ JSON
 }
 
 
-# This host models the original 1.x CLI: --version and --info only.
+# This host models original 1.x and early 2.x CLIs: --version and --info only.
 install_legacy_verify_host() {
   local version="$1"
   local install_dir="$tool_root/$version"
@@ -300,9 +300,9 @@ HOST
   chmod +x "$install_dir/dotnet"
 }
 
-@test "legacy 1.x Verify succeeds without unsupported inventory diagnostics" {
+@test "legacy 1.x and early 2.x Verify succeeds without unsupported inventory diagnostics" {
   export VERIFY_LEGACY_CALL_LOG="$test_root/legacy-calls"
-  for version in 1.0.4 1.1.5 1.1.14; do
+  for version in 1.0.4 1.1.5 1.1.14 2.0.3 2.1.105; do
     install_legacy_verify_host "$version"
     : > "$VERIFY_LEGACY_CALL_LOG"
     run env HOME="$test_home" DOTNET_MULTILEVEL_LOOKUP=1 VERIFY_LEGACY_REQUIRE_PIN=true "$tool_path" verify "$version"
@@ -316,7 +316,10 @@ HOST
     [[ "$output" == *"Release/lifecycle   Unavailable"* ]]
     grep -Fxq -- '--version' "$VERIFY_LEGACY_CALL_LOG"
     grep -Fxq -- '--info' "$VERIFY_LEGACY_CALL_LOG"
-    ! grep -Eq '^--list-(sdks|runtimes)$' "$VERIFY_LEGACY_CALL_LOG"
+    ! grep -Fxq -- '--list-sdks' "$VERIFY_LEGACY_CALL_LOG"
+    if [[ "$version" == 1.* ]]; then
+      ! grep -Fxq -- '--list-runtimes' "$VERIFY_LEGACY_CALL_LOG"
+    fi
   done
 }
 

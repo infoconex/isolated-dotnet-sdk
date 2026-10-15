@@ -70,7 +70,7 @@ function Invoke-RestMethod {
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
-        foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_SUPPRESS_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO')) {
+        foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_SUPPRESS_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO', 'FAKE_DOTNET_RUNTIME_EXIT_CODE', 'FAKE_DOTNET_RUNTIME_PROBE_MARKER')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -100,6 +100,42 @@ function Invoke-RestMethod {
         $outputText | Should -Not -Match '(?m)^Location:'
         (Get-Content -LiteralPath $sentinelPath -Raw) | Should -Be 'preserve-me'
         @(Get-ChildItem -LiteralPath $installDirectory -File -Recurse -Force).Count | Should -Be $fileCountBefore
+    }
+
+    It 'bootstrapped Verify succeeds when optional modern runtime diagnostics fail' {
+        $version = '99.0.100'
+        Install-FakeIsolatedHost -Version $version -ReportedVersion $version | Out-Null
+        $env:FAKE_DOTNET_RUNTIME_EXIT_CODE = '72'
+        $env:FAKE_DOTNET_RUNTIME_PROBE_MARKER = Join-Path $script:TestRoot 'runtime-probed.txt'
+
+        $output = @(& pwsh -NoProfile -File $script:SourceCopy -Action Verify -SdkVersion $version 2>&1)
+
+        $LASTEXITCODE | Should -Be 0
+        $text = $output -join [Environment]::NewLine
+        $text | Should -Match 'Isolated SDK 99\.0\.100 verified successfully\.'
+        $text | Should -Match 'SDK inventory\s+OK'
+        $text | Should -Match 'SDK resolution\s+OK'
+        $text | Should -Match '(?s)\.NET runtimes:\s+Unavailable'
+        Test-Path -LiteralPath $env:FAKE_DOTNET_RUNTIME_PROBE_MARKER | Should -BeTrue
+    }
+
+    It 'bootstrapped early 2.x Verify skips unsupported runtime probing and exits zero' {
+        $version = '2.1.105'
+        $target = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
+        New-Item -ItemType Directory -Path (Join-Path (Join-Path $target 'sdk') $version) -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $env:FAKE_DOTNET_SDK_VERSION = $version
+        $env:FAKE_DOTNET_RUNTIME_PROBE_MARKER = Join-Path $script:TestRoot 'runtime-probed.txt'
+
+        $output = @(& pwsh -NoProfile -File $script:SourceCopy -Action Verify -SdkVersion $version 2>&1)
+
+        $LASTEXITCODE | Should -Be 0
+        $text = $output -join [Environment]::NewLine
+        $text | Should -Match 'Isolated SDK 2\.1\.105 verified successfully\.'
+        $text | Should -Match 'SDK origin\s+OK'
+        $text | Should -Match 'SDK resolution\s+OK'
+        $text | Should -Match '(?s)\.NET runtimes:\s+Unavailable'
+        Test-Path -LiteralPath $env:FAKE_DOTNET_RUNTIME_PROBE_MARKER | Should -BeFalse
     }
 
     It 'reads legacy Host information and infers architecture from RID' {
@@ -389,6 +425,19 @@ function Invoke-RestMethod {
         $text | Should -Match 'SDK origin\s+FAIL'
     }
 
+    It 'verifies early 2.x isolated hosts via exact legacy Base Path instead of inventory' -ForEach @(
+        @{ Version = '2.0.3' }
+        @{ Version = '2.1.105' }
+    ) {
+        $target = Install-FakeIsolatedHost -Version $Version -ReportedVersion $Version
+        New-Item -ItemType Directory -Path (Join-Path (Join-Path $target 'sdk') $Version) -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        $result = @(Invoke-VerifyTool -Version $Version)
+        $script:VerifyExitCode | Should -Be 0
+        ($result -join [Environment]::NewLine) | Should -Match 'SDK origin\s+OK'
+        ($result -join [Environment]::NewLine) | Should -Not -Match 'SDK inventory\s+FAIL'
+    }
+
     It 'reports only supported optional legacy RID and architecture information' {
         $version = '1.1.5'
         $directory = Install-FakeIsolatedHost -Version $version -ReportedVersion $version
@@ -409,9 +458,10 @@ Describe 'PowerShell Verify origin, resolution, and metadata boundaries' {
     BeforeAll {
         $script:root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
     }
-    It 'keeps the Verify local proof helper available to later Install work without implementing Install reuse yet' {
+    It 'shares the local proof between Verify and both Install correctness boundaries' {
         $source = Get-Content -LiteralPath (Join-Path $script:root 'isolated-dotnet-sdk.ps1') -Raw
         $source | Should -Match 'function Get-LocalIsolatedSdkValidation'
+        ([regex]::Matches($source, 'Get-LocalIsolatedSdkValidation -Version')).Count | Should -Be 3
         $source | Should -Match 'Get-SdkAuditClassification -Version'
     }
 }

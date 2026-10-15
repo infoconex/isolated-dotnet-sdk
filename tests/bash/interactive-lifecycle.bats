@@ -413,10 +413,13 @@ EOF
   cat > "$tool_root/$version/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s [/fake/sdk]\n' '$version'
+  printf '%s\n' '$version [$tool_root/$version/sdk]'
+elif [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\n' '$version'
 fi
 exit 0
 EOF
+  mkdir -p "$tool_root/$version/sdk"
   chmod +x "$tool_root/$version/dotnet"
 
   run bash -c 'printf "i\n1\n1\nb\nb\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
@@ -438,10 +441,13 @@ EOF
   cat > "$tool_root/$version/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s [/fake/sdk]\n' '$version'
+  printf '%s\n' '$version [$tool_root/$version/sdk]'
+elif [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\n' '$version'
 fi
 exit 0
 EOF
+  mkdir -p "$tool_root/$version/sdk"
   chmod +x "$tool_root/$version/dotnet"
 
   run bash -c 'printf "i\nm\n%s\nb\ne\n" "$4" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \
@@ -551,10 +557,13 @@ EOF
   cat > "$install_dir/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s\n' '$version [/fake]'
+  printf '%s\n' '$version [$install_dir/sdk]'
+elif [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\n' '$version'
 fi
 exit 0
 EOF
+  mkdir -p "$install_dir/sdk"
   chmod +x "$install_dir/dotnet"
 
   run bash -c 'printf "i\n1\n1\nb\nb\nl\nr\n1\ny\ne\n" | env HOME="$1" PATH="$2:$PATH" "$3"' _ \

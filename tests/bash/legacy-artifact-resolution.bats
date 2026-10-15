@@ -212,7 +212,7 @@ EOF
   export SDK_TEST_DOTNET_VERSION='1.1.13'
   run_payload_install
   [ "$status" -ne 0 ]
-  [[ "$output" == *"legacy host did not report the requested exact SDK version"* ]]
+  [[ "$output" == *"legacy --version did not resolve the exact requested SDK"* ]]
   [ ! -e "$install_dir" ]
   ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
   ! compgen -G "$tool_root/.install-$version.*" >/dev/null
@@ -222,7 +222,7 @@ EOF
   export SDK_TEST_FAKE_BASE_PATH="$test_root"
   run_payload_install
   [ "$status" -ne 0 ]
-  [[ "$output" == *"legacy host SDK Base Path does not match the isolated directory"* ]]
+  [[ "$output" == *"legacy SDK Base Path does not match the isolated directory"* ]]
   [ ! -e "$install_dir" ]
   ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
   ! compgen -G "$tool_root/.install-$version.*" >/dev/null
@@ -232,7 +232,7 @@ EOF
   export SDK_TEST_LEGACY_CMD_FAILURE=1
   run_payload_install
   [ "$status" -ne 0 ]
-  [[ "$output" == *"legacy host --version failed"* ]]
+  [[ "$output" == *"--version exited with code"* ]]
   [ ! -e "$install_dir" ]
   ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
 }
@@ -300,7 +300,7 @@ prepare_early2_payload() {
   export SDK_TEST_DOTNET_VERSION='10.0.402'
   run_payload_install
   [ "$status" -ne 0 ]
-  [[ "$output" == *"legacy host did not report the requested exact SDK version"* ]]
+  [[ "$output" == *"legacy --version did not resolve the exact requested SDK"* ]]
   [ ! -e "$install_dir" ]
   ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
   ! compgen -G "$tool_root/.install-$version.*" >/dev/null
@@ -311,7 +311,7 @@ prepare_early2_payload() {
   export SDK_TEST_FAKE_BASE_PATH="$test_root"
   run_payload_install
   [ "$status" -ne 0 ]
-  [[ "$output" == *"legacy host SDK Base Path does not match the isolated directory"* ]]
+  [[ "$output" == *"legacy SDK Base Path does not match the isolated directory"* ]]
   [ ! -e "$install_dir" ]
   ! compgen -G "$tool_root/.sdk-host-verify-$version.*" >/dev/null
 }

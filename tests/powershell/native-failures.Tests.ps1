@@ -42,7 +42,7 @@ Describe 'PowerShell native install command failures' {
         $failureOutput = @(& pwsh -NoProfile -Command 'function Invoke-WebRequest { throw "continued-to-download" }; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion 99.0.100 -Yes' 2>&1)
         $LASTEXITCODE | Should -Not -Be 0
         $text = $failureOutput -join [Environment]::NewLine
-        $text | Should -Match 'Unable to inspect existing isolated SDK 99\.0\.100 with exit code -?[1-9][0-9]*\.'
+        $text | Should -Match 'Isolated SDK destination already exists and cannot be replaced'
         $text | Should -Not -Match 'continued-to-download'
         $text | Should -Not -Match 'installation completed successfully'
     }

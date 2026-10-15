@@ -61,6 +61,11 @@ public static class Program
                 Console.WriteLine("  Architecture: x64");
             }
         }
+        if (args.Length > 0 && args[0] == "--list-runtimes")
+        {
+            var probeMarker = Environment.GetEnvironmentVariable("FAKE_DOTNET_RUNTIME_PROBE_MARKER");
+            if (!string.IsNullOrWhiteSpace(probeMarker)) { File.WriteAllText(probeMarker, "probed"); }
+        }
         if (args.Length > 0 && args[0] == "--list-runtimes" &&
             string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_HOST"), "true", StringComparison.OrdinalIgnoreCase))
         {
@@ -69,6 +74,8 @@ public static class Program
         }
         if (args.Length > 0 && args[0] == "--list-runtimes")
         {
+            var runtimeExitText = Environment.GetEnvironmentVariable("FAKE_DOTNET_RUNTIME_EXIT_CODE");
+            if (!string.IsNullOrWhiteSpace(runtimeExitText)) { return int.Parse(runtimeExitText); }
             var runtimePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "shared", "Microsoft.NETCore.App");
             Console.WriteLine("Microsoft.NETCore.App 99.0.9 [" + runtimePath + "]");
             var unrelated = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXTRA_RUNTIME_ROOT");

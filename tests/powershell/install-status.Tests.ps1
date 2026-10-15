@@ -35,6 +35,7 @@ Describe 'PowerShell install target status' {
                 -Destination $script:InstallDir `
                 -Recurse `
                 -Force
+            New-Item -ItemType Directory -Path (Join-Path $script:InstallDir 'sdk') -Force | Out-Null
         }
     }
 

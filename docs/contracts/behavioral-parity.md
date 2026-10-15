@@ -19,7 +19,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Persistent Main menu | Use case-insensitive `I` / `R` / `L` / `V` / `A` / `E` for Install / Remove / List / Verify / Audit / Exit. Old numeric Main aliases are rejected rather than retained as hidden aliases. |
 | Explicit interactive no/blank/q cancellation | Return success with no state change where that response is part of the prompt's normal cancellation contract. |
 | List | Report two ordered ownership groups: recognized isolated SDKs under the isolated root first, then read-only SDKs returned by the normally resolved `dotnet --list-sdks` host. Sort each ownership group by SDK version newest to oldest, include each SDK's concrete version directory, preserve same-version overlap across groups, and report `None` for each empty group. |
-| Existing SDK detection | Distinguish SDKs already available from the system `dotnet` host from SDKs already present under the isolated root. An unavailable normal host is an empty system inventory; a resolved host whose `--list-sdks` command fails is an operational failure. |
+| Existing SDK detection | Distinguish SDKs reported by the system `dotnet` host from SDKs proven to originate under the isolated root by the shared Verify local proof (exact version, exact origin, and exact controlled SDK resolution). Do not classify a wrong-origin existing target as already installed or overwrite it. An unavailable normal host is an empty system inventory; a resolved host whose `--list-sdks` command fails is an operational failure. |
 | Explicit List plus Version | Reject the version instead of silently ignoring it. |
 | Audit | Perform an online, read-only assessment of both ownership groups against current Microsoft release metadata. Sort each group newest to oldest and preserve duplicate versions across Isolated and System groups; report LTS/STS, lifecycle status, exact installed-SDK release date when published, authoritative future Go-Live date when available, end-of-support date, and an optional compact `Update -> <version>` tail without mutating either inventory or labeling an installed SDK `Vulnerable`. |
 | Audit metadata failure | Fail nonzero when required release-index or known-channel metadata is unavailable or structurally unusable rather than emitting fabricated results. The official `dotnet/core` release-notes table is an optional fallback only for a missing future Go-Live date; fallback failure omits that date without fabricating one. Unknown installed channels remain explicit per-SDK results. |
@@ -42,7 +42,7 @@ The transactional installation contract defines the installation ownership and r
 - each new install uses operation-owned Microsoft release metadata and SDK payload archive state;
 - installation occurs in an operation-owned staging directory rather than directly in the final version directory;
 - the downloaded SDK archive must match its Microsoft-published SHA-512 before extraction;
-- the staged host must exist, execute successfully, and report the requested exact SDK before promotion;
+- the staged host must pass the shared Verify exact-version, isolated-origin, and controlled-resolution proof for the staging directory before promotion, including the legacy 1.x/early-2.x `--info` Base Path alternative;
 - a pre-existing final destination is never replaced or adopted accidentally;
 - a final destination that appears before promotion blocks promotion and is preserved;
 - clean-start failures do not leave a new final destination;
