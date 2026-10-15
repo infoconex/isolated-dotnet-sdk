@@ -79,6 +79,19 @@ Describe 'PowerShell removal behavior' {
             ($whatIfOutput -join [Environment]::NewLine) | Should -Match 'What if:'
         }
 
+        It 'forwards the legacy opt-in through bootstrap while WhatIf preserves the target' {
+            $version = '1.0.4'
+            $publicInstallDirectory = Join-Path $script:ToolRoot $version
+            New-Item -ItemType Directory -Path $publicInstallDirectory -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $publicInstallDirectory 'dotnet.exe') -Force | Out-Null
+
+            $whatIfOutput = @(& pwsh -NoProfile -File $script:ToolScript -Action Remove -SdkVersion $version -AllowUnsupportedShutdown -Yes -WhatIf *>&1)
+
+            $LASTEXITCODE | Should -Be 0
+            Test-Path -LiteralPath $publicInstallDirectory | Should -BeTrue
+            ($whatIfOutput -join [Environment]::NewLine) | Should -Match 'What if:'
+        }
+
         It 'rejects removal-only risk-mitigation parameters on unsupported actions' {
             Install-TestTool
 
