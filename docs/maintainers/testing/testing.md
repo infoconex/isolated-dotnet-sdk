@@ -3,7 +3,8 @@
 The repository uses established test frameworks for behavioral coverage:
 
 - **Pester** for PowerShell tests;
-- **Bats-core** for Bash tests.
+- **Bats-core** for Bash tests;
+- **Node.js built-in `node:test`** for hermetic stable-release publisher regression tests (no npm framework dependency).
 
 Exact framework versions are repository-owned in [`.config/test-frameworks.json`](../../../.config/test-frameworks.json). Bats is additionally pinned to the upstream commit behind the selected release tag. Local and CI runs must use those exact pins so diagnostics and behavior stay reproducible.
 
@@ -338,12 +339,25 @@ Real Microsoft/.NET ecosystem coverage is intentionally separate from the determ
 
 `.github/workflows/e2e.yml` runs automatically on `push` to `main` and also supports `workflow_dispatch` for ad hoc reruns. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft release metadata and SDK payload acquisition, checksum verification, extraction, and staged-host verification. It is a post-merge confidence signal, not a required PR or merge check; required merge-candidate E2E remains tracked separately in Issue #60.
 
+## Stable release publication regression tests
+
+The Node test suite invokes the **real** `.github/scripts/publish-release.js` with isolated local release-source/manifest fixtures and an in-memory GitHub API implementation. It deterministically exercises commit/tag identity, checksum verification, draft/public release state, API failures and cleanup ownership without any remote API requests, GitHub write credentials, or real tag/release mutations.
+
+From the repository root, with Node.js supporting its built-in test runner:
+
+```bash
+node --test tests/node/publish-release.test.js
+```
+
+Normal `Validate` also runs this suite on Ubuntu, where the actual publication workflow executes. Node's test runner is part of the runtime (like the Bash/PowerShell runtimes), not an additional externally pinned test package. The workflow reports the runner-provided Node version alongside test results. The deterministic suite does **not** replace live publication, candidate E2E, or the read-only `Verify Release` workflow.
+
 ## CI
 
 `.github/workflows/validate.yml` uses explicit versioned GitHub-hosted runner labels and repository-owned dependency pins rather than relying on preinstalled tool versions. It runs:
 
 - Bash syntax validation and the Bats behavioral suite on `ubuntu-24.04` and `macos-26`;
 - ShellCheck once on `ubuntu-24.04`;
+- Node stable-release publisher regression tests once on `ubuntu-24.04`;
 - PowerShell parser validation, PSScriptAnalyzer, formatting checks, and the Pester behavioral suite on `windows-2025`.
 
 Validate uses exact-key caches for pinned Bats-core, ShellCheck, Pester, and PSScriptAnalyzer where practical. Cache identity derives from the repository-owned pin/configuration files plus relevant runner/runtime identity. A cache miss acquires the exact configured dependency; a cache hit still revalidates the configured commit, checksum, or module version before use. No broad restore-key fallback accepts an older toolset, and product/E2E SDK or HOME/profile state is not cached.
@@ -352,6 +366,6 @@ The dependency-update monitor uses `ubuntu-24.04` and remains separate from prod
 
 Versioned hosted-runner labels intentionally pin the OS/architecture family, not an immutable VM image build. GitHub can patch and rebuild a selected hosted image over time; the exact resolved image and build revision are visible in each job log. Repository-owned test frameworks, analyzers, checksums, and action references remain independently pinned so those dependencies do not silently follow runner-image contents.
 
-CI invokes the same repository-owned behavioral/analyzer/formatting commands documented above instead of maintaining parallel CI-only runners. Syntax/parser checks remain inline because they are small shell/runtime primitives rather than a second test harness. Framework failure output is emitted directly by Bats/Pester so CI retains test names, assertion context, and framework diagnostics.
+CI invokes the same repository-owned behavioral/analyzer/formatting commands documented above instead of maintaining parallel CI-only runners. Syntax/parser checks remain inline because they are small shell/runtime primitives rather than a second test harness. Framework failure output is emitted directly by Bats/Pester/Node so CI retains test names, assertion context, and framework diagnostics.
 
 Syntax/parser checks, static analysis/formatting, and behavioral tests remain separate validation layers because they identify different failure classes. Static analyzers intentionally run once per relevant shell; cross-platform duplication is not added without evidence that it catches a platform-specific analyzer contract.
