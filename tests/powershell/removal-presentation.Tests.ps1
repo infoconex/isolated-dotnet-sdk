@@ -64,6 +64,70 @@ Describe 'PowerShell removal presentation' {
         }
     }
 
+    It 'isolates historical shutdown from ambient SDK discovery and restores caller state' {
+        $sdkDirectory = Join-Path $TestDrive '2.2.207'
+        $ambientDirectory = Join-Path $TestDrive 'ambient'
+        $fakeDotNet = Join-Path $sdkDirectory 'dotnet.cmd'
+        $workDirectoryMarker = Join-Path $TestDrive 'shutdown-workdir.txt'
+        New-Item -ItemType Directory -Path $sdkDirectory, $ambientDirectory -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $ambientDirectory 'global.json') -Value '{"sdk":{"version":"0.0.0"}}'
+        Set-Content -LiteralPath $fakeDotNet -Value (@(
+                '@echo off'
+                'if /I not "%1"=="build-server" exit /b 81'
+                'if /I not "%2"=="shutdown" exit /b 82'
+                'if /I not "%DOTNET_ROOT%"=="%EXPECTED_ISOLATED_ROOT%" exit /b 83'
+                'if not "%DOTNET_MULTILEVEL_LOOKUP%"=="0" exit /b 84'
+                'if not "%DOTNET_SKIP_FIRST_TIME_EXPERIENCE%"=="1" exit /b 85'
+                'if not "%DOTNET_CLI_TELEMETRY_OPTOUT%"=="1" exit /b 86'
+                'if /I not "%DOTNET_CLI_HOME%"=="%CD%" exit /b 87'
+                'if exist global.json exit /b 88'
+                'echo %CD%>"%SDK_TEST_SHUTDOWN_WORK_DIR_MARKER%"'
+                'exit /b 0'
+            ) -join "`r`n")
+
+        $settings = @{
+            DOTNET_ROOT                       = 'wrong-root'
+            DOTNET_MULTILEVEL_LOOKUP          = '1'
+            DOTNET_CLI_HOME                   = 'wrong-home'
+            DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '0'
+            DOTNET_CLI_TELEMETRY_OPTOUT       = '0'
+            EXPECTED_ISOLATED_ROOT            = $sdkDirectory
+            SDK_TEST_SHUTDOWN_WORK_DIR_MARKER = $workDirectoryMarker
+        }
+        $original = @{}
+        $originalLocation = (Get-Location).Path
+        foreach ($name in $settings.Keys) {
+            $original[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+        }
+        try {
+            foreach ($name in $settings.Keys) {
+                [Environment]::SetEnvironmentVariable($name, $settings[$name], 'Process')
+            }
+            Push-Location -LiteralPath $ambientDirectory
+            try {
+                Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $fakeDotNet -SdkVersion '2.2.207'
+                (Get-Location).Path | Should -Be $ambientDirectory
+                foreach ($name in $settings.Keys) {
+                    [Environment]::GetEnvironmentVariable($name, 'Process') |
+                        Should -Be $settings[$name]
+                }
+                Test-Path -LiteralPath $workDirectoryMarker | Should -BeTrue
+                $shutdownDirectory = (Get-Content -LiteralPath $workDirectoryMarker -Raw).Trim()
+                $shutdownDirectory | Should -Not -Be $ambientDirectory
+                Test-Path -LiteralPath $shutdownDirectory | Should -BeFalse
+            }
+            finally {
+                Pop-Location
+            }
+            (Get-Location).Path | Should -Be $originalLocation
+        }
+        finally {
+            foreach ($name in $settings.Keys) {
+                [Environment]::SetEnvironmentVariable($name, $original[$name], 'Process')
+            }
+        }
+    }
+
     It 'places blank display boundaries around the destructive warning' {
         $lines = @(Get-Content -LiteralPath $script:ToolScript)
         $warningIndex = -1
