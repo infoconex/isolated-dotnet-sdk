@@ -61,6 +61,11 @@ public static class Program
                 Console.WriteLine("  Architecture: x64");
             }
         }
+        if (args.Length > 0 && args[0] == "--list-runtimes")
+        {
+            var probeMarker = Environment.GetEnvironmentVariable("FAKE_DOTNET_RUNTIME_PROBE_MARKER");
+            if (!string.IsNullOrWhiteSpace(probeMarker)) { File.WriteAllText(probeMarker, "probed"); }
+        }
         if (args.Length > 0 && args[0] == "--list-runtimes" &&
             string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_HOST"), "true", StringComparison.OrdinalIgnoreCase))
         {
