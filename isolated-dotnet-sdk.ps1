@@ -2570,6 +2570,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
     $PreviousEnvironment = @{}
     $LocationPushed = $false
     $ExitCode = $null
+    $CleanupFailure = $null
 
     try {
         New-Item -ItemType Directory -Path $WorkDirectory -ErrorAction Stop | Out-Null
@@ -2592,12 +2593,20 @@ function Invoke-IsolatedSdkBuildServerShutdown {
             Pop-Location
         }
         if (Test-Path -LiteralPath $WorkDirectory) {
-            Remove-Item -LiteralPath $WorkDirectory -Recurse -Force -ErrorAction SilentlyContinue
+            try {
+                Remove-Item -LiteralPath $WorkDirectory -Recurse -Force -ErrorAction Stop
+            }
+            catch {
+                $CleanupFailure = $_
+            }
         }
     }
 
     if ($ExitCode -ne 0) {
         throw "Build-server shutdown failed for SDK $SdkVersion with exit code $ExitCode."
+    }
+    if ($CleanupFailure) {
+        throw "Unable to clean temporary shutdown state for SDK $SdkVersion; removal stopped. $($CleanupFailure.Exception.Message)"
     }
 }
 
