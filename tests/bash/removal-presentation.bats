@@ -315,6 +315,12 @@ EOF
   [ ! -e "$install_dir/dotnet" ]
   [[ "$output" != *"was removed."* ]]
 
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"incomplete"* ]]
+  [ -f "$tool_root/.pending-removals/$version" ]
+
   run env HOME="$test_home" "$tool_path" remove "$version" --yes
   [ "$status" -eq 0 ]
   [[ "$output" == *"was removed."* ]]
@@ -426,4 +432,41 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"Invalid incomplete-removal recovery token"* ]]
   [ "$(cat "$sibling/data.txt")" = 'do not delete' ]
+}
+
+@test "replacing a quarantined recovery target with a symlink is rejected" {
+  version='99.0.105'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'locked' > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == true && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  token="$(cat "$tool_root/.pending-removals/$version")"
+  stage="$tool_root/.removing-$version-$token"
+  [ -d "$stage" ]
+  preserved="$test_root/preserved"
+  mv "$stage" "$preserved"
+  mkdir -p "$test_root/unrelated"
+  printf 'protect' > "$test_root/unrelated/keep.txt"
+  ln -s "$test_root/unrelated" "$stage"
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unsafe incomplete-removal target"* ]]
+  [ "$(cat "$test_root/unrelated/keep.txt")" = "protect" ]
 }
