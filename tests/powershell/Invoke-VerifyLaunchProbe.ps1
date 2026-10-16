@@ -95,6 +95,49 @@ try {
             $timer.Stop()
         }
         Add-LaunchProbeEvent -Iteration $iteration -Phase 'native-list-sdks-complete' -StartedUtc $startUtc -ElapsedMs $timer.Elapsed.TotalMilliseconds -InvocationId $invocationId -ExitCode $code -Detail $message
+
+        # OS-native reference process in the same pwsh session; unlike the
+        # compiled fake dotnet host this executable does not initialize CLR.
+        if ($IsWindows) {
+            $referencePath = Join-Path $env:WINDIR 'System32/cmd.exe'
+            $osStartedUtc = [DateTime]::UtcNow
+            $osTimer = [System.Diagnostics.Stopwatch]::StartNew()
+            $osExit = ''
+            $osDetail = ''
+            try {
+                if ($Mode -eq 'PowerShellNative') {
+                    $null = @(& $referencePath /d /c exit 0)
+                    $osExit = [string]$LASTEXITCODE
+                }
+                else {
+                    $referenceInfo = [System.Diagnostics.ProcessStartInfo]::new()
+                    $referenceInfo.FileName = $referencePath
+                    $referenceInfo.Arguments = '/d /c exit 0'
+                    $referenceInfo.UseShellExecute = $false
+                    $referenceInfo.RedirectStandardOutput = $true
+                    $referenceInfo.RedirectStandardError = $true
+                    $referenceProcess = $null
+                    try {
+                        $referenceProcess = [System.Diagnostics.Process]::Start($referenceInfo)
+                        $null = $referenceProcess.StandardOutput.ReadToEnd()
+                        $osDetail = $referenceProcess.StandardError.ReadToEnd()
+                        $referenceProcess.WaitForExit()
+                        $osExit = [string]$referenceProcess.ExitCode
+                    }
+                    finally {
+                        if ($null -ne $referenceProcess) { $referenceProcess.Dispose() }
+                    }
+                }
+            }
+            catch {
+                $osExit = 'exception'
+                $osDetail = $_.Exception.ToString()
+            }
+            finally {
+                $osTimer.Stop()
+            }
+            Add-LaunchProbeEvent -Iteration $iteration -Phase 'os-control-complete' -StartedUtc $osStartedUtc -ElapsedMs $osTimer.Elapsed.TotalMilliseconds -InvocationId $invocationId -ExitCode $osExit -Detail $osDetail
+        }
     }
 }
 finally {
