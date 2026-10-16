@@ -16,9 +16,9 @@ The versioned GitHub-hosted runner labels make major OS/architecture transitions
 
 The product scripts intentionally use shell-native facilities and a small set of platform tools.
 
-- Windows execution requires PowerShell 7. The repository validation suite currently requires PowerShell 7.4 or newer because of the pinned Pester major version. SDK payload verification uses PowerShell's `Get-FileHash -Algorithm SHA512` and `Expand-Archive`.
+- Windows execution requires PowerShell 7. The repository validation suite currently requires PowerShell 7.4 or newer because of the pinned Pester major version. SDK payload verification uses PowerShell's `Get-FileHash` with the published SHA-512 for 2.x and newer SDKs, or the published SHA-256 for eligible historical .NET 1.x SDKs, followed by `Expand-Archive` only after a matching checksum.
 - Linux/macOS execution requires Bash plus standard Unix tools used by the script (`awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, `rm`, `tar`, and `curl`).
-- Bash SDK-payload integrity verification accepts either `sha512sum` or `shasum -a 512`; this is the deliberate GNU/Linux versus macOS portability boundary.
+- Bash SDK-payload integrity verification accepts `sha512sum` or `shasum -a 512` for 2.x and newer SDKs. Eligible historical .NET 1.x SDKs using Microsoft's published SHA-256 instead require `sha256sum` or `shasum -a 256`. These alternatives preserve the GNU/Linux versus macOS portability boundary.
 - Product SDK operations use the platform's .NET host name: `dotnet.exe` on Windows and executable `dotnet` on Linux/macOS.
 - Repository validation has additional development dependencies documented in [Testing](../maintainers/testing/testing.md), including Pester, Bats-core, PSScriptAnalyzer, ShellCheck, Git, and `jq`.
 

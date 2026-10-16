@@ -32,11 +32,15 @@
       path: docs/commands/remove.md
     - title: Interactive Mode
       path: docs/commands/interactive.md
+    - title: Tool Version
+      path: docs/commands/tool-version.md
 
 - title: Guides
   items:
     - title: Project & Editor Usage
       path: docs/guides/project-editor-usage.md
+    - title: Troubleshooting & Recovery
+      path: docs/guides/troubleshooting.md
 
 - title: Concepts
   items:

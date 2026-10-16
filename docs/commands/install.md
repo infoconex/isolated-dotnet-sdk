@@ -46,7 +46,7 @@ A new installation is transactional:
 6. promote staging to the final version directory only while that destination remains absent; and
 7. clean operation-owned metadata, payload, and staging state where possible.
 
-Successful Install output keeps the staged verification step without echoing a temporary staging inventory/path or a redundant verified-version line. The final isolated installation directory remains visible; staged-host verification failures retain the failed staging directory for diagnosis.
+Successful Install output keeps the staged verification step without echoing a temporary staging inventory/path or a redundant verified-version line. The final isolated installation directory remains visible. On staged-host verification failure, Install reports the error and **attempts to remove operation-owned staging and transaction files**; failed staging state is not guaranteed to be retained for diagnosis. Cleanup errors are reported without hiding the primary failure.
 
 A failed download, checksum, extraction, staged-host verification, or promotion must not be reported as installation success. Clean-start failures do not promote a partial final installation.
 
@@ -66,3 +66,4 @@ For a currently prerelease channel, the SDK picker initially shows all discovere
 - [Filesystem safety](../concepts/filesystem-safety.md)
 - [Supply-chain integrity](../concepts/supply-chain-integrity.md)
 - [Native-command failure boundaries](../contracts/native-command-failures.md)
+- [Troubleshooting and safe recovery](../guides/troubleshooting.md)

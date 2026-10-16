@@ -337,7 +337,7 @@ The deterministic behavioral checks do not install a real SDK or require live re
 
 Real Microsoft/.NET ecosystem coverage is intentionally separate from the deterministic behavioral suites. The repository-owned fixed SDK target, direct and persistent-interactive scenarios, isolated job-state rules, automatic post-merge trigger, and manual rerun procedure are documented in [Real end-to-end validation](e2e-testing.md).
 
-`.github/workflows/e2e.yml` runs automatically on `push` to `main` and also supports `workflow_dispatch` for ad hoc reruns. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft release metadata and SDK payload acquisition, checksum verification, extraction, and staged-host verification. It is a post-merge confidence signal, not a required PR or merge check; required merge-candidate E2E remains tracked separately in Issue #60.
+`.github/workflows/e2e.yml` runs automatically on `push` to `main` and also supports `workflow_dispatch` for ad hoc reruns. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft release metadata and SDK payload acquisition, checksum verification, extraction, and staged-host verification. It is a post-merge confidence signal, not a required PR or merge check. Automatic merge-candidate E2E gating was proposed in [#60](https://github.com/infoconex/isolated-dotnet-sdk/issues/60), **closed as not planned**; adopting that gate would require a separately approved policy change.
 
 ## Stable release publication regression tests
 

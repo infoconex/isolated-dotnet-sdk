@@ -9,7 +9,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Behavior | Shared contract |
 | --- | --- |
 | Bare exact version | Treat it as an Install request. |
-| Explicit Install with a version | Bypass Microsoft release-index/channel discovery and install that exact version. The exact-version artifact metadata required for payload acquisition and SHA-512 verification is still retrieved. |
+| Explicit Install with a version | Bypass Microsoft release-index/channel discovery and install that exact version. Exact-version Microsoft artifact metadata and a supported published checksum remain required: SHA-512 for 2.x+ and modern SDKs, or SHA-256 only for eligible historical .NET 1.x archives. |
 | Install without a version | Use the interactive release/channel/version picker. Explicit picker cancellation is a successful no-change result. |
 | Existing matching isolated SDK | Report it as already installed and return success without downloading or reinstalling. |
 | Pre-existing non-valid destination | Fail closed and preserve the destination. |
@@ -24,7 +24,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Audit | Perform an online, read-only assessment of both ownership groups against current Microsoft release metadata. Sort each group newest to oldest and preserve duplicate versions across Isolated and System groups; report LTS/STS, lifecycle status, exact installed-SDK release date when published, authoritative future Go-Live date when available, end-of-support date, and an optional compact `Update -> <version>` tail without mutating either inventory or labeling an installed SDK `Vulnerable`. |
 | Audit metadata failure | Fail nonzero when required release-index or known-channel metadata is unavailable or structurally unusable rather than emitting fabricated results. The official `dotnet/core` release-notes table is an optional fallback only for a missing future Go-Live date; fallback failure omits that date without fabricating one. Unknown installed channels remain explicit per-SDK results. |
 | Explicit Audit plus Version | Reject the version instead of silently ignoring it. |
-| Explicit Verify with an exact version | Run a one-shot detailed report for a tool-owned isolated SDK. Reuse Audit's structured lifecycle/servicing classification where metadata is available, but make the local proof authoritative: verify directory/host presence and runnability, successful `--list-sdks`, exact version AND expected isolated SDK origin, and exact `--version` resolution from a controlled working directory with old Windows multi-level lookup disabled. Local success exits 0 even when online metadata is unavailable, reporting that status explicitly. |
+| Explicit Verify with an exact version | Run a one-shot detailed report for a tool-owned isolated SDK. Reuse Audit's structured lifecycle/servicing classification when optional online metadata is available, but make the local proof authoritative: modern hosts require a runnable host, exact version and isolated origin in `--list-sdks`, and exact `--version` resolution from controlled state; original 1.x and early 2.x hosts instead require pinned `--version` and `--info` SDK Base Path origin because `--list-sdks` is unsupported. Older Windows multilevel lookup is disabled. Local success exits zero even if optional metadata is unavailable. |
 | Interactive Verify | From Main, list only recognized isolated SDKs, select one exact version, and run the same read-only health check as explicit Verify. System SDKs are not targets. Back or an empty isolated inventory is a normal no-change outcome that returns to Main. |
 | Failed Verify result | Report per-check `OK`/`FAIL` and return nonzero with operation-specific context for missing/non-runnable host, native host failure, wrong/missing inventory origin, or mismatched/failed exact-version resolution. Verification never repairs or mutates the isolated installation. An optional metadata lookup failure cannot change local verification exit status. In a persistent session, local failure terminates the process instead of returning to Main. |
 | Remove without a version | Present the installed isolated SDK picker. Explicit cancellation or an empty installed set is a normal no-change result. |
@@ -41,7 +41,7 @@ The transactional installation contract defines the installation ownership and r
 
 - each new install uses operation-owned Microsoft release metadata and SDK payload archive state;
 - installation occurs in an operation-owned staging directory rather than directly in the final version directory;
-- the downloaded SDK archive must match its Microsoft-published SHA-512 before extraction;
+- the downloaded SDK archive must match its supported Microsoft-published digest before extraction (SHA-512 for 2.x+ and modern SDKs; SHA-256 only for eligible historical .NET 1.x payloads);
 - the staged host must pass the shared Verify exact-version, isolated-origin, and controlled-resolution proof for the staging directory before promotion, including the legacy 1.x/early-2.x `--info` Base Path alternative;
 - a pre-existing final destination is never replaced or adopted accidentally;
 - a final destination that appears before promotion blocks promotion and is preserved;
@@ -91,7 +91,7 @@ For a selected channel, the Install picker has two version views:
 
 Classify the **selected channel's current SDK**, not its historical release list: prefer the release-index `latest-sdk` when it is present in the discovered channel SDK versions; otherwise use the SDK-aware newest discovered version as the deterministic fallback. A `-preview.N` or `-rc.N` suffix identifies a currently prerelease SDK. Do not use a hard-coded channel number, or classify a stable channel as prerelease because it contains older previews or an inconsistent support-phase label. An absent or nonmatching `latest-sdk` does not create a fabricated `latest` marker.
 
-Both views preserve the existing `latest`, `system`, and `isolated` markers; Back, Exit, and manual exact-version entry; and numbered selection of any displayed version. The complete view reuses SDK-aware newest-first ordering. Feature-band grouping and Preview/RC ordering are derived from SDK version data, not fixed menu positions. Explicit exact-version command invocation continues to bypass release-index/channel discovery while retaining the exact-version artifact metadata lookup needed for installation. These picker rules apply in persistent interactive and one-shot Install picker contexts.
+Both views preserve the literal `latest`, `installed system-sdk`, and `installed isolated-sdk` markers; Back, Exit, and manual exact-version entry; and numbered selection of any displayed version. The complete view reuses SDK-aware newest-first ordering. Feature-band grouping and Preview/RC ordering are shared across shells.
 
 ## Intentional runtime and platform differences
 

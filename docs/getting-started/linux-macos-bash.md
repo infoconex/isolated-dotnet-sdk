@@ -7,7 +7,7 @@ This guide contains the exact Bash syntax for the supported Linux/Bash and macOS
 - Linux or macOS
 - Bash
 - standard shell utilities used by the tool, including `curl`, `awk`, `grep`, `sed`, `tr`, `mktemp`, `chmod`, `mv`, `rm`, and `tar`
-- a SHA-256 utility for stable tool bootstrap: `sha256sum` where available or `shasum -a 256`
+- a SHA-256 utility for stable tool bootstrap and eligible historical .NET 1.x payloads: `sha256sum` where available or `shasum -a 256`
 - a SHA-512 utility for SDK payload verification: `sha512sum` where available or `shasum -a 512`
 - network access when bootstrap or SDK installation downloads remote artifacts
 
@@ -156,6 +156,10 @@ curl -fsSL https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/
 
 This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee. Once saved, that development copy reports `isolated-dotnet-sdk development (main)` through `--version` and on Main.
 
+## Troubleshooting and safe recovery
+
+If a bootstrap download, SDK installation, Verify report, Audit request, or Remove operation fails, follow [Troubleshooting and safe recovery](../guides/troubleshooting.md) before deleting or replacing anything under `dotnet-sdks`. A failed Verify local check differs from temporarily unavailable Microsoft metadata, and a conflicting existing destination is deliberately preserved.
+
 ## Next steps
 
 - [Commands](../commands/README.md)
@@ -163,3 +167,4 @@ This is not a stable installation command. It consumes mutable source and does n
 - [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md)
 - [Cross-platform support](../concepts/cross-platform-support.md)
 - [Supply-chain integrity](../concepts/supply-chain-integrity.md)
+- [Troubleshooting and safe recovery](../guides/troubleshooting.md)

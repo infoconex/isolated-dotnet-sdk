@@ -28,6 +28,7 @@ See the [command index](commands/README.md) for the command/documentation bounda
 ## Guides
 
 - [Project and editor use](guides/project-editor-usage.md) — `global.json`, direct isolated-host use, VS Code, and project-local workflows
+- [Troubleshooting and safe recovery](guides/troubleshooting.md) — failure symptoms, safe recovery, and operational boundaries
 
 ## Concepts
 

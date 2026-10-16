@@ -88,4 +88,4 @@ The maintained expectation is that validation changes should not materially regr
 
 During an active next-release integration cycle, deterministic Validate runs after landed changes on the release integration branch, while real E2E remains a release-level signal that can be invoked manually on the integrated candidate before the final release PR. After the approved candidate merges to `main`, the normal automatic E2E run provides landed release-source evidence before publication.
 
-E2E intentionally does not share or cache installed product SDK/HOME state with deterministic validation. Merge-candidate E2E enforcement remains separate work tracked by Issue #60.
+E2E intentionally does not share or cache installed product SDK/HOME state with deterministic validation. Automatic merge-candidate E2E gating is **not current policy**: [#60](https://github.com/infoconex/isolated-dotnet-sdk/issues/60) was closed as not planned. Real E2E remains an optional manual integration-candidate signal and a normal post-`main`-merge release signal unless a separately approved policy change is adopted.
