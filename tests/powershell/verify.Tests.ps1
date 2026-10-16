@@ -27,7 +27,7 @@ Describe 'PowerShell isolated SDK verification' {
                 @{ Text = 'function Test-IsolatedSdk {'; Before = ''; After = 'verify-function-enter' }
                 @{ Text = "    Write-ToolHeading 'Verify isolated .NET SDK'"; Before = 'local-proof-complete'; After = '' }
                 @{ Text = '        # Microsoft lifecycle information is optional; local checks remain authoritative.'; Before = 'classification-error-caught'; After = '' }
-                @{ Text = 'function Write-ToolActionFailure {'; Before = ''; After = 'error-render-function-enter' }
+                @{ Text = '    if (($Message.StartsWith('; Before = 'error-render-function-enter'; After = '' }
                 @{ Text = '        throw $Validation.Failure'; Before = 'verification-failure-thrown'; After = '' }
                 @{ Text = '    Write-ToolSuccess "Isolated SDK $SdkVersion verified successfully."'; Before = 'verify-success-render-start'; After = '' }
                 @{ Text = '        $Classification = Get-VerifyAuditClassification -Version $SdkVersion'; Before = 'classification-start'; After = 'classification-complete' }
