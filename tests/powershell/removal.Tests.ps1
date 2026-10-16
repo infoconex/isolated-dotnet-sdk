@@ -160,7 +160,7 @@ Describe 'PowerShell removal behavior' {
         }
 
         It 'prints removal errors and native details under distinct uncolored headings when ANSI is unavailable' {
-            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nPossible causes: open handles or insufficient permissions.`nNo matching SDK processes found.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect permissions: icacls.`nDetails: Exception calling Move: access denied."
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nPossible causes: open handles or insufficient permissions.`nNo matching SDK processes found.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls "C:\some\sdk".`nDetails: Exception calling Move: access denied."
             $originalRendering = $PSStyle.OutputRendering
             try {
                 $PSStyle.OutputRendering = 'PlainText'
@@ -178,7 +178,6 @@ Describe 'PowerShell removal behavior' {
             $displayLines | Should -Contain 'Diagnostics:'
             $displayLines | Should -Contain '  Access denied can also mean a lock.'
             $displayLines | Should -Contain '  No matching SDK processes found.'
-            $displayLines | Should -Contain '  To inspect permissions: icacls.'
             $possibleIndex = [array]::IndexOf($displayLines, '  Possible causes:')
             $possibleIndex | Should -BeGreaterThan 0
             $displayLines[$possibleIndex - 1] | Should -Be ''
@@ -187,13 +186,17 @@ Describe 'PowerShell removal behavior' {
             $fileLockIndex | Should -BeGreaterThan $possibleIndex
             $displayLines[$fileLockIndex - 1] | Should -Be ''
             $displayLines[$fileLockIndex + 1] | Should -Be '    use Resource Monitor.'
+            $permissionsIndex = [array]::IndexOf($displayLines, '  To inspect filesystem permissions:')
+            $permissionsIndex | Should -BeGreaterThan $fileLockIndex
+            $displayLines[$permissionsIndex - 1] | Should -Be ''
+            $displayLines[$permissionsIndex + 1] | Should -Be '    icacls "C:\some\sdk".'
             $displayLines | Should -Contain 'Details:'
             $displayLines | Should -Contain '  Exception calling Move: access denied.'
             $displayLines.Count | Should -BeGreaterThan 8
         }
 
         It 'colors only the removal diagnostic headings in ANSI terminals' {
-            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied.`nPossible causes: open handles or permissions.`nTo find a file-lock holder: use Resource Monitor.`nDetails: Native failure."
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied.`nPossible causes: open handles or permissions.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls "C:\some\sdk".`nDetails: Native failure."
             $originalRendering = $PSStyle.OutputRendering
             try {
                 $PSStyle.OutputRendering = 'Ansi'
@@ -217,6 +220,10 @@ Describe 'PowerShell removal behavior' {
             $fileLockIndex | Should -BeGreaterThan $possibleIndex
             $displayLines[$fileLockIndex - 1] | Should -Be ''
             $displayLines[$fileLockIndex + 1] | Should -Be '    use Resource Monitor.'
+            $permissionsIndex = [array]::IndexOf($displayLines, "  $($PSStyle.Foreground.Cyan)To inspect filesystem permissions:$($PSStyle.Reset)")
+            $permissionsIndex | Should -BeGreaterThan $fileLockIndex
+            $displayLines[$permissionsIndex - 1] | Should -Be ''
+            $displayLines[$permissionsIndex + 1] | Should -Be '    icacls "C:\some\sdk".'
             $displayLines | Should -Contain '  Unable to remove isolated SDK 99.0.0. SDK intact.'
             $displayLines | Should -Contain '  Native failure.'
         }
