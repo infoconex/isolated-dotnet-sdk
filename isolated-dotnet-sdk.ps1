@@ -156,14 +156,15 @@ function Write-ToolRemovalFailure {
     $Details = $Sections[1] -split "`nDetails: ", 2
 
     Write-ToolDisplay
-    Write-ToolDisplay "ERROR: $($Sections[0])"
+    Write-ToolDisplay (Format-ToolMessage -Kind Error -Message 'Error:')
+    Write-ToolDisplay "  $($Sections[0])"
     Write-ToolDisplay
-    Write-ToolDisplay 'Diagnostics:'
+    Write-ToolDisplay (Format-ToolMessage -Kind Diagnostics -Message 'Diagnostics:')
     foreach ($Line in ($Details[0] -split "`n")) {
         Write-ToolDisplay "  $Line"
     }
     Write-ToolDisplay
-    Write-ToolDisplay 'Details:'
+    Write-ToolDisplay (Format-ToolMessage -Kind Details -Message 'Details:')
     foreach ($Line in ($Details[1] -split "`n")) {
         Write-ToolDisplay "  $Line"
     }
@@ -171,7 +172,7 @@ function Write-ToolRemovalFailure {
 
 function Format-ToolMessage {
     param(
-        [ValidateSet('Heading', 'Accent', 'Success')]
+        [ValidateSet('Heading', 'Accent', 'Success', 'Error', 'Diagnostics', 'Details')]
         [string]$Kind,
         [string]$Message
     )
@@ -190,11 +191,11 @@ function Format-ToolMessage {
         return $Message
     }
 
-    $Foreground = if ($Kind -eq 'Success') {
-        $PSStyle.Foreground.Green
-    }
-    else {
-        $PSStyle.Foreground.Cyan
+    $Foreground = switch ($Kind) {
+        'Success' { $PSStyle.Foreground.Green }
+        'Error' { $PSStyle.Foreground.Red }
+        'Diagnostics' { $PSStyle.Foreground.Yellow }
+        default { $PSStyle.Foreground.Cyan }
     }
 
     return "$Foreground$Message$($PSStyle.Reset)"
@@ -3271,10 +3272,11 @@ try {
             $FailureMessage.Contains("`nDiagnostics:`n") -and
             $FailureMessage.Contains("`nDetails: ")) {
             Write-ToolRemovalFailure -Message $FailureMessage
-            # Retain a PowerShell error record and nonzero status for callers.
-            # The detailed, line-separated report above remains readable in
-            # a normal interactive terminal rather than being flattened.
-            Write-Error -Message 'Isolated SDK removal failed; see diagnostics above.' -ErrorAction Continue
+            # Keep an actionable error record for automation and stderr
+            # consumers, with the original failure rather than a reference to
+            # console output. Do not repeat the longer diagnostic report here.
+            $NativeDetails = ($FailureMessage -split "`nDetails: ", 2)[1]
+            Write-Error -Message "Unable to remove isolated SDK $script:SdkVersion. Underlying error: $NativeDetails" -ErrorAction Continue
         }
         else {
             Write-Error -Message $FailureMessage -ErrorAction Continue
