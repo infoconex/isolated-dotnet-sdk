@@ -33,6 +33,20 @@ count_acknowledgement_prompts() {
   printf '%s\n' "$1" | grep -Ec 'Press Enter to return to .+\.\.\.' || true
 }
 
+assert_cleared_screens_start_with_content() {
+  local remaining="$output"
+  local clear_sequence=$'\e[H\e[2J'
+  local after_clear
+
+  [[ "$remaining" == *"$clear_sequence"* ]] || return 1
+  while [[ "$remaining" == *"$clear_sequence"* ]]; do
+    remaining="${remaining#*"$clear_sequence"}"
+    # xterm's tput clear may also append a scrollback-clear sequence.
+    after_clear="${remaining#$'\e[3J'}"
+    [[ "$after_clear" != $'\r\n'* && "$after_clear" != $'\n'* ]] || return 1
+  done
+}
+
 write_metadata_fake_curl() {
   local fake_bin="$1"
   mkdir -p "$fake_bin"
@@ -123,6 +137,7 @@ EOF
   [[ "$before_main" == *$'\e[H\e[2J'* ]]
   without_clear="${before_main//$'\e[H\e[2J'/}"
   [ "$(( (${#before_main} - ${#without_clear}) / 7 ))" -eq 1 ]
+  assert_cleared_screens_start_with_content
   after_main="${after_bootstrap#*What would you like to do?}"
   [[ "$after_main" != *$'\e[H\e[2J'* ]]
   [[ "$after_main" == *"Exiting."* ]]
@@ -156,6 +171,7 @@ EOF
   [[ "$before_ack" == *$'\e[H\e[2J'* ]]
   [[ "$after_ack" == *$'\e[H\e[2J'* ]]
   [[ "$after_ack" == *"What would you like to do?"* ]]
+  assert_cleared_screens_start_with_content
 }
 
 @test "terminal without clearing capability retains scrolling and acknowledgement" {
@@ -306,6 +322,7 @@ EOF
   assert_operation_view 'B. Back to Main' 'Isolated SDK 10.0.401 will be removed' \
     'Isolated SDK 10.0.401 was removed.' 'Press Enter to return to Remove...' \
     'Select an isolated SDK to remove:'
+  assert_cleared_screens_start_with_content
 }
 
 @test "terminal nested Install Back clears each destination without waiting" {
@@ -334,6 +351,7 @@ EOF
   [[ "$output" == *$'\e[H\e[2J'* ]]
   clear_sequences="${output//$'\e[H\e[2J'/}"
   [ "$(( (${#output} - ${#clear_sequences}) / 7 ))" -ge 4 ]
+  assert_cleared_screens_start_with_content
 }
 
 @test "terminal Install view toggles clear only changed selection views" {
@@ -361,6 +379,7 @@ EOF
   [[ "$output" == *"S. Show featured versions"* ]]
   clear_sequences="${output//$'\e[H\e[2J'/}"
   [ "$(( (${#output} - ${#clear_sequences}) / 7 ))" -ge 7 ]
+  assert_cleared_screens_start_with_content
 }
 
 @test "terminal invalid Main retry does not clear again, and one-shot List never clears" {

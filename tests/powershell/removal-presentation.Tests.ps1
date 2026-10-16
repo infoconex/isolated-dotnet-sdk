@@ -254,8 +254,12 @@ Describe 'PowerShell removal presentation' {
             }
         }
 
-        $warningIndex | Should -BeGreaterThan 0
-        $lines[$warningIndex - 1].Trim() | Should -Be 'Write-ToolDisplay'
+        $warningIndex | Should -BeGreaterThan 3
+        # Before a supported clear, interactive Remove already emitted the separator;
+        # exact-version/direct Remove retains it immediately before the warning.
+        $lines[$warningIndex - 3].Trim() | Should -Be 'if (-not $SelectedInteractively) {'
+        $lines[$warningIndex - 2].Trim() | Should -Be 'Write-ToolDisplay'
+        $lines[$warningIndex - 1].Trim() | Should -Be '}'
         $lines[$warningIndex + 1].Trim() | Should -Be 'Write-ToolDisplay'
     }
 }

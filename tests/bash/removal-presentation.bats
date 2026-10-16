@@ -282,9 +282,12 @@ EOF
   warning_line="$(grep -n 'tool_warn "Isolated SDK \$VERSION will be removed from \$install_dir"' "$repo_root/isolated-dotnet-sdk.sh" | cut -d: -f1)"
   [ -n "$warning_line" ]
 
-  previous_line="$(sed -n "$((warning_line - 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
+  preceding_block="$(sed -n "$((warning_line - 3)),$((warning_line - 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
   next_line="$(sed -n "$((warning_line + 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
 
-  [[ "$previous_line" =~ ^[[:space:]]*echo[[:space:]]*$ ]]
+  # The outer selection boundary supplies the separator before a clear.
+  # Direct and non-clearing Remove still need one blank line before the warning.
+  [[ "$preceding_block" == *'if [[ "$selected_interactively" != "true" ]]; then'* ]]
+  [[ "$preceding_block" == *$'\n        echo\n'* ]]
   [[ "$next_line" =~ ^[[:space:]]*echo[[:space:]]*$ ]]
 }

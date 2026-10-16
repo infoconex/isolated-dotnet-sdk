@@ -1110,11 +1110,11 @@ select_install_version() {
             resume_channel=""
             resume_versions=""
         else
+        echo
         if [[ "$clear_channel_screen" == "true" ]]; then
             clear_interactive_screen
             clear_channel_screen="false"
         fi
-        echo
         if [[ "$show_archived" == "true" ]]; then
             tool_heading "Select an end-of-life .NET channel:"
         else
@@ -1294,11 +1294,11 @@ select_install_version() {
         local clear_sdk_screen="true"
 
         while true; do
+            echo
             if [[ "$clear_sdk_screen" == "true" ]]; then
                 clear_interactive_screen
                 clear_sdk_screen="false"
             fi
-            echo
             tool_heading "Available .NET $channel SDKs:"
             echo
 
@@ -1903,8 +1903,8 @@ install_isolated_sdk() {
     resolve_install_version || return 0
 
     if [[ "$selected_interactively" == "true" ]]; then
-        clear_interactive_screen
         echo
+        clear_interactive_screen
     fi
 
     local install_dir="$SDK_ROOT/$VERSION"
@@ -2444,6 +2444,7 @@ remove_isolated_sdk() {
 
     resolve_remove_version || return 0
     if [[ "$selected_interactively" == "true" ]]; then
+        echo
         clear_interactive_screen
     fi
 
@@ -2456,7 +2457,9 @@ remove_isolated_sdk() {
         tool_fail "Isolated SDK $VERSION was not found at $install_dir"
     fi
 
-    echo
+    if [[ "$selected_interactively" != "true" ]]; then
+        echo
+    fi
     tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
     echo
 
@@ -2581,8 +2584,8 @@ run_selected_action() {
         verify)
             if [[ "$INTERACTIVE_SESSION" == "true" && -z "$VERSION" ]]; then
                 select_verify_version || return 0
-                clear_interactive_screen
                 echo
+                clear_interactive_screen
             fi
             verify_isolated_sdk
             ;;
@@ -2764,9 +2767,9 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
             exit 0
         fi
 
+        echo
         clear_interactive_screen
         while true; do
-            echo
             run_selected_action
 
             if [[ "$EXIT_REQUESTED" == "true" ]]; then
