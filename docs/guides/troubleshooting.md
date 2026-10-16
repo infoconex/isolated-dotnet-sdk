@@ -24,6 +24,14 @@ Use the [Windows / PowerShell 7](../getting-started/windows-powershell.md) or [L
 
 On Windows, PowerShell removal failures display a colored **Error** heading and a **Diagnostics** section with nested troubleshooting guidance. The original underlying exception appears in the PowerShell error record, not in a duplicated **Details** section. Diagnostics inspect running processes whose executable or command line references the SDK and attempt a read-only ACL check. A matching process is **not proof that it owns a blocking file handle**; no matching process does **not** exclude locks held by an editor, shell, antivirus, or another application. Reading an ACL does **not** prove that the current user has effective rename/delete permissions. This inspection is best-effort and does not modify files or permissions. For ambiguous failures, investigate handles and effective permissions before retrying.
 
+#### Find a Windows file-lock holder
+
+1. Run `resmon.exe`, open **CPU > Associated Handles**, and use the **Search Handles** field.
+2. Enter part of the **full file path**, not necessarily a process name. For example, try the SDK version folder (`99.0.189`), its parent directory (`dotnet-sdks` for the default installation), or a suspected locked filename (`issue-186-lock-test.tmp`). If one search yields no results, try a different part of the path.
+3. Inspect the result's **Image** (process name) and **PID** to identify the process holding the handle. A PowerShell window (`pwsh.exe`) or editor may hold a file even when its executable and command line do not mention that SDK. A matching handle is a clue, not definitive proof of which handle prevented the directory rename; no match does not rule out a lock.
+
+For a command-line alternative, Microsoft [Sysinternals Handle](https://learn.microsoft.com/en-us/sysinternals/downloads/handle) can search open file handles from an **elevated PowerShell window** after separately installing the tool. For example, `handle.exe "99.0.189"` or `handle.exe "issue-186-lock-test.tmp"` searches handle paths and reports process names and PIDs. It is **optional**: the isolated SDK tool does not install, require, or invoke Handle automatically. Do not forcibly close another process's handles; resolve the underlying application's use of the SDK and retry Remove normally.
+
 ## Choose the right diagnostic command
 
 - **List** answers *which SDKs are installed, and where?* It is local and network-independent, and reports Isolated and read-only System SDKs separately.
