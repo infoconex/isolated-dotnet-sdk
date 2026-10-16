@@ -356,6 +356,59 @@ Describe 'PowerShell removal behavior' {
             Test-Path -LiteralPath $installDirectory | Should -BeTrue
         }
 
+        It 'keeps locked SDK contents together while staging with an atomic directory rename' {
+            $installDirectory = Initialize-TestRemovalTarget
+            $lockedFile = Join-Path $installDirectory 'locked-test-file.txt'
+            Set-Content -LiteralPath $lockedFile -Value 'locked fixture'
+            $record = Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion
+            $lockHandle = [IO.File]::Open($lockedFile, [IO.FileMode]::Open,
+                [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            $staged = $false
+
+            try {
+                try {
+                    Invoke-ConfirmedSdkRemovalStaging -Version $script:SdkVersion
+                    $staged = $true
+                }
+                catch {
+                    # Windows may reject renaming a directory containing an
+                    # exclusively opened file. That is an acceptable failure,
+                    # provided the entire original SDK remains intact.
+                }
+
+                $stages = @(Get-ChildItem -LiteralPath $script:SdkRoot -Directory -Force |
+                        Where-Object { $_.Name -like ".removing-$($script:SdkVersion)-*" })
+                if ($staged) {
+                    # Platforms that permit renaming a directory with an open
+                    # child file must still stage everything together.
+                    Test-Path -LiteralPath $installDirectory | Should -BeFalse
+                    $stages.Count | Should -Be 1
+                    Test-Path -LiteralPath $record -PathType Leaf | Should -BeTrue
+                    $state = Get-PendingRemoval -Version $script:SdkVersion
+                    Test-Path -LiteralPath (Join-Path $state.Stage 'dotnet.exe') | Should -BeTrue
+                    Test-Path -LiteralPath (Join-Path $state.Stage 'locked-test-file.txt') | Should -BeTrue
+                }
+                else {
+                    # A failed rename must not relocate individual SDK files
+                    # or destroy the original installation/recovery identity.
+                    Test-Path -LiteralPath $installDirectory | Should -BeTrue
+                    Test-Path -LiteralPath (Join-Path $installDirectory 'dotnet.exe') | Should -BeTrue
+                    Test-Path -LiteralPath $lockedFile | Should -BeTrue
+                    $stages.Count | Should -Be 0
+                    Test-Path -LiteralPath $record | Should -BeFalse
+                }
+            }
+            finally {
+                $lockHandle.Dispose()
+            }
+
+            if ($staged) {
+                Complete-PendingRemoval -Version $script:SdkVersion
+                Test-Path -LiteralPath $record | Should -BeFalse
+                Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            }
+        }
+
         It 'retries an incomplete removal after its SDK host was deleted' {
             $installDirectory = Initialize-TestRemovalTarget
             $script:SdkVersion = $script:RemovalVersion
