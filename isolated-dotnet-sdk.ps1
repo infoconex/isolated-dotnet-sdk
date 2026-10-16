@@ -2620,6 +2620,21 @@ function Test-IsolatedSdk {
     Write-ToolSuccess "Isolated SDK $SdkVersion verified successfully."
 }
 
+# Public unified build-server shutdown arrived with SDK 2.1.300. Keep the
+# compatibility window limited to documented stable servicing generations:
+# 1.0.x/1.1.x, 2.0.x, SDK 2.1.1-4, 2.1.100-105, and 2.1.200-202.
+# A matching version is only a candidate: actual capability probes, expected
+# exact SDK payload, and targeted Roslyn shutdown remain mandatory.
+function Test-PreUnifiedSdkVersion {
+    param([string]$Version)
+    return $Version -cmatch '^(?:1\.0\.[0-4]|1\.1\.(?:[0-9]|1[0-4])|2\.0\.[0-3]|2\.1\.(?:[0-4]|10[0-5]|20[0-2]))$'
+}
+
+function Test-PreUnifiedRoslynSdkVersion {
+    param([string]$Version)
+    return $Version -cmatch '^2\.1\.(?:10[0-5]|20[0-2])$'
+}
+
 function Invoke-IsolatedSdkBuildServerShutdown {
     param(
         [string]$DotNetPath,
@@ -2631,8 +2646,8 @@ function Invoke-IsolatedSdkBuildServerShutdown {
     $null = $AllowUnsupportedShutdown
 
     # Historic SDKs must not resolve ambient global.json or System SDKs.
-    # The explicit opt-in is strictly limited to owner-verified early releases;
-    # a supported shutdown failure always prevents deletion.
+    # A pre-unified servicing generation only enters the compatibility branch
+    # after precise missing-command probes. Actual shutdown failure blocks.
     $WorkDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-shutdown-{0}" -f [guid]::NewGuid())
     $IsolatedRoot = Split-Path -Path $DotNetPath -Parent
     $EnvironmentOverrides = @{
@@ -2660,8 +2675,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
             [Environment]::SetEnvironmentVariable($Name, $EnvironmentOverrides[$Name], 'Process')
         }
 
-        $KnownLegacyVersions = @('1.0.4', '1.1.5', '1.1.14', '2.0.3', '2.1.105')
-        if ($SdkVersion -in $KnownLegacyVersions) {
+        if (Test-PreUnifiedSdkVersion -Version $SdkVersion) {
             $SdkPayload = Join-Path (Join-Path $IsolatedRoot 'sdk') $SdkVersion
             if (-not (Test-Path -LiteralPath $SdkPayload -PathType Container)) {
                 throw "Unable to classify legacy shutdown for SDK $($SdkVersion): SDK payload missing."
@@ -2686,7 +2700,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
                 $null = & $DotNetPath $SupportedSpelling shutdown
                 $ExitCode = $LASTEXITCODE
             }
-            elseif ($SdkVersion -eq '2.1.105') {
+            elseif (Test-PreUnifiedRoslynSdkVersion -Version $SdkVersion) {
                 $Compiler = Join-Path $SdkPayload 'Roslyn/bincore/VBCSCompiler.dll'
                 if (-not (Test-Path -LiteralPath $Compiler -PathType Leaf)) {
                     throw "Legacy compiler shutdown unavailable for SDK $SdkVersion; removal stopped."
