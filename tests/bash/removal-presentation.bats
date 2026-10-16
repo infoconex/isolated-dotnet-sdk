@@ -278,14 +278,15 @@ EOF
   warning_line="$(grep -n 'tool_warn "Isolated SDK \$VERSION will be removed from \$install_dir"' "$repo_root/isolated-dotnet-sdk.sh" | cut -d: -f1)"
   [ -n "$warning_line" ]
 
-  preceding_block="$(sed -n "$((warning_line - 3)),$((warning_line - 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
-  next_line="$(sed -n "$((warning_line + 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
+  preceding_block="$(sed -n "$((warning_line - 6)),$((warning_line - 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
+  following_block="$(sed -n "$((warning_line + 1)),$((warning_line + 2))p" "$repo_root/isolated-dotnet-sdk.sh")"
 
-  # The outer selection boundary supplies the separator before a clear.
-  # Direct and non-clearing Remove still need one blank line before the warning.
+  # The outer selection boundary retains the separator when no clear occurred;
+  # both initial and incomplete-removal warning paths share its trailing blank.
   [[ "$preceding_block" == *'if [[ "$selected_interactively" != "true" ]]; then'* ]]
   [[ "$preceding_block" == *$'\n        echo\n'* ]]
-  [[ "$next_line" =~ ^[[:space:]]*echo[[:space:]]*$ ]]
+  [[ "$preceding_block" == *'if [[ "$recovery" == "true" ]]; then'* ]]
+  [[ "$following_block" == *$'    fi\n    echo'* ]]
 }
 
 @test "partial removal remains retryable after SDK host loss" {
