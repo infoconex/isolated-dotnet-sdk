@@ -268,6 +268,8 @@ The resulting archive additionally includes:
 - `stack-host-startup.tsv` — native fake-host managed `Main`
   checkpoints, including the Windows process creation UTC timestamp, first
   managed instruction, command handling, output, and process-exit event.
+- `stack-host-startup-summary.csv` — automatically correlated process-created,
+  managed-entry, and exit UTC events, grouped by invocation ID and process ID.
 
 The existing `step-timings.csv` adds UTC markers for the test/child
 scopes, product bootstrap, selected action, SDK validation, failure
