@@ -1646,7 +1646,10 @@ function Select-InstallVersion {
 
 function Select-RemoveVersion {
     $script:BackToMain = $false
-    $SdkVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
+    $SdkVersions = @(Get-OrderedSdkVersion @(
+            @(Get-IsolatedSdkVersion) + @(Get-PendingRemovalVersions) |
+                Sort-Object -Unique
+        ))
 
     if (-not $SdkVersions) {
         Write-ToolInfo "No isolated SDKs are installed under $SdkRoot."
@@ -1658,7 +1661,14 @@ function Select-RemoveVersion {
         Write-ToolDisplay
 
         for ($Index = 0; $Index -lt $SdkVersions.Count; $Index++) {
-            Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $SdkVersions[$Index])
+            $Version = $SdkVersions[$Index]
+            $Record = Join-Path (Join-Path $SdkRoot '.pending-removals') $Version
+            if ($null -ne (Get-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue)) {
+                Write-ToolDisplay ("  {0}. {1} (incomplete removal)" -f ($Index + 1), $Version)
+            }
+            else {
+                Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $Version)
+            }
         }
 
         Write-ToolDisplay
@@ -2692,16 +2702,149 @@ function Invoke-IsolatedSdkBuildServerShutdown {
     }
 }
 
+
+function Get-PendingRemovalVersions {
+    $Root = Join-Path $SdkRoot '.pending-removals'
+    if (-not (Test-Path -LiteralPath $Root)) { return @() }
+    $Info = Get-Item -LiteralPath $Root -Force -ErrorAction Stop
+    if (-not $Info.PSIsContainer -or ($Info.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Unsafe incomplete-removal recovery directory: $Root"
+    }
+    return @(
+        Get-ChildItem -LiteralPath $Root -Force -ErrorAction Stop | ForEach-Object {
+            if ($_.PSIsContainer -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "Invalid incomplete-removal recovery record: $($_.FullName)"
+            }
+            $_.Name
+        }
+    )
+}
+
+function Get-PendingRemoval {
+    param([string]$Version)
+    $Root = Join-Path $SdkRoot '.pending-removals'
+    $Record = Join-Path $Root $Version
+    $RootInfo = Get-Item -LiteralPath $Root -Force -ErrorAction Stop
+    $Info = Get-Item -LiteralPath $Record -Force -ErrorAction Stop
+    if (-not $RootInfo.PSIsContainer -or ($RootInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        $Info.PSIsContainer -or ($Info.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Unsafe incomplete-removal recovery record for SDK $Version."
+    }
+    $Token = ([IO.File]::ReadAllText($Record)).Trim()
+    if ($Token -cnotmatch '^[0-9a-f]{32}$') {
+        throw "Invalid incomplete-removal recovery token for SDK $Version."
+    }
+    $Stage = Join-Path $SdkRoot ".removing-$Version-$Token"
+    $Proof = Join-Path $Stage ".isolated-sdk-remove-$Token"
+    if ($null -ne (Get-Item -LiteralPath (Join-Path $SdkRoot $Version) -Force -ErrorAction SilentlyContinue)) {
+        throw "SDK $Version was replaced during incomplete removal; manual recovery is required."
+    }
+    $StageInfo = Get-Item -LiteralPath $Stage -Force -ErrorAction SilentlyContinue
+    if ($null -ne $StageInfo) {
+        if (-not $StageInfo.PSIsContainer -or ($StageInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "Unsafe incomplete-removal target for SDK $Version."
+        }
+        $ProofInfo = Get-Item -LiteralPath $Proof -Force -ErrorAction SilentlyContinue
+        if ($null -eq $ProofInfo) {
+            if (@(Get-ChildItem -LiteralPath $Stage -Force -ErrorAction Stop).Count -gt 0) {
+                throw "Removal proof missing while SDK $Version still has files; manual recovery is required."
+            }
+        }
+        elseif ($ProofInfo.PSIsContainer -or ($ProofInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+            (([IO.File]::ReadAllText($Proof)).Trim() -cne "$($Version):$Token")) {
+            throw "Removal proof mismatch for SDK $Version; manual recovery is required."
+        }
+    }
+    return [pscustomobject]@{ Record = $Record; Stage = $Stage; Proof = $Proof }
+}
+
+function Start-ConfirmedSdkRemoval {
+    param([string]$Version)
+    $InstallDir = Join-Path $SdkRoot $Version
+    $Root = Join-Path $SdkRoot '.pending-removals'
+    $Record = Join-Path $Root $Version
+    $Dir = Get-Item -LiteralPath $InstallDir -Force -ErrorAction Stop
+    if (-not $Dir.PSIsContainer -or ($Dir.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Unsafe SDK removal target: $InstallDir"
+    }
+    if ($null -ne (Get-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue)) {
+        throw "SDK $Version has an existing incomplete-removal record; removal stopped."
+    }
+    if (-not (Test-Path -LiteralPath $Root)) {
+        New-Item -ItemType Directory -Path $Root -ErrorAction Stop | Out-Null
+    }
+    $RootInfo = Get-Item -LiteralPath $Root -Force -ErrorAction Stop
+    if (-not $RootInfo.PSIsContainer -or ($RootInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Unsafe removal recovery directory: $Root"
+    }
+    $Token = [guid]::NewGuid().ToString('N')
+    $Stage = Join-Path $SdkRoot ".removing-$Version-$Token"
+    $Proof = Join-Path $InstallDir ".isolated-sdk-remove-$Token"
+    if ($null -ne (Get-Item -LiteralPath $Stage -Force -ErrorAction SilentlyContinue) -or
+        $null -ne (Get-Item -LiteralPath $Proof -Force -ErrorAction SilentlyContinue)) {
+        throw "Removal recovery identity conflict; removal stopped."
+    }
+    $Stream = [IO.File]::Open($Record, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        $Bytes = [Text.Encoding]::UTF8.GetBytes($Token)
+        $Stream.Write($Bytes, 0, $Bytes.Length)
+    }
+    finally { $Stream.Dispose() }
+    try {
+        $ProofStream = [IO.File]::Open($Proof, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {
+            $Bytes = [Text.Encoding]::UTF8.GetBytes("$($Version):$Token")
+            $ProofStream.Write($Bytes, 0, $Bytes.Length)
+        }
+        finally { $ProofStream.Dispose() }
+        Move-Item -LiteralPath $InstallDir -Destination $Stage -ErrorAction Stop
+    }
+    catch {
+        if ($null -ne (Get-Item -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue)) {
+            Remove-Item -LiteralPath $Proof -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+}
+
+function Complete-PendingRemoval {
+    param([string]$Version)
+    $State = Get-PendingRemoval -Version $Version
+    if (Test-Path -LiteralPath $State.Stage -PathType Container) {
+        $script:RemovalProofPath = $State.Proof
+        try {
+            Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $State.Stage
+        }
+        catch {
+            throw "SDK $Version removal incomplete at $($State.Stage). Files may be in use or partially deleted. Free blocking processes and run Remove again. $($_.Exception.Message)"
+        }
+        finally { $script:RemovalProofPath = $null }
+    }
+    if ($null -ne (Get-Item -LiteralPath $State.Stage -Force -ErrorAction SilentlyContinue)) {
+        throw "SDK $Version removal incomplete at $($State.Stage). Free blocking processes and retry Remove."
+    }
+    Remove-Item -LiteralPath $State.Record -Force -ErrorAction Stop
+    $Root = Join-Path $SdkRoot '.pending-removals'
+    if (@(Get-ChildItem -LiteralPath $Root -Force -ErrorAction Stop).Count -eq 0) {
+        Remove-Item -LiteralPath $Root -Force -ErrorAction Stop
+    }
+}
+
 function Invoke-IsolatedSdkDirectoryRemoval {
     param([string]$InstallDirectory)
 
-    Remove-Item `
-        -LiteralPath $InstallDirectory `
-        -Recurse `
-        -Force `
-        -WhatIf:$false `
-        -Confirm:$false
-
+    # Preserve proof until all other contents were removed; incomplete deletion
+    # retains the in-directory proof for a later user-initiated retry.
+    $ProofPath = $script:RemovalProofPath
+    foreach ($Child in @(Get-ChildItem -LiteralPath $InstallDirectory -Force -ErrorAction Stop)) {
+        if ($Child.FullName -ceq $ProofPath) { continue }
+        Remove-Item -LiteralPath $Child.FullName -Recurse -Force -ErrorAction Stop -WhatIf:$false -Confirm:$false
+    }
+    if (Test-Path -LiteralPath $ProofPath -PathType Leaf) {
+        Remove-Item -LiteralPath $ProofPath -Force -ErrorAction Stop -WhatIf:$false -Confirm:$false
+    }
+    Remove-Item -LiteralPath $InstallDirectory -Force -ErrorAction Stop -WhatIf:$false -Confirm:$false
     if (Test-Path -LiteralPath $InstallDirectory) {
         throw "SDK directory still exists after removal: $InstallDirectory"
     }
@@ -2728,14 +2871,24 @@ function Remove-IsolatedSdk {
     $InstallDir = Join-Path $SdkRoot $SdkVersion
     $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
 
-    if (-not (Test-Path $IsolatedDotNet)) {
+    $PendingRecord = Join-Path (Join-Path $SdkRoot '.pending-removals') $SdkVersion
+    $Recovery = $null
+    if ($null -ne (Get-Item -LiteralPath $PendingRecord -Force -ErrorAction SilentlyContinue)) {
+        $Recovery = Get-PendingRemoval -Version $SdkVersion
+    }
+    elseif (-not (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf)) {
         throw "Isolated SDK $SdkVersion was not found at $InstallDir"
     }
 
     if (-not $SelectedInteractively) {
         Write-ToolDisplay
     }
-    Write-ToolWarning "Isolated SDK $SdkVersion will be removed from $InstallDir"
+    if ($Recovery) {
+        Write-ToolWarning "SDK $SdkVersion has an incomplete removal. Remaining files in $($Recovery.Stage) will be removed."
+    }
+    else {
+        Write-ToolWarning "Isolated SDK $SdkVersion will be removed from $InstallDir"
+    }
     Write-ToolDisplay
 
     $ConfirmWasSpecified = $PSBoundParameters.ContainsKey('Confirm')
@@ -2754,6 +2907,13 @@ function Remove-IsolatedSdk {
         return
     }
 
+    if ($Recovery) {
+        Write-ToolInfo "Retrying incomplete removal of SDK $SdkVersion..."
+        Complete-PendingRemoval -Version $SdkVersion
+        Write-ToolSuccess "Isolated SDK $SdkVersion was removed."
+        return
+    }
+
     Write-ToolInfo "Shutting down build servers for SDK $SdkVersion..."
     $ShutdownArguments = @{
         DotNetPath = $IsolatedDotNet
@@ -2764,8 +2924,9 @@ function Remove-IsolatedSdk {
     }
     Invoke-IsolatedSdkBuildServerShutdown @ShutdownArguments
 
+    Start-ConfirmedSdkRemoval -Version $SdkVersion
     Write-ToolInfo "Removing $InstallDir..."
-    Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $InstallDir
+    Complete-PendingRemoval -Version $SdkVersion
 
     Write-ToolSuccess "Isolated SDK $SdkVersion was removed."
 }
