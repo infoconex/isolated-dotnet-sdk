@@ -160,7 +160,7 @@ function Write-ToolRemovalFailure {
     Write-ToolDisplay "  $($Sections[0])"
     Write-ToolDisplay
     Write-ToolDisplay (Format-ToolMessage -Kind Diagnostics -Message 'Diagnostics:')
-    $NestedHeadings = @('Possible causes:', 'To find a file-lock holder:')
+    $NestedHeadings = @('Possible causes:', 'To find a file-lock holder:', 'To inspect filesystem permissions:')
     foreach ($Line in ($Details[0] -split "`n")) {
         $NestedHeading = $null
         foreach ($Candidate in $NestedHeadings) {
