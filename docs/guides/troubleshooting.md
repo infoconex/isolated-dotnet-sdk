@@ -30,7 +30,7 @@ On Windows, PowerShell removal failures display a colored **Error** heading and 
 2. Enter part of the **full file path**, not necessarily a process name. For example, try the SDK version folder (`99.0.189`), its parent directory (`dotnet-sdks` for the default installation), or a suspected locked filename (`issue-186-lock-test.tmp`). If one search yields no results, try a different part of the path.
 3. Inspect the result's **Image** (process name) and **PID** to identify the process holding the handle. A PowerShell window (`pwsh.exe`) or editor may hold a file even when its executable and command line do not mention that SDK. A matching handle is a clue, not definitive proof of which handle prevented the directory rename; no match does not rule out a lock.
 
-For a command-line alternative, Microsoft [Sysinternals Handle](https://learn.microsoft.com/en-us/sysinternals/downloads/handle) can search open file handles from an **elevated PowerShell window** after separately installing the tool. For example, `handle.exe "99.0.189"` or `handle.exe "issue-186-lock-test.tmp"` searches handle paths and reports process names and PIDs. It is **optional**: the isolated SDK tool does not install, require, or invoke Handle automatically. Do not forcibly close another process's handles; resolve the underlying application's use of the SDK and retry Remove normally.
+After identifying a likely owner, close or stop that application normally, then retry Remove. Do not forcibly close another process's handles or terminate an unrelated process. Resource Monitor is built into Windows; no additional utility is required.
 
 ## Choose the right diagnostic command
 
