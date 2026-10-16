@@ -21,7 +21,7 @@ Specifies an exact .NET SDK version. When omitted for Install or Remove, the scr
 Skips confirmation prompts that support automatic confirmation. It does not supply a missing action or version.
 
 .PARAMETER AllowUnsupportedShutdown
-Remove-only explicit opt-in for verified historical SDK versions that lack both public build-server shutdown command spellings. This is separate from -Yes and -Confirm. Version 2.1.105 requires a successful SDK-local Roslyn compiler-server shutdown before deletion; any unexpected or actual shutdown failure blocks removal.
+Deprecated Remove-only compatibility option, accepted for existing scripts but no longer required. Verified historical SDK shutdown incompatibility is handled automatically after ordinary Remove confirmation. Any unexpected or supported shutdown failure still blocks removal.
 
 .PARAMETER Version
 Shows the isolated-dotnet-sdk release/source identity and exits without bootstrap, network access, SDK discovery, prompting, or mutation. This is distinct from SdkVersion, which selects the .NET SDK to install, verify, or remove.
@@ -54,7 +54,7 @@ Removes the isolated .NET SDK 10.0.100 without the tool-owned confirmation promp
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 1.0.4 -AllowUnsupportedShutdown -Yes
 
-Explicitly authorizes the verified historical unsupported-shutdown exception for SDK 1.0.4, in addition to the usual deletion confirmation bypass.
+For backward compatibility, this legacy option is accepted but no longer needed; -Yes skips the ordinary deletion confirmation.
 
 .EXAMPLE
 .\isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 10.0.100 -WhatIf
@@ -495,7 +495,12 @@ function Get-IsolatedSdkVersion {
         -Path $SdkRoot `
         -Directory `
         -ErrorAction SilentlyContinue |
-        Where-Object { Test-Path (Join-Path $_.FullName 'dotnet.exe') } |
+        Where-Object {
+            $_.Name -notlike '.removing-*' -and
+            $_.Name -ne '.pending-removals' -and
+            -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -and
+            (Test-Path (Join-Path $_.FullName 'dotnet.exe'))
+        } |
         Sort-Object Name
 
     return @($SdkDirectories | ForEach-Object { $_.Name })
@@ -1930,6 +1935,10 @@ function Install-IsolatedSdk {
     }
 
     $InstallDir = Join-Path $SdkRoot $SdkVersion
+    $RecoveryRecord = Join-Path (Join-Path $SdkRoot '.pending-removals') $SdkVersion
+    if ($null -ne (Get-Item -LiteralPath $RecoveryRecord -Force -ErrorAction SilentlyContinue)) {
+        throw "SDK $SdkVersion has an incomplete removal; finish Remove before installing this version."
+    }
     $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
 
     Write-ToolLabelValue -Label 'Target SDK:' -Value $SdkVersion

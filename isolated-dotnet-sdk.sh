@@ -1917,6 +1917,9 @@ install_isolated_sdk() {
     fi
 
     local install_dir="$SDK_ROOT/$VERSION"
+    if [[ -e "$SDK_ROOT/.pending-removals/$VERSION" || -L "$SDK_ROOT/.pending-removals/$VERSION" ]]; then
+        tool_fail "SDK $VERSION has an incomplete removal; finish Remove before installing this version."
+    fi
     local isolated_dotnet="$install_dir/dotnet"
     local installed_sdks=""
     local system_sdk_line=""
@@ -2774,7 +2777,7 @@ Commands:
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
-  --allow-unsupported-shutdown  Remove-only explicit authorization for verified early SDKs lacking unified shutdown; never ignores failed shutdown.
+  --allow-unsupported-shutdown  Deprecated Remove-only compatibility option; historical fallback is automatic and real shutdown failures still block deletion.
   --sdk-version <v>  Select the exact .NET SDK version. Without an action, Install is selected.
   --version          Show the tool release/source identity and exit.
   --help, -h         Show this help text.
