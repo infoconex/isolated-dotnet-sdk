@@ -72,13 +72,13 @@ Non-interactive execution is fail-safe:
 
 After removal is approved, operations occur in this order:
 
-1. create operation-owned temporary working state and request build-server shutdown with the selected isolated `dotnet` host from that neutral working directory, with `DOTNET_ROOT` scoped to the selected isolated SDK and Windows multi-level lookup disabled;
-2. restore the caller's environment and working directory, clean up temporary shutdown state, and require a zero shutdown exit code (and successful cleanup) before deletion, except for the explicitly authorized legacy compatibility case specified below;
-3. durably record the approved removal, move the selected version directory into same-root quarantine, and delete its contents; permit a later normally confirmed retry only for a verifiably matching incomplete removal;
-4. verify the directory no longer exists;
-5. report success.
+1. Validate the **SDK-version-shaped directory name**, its direct-child relationship to the isolated root, and the absence of an unsafe path type such as a junction or directory symlink. A directory without a dotnet host remains an eligible cleanup candidate, **not** a verified SDK.
+2. When a usable isolated host is present, require successful build-server shutdown with the selected host in neutral temporary working state (`DOTNET_ROOT` scoped, Windows multilevel lookup disabled), or the strict verified historical compatibility path. Restore the caller's environment and clean up temporary shutdown state. When the host is absent or unsafe to execute, warn before deletion that shutdown cannot be performed and processes/files may remain in use.
+3. Record ordinary confirmation in operation-owned recovery state, and rename the selected version directory into a unique same-root quarantine before recursive deletion. A subsequent user-initiated Remove with fresh ordinary confirmation can finish that **same verified staged deletion**, even if the SDK host is gone.
+4. Verify the quarantined directory is absent and recovery records are cleaned up.
+5. Report success only after full cleanup.
 
-A shutdown failure, temporary shutdown-state setup failure, or temporary shutdown-state cleanup failure prevents deletion. A deletion failure or remaining directory prevents success reporting. Even on legacy hosts, no particular nonzero shutdown result is silently bypassed.
+**An actually attempted supported shutdown failure**, temporary shutdown-state setup failure or temporary-state cleanup failure blocks deletion. By contrast, the absence of an SDK host is not an available shutdown that failed; normally confirmed cleanup of that damaged directory is allowed. An incomplete deletion returns nonzero, preserving recovery proof. The initial directory rename may fail when Windows processes hold incompatible handles; a successful rename does not guarantee files are unlocked.
 
 `-WhatIf` and cancellation occur before shutdown.
 
@@ -100,7 +100,7 @@ Given an installed isolated SDK, when the user declines the default tool-owned c
 
 ### Default approval
 
-Given an installed isolated SDK, when the user approves the default tool-owned confirmation, shutdown occurs before deletion and success is reported only after deletion is verified.
+Given an SDK with an available host, when the user approves the default tool-owned confirmation, shutdown occurs before deletion and success is reported only after deletion is verified. For a missing-host folder, the ordinary confirmation authorizes cleanup after a warning rather than attempting shutdown.
 
 ### Preview
 
@@ -137,3 +137,7 @@ Given approved removal, when build-server shutdown exits nonzero, removal fails 
 ### Deletion failure
 
 Given approved removal and successful shutdown, when directory deletion fails or the directory remains, removal fails and success is not reported.
+
+### Damaged SDK and incomplete-removal recovery
+
+Given a directory named like a full SDK version under the isolated root but without a usable SDK host, Remove can offer it as `(incomplete)`. After the normal confirmation it warns that shutdown is unavailable, stages that exact directory and attempts deletion. A rename or deletion failure never reports success. Any previously authorized, partially deleted stage remains selectable as `(incomplete removal)` and uses journal/proof checks plus a fresh ordinary confirmation to retry; it does not execute a deleted host or delete another directory. `-WhatIf` remains non-mutating in both paths.

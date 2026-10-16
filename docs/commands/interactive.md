@@ -117,6 +117,12 @@ Classification uses Microsoft's latest SDK for the channel when it is present in
 
 Install choices may be marked `latest`, `installed system-sdk`, and/or `installed isolated-sdk` to describe current metadata and ownership state, combining applicable markers. The picker uses SDK-aware ordering rather than fixed menu positions. The same defaults apply if an explicit, one-shot Install command needs to open a picker.
 
+## Remove selection
+
+The Remove SDK picker differs intentionally from List and Verify: it shows direct-child folders whose names have a full SDK-version shape, even when their dotnet host is missing or unusable. Such candidates are labeled `(incomplete)` rather than treated as verified installations. A previously authorized removal left in operation-owned quarantine appears as `(incomplete removal)` and can be retried after the blocking process is released.
+
+Selecting either kind of candidate uses the same ordinary default-no confirmation, without an additional recovery approval. A damaged/no-host SDK displays a warning that build-server shutdown cannot run and that files may still be in use. A target with an available host must still pass actual shutdown or the narrowly verified historical fallback. System SDKs, unrelated directories, and linked or redirected directory targets are never offered. Failed initial rename leaves the original directory intact; a later user-initiated Remove can try again.
+
 ## Verify selection
 
 Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only detailed report and local origin/resolution checks as direct Verify; there is no separate interactive verification implementation.
