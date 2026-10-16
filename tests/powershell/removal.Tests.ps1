@@ -302,6 +302,56 @@ Describe 'PowerShell removal behavior' {
             Test-Path -LiteralPath $installDirectory | Should -BeTrue
         }
 
+        It 'retries an incomplete removal after its SDK host was deleted' {
+            $installDirectory = Initialize-TestRemovalTarget
+            $script:SdkVersion = $script:RemovalVersion
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {}
+            Set-Item -Path Function:script:Invoke-IsolatedSdkDirectoryRemoval -Value {
+                param([string]$InstallDirectory)
+                Remove-Item -LiteralPath (Join-Path $InstallDirectory 'dotnet.exe') -Force -ErrorAction Stop
+                throw 'simulated locked file'
+            }
+
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*incomplete*'
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            $record = Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion
+            Test-Path -LiteralPath $record -PathType Leaf | Should -BeTrue
+            $state = Get-PendingRemoval -Version $script:SdkVersion
+            Test-Path -LiteralPath $state.Stage -PathType Container | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $state.Stage 'dotnet.exe') | Should -BeFalse
+
+            # Restore the real removal helper to exercise a second invocation
+            # without a host or another build-server shutdown.
+            Import-ToolFunctionDefinition
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                throw 'shutdown must not run during incomplete removal retry'
+            }
+            Remove-IsolatedSdk -Yes
+
+            Test-Path -LiteralPath $record | Should -BeFalse
+            Test-Path -LiteralPath $state.Stage | Should -BeFalse
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+        }
+
+        It 'does not retry against a newly replaced version directory' {
+            $installDirectory = Initialize-TestRemovalTarget
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {}
+            Set-Item -Path Function:script:Invoke-IsolatedSdkDirectoryRemoval -Value {
+                param([string]$InstallDirectory)
+                Remove-Item -LiteralPath (Join-Path $InstallDirectory 'dotnet.exe') -Force -ErrorAction Stop
+                throw 'simulated locked file'
+            }
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*incomplete*'
+            $state = Get-PendingRemoval -Version $script:SdkVersion
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            $sentinel = Join-Path $installDirectory 'preserve.txt'
+            Set-Content -LiteralPath $sentinel -Value 'unrelated data'
+
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*replaced*'
+            Get-Content -LiteralPath $sentinel | Should -Be 'unrelated data'
+            Test-Path -LiteralPath $state.Stage | Should -BeTrue
+        }
+
         It 'propagates deletion failure and does not report success' {
             $installDirectory = Initialize-TestRemovalTarget
             Set-Item -Path Function:script:Confirm-Action -Value {
