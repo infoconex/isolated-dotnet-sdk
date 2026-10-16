@@ -490,6 +490,23 @@ function Get-SystemSdkVersion {
     )
 }
 
+function Test-RemovableSdkVersion {
+    param([string]$Version)
+    return $Version -cmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z][0-9A-Za-z.+-]*)?$'
+}
+
+function Get-RemoveSdkCandidateVersion {
+    if (-not (Test-Path -LiteralPath $SdkRoot -PathType Container)) {
+        return @()
+    }
+    $Directories = Get-ChildItem -LiteralPath $SdkRoot -Directory -ErrorAction Stop |
+        Where-Object {
+            (Test-RemovableSdkVersion -Version $_.Name) -and
+            -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)
+        }
+    return @($Directories | ForEach-Object { $_.Name })
+}
+
 function Get-IsolatedSdkVersion {
     $SdkDirectories = Get-ChildItem `
         -Path $SdkRoot `
@@ -1652,7 +1669,7 @@ function Select-InstallVersion {
 function Select-RemoveVersion {
     $script:BackToMain = $false
     $SdkVersions = @(Get-OrderedSdkVersion @(
-            @(Get-IsolatedSdkVersion) + @(Get-PendingRemovalVersion) |
+            @(Get-RemoveSdkCandidateVersion) + @(Get-PendingRemovalVersion) |
                 Sort-Object -Unique
         ))
 
@@ -1670,6 +1687,9 @@ function Select-RemoveVersion {
             $Record = Join-Path (Join-Path $SdkRoot '.pending-removals') $Version
             if ($null -ne (Get-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue)) {
                 Write-ToolDisplay ("  {0}. {1} (incomplete removal)" -f ($Index + 1), $Version)
+            }
+            elseif (-not (Test-Path -LiteralPath (Get-IsolatedDotNetPath -SdkVersion $Version) -PathType Leaf)) {
+                Write-ToolDisplay ("  {0}. {1} (incomplete)" -f ($Index + 1), $Version)
             }
             else {
                 Write-ToolDisplay ("  {0}. {1}" -f ($Index + 1), $Version)
@@ -2883,13 +2903,24 @@ function Remove-IsolatedSdk {
     $InstallDir = Join-Path $SdkRoot $SdkVersion
     $IsolatedDotNet = Get-IsolatedDotNetPath -SdkVersion $SdkVersion
 
+    if (-not (Test-RemovableSdkVersion -Version $SdkVersion)) {
+        throw "Invalid SDK version for Remove: $SdkVersion"
+    }
     $PendingRecord = Join-Path (Join-Path $SdkRoot '.pending-removals') $SdkVersion
     $Recovery = $null
+    $HostAvailable = $false
     if ($null -ne (Get-Item -LiteralPath $PendingRecord -Force -ErrorAction SilentlyContinue)) {
         $Recovery = Get-PendingRemoval -Version $SdkVersion
     }
-    elseif (-not (Test-Path -LiteralPath $IsolatedDotNet -PathType Leaf)) {
-        throw "Isolated SDK $SdkVersion was not found at $InstallDir"
+    else {
+        $DirectoryInfo = Get-Item -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue
+        if ($null -eq $DirectoryInfo -or -not $DirectoryInfo.PSIsContainer -or
+            ($DirectoryInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "Unsafe or missing isolated SDK directory: $InstallDir"
+        }
+        $HostInfo = Get-Item -LiteralPath $IsolatedDotNet -Force -ErrorAction SilentlyContinue
+        $HostAvailable = $null -ne $HostInfo -and -not $HostInfo.PSIsContainer -and
+            -not ($HostInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)
     }
 
     if (-not $SelectedInteractively) {
@@ -2900,6 +2931,9 @@ function Remove-IsolatedSdk {
     }
     else {
         Write-ToolWarning "Isolated SDK $SdkVersion will be removed from $InstallDir"
+    }
+    if (-not $Recovery -and -not $HostAvailable) {
+        Write-ToolWarning "SDK $SdkVersion has no usable isolated dotnet host and cannot be shut down. Build processes may remain, and files in use may prevent removal."
     }
     Write-ToolDisplay
 
@@ -2921,6 +2955,14 @@ function Remove-IsolatedSdk {
 
     if ($Recovery) {
         Write-ToolInfo "Retrying incomplete removal of SDK $SdkVersion..."
+        Complete-PendingRemoval -Version $SdkVersion
+        Write-ToolSuccess "Isolated SDK $SdkVersion was removed."
+        return
+    }
+
+    if (-not $HostAvailable) {
+        Invoke-ConfirmedSdkRemovalStaging -Version $SdkVersion
+        Write-ToolInfo "Removing $InstallDir..."
         Complete-PendingRemoval -Version $SdkVersion
         Write-ToolSuccess "Isolated SDK $SdkVersion was removed."
         return
