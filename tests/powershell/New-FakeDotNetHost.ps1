@@ -23,10 +23,10 @@ public static class Program
         // initialization occur before Main; process StartTime anchors that gap.
         var stackPath = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH");
         var stackRows = string.IsNullOrWhiteSpace(stackPath) ? null : new System.Collections.Generic.List<string>();
-        var mainClock = System.Diagnostics.Stopwatch.StartNew();
-        var stackInvocation = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "";
-        var stackCase = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "";
-        var stackArgument = string.Join(" ", args);
+        var mainClock = stackRows == null ? null : System.Diagnostics.Stopwatch.StartNew();
+        var stackInvocation = stackRows == null ? "" : (Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "");
+        var stackCase = stackRows == null ? "" : (Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "");
+        var stackArgument = stackRows == null ? "" : string.Join(" ", args);
         var stackPid = stackRows == null ? 0 : System.Diagnostics.Process.GetCurrentProcess().Id;
         Action<string> markStack = delegate(string phase)
         {
