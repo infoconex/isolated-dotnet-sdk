@@ -259,6 +259,21 @@ try {
                         if ($osStart.Count -eq 0 -or $mainEntry.Count -eq 0 -or $exitEvent.Count -eq 0) {
                             continue
                         }
+                        # In the normal healthy Verify child, this marker is
+                        # immediately before the first PowerShell native SDK call.
+                        $inventoryMarker = @($steps | Where-Object {
+                                $_.Scope -eq 'Child' -and
+                                $_.InvocationId -eq $events[0].InvocationId -and
+                                $_.Step -eq 'local-proof-inventory-start'
+                            } | Select-Object -First 1)
+                        $callToProcess = ''
+                        if ($events[0].Command -eq '--list-sdks' -and
+                            $inventoryMarker.Count -gt 0 -and
+                            -not [string]::IsNullOrWhiteSpace($inventoryMarker[0].Utc)) {
+                            $callStartUtc = [datetimeoffset]::Parse(
+                                $inventoryMarker[0].Utc, [System.Globalization.CultureInfo]::InvariantCulture)
+                            $callToProcess = [math]::Round(($osStart[0].Utc - $callStartUtc).TotalMilliseconds, 3)
+                        }
                         [pscustomobject]@{
                             InvocationId = $events[0].InvocationId
                             ProcessId = $events[0].ProcessId
@@ -266,6 +281,7 @@ try {
                             ProcessCreatedUtc = $osStart[0].Utc.ToString('o')
                             ManagedMainUtc = $mainEntry[0].Utc.ToString('o')
                             ProcessExitUtc = $exitEvent[0].Utc.ToString('o')
+                            PowerShellMarkerToOsProcessMs = $callToProcess
                             OsProcessToManagedMainMs = [math]::Round(($mainEntry[0].Utc - $osStart[0].Utc).TotalMilliseconds, 3)
                             ManagedMainToExitMs = [math]::Round(($exitEvent[0].Utc - $mainEntry[0].Utc).TotalMilliseconds, 3)
                         }
@@ -278,7 +294,7 @@ try {
                     Export-Csv -LiteralPath (Join-Path $traceRoot 'stack-host-startup-summary.csv') -NoTypeInformation -Encoding utf8
                 Write-Output ('Compiled fake host startup/managed phases: {0} correlated processes' -f $startupRows.Count)
                 $startupRows |
-                    Select-Object -First 16 Command, OsProcessToManagedMainMs, ManagedMainToExitMs |
+                    Select-Object -First 16 Command, PowerShellMarkerToOsProcessMs, OsProcessToManagedMainMs, ManagedMainToExitMs |
                     Format-Table -AutoSize |
                     Out-String -Width 180 |
                     Write-Output
