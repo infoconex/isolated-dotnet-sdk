@@ -15,6 +15,7 @@ Describe 'PowerShell isolated SDK verification' {
                     Step = $Step
                     ElapsedMs = [math]::Round($nowMs - $script:VerifyStepLastMs, 3)
                     CumulativeMs = [math]::Round($nowMs, 3)
+                    Utc = [DateTime]::UtcNow.ToString('o')
                 })
             $script:VerifyStepLastMs = $nowMs
         }
@@ -37,6 +38,7 @@ Describe 'PowerShell isolated SDK verification' {
                 @{ Text = "    Write-ToolHeading 'Verify isolated .NET SDK'"; Before = 'local-proof-complete'; After = '' }
                 @{ Text = '        # Microsoft lifecycle information is optional; local checks remain authoritative.'; Before = 'classification-error-caught'; After = '' }
                 @{ Text = '    if (($Message.StartsWith('; Before = 'error-render-function-enter'; After = '' }
+                @{ Text = '        Write-Error -Message $Message -ErrorAction Continue'; Before = 'failure-write-error-start'; After = 'failure-write-error-complete' }
                 @{ Text = '        throw $Validation.Failure'; Before = 'verification-failure-thrown'; After = '' }
                 @{ Text = '    Write-ToolSuccess "Isolated SDK $SdkVersion verified successfully."'; Before = 'verify-success-render-start'; After = '' }
                 @{ Text = '        $Classification = Get-VerifyAuditClassification -Version $SdkVersion'; Before = 'classification-start'; After = 'classification-complete' }
@@ -62,6 +64,30 @@ Describe 'PowerShell isolated SDK verification' {
             }
             [System.IO.File]::WriteAllText(
                 $script:ToolPath, $content, [System.Text.UTF8Encoding]::new($false))
+        }
+
+        function Invoke-VerifyStackLaunchProbes {
+            $probeFile = Join-Path $PSScriptRoot 'Invoke-VerifyLaunchProbe.ps1'
+            $hostPath = Join-Path (Join-Path $script:ToolRoot '99.0.100') 'dotnet.exe'
+            $reportPath = $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH
+            $parentReport = Join-Path (Split-Path -Parent $reportPath) 'stack-probe-processes.csv'
+            # Alternating mode order reduces cache-order bias, but does not eliminate it.
+            foreach ($mode in @('PowerShellNative', 'DirectProcess', 'DirectProcess', 'PowerShellNative')) {
+                $startedUtc = [DateTime]::UtcNow
+                $clock = [System.Diagnostics.Stopwatch]::StartNew()
+                $output = @(& pwsh -NoProfile -File $probeFile -Mode $mode -HostPath $hostPath -ReportPath $reportPath -Iterations 3 2>&1)
+                $resultCode = $LASTEXITCODE
+                $clock.Stop()
+                [pscustomobject]@{
+                    Mode = $mode
+                    StartedUtc = $startedUtc.ToString('o')
+                    ChildPwshMs = [math]::Round($clock.Elapsed.TotalMilliseconds, 3)
+                    ExitCode = $resultCode
+                } | Export-Csv -LiteralPath $parentReport -Append -NoTypeInformation -Encoding utf8
+                if ($resultCode -ne 0) {
+                    throw "Stack launch control ($mode) failed with $resultCode. Output: $($output -join ' ')"
+                }
+            }
         }
 
         function Install-FakeIsolatedHost {
@@ -169,6 +195,7 @@ function Mark-VerifyChildStep {
         Step = $Step
         ElapsedMs = [math]::Round($nowMs - $state.LastMs, 3)
         CumulativeMs = [math]::Round($nowMs, 3)
+        Utc = [DateTime]::UtcNow.ToString('o')
     })
     $state.LastMs = $nowMs
 }
@@ -401,6 +428,12 @@ Mark-VerifyChildStep 'child-command-start'
             $newCalls[1].ExitCode | Should -Be '0'
             (Get-Content -LiteralPath $childTracePath -Raw) | Should -Match 'product-return'
             Add-VerifyTestStep 'trace-assertions-complete'
+            if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
+                $script:VerifyStepScenario = 'stack-probe'
+                Add-VerifyTestStep 'stack-launch-controls-start'
+                Invoke-VerifyStackLaunchProbes
+                Add-VerifyTestStep 'stack-launch-controls-complete'
+            }
         }
         finally {
             [Environment]::SetEnvironmentVariable(
