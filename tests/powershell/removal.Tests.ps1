@@ -101,8 +101,10 @@ Describe 'PowerShell removal behavior' {
                 $text | Should -Match 'Error:'
                 $text | Should -Match 'Diagnostics:'
                 $text | Should -Not -Match '(?m)^\s*Details:'
-                $text | Should -Match 'Underlying error:'
-                $text | Should -Match 'Access to the path'
+                $text | Should -Match 'Underlying error: Exception calling "Move"'
+                # PowerShell may wrap the native error at the host width.
+                $text | Should -Match 'Access'
+                $text | Should -Match 'is denied\.'
             }
             finally {
                 $lockHandle.Dispose()
