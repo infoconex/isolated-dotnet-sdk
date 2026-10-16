@@ -13,7 +13,7 @@ Before native `ShouldProcess` support, PowerShell removal:
 - treats cancellation as a normal user action rather than an operational failure;
 - allows `-Yes` to bypass the tool-owned confirmation;
 - requests `dotnet build-server shutdown` before deletion;
-- removes only the selected version directory;
+- moves only the verified selected version directory into same-root removal quarantine and deletes that target;
 - reports success only after verifying the directory no longer exists.
 
 The baseline does not expose native `-WhatIf` or `-Confirm`, and it does not explicitly stop deletion when the native build-server shutdown command exits nonzero.
@@ -74,7 +74,7 @@ After removal is approved, operations occur in this order:
 
 1. create operation-owned temporary working state and request build-server shutdown with the selected isolated `dotnet` host from that neutral working directory, with `DOTNET_ROOT` scoped to the selected isolated SDK and Windows multi-level lookup disabled;
 2. restore the caller's environment and working directory, clean up temporary shutdown state, and require a zero shutdown exit code (and successful cleanup) before deletion, except for the explicitly authorized legacy compatibility case specified below;
-3. remove only the selected SDK version directory;
+3. durably record the approved removal, move the selected version directory into same-root quarantine, and delete its contents; permit a later normally confirmed retry only for a verifiably matching incomplete removal;
 4. verify the directory no longer exists;
 5. report success.
 
@@ -82,15 +82,15 @@ A shutdown failure, temporary shutdown-state setup failure, or temporary shutdow
 
 `-WhatIf` and cancellation occur before shutdown.
 
-## Explicit historical unsupported-shutdown opt-in
+## Automatic historical unsupported-shutdown compatibility
 
-`-AllowUnsupportedShutdown` is a Remove-only switch separate from `-Yes`, native `-Confirm`, and `-WhatIf`. The opt-in is not inferred from a confirmation or interactive selection, and it is not available for Install, List, Verify, Audit, or `-Version`. The switch is forwarded through the file-based bootstrap boundary without silently authorizing a normal Remove.
+`-AllowUnsupportedShutdown` is retained as a deprecated Remove-only option for backwards compatibility; a *verified* historical unsupported shutdown is automatically handled after ordinary removal confirmation. This flag does not grant permission to ignore a supported shutdown failure, is not required in interactive or direct Remove, and is rejected for other actions. `-WhatIf` remains authoritative.
 
 This exception is limited to the exact observed installed SDK versions `1.0.4`, `1.1.5`, `1.1.14`, `2.0.3`, and `2.1.105`, not all SDK versions matching a numeric prefix. The SDK-local `sdk/<version>` payload must exist. Both historical command spellings are probed in the isolated environment; a supported command must instead complete its real build-server shutdown successfully. An expected missing-command exit and message for **both** spellings establishes the unsupported case; any unexpected probe result is a blocking failure.
 
-For SDK `2.1.105`, unsupported unified shutdown requires executing the selected SDK's `Roslyn/bincore/VBCSCompiler.dll -shutdown` through its own host with successful native exit. For the four older enumerated SDK versions, the absence of a `VBCSCompiler` component in their payload is additionally required. This is deliberately not a general guarantee that all build-related processes have stopped; warn explicitly that other processes may remain. Even with the opt-in, an available shutdown failure, a failed Roslyn shutdown, or any ambiguous/missing payload condition prevents deletion.
+For SDK `2.1.105`, unsupported unified shutdown requires executing the selected SDK's `Roslyn/bincore/VBCSCompiler.dll -shutdown` through its own host with successful native exit. For the four older enumerated SDK versions, the absence of a `VBCSCompiler` component in their payload is additionally required. This is deliberately not a general guarantee that all build-related processes have stopped; warn explicitly that other processes may remain. An available shutdown failure, a failed Roslyn shutdown, or any ambiguous/missing payload condition prevents deletion even if the legacy option is supplied.
 
-Neither `-AllowUnsupportedShutdown` nor `-Yes` bypasses `-WhatIf`, an unapproved confirmation, cleanup failure, selected-SDK ownership/scope checks, or directory deletion verification.
+Neither the compatibility fallback, `-AllowUnsupportedShutdown`, nor `-Yes` bypasses `-WhatIf`, an unapproved confirmation, cleanup failure, selected-SDK ownership/scope checks, or directory deletion verification. If files remain in a verified quarantine, another ordinary Remove can retry without the now-missing SDK host; replacement/untrusted recovery state cannot be removed automatically.
 
 ## Behavioral scenarios
 

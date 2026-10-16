@@ -8,7 +8,7 @@ For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-po
 
 Remove with an exact version targets only that version's directory directly beneath the isolated SDK root.
 
-Remove without a version opens a picker containing recognized Isolated SDKs ordered newest to oldest. System SDKs are not included because they are outside the tool's ownership boundary.
+Remove without a version opens a picker containing recognized Isolated SDKs ordered newest to oldest. An earlier approved removal that stopped partway through is listed as `(incomplete removal)` even if its SDK executable is gone. System SDKs are never included.
 
 An empty isolated inventory or explicit picker cancellation is a normal no-change result.
 
@@ -24,21 +24,25 @@ The authoritative PowerShell-specific rules and precedence are documented in the
 
 After removal is approved, the selected isolated SDK is asked to shut down its .NET build servers before directory deletion. The shutdown runs from an operation-owned temporary working directory with the selected SDK as `DOTNET_ROOT`, older Windows multi-level SDK lookup disabled, and first-run CLI state isolated from the caller. The caller's working directory and environment are preserved.
 
-A failed build-server shutdown blocks deletion and suppresses removal success, even when the user supplies legacy opt-in. Temporary shutdown-state setup or cleanup failure also blocks deletion. The tool never treats a native failure, including a `hostfxr` exception, as proof that shutdown is unsupported.
+A failed *supported* build-server shutdown blocks deletion and suppresses removal success. Temporary shutdown-state setup or cleanup failure also blocks deletion. The tool never treats an arbitrary native failure, including a `hostfxr` exception, as proof that shutdown is unsupported.
 
-### Explicitly authorized historical SDK removal
+### Automatic verified historical SDK removal
 
-The supported exception is **off by default**. PowerShell uses `-AllowUnsupportedShutdown` with `-Action Remove`; Bash uses `--allow-unsupported-shutdown` with `remove`. This is **separate from** the ordinary confirmation controls (`-Yes` / `--yes`, and PowerShell `-Confirm`). Passing automatic confirmation alone never permits a shutdown bypass. The option is rejected for other actions.
+For strictly verified historical SDKs without unified shutdown, the tool uses the compatible removal path **automatically after the ordinary Remove confirmation**. There is no additional authorization flag or second prompt. The old PowerShell `-AllowUnsupportedShutdown` and Bash `--allow-unsupported-shutdown` switches remain accepted with Remove for existing scripts but are not required or used to bypass a real shutdown failure; they are rejected with other actions.
 
 Only these **exact SDK versions**, verified by historical Windows testing, qualify for the exception: `1.0.4`, `1.1.5`, `1.1.14`, `2.0.3`, and `2.1.105`. Other SDK versions, including nearby servicing versions, retain mandatory build-server shutdown unless separately verified and added in future work.
 
 For a qualifying SDK, the tool checks the SDK's installed payload and probes both historical command spellings (`build-server --help` and `buildserver --help`) from the controlled environment. Both must return the exact observed missing-command result before any fallback applies. If either command is available, the tool instead requires that command's actual shutdown to succeed. An ambiguous probe, unexpected error, missing payload, or failed shutdown blocks deletion.
 
-For `2.1.105`, the fallback requires its SDK-local `Roslyn/bincore/VBCSCompiler.dll -shutdown` operation to return zero. For the four earlier sampled SDKs, the tool checks that their payload has no `VBCSCompiler` component before explicitly bypassing shutdown. The user is warned that other build processes may remain. An exit-zero Roslyn request cannot guarantee all process classes have stopped, and the historical Roslyn path is an SDK-internal compatibility mechanism, not a general public shutdown API.
+For `2.1.105`, the fallback requires its SDK-local `Roslyn/bincore/VBCSCompiler.dll -shutdown` operation to return zero. For the four earlier sampled SDKs, the tool checks that their payload has no `VBCSCompiler` component. The user is warned **before deletion** that other build processes may remain and locked files may prevent complete cleanup. An exit-zero Roslyn request cannot guarantee all process classes have stopped, and the historical Roslyn path is an SDK-internal compatibility mechanism, not a general public shutdown API.
 
-This exception never broadens the deletion scope or relaxes the rules for real shutdown errors. For example, an intentionally authorized Bash invocation is `isolated-dotnet-sdk.sh remove 1.0.4 --allow-unsupported-shutdown --yes`; the equivalent PowerShell command is `./isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 1.0.4 -AllowUnsupportedShutdown -Yes`.
+This exception never broadens the deletion scope or relaxes the rules for real shutdown errors. For example, `isolated-dotnet-sdk.sh remove 1.0.4 --yes` or `./isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 1.0.4 -Yes` use the verified fallback when applicable; `--yes` / `-Yes` still only skips the ordinary confirmation.
 
-After deletion, the tool verifies the selected version directory is gone before reporting success. Filesystem or deletion failure returns nonzero and does not broaden cleanup to sibling SDKs or System SDK locations.
+After confirmation and successful shutdown/preflight, the tool records removal authorization and moves the selected version directory into a uniquely named operation-owned quarantine beneath the isolated root **before deleting any SDK files**. If that same-root move fails (for example, because a process has locked files), the SDK remains at its original path; release the lock and use Remove again. While quarantined, the target is no longer a usable installed SDK.
+
+If deletion then fails, the tool reports an **incomplete removal** with a nonzero exit code; some SDK files may already be gone. A later user-initiated Remove finds the incomplete entry even when its SDK host was deleted, requires the ordinary confirmation, checks matching persistent recovery proof, and deletes only the remaining files in that previously approved quarantine. It does **not** rerun a missing SDK executable or make another shutdown exception. No automatic retries or process termination occur. The tool refuses inconsistent, missing or replaced recovery state; do not manually alter its hidden recovery files.
+
+Success is reported only after the quarantined directory is absent and recovery state is cleaned up. Install of the same version is blocked while removal is pending. List, Verify and Audit do not treat a quarantined SDK as installed. Sibling SDKs and System SDKs remain out of scope.
 
 ## Interactive versus one-shot
 
