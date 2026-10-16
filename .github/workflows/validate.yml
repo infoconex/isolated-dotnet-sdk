@@ -123,3 +123,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+
+      # Issue 181 investigative branch only; remove before review.
+      - name: Smoke test experimental Verify stack profiler
+        if: github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifyStack
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
