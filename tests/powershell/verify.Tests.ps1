@@ -42,7 +42,7 @@ Describe 'PowerShell isolated SDK verification' {
             )
             foreach ($marker in $markers) {
                 $needle = [string]$marker.Text
-                if ($content.Split(@($needle), [System.StringSplitOptions]::None).Count -ne 2) {
+                if ([regex]::Matches($content, [regex]::Escape($needle)).Count -ne 1) {
                     throw "Verify step instrumentation boundary changed: $needle"
                 }
                 $prefix = if ($marker.Before) {
