@@ -263,6 +263,8 @@ Describe 'PowerShell removal presentation' {
         $lines[$warningIndex - 4].Trim() | Should -Be 'if ($Recovery) {'
         $lines[$warningIndex - 1].Trim() | Should -Be 'else {'
         $lines[$warningIndex + 1].Trim() | Should -Be '}'
-        $lines[$warningIndex + 2].Trim() | Should -Be 'Write-ToolDisplay'
+        $lines[$warningIndex + 2].Trim() | Should -Be 'if (-not $Recovery -and -not $HostAvailable) {'
+        $lines[$warningIndex + 3].Trim() | Should -Match 'cannot be shut down'
+        $lines[$warningIndex + 5].Trim() | Should -Be 'Write-ToolDisplay'
     }
 }

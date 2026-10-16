@@ -279,14 +279,15 @@ EOF
   [ -n "$warning_line" ]
 
   preceding_block="$(sed -n "$((warning_line - 6)),$((warning_line - 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
-  following_block="$(sed -n "$((warning_line + 1)),$((warning_line + 2))p" "$repo_root/isolated-dotnet-sdk.sh")"
+  following_block="$(sed -n "$((warning_line + 1)),$((warning_line + 5))p" "$repo_root/isolated-dotnet-sdk.sh")"
 
   # The outer selection boundary retains the separator when no clear occurred;
   # both initial and incomplete-removal warning paths share its trailing blank.
   [[ "$preceding_block" == *'if [[ "$selected_interactively" != "true" ]]; then'* ]]
   [[ "$preceding_block" == *$'\n        echo\n'* ]]
   [[ "$preceding_block" == *'if [[ "$recovery" == "true" ]]; then'* ]]
-  [[ "$following_block" == *$'    fi\n    echo'* ]]
+  [[ "$following_block" == *'if [[ "$recovery" != "true" && "$host_available" != "true" ]]; then'* ]]
+  [[ "$following_block" == *$'\n    echo'* ]]
 }
 
 @test "partial removal remains retryable after SDK host loss" {

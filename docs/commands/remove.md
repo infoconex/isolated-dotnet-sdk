@@ -8,7 +8,7 @@ For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-po
 
 Remove with an exact version targets only that version's directory directly beneath the isolated SDK root.
 
-Remove without a version opens a picker containing recognized Isolated SDKs ordered newest to oldest. An earlier approved removal that stopped partway through is listed as `(incomplete removal)` even if its SDK executable is gone. System SDKs are never included.
+Remove without a version lists **direct-child SDK-version-named directories**, ordered newest to oldest, whether or not their SDK host is usable. A missing or unusable host is labeled `(incomplete)`; a prior confirmed staged deletion needing another attempt is labeled `(incomplete removal)`. These are **removal candidates**, not a statement that their SDK is healthy or fully installed. Only exact SDK-version-shaped names qualify; links, mounts, non-directories, unrelated root entries and System SDKs are not removal targets.
 
 An empty isolated inventory or explicit picker cancellation is a normal no-change result.
 
@@ -38,7 +38,9 @@ For `2.1.105`, the fallback requires its SDK-local `Roslyn/bincore/VBCSCompiler.
 
 This exception never broadens the deletion scope or relaxes the rules for real shutdown errors. For example, `isolated-dotnet-sdk.sh remove 1.0.4 --yes` or `./isolated-dotnet-sdk.ps1 -Action Remove -SdkVersion 1.0.4 -Yes` use the verified fallback when applicable; `--yes` / `-Yes` still only skips the ordinary confirmation.
 
-After confirmation and successful shutdown/preflight, the tool records removal authorization and moves the selected version directory into a uniquely named operation-owned quarantine beneath the isolated root **before deleting any SDK files**. If that same-root move fails (for example, because a process has locked files), the SDK remains at its original path; release the lock and use Remove again. While quarantined, the target is no longer a usable installed SDK.
+After ordinary confirmation, a **usable** SDK host requires successful build-server shutdown under the existing rules. When the SDK host is absent, non-executable (Bash), or an unsafe link, the tool warns that shutdown **cannot** run and that build processes/files may remain in use; it may remove the owner-selected strictly scoped damaged SDK directory without a separate opt-in. An actual attempted shutdown that fails still blocks deletion. Remove never requires a successful Verify check to clean a version-named incomplete directory.
+
+After that required shutdown or the missing-host warning, the tool records removal authorization and **renames** the selected directory to a uniquely named operation-owned quarantine beneath the same isolated root, before deleting SDK files. If rename fails (for example, because a process holds a Windows lock or permissions disallow it), the installation remains at its original path; free the blocking process and invoke Remove again. Rename success is not proof that all contents are unlocked, particularly on Unix. While quarantined, the target is no longer a usable installed SDK.
 
 If deletion then fails, the tool reports an **incomplete removal** with a nonzero exit code; some SDK files may already be gone. A later user-initiated Remove finds the incomplete entry even when its SDK host was deleted, requires the ordinary confirmation, checks matching persistent recovery proof, and deletes only the remaining files in that previously approved quarantine. It does **not** rerun a missing SDK executable or make another shutdown exception. No automatic retries or process termination occur. The tool refuses inconsistent, missing or replaced recovery state; do not manually alter its hidden recovery files.
 
