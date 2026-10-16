@@ -4,7 +4,9 @@ param(
 
     [switch]$TraceVerifyProcesses,
 
-    [switch]$TraceVerifySteps
+    [switch]$TraceVerifySteps,
+
+    [switch]$TraceVerifyStack
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,6 +30,12 @@ if ($null -eq $availablePester) {
 
 Import-Module Pester -RequiredVersion $expectedVersion -Force
 
+if ($TraceVerifyStack -and ($TraceVerifyProcesses -or $TraceVerifySteps)) {
+    throw '-TraceVerifyStack includes all step and process tracing; do not combine the switches.'
+}
+if ($TraceVerifyStack) {
+    $TraceVerifySteps = $true
+}
 if ($TraceVerifyProcesses -and $Suite -ne 'Verify') {
     throw '-TraceVerifyProcesses requires -Suite Verify to keep traces scoped to one test file.'
 }
@@ -46,6 +54,8 @@ $previousChildTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK
 $previousInvocation = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', 'Process')
 $previousStepTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH', 'Process')
 $previousStepScenario = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO', 'Process')
+$previousStackTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH', 'Process')
+$previousStackHostTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH', 'Process')
 
 if ($traceEnabled) {
     $traceRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
@@ -57,6 +67,14 @@ if ($traceEnabled) {
     $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH = Join-Path $traceRoot 'verify-child-events.tsv'
     if ($TraceVerifySteps) {
         $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH = Join-Path $traceRoot 'step-timings.csv'
+    }
+    if ($TraceVerifyStack) {
+        $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH = Join-Path $traceRoot 'stack-launch-probes.csv'
+        $env:ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH = Join-Path $traceRoot 'stack-host-startup.tsv'
+    }
+    else {
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH -ErrorAction SilentlyContinue
     }
     else {
         Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -ErrorAction SilentlyContinue
@@ -189,6 +207,7 @@ try {
                             Step = "dotnet.exe $($columns[4]) (Main to exit)"
                             ElapsedMs = [math]::Round($elapsed, 3)
                             CumulativeMs = ''
+                            Utc = ''
                         }
                     }
                 }
@@ -199,6 +218,24 @@ try {
             }
             if ($result.Result -eq 'Passed' -and $nativeRows.Count -eq 0) {
                 throw 'The healthy Verify case passed but native fake-host events were not recorded.'
+            }
+            if ($TraceVerifyStack) {
+                $probePath = $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH
+                if (-not (Test-Path -LiteralPath $probePath -PathType Leaf)) {
+                    throw 'Stack launch profiling produced no process control records.'
+                }
+                $probeRows = @(Import-Csv -LiteralPath $probePath)
+                if (@($probeRows | Where-Object { $_.Mode -eq 'PowerShellNative' -and $_.Phase -eq 'native-list-sdks-complete' }).Count -lt 3 -or
+                    @($probeRows | Where-Object { $_.Mode -eq 'DirectProcess' -and $_.Phase -eq 'native-list-sdks-complete' }).Count -lt 3) {
+                    throw 'Stack launch profiling requires multiple measured invocations for both mechanisms.'
+                }
+                Write-Output ('Independent launch controls: {0} rows' -f $probeRows.Count)
+                $probeRows |
+                    Where-Object Phase -eq 'native-list-sdks-complete' |
+                    Select-Object Mode, Iteration, ElapsedMs, ExitCode |
+                    Format-Table -AutoSize |
+                    Out-String -Width 180 |
+                    Write-Output
             }
             Write-Output ("Recorded {0} buffered step timings from the selected Verify test:" -f $steps.Count)
             $steps |
@@ -222,6 +259,8 @@ finally {
     if ($traceEnabled) {
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH', $previousStepTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO', $previousStepScenario, 'Process')
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH', $previousStackTrace, 'Process')
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH', $previousStackHostTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', $previousVerifyTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', $previousHostTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', $previousChildTrace, 'Process')
