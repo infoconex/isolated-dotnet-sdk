@@ -320,6 +320,10 @@ Describe 'PowerShell removal behavior' {
             Test-Path -LiteralPath $state.Stage -PathType Container | Should -BeTrue
             Test-Path -LiteralPath (Join-Path $state.Stage 'dotnet.exe') | Should -BeFalse
 
+            Remove-IsolatedSdk -Yes -WhatIf
+            Test-Path -LiteralPath $record | Should -BeTrue
+            Test-Path -LiteralPath $state.Stage | Should -BeTrue
+
             # Restore the real removal helper to exercise a second invocation
             # without a host or another build-server shutdown.
             Import-ToolFunctionDefinition
