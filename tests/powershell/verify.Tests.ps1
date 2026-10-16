@@ -24,6 +24,9 @@ Describe 'PowerShell isolated SDK verification' {
             # Modify only the one case's temporary installed-tool copy.
             # The committed product script and other cases are untouched.
             $content = Get-Content -LiteralPath $script:ToolPath -Raw
+            # Git on Windows can check out CRLF. Normalize only the disposable
+            # installed-tool copy so source-marker matching is deterministic.
+            $content = $content.Replace("`r`n", "`n")
             $markers = @(
                 @{ Text = '    $Checks = [System.Collections.Generic.List[object]]::new()'; Before = 'local-proof-enter'; After = '' }
                 @{ Text = '    $PreviousMultiLevel = [Environment]::GetEnvironmentVariable(''DOTNET_MULTILEVEL_LOOKUP'', ''Process'')'; Before = 'local-proof-paths-checked'; After = '' }
