@@ -129,6 +129,23 @@ Describe 'PowerShell removal behavior' {
             $script:SdkVersion = $script:RemovalVersion
         }
 
+        It 'prints contextual removal diagnostics and native errors as distinct readable lines' {
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nNo matching SDK processes found.`nDetails: Exception calling Move: access denied."
+
+            $displayLines = @(
+                Write-ToolRemovalFailure -Message $message 6>&1 |
+                    ForEach-Object { [string]$_ }
+            )
+
+            $displayLines | Should -Contain 'ERROR: Unable to remove isolated SDK 99.0.0. SDK intact.'
+            $displayLines | Should -Contain 'Diagnostics:'
+            $displayLines | Should -Contain '  Access denied can also mean a lock.'
+            $displayLines | Should -Contain '  No matching SDK processes found.'
+            $displayLines | Should -Contain 'Details:'
+            $displayLines | Should -Contain '  Exception calling Move: access denied.'
+            $displayLines.Count | Should -BeGreaterThan 7
+        }
+
         It 'discovers damaged version directories for Remove but excludes unrelated folders' {
             Import-ToolFunctionDefinition
             New-Item -ItemType Directory -Path $script:SdkRoot -Force | Out-Null
