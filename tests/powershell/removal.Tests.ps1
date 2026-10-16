@@ -100,7 +100,7 @@ Describe 'PowerShell removal behavior' {
                 $text = $output -join "`n"
                 $text | Should -Match 'Error:'
                 $text | Should -Match 'Diagnostics:'
-                $text | Should -Match 'Details:'
+                $text | Should -Not -Match '(?m)^\s*Details:'
                 $text | Should -Match 'Underlying error:'
                 $text | Should -Match 'Access to the path'
             }
@@ -159,7 +159,7 @@ Describe 'PowerShell removal behavior' {
             $script:SdkVersion = $script:RemovalVersion
         }
 
-        It 'prints removal errors and native details under distinct uncolored headings when ANSI is unavailable' {
+        It 'prints contextual removal guidance without duplicating native details in plain text' {
             $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nPossible causes: open handles or insufficient permissions.`nNo matching SDK processes found.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls `"C:\some\sdk`".`nDetails: Exception calling Move: access denied."
             $originalRendering = $PSStyle.OutputRendering
             try {
@@ -190,12 +190,12 @@ Describe 'PowerShell removal behavior' {
             $permissionsIndex | Should -BeGreaterThan $fileLockIndex
             $displayLines[$permissionsIndex - 1] | Should -Be ''
             $displayLines[$permissionsIndex + 1] | Should -Be '    icacls "C:\some\sdk".'
-            $displayLines | Should -Contain 'Details:'
-            $displayLines | Should -Contain '  Exception calling Move: access denied.'
+            $displayLines | Should -Not -Contain 'Details:'
+            ($displayLines -join "`n") | Should -Not -Match 'Exception calling Move'
             $displayLines.Count | Should -BeGreaterThan 8
         }
 
-        It 'colors only the removal diagnostic headings in ANSI terminals' {
+        It 'colors error and diagnostic headings without displaying native exception twice' {
             $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied.`nPossible causes: open handles or permissions.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls `"C:\some\sdk`".`nDetails: Native failure."
             $originalRendering = $PSStyle.OutputRendering
             try {
@@ -211,7 +211,7 @@ Describe 'PowerShell removal behavior' {
 
             $displayLines | Should -Contain "$($PSStyle.Foreground.Red)Error:$($PSStyle.Reset)"
             $displayLines | Should -Contain "$($PSStyle.Foreground.Yellow)Diagnostics:$($PSStyle.Reset)"
-            $displayLines | Should -Contain "$($PSStyle.Foreground.Cyan)Details:$($PSStyle.Reset)"
+            $displayLines | Should -Not -Contain "$($PSStyle.Foreground.Cyan)Details:$($PSStyle.Reset)"
             $possibleIndex = [array]::IndexOf($displayLines, "  $($PSStyle.Foreground.Cyan)Possible causes:$($PSStyle.Reset)")
             $possibleIndex | Should -BeGreaterThan 0
             $displayLines[$possibleIndex - 1] | Should -Be ''
@@ -225,7 +225,8 @@ Describe 'PowerShell removal behavior' {
             $displayLines[$permissionsIndex - 1] | Should -Be ''
             $displayLines[$permissionsIndex + 1] | Should -Be '    icacls "C:\some\sdk".'
             $displayLines | Should -Contain '  Unable to remove isolated SDK 99.0.0. SDK intact.'
-            $displayLines | Should -Contain '  Native failure.'
+            $displayLines | Should -Not -Contain '  Native failure.'
+            ($displayLines -join "`n") | Should -Not -Match 'Details:'
         }
 
         It 'discovers damaged version directories for Remove but excludes unrelated folders' {
