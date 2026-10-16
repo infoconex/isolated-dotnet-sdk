@@ -3014,7 +3014,8 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
                     destination="$INSTALL_RESULT_PARENT"
                     ;;
                 remove)
-                    if [[ -n "$(get_isolated_sdk_versions)" ]]; then
+                    if [[ -n "$(get_remove_sdk_candidate_versions)" ||
+                          -n "$(pending_removal_versions)" ]]; then
                         destination="Remove"
                     else
                         destination="Main"

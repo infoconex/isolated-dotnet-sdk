@@ -595,6 +595,22 @@ function Invoke-RestMethod {
         $result.Output | Should -Not -Match 'Continue\?'
     }
 
+    It 'returns to Remove when only a damaged hostless SDK folder remains' {
+        Install-FakeInteractiveHost -Version '99.0.100'
+        $damaged = Join-Path $script:ToolRoot '98.0.100'
+        New-Item -ItemType Directory -Path $damaged -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $damaged 'leftover.txt') -Value 'retained'
+
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', '1', 'b', 'e') -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Yes'
+
+        $result.ExitCode | Should -Be 0
+        $result.Output | Should -Match 'Isolated SDK 99\.0\.100 was removed\.'
+        ([regex]::Matches($result.Output, 'Select an isolated SDK to remove:')).Count | Should -Be 2
+        $result.Output | Should -Match '98\.0\.100 \(incomplete\)'
+        Test-Path -LiteralPath $damaged -PathType Container | Should -BeTrue
+        (Get-MainPromptCount $result.Output) | Should -Be 2
+    }
+
     It 'returns a completed Remove result to the Remove SDK list' {
         foreach ($version in @('99.0.100', '98.0.100')) {
             Install-FakeInteractiveHost -Version $version

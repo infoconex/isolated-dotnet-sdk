@@ -3111,7 +3111,11 @@ try {
                     $Destination = switch ($script:Action) {
                         'Install' { $script:InstallResultParent }
                         'Remove' {
-                            if (@(Get-IsolatedSdkVersion).Count -gt 0) {
+                            $RemainingRemoveVersions = @(
+                                @(Get-RemoveSdkCandidateVersion) + @(Get-PendingRemovalVersion) |
+                                    Sort-Object -Unique
+                            )
+                            if ($RemainingRemoveVersions.Count -gt 0) {
                                 'Remove'
                             }
                             else {
