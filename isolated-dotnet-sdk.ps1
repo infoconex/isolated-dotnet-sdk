@@ -2804,6 +2804,71 @@ function Get-PendingRemoval {
     return [pscustomobject]@{ Record = $Record; Stage = $Stage; Proof = $Proof }
 }
 
+# Diagnostics are advisory and read-only. Windows can report access denied
+# for open handles as well as filesystem permissions; neither an ACL read
+# nor an executable-path match conclusively identifies the blocking process.
+function Get-SdkRemovalFailureDiagnostics {
+    param(
+        [string]$InstallDirectory,
+        [System.Exception]$Failure
+    )
+
+    $Lines = [System.Collections.Generic.List[string]]::new()
+    $NativeError = $Failure.GetBaseException()
+    $Win32Code = $NativeError.HResult -band 0xFFFF
+
+    if ($Win32Code -in @(32, 33)) {
+        $Lines.Add('Windows reported a sharing or lock violation; a file may be in use.')
+    }
+    elseif ($Win32Code -eq 5) {
+        $Lines.Add('Windows reported access denied. This alone does not distinguish a file lock from insufficient permissions.')
+    }
+    else {
+        $Lines.Add('The filesystem operation failed; its error does not identify a single cause.')
+    }
+    $Lines.Add('Possible causes: open file handles, insufficient rename/delete permissions, security software, or filesystem restrictions.')
+
+    if ($IsWindows) {
+        try {
+            $SdkPath = [IO.Path]::GetFullPath($InstallDirectory).TrimEnd('\\', '/') + [IO.Path]::DirectorySeparatorChar
+            $MatchingProcesses = @(
+                Get-CimInstance -ClassName Win32_Process -ErrorAction Stop |
+                    Where-Object {
+                        $Executable = [string]$_.ExecutablePath
+                        $Command = [string]$_.CommandLine
+                        ($Executable.StartsWith($SdkPath, [StringComparison]::OrdinalIgnoreCase)) -or
+                        ($Command.IndexOf($InstallDirectory, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+                    } |
+                    Select-Object -First 5 ProcessId, Name
+            )
+
+            if ($MatchingProcesses.Count -gt 0) {
+                $Matches = @($MatchingProcesses | ForEach-Object { "$($_.Name) (PID $($_.ProcessId))" })
+                $Lines.Add("Processes referencing this SDK (not confirmed file-lock holders): $($Matches -join ', ')")
+            }
+            else {
+                $Lines.Add('No running processes referencing the SDK were found; this does not rule out open file handles.')
+            }
+        }
+        catch {
+            $Lines.Add("Process inspection was unavailable: $($_.Exception.Message)")
+        }
+
+        try {
+            $null = Get-Acl -LiteralPath $InstallDirectory -ErrorAction Stop
+            $Lines.Add('Directory ACL is readable, but effective rename/delete permission has not been established.')
+        }
+        catch {
+            $Lines.Add("Directory ACL could not be inspected: $($_.Exception.Message)")
+        }
+
+        $Lines.Add("To find a file-lock holder: open Resource Monitor (resmon.exe), select CPU > Associated Handles, and search for the SDK directory name.")
+        $Lines.Add("To inspect filesystem permissions: icacls `"$InstallDirectory`"")
+    }
+
+    return ($Lines -join "`n")
+}
+
 function Invoke-ConfirmedSdkRemovalStaging {
     param([string]$Version)
     $InstallDir = Join-Path $SdkRoot $Version
@@ -2874,10 +2939,12 @@ function Invoke-ConfirmedSdkRemovalStaging {
             else {
                 'Removal staging could not be prepared.'
             }
-            throw "Unable to remove isolated SDK $Version. $Explanation The original installation remains intact; no SDK files were removed. Close applications using this SDK, check filesystem permissions, and try Remove again.`nDetails: $OriginalError"
+            $Diagnostics = Get-SdkRemovalFailureDiagnostics -InstallDirectory $InstallDir -Failure $_.Exception
+            throw "Unable to remove isolated SDK $Version. $Explanation The original installation remains intact; no SDK files were removed. Close applications using this SDK, check filesystem permissions, and try Remove again.`nDiagnostics:`n$Diagnostics`nDetails: $OriginalError"
         }
 
-        throw "Unable to remove isolated SDK $Version. Removal staging did not complete, and the filesystem state could not be verified. Do not retry until the SDK and recovery directories have been inspected.`nDetails: $OriginalError"
+        $Diagnostics = Get-SdkRemovalFailureDiagnostics -InstallDirectory $InstallDir -Failure $_.Exception
+        throw "Unable to remove isolated SDK $Version. Removal staging did not complete, and the filesystem state could not be verified. Do not retry until the SDK and recovery directories have been inspected.`nDiagnostics:`n$Diagnostics`nDetails: $OriginalError"
     }
 }
 
@@ -2890,7 +2957,8 @@ function Complete-PendingRemoval {
             Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $State.Stage
         }
         catch {
-            throw "SDK $Version removal incomplete at $($State.Stage). Files may be in use or partially deleted. Free blocking processes, check filesystem permissions, and try Remove again.`nDetails: $($_.Exception.Message)"
+            $Diagnostics = Get-SdkRemovalFailureDiagnostics -InstallDirectory $State.Stage -Failure $_.Exception
+            throw "SDK $Version removal incomplete at $($State.Stage). Files may be in use or partially deleted. Free blocking processes, check filesystem permissions, and try Remove again.`nDiagnostics:`n$Diagnostics`nDetails: $($_.Exception.Message)"
         }
         finally { $script:RemovalProofPath = $null }
     }
