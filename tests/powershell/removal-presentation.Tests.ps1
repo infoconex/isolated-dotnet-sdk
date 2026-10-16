@@ -134,7 +134,7 @@ Describe 'PowerShell removal presentation' {
         }
     }
 
-    It 'requires explicit opt-in to bypass missing shutdown on verified early SDKs' {
+    It 'automatically classifies proven historical unsupported shutdown without extra authorization' {
         foreach ($version in @('1.0.4', '1.1.5', '1.1.14', '2.0.3')) {
             $root = Join-Path $TestDrive $version
             $hostPath = Join-Path $root 'dotnet.cmd'
@@ -153,7 +153,7 @@ Describe 'PowerShell removal presentation' {
                 ) -join "`r`n")
 
             { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } |
-                Should -Throw '*exit code 72*'
+                Should -Not -Throw
 
             { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
                 Should -Not -Throw
