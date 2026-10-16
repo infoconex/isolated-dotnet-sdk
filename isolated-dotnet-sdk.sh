@@ -2555,6 +2555,27 @@ stage_confirmed_removal() {
         rm -f "$record" || true
         tool_fail "Unable to record SDK directory removal proof."
     fi
+    # A directory mountpoint can live inside the isolated root but on a
+    # different device. Prevent mv's cross-device copy-and-delete fallback:
+    # a removal stage must be a rename on the same filesystem.
+    local root_device="" source_device=""
+    if root_device="$(stat -c %d "$SDK_ROOT" 2>/dev/null)" &&
+       source_device="$(stat -c %d "$install_dir" 2>/dev/null)"; then
+        :
+    elif root_device="$(stat -f %d "$SDK_ROOT" 2>/dev/null)" &&
+         source_device="$(stat -f %d "$install_dir" 2>/dev/null)"; then
+        :
+    else
+        rm -f "$proof" "$record" ||
+            tool_fail "Unable to clean removal markers after filesystem preflight failed."
+        tool_fail "Unable to establish same-filesystem rename safety for SDK $VERSION."
+    fi
+    if [[ "$root_device" != "$source_device" ]]; then
+        rm -f "$proof" "$record" ||
+            tool_fail "Unable to clean removal markers after cross-device staging was blocked."
+        tool_fail "SDK $VERSION is on a different filesystem; removal cannot safely stage it."
+    fi
+
     if ! mv "$install_dir" "$stage"; then
         rm -f "$proof" "$record" ||
             tool_fail "SDK $VERSION could not be staged and recovery markers could not be cleaned."

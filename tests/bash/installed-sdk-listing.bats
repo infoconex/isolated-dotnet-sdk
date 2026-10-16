@@ -209,6 +209,6 @@ EOF
   run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" remove 10.0.401 --yes
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"Isolated SDK 10.0.401 was not found"* ]]
+  [[ "$output" == *"Unsafe or missing isolated SDK directory"* ]]
   [ -x "$fake_bin/dotnet" ]
 }
