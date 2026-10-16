@@ -2843,10 +2843,19 @@ function Invoke-ConfirmedSdkRemovalStaging {
             $ProofStream.Write($Bytes, 0, $Bytes.Length)
         }
         finally { $ProofStream.Dispose() }
-        Move-Item -LiteralPath $InstallDir -Destination $Stage -ErrorAction Stop
+        # PowerShell Move-Item can move individual children before failing on a
+        # locked Windows file, leaving a split SDK. Both paths are siblings on
+        # the same volume; use an atomic directory rename instead.
+        [System.IO.Directory]::Move($InstallDir, $Stage)
     }
     catch {
-        if ($null -ne (Get-Item -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue)) {
+        $OriginalExists = $null -ne (Get-Item -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue)
+        $StageExists = $null -ne (Get-Item -LiteralPath $Stage -Force -ErrorAction SilentlyContinue)
+
+        # Clean up a failed atomic rename only when no stage exists. If both
+        # locations exist, retain the recovery identity for manual inspection.
+        # Never discard the journal for a possibly incomplete staged removal.
+        if ($OriginalExists -and -not $StageExists) {
             Remove-Item -LiteralPath $Proof -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue
         }
