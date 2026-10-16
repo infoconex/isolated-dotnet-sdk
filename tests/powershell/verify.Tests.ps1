@@ -173,11 +173,10 @@ Mark-VerifyChildStep 'child-command-start'
                     @{ Old = '    Write-VerifyChildTraceEvent -EventName ''metadata-failure'' -Detail $Uri'; New = "    Mark-VerifyChildStep 'metadata-unavailable'" + [Environment]::NewLine + '    Write-VerifyChildTraceEvent -EventName ''metadata-failure'' -Detail $Uri' }
                     @{ Old = 'Write-VerifyChildTraceEvent -EventName ''product-entry'''; New = "Mark-VerifyChildStep 'product-entry'" + [Environment]::NewLine + 'Write-VerifyChildTraceEvent -EventName ''product-entry''' }
                     @{ Old = '$verifyExitCode = $LASTEXITCODE'; New = '$verifyExitCode = $LASTEXITCODE' + [Environment]::NewLine + "Mark-VerifyChildStep 'product-return'" }
-                    @{ Old = 'exit $verifyExitCode'; New = @'
-Mark-VerifyChildStep 'child-buffer-flush'
-$verifyStepEvents | Export-Csv -LiteralPath $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -Append -NoTypeInformation -Encoding utf8
-exit $verifyExitCode
-'@ }
+                    @{ Old = 'exit $verifyExitCode'; New = "Mark-VerifyChildStep 'child-buffer-flush'" +
+                            [Environment]::NewLine +
+                            '$verifyStepEvents | Export-Csv -LiteralPath $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -Append -NoTypeInformation -Encoding utf8' +
+                            [Environment]::NewLine + 'exit $verifyExitCode' }
                 )
                 foreach ($change in $stepChanges) {
                     if (-not $command.Contains($change.Old)) {
