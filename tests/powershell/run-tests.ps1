@@ -161,6 +161,45 @@ try {
                 @($steps | Where-Object Scope -eq 'Test').Count -eq 0) {
                 throw 'The step-timing report must contain child and test steps.'
             }
+            # The existing fake host reports its own Main-to-ProcessExit intervals.
+            # Incorporate those native phases without injecting commands beside the
+            # product's native invocations (which must retain their original shape).
+            $nativeTrace = Join-Path $traceRoot 'fake-host-events.tsv'
+            $nativeRows = @(
+                if (Test-Path -LiteralPath $nativeTrace -PathType Leaf) {
+                    foreach ($line in (Get-Content -LiteralPath $nativeTrace)) {
+                        $columns = $line.Split("`t")
+                        if ($columns.Count -ne 7 -or $columns[3] -ne 'exit') {
+                            continue
+                        }
+                        $child = @($steps | Where-Object {
+                                $_.Scope -eq 'Child' -and $_.InvocationId -eq $columns[6]
+                            } | Select-Object -First 1)
+                        $elapsed = 0.0
+                        if (-not [double]::TryParse($columns[5],
+                                [System.Globalization.NumberStyles]::Float,
+                                [System.Globalization.CultureInfo]::InvariantCulture,
+                                [ref]$elapsed)) {
+                            throw "Invalid fake-host duration in the trace: $($columns[5])"
+                        }
+                        [pscustomobject]@{
+                            Scope = 'Native'
+                            InvocationId = $columns[6]
+                            Scenario = if ($child.Count -gt 0) { $child[0].Scenario } else { 'unknown' }
+                            Step = "dotnet.exe $($columns[4]) (Main to exit)"
+                            ElapsedMs = [math]::Round($elapsed, 3)
+                            CumulativeMs = ''
+                        }
+                    }
+                }
+            )
+            if ($nativeRows.Count -gt 0) {
+                $nativeRows | Export-Csv -LiteralPath $stepPath -Append -NoTypeInformation -Encoding utf8
+                $steps = @(Import-Csv -LiteralPath $stepPath)
+            }
+            if ($result.Result -eq 'Passed' -and $nativeRows.Count -eq 0) {
+                throw 'The healthy Verify case passed but native fake-host events were not recorded.'
+            }
             Write-Output ("Recorded {0} buffered step timings from the selected Verify test:" -f $steps.Count)
             $steps |
                 Select-Object Scope, Scenario, Step, ElapsedMs |
