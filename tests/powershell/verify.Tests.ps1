@@ -34,6 +34,10 @@ Describe 'PowerShell isolated SDK verification' {
                 @{ Text = '                $Checks.Add([pscustomobject]@{ Label = ''SDK inventory''; Status = ''OK''; Detail = "$Version from $ExpectedOrigin" })'; Before = 'local-proof-version-start'; After = '' }
                 @{ Text = '                    $Checks.Add([pscustomobject]@{ Label = ''SDK resolution''; Status = ''OK''; Detail = $Version })'; Before = 'local-proof-version-complete'; After = '' }
                 @{ Text = '        [Environment]::SetEnvironmentVariable(''DOTNET_MULTILEVEL_LOOKUP'', $PreviousMultiLevel, ''Process'')'; Before = 'local-proof-cleanup-in-progress'; After = '' }
+                @{ Text = '$ErrorActionPreference = ''Stop'''; Before = 'product-parameters-bound'; After = 'product-error-preference-set' }
+                @{ Text = "`nInstall-ToolIfNeeded`n"; Before = 'bootstrap-start'; After = 'bootstrap-complete' }
+                @{ Text = 'Push-Location $SdkRoot'; Before = 'tool-sdk-root-prepared'; After = 'tool-sdk-root-entered' }
+                @{ Text = "        Test-IsolatedSdk`n"; Before = 'verify-action-dispatched'; After = 'verify-action-returned' }
                 @{ Text = 'function Test-IsolatedSdk {'; Before = ''; After = 'verify-function-enter' }
                 @{ Text = "    Write-ToolHeading 'Verify isolated .NET SDK'"; Before = 'local-proof-complete'; After = '' }
                 @{ Text = '        # Microsoft lifecycle information is optional; local checks remain authoritative.'; Before = 'classification-error-caught'; After = '' }
@@ -67,7 +71,7 @@ Describe 'PowerShell isolated SDK verification' {
         }
 
         function Invoke-VerifyStackLaunchProbes {
-            $probeFile = Join-Path $PSScriptRoot 'Invoke-VerifyLaunchProbe.ps1'
+            $probeFile = Join-Path $script:RepositoryRoot 'tests/powershell/Invoke-VerifyLaunchProbe.ps1'
             $hostPath = Join-Path (Join-Path $script:ToolRoot '99.0.100') 'dotnet.exe'
             $reportPath = $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH
             $parentReport = Join-Path (Split-Path -Parent $reportPath) 'stack-probe-processes.csv'
