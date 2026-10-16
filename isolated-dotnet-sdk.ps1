@@ -1368,11 +1368,11 @@ function Select-InstallVersion {
             $ResumeMetadata = $null
         }
         else {
+            Write-ToolDisplay
             if ($ClearChannelScreen) {
                 Clear-InteractiveScreen
                 $ClearChannelScreen = $false
             }
-            Write-ToolDisplay
 
             if ($ShowArchived) {
                 Write-ToolHeading 'Select an end-of-life .NET channel:'
@@ -1516,11 +1516,11 @@ function Select-InstallVersion {
         $ClearSdkScreen = $true
 
         while ($true) {
+            Write-ToolDisplay
             if ($ClearSdkScreen) {
                 Clear-InteractiveScreen
                 $ClearSdkScreen = $false
             }
-            Write-ToolDisplay
             Write-ToolHeading "Available .NET $ChannelVersion SDKs:"
             Write-ToolDisplay
 
@@ -1915,8 +1915,8 @@ function Install-IsolatedSdk {
     }
 
     if ($SelectedInteractively) {
-        Clear-InteractiveScreen
         Write-ToolDisplay
+        Clear-InteractiveScreen
     }
 
     $InstallDir = Join-Path $SdkRoot $SdkVersion
@@ -2721,6 +2721,7 @@ function Remove-IsolatedSdk {
     }
 
     if ($SelectedInteractively) {
+        Write-ToolDisplay
         Clear-InteractiveScreen
     }
 
@@ -2731,7 +2732,9 @@ function Remove-IsolatedSdk {
         throw "Isolated SDK $SdkVersion was not found at $InstallDir"
     }
 
-    Write-ToolDisplay
+    if (-not $SelectedInteractively) {
+        Write-ToolDisplay
+    }
     Write-ToolWarning "Isolated SDK $SdkVersion will be removed from $InstallDir"
     Write-ToolDisplay
 
@@ -2796,8 +2799,8 @@ function Invoke-SelectedAction {
                 if (-not (Select-VerifyVersion)) {
                     return
                 }
-                Clear-InteractiveScreen
                 Write-ToolDisplay
+                Clear-InteractiveScreen
             }
             Test-IsolatedSdk
         }
@@ -2853,9 +2856,9 @@ try {
                     return
                 }
 
+                Write-ToolDisplay
                 Clear-InteractiveScreen
                 while ($true) {
-                    Write-ToolDisplay
                     Invoke-SelectedAction
 
                     if ($script:ExitRequested) {

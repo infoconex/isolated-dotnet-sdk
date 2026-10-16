@@ -12,7 +12,7 @@ Both product implementations have behavioral coverage for:
 - capability-aware screen clearing at persistent navigation and picker-view boundaries, including Back and only *after* completed-result acknowledgement;
 - first-launch persistent Main clearing once after successful bootstrap, with original bootstrap errors preserved and no extra clear on invalid Main retries or Exit;
 - successful Install, Verify, and Remove picker selections clearing once before operation details or confirmation, retaining output until acknowledgement and clearing again before the parent picker;
-- unsupported terminals retaining scrolling, and captured/redirected/one-shot execution staying free of clearing controls;
+- successful clears rendering the first meaningful screen content on the top row (no post-clear blank line), with unsupported terminals retaining the ordinary separator and scrolling, and captured/redirected/one-shot execution staying free of clearing controls;
 - invalid-selection feedback and active operation progress not being erased by a generic menu redraw;
 - redirected/captured persistent execution skipping acknowledgement so pipes, CI, and automation never wait;
 - completed Install, List, Audit, Verify, and Remove transitions sharing the same terminal acknowledgement boundary while returning to the correct parent screen;
