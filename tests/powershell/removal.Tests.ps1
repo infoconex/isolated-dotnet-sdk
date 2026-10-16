@@ -364,6 +364,7 @@ Describe 'PowerShell removal behavior' {
             $lockHandle = [IO.File]::Open($lockedFile, [IO.FileMode]::Open,
                 [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
             $staged = $false
+            $stagingFailure = $null
 
             try {
                 try {
@@ -374,6 +375,7 @@ Describe 'PowerShell removal behavior' {
                     # Windows may reject renaming a directory containing an
                     # exclusively opened file. That is an acceptable failure,
                     # provided the entire original SDK remains intact.
+                    $stagingFailure = $_
                 }
 
                 $stages = @(Get-ChildItem -LiteralPath $script:SdkRoot -Directory -Force |
@@ -389,6 +391,7 @@ Describe 'PowerShell removal behavior' {
                     Test-Path -LiteralPath (Join-Path $state.Stage 'locked-test-file.txt') | Should -BeTrue
                 }
                 else {
+                    $stagingFailure | Should -Not -BeNullOrEmpty
                     # A failed rename must not relocate individual SDK files
                     # or destroy the original installation/recovery identity.
                     Test-Path -LiteralPath $installDirectory | Should -BeTrue
