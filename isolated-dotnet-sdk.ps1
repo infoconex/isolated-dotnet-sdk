@@ -2903,7 +2903,7 @@ function Get-SdkRemovalFailureDiagnostic {
         }
 
         $SdkSearchName = Split-Path -Path $InstallDirectory -Leaf
-        $Lines.Add("To find a file-lock holder: open Resource Monitor (resmon.exe) > CPU > Associated Handles. In Search Handles, try '$SdkSearchName' (SDK folder), 'dotnet-sdks' (parent folder), or a known filename. Search matches parts of the full file path. Check the process name and PID; a result does not prove it blocks removal, and no result does not rule out a lock.")
+        $Lines.Add("To find a file-lock holder: in Resource Monitor (resmon.exe) > CPU > Associated Handles, search for '$SdkSearchName', 'dotnet-sdks', or a known filename. Search Handles matches parts of full paths; compare the process name and PID.")
         $Lines.Add("To inspect filesystem permissions: icacls `"$InstallDirectory`"")
     }
 
