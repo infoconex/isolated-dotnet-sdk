@@ -129,6 +129,60 @@ Describe 'PowerShell removal behavior' {
             $script:SdkVersion = $script:RemovalVersion
         }
 
+        It 'discovers damaged version directories for Remove but excludes unrelated folders' {
+            Import-ToolFunctionDefinition
+            New-Item -ItemType Directory -Path $script:SdkRoot -Force | Out-Null
+            $valid = Join-Path $script:SdkRoot '8.0.426'
+            $other = Join-Path $script:SdkRoot 'notes'
+            New-Item -ItemType Directory -Path $valid -Force | Out-Null
+            New-Item -ItemType Directory -Path $other -Force | Out-Null
+            $versions = @(Get-RemoveSdkCandidateVersion)
+            $versions | Should -Contain '8.0.426'
+            $versions | Should -Not -Contain 'notes'
+        }
+
+        It 'removes an incomplete no-host SDK after ordinary approval without invoking shutdown' {
+            $installDirectory = Join-Path $script:SdkRoot $script:SdkVersion
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $installDirectory 'leftover.txt') -Value 'safe fixture'
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                throw 'shutdown must not run without a host'
+            }
+
+            Remove-IsolatedSdk -Yes
+
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion) | Should -BeFalse
+        }
+
+        It 'preserves a no-host SDK under -WhatIf without creating recovery state' {
+            $installDirectory = Join-Path $script:SdkRoot $script:SdkVersion
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+
+            Remove-IsolatedSdk -Yes -WhatIf
+
+            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion) | Should -BeFalse
+        }
+
+        It 'rejects arbitrary directory names and symlinked SDK targets on direct Remove' {
+            New-Item -ItemType Directory -Path $script:SdkRoot -Force | Out-Null
+            $other = Join-Path $script:SdkRoot 'notes'
+            New-Item -ItemType Directory -Path $other -Force | Out-Null
+            $script:SdkVersion = 'notes'
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*Invalid*'
+            Test-Path -LiteralPath $other | Should -BeTrue
+
+            $outside = Join-Path $script:TestRoot 'outside'
+            New-Item -ItemType Directory -Path $outside -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $outside 'keep.txt') -Value 'protected'
+            $script:SdkVersion = '9.0.117'
+            $link = Join-Path $script:SdkRoot $script:SdkVersion
+            New-Item -ItemType SymbolicLink -Path $link -Target $outside -ErrorAction Stop | Out-Null
+            { Remove-IsolatedSdk -Yes } | Should -Throw
+            Get-Content -LiteralPath (Join-Path $outside 'keep.txt') | Should -Be 'protected'
+        }
+
         It 'exposes native WhatIf and Confirm parameters' {
             $removeCommand = Get-Command Remove-IsolatedSdk -CommandType Function
 

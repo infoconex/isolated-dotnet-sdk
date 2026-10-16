@@ -471,3 +471,79 @@ EOF
   [[ "$output" == *"Unsafe incomplete-removal target"* ]]
   [ "$(cat "$test_root/unrelated/keep.txt")" = "protect" ]
 }
+
+
+@test "Remove discovers version folders without hosts and excludes unrelated or linked folders" {
+  version='9.0.115'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir" "$tool_root/notes" "$test_root/outside"
+  printf 'preserve' > "$tool_root/notes/readme.txt"
+  printf 'outside' > "$test_root/outside/keep.txt"
+  ln -s "$test_root/outside" "$tool_root/7.0.400"
+  run bash -c 'printf "q\n" | env HOME="$1" "$2" remove' _ "$test_home" "$tool_path"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$version (incomplete)"* ]]
+  [[ "$output" != *"7.0.400"* ]]
+  [[ "$output" != *"notes"* ]]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cannot be shut down"* ]]
+  [[ "$output" == *"Isolated SDK $version was removed."* ]]
+  [ ! -e "$install_dir" ]
+  [ "$(cat "$tool_root/notes/readme.txt")" = preserve ]
+  [ "$(cat "$test_root/outside/keep.txt")" = outside ]
+}
+
+@test "No-host Remove requires ordinary confirmation and supports an unexecutable host" {
+  version='9.0.116'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir"
+  printf 'not executable' > "$install_dir/dotnet"
+
+  run bash -c 'printf "n\n" | env HOME="$1" "$2" remove "$3"' _ "$test_home" "$tool_path" "$version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removal cancelled."* ]]
+  [ -e "$install_dir/dotnet" ]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cannot be shut down"* ]]
+  [ ! -e "$install_dir" ]
+}
+
+@test "Remove rejects invalid version names and linked SDK directories without touching their targets" {
+  mkdir -p "$tool_root/notes" "$test_root/foreign"
+  printf 'unrelated' > "$tool_root/notes/keep.txt"
+  printf 'external' > "$test_root/foreign/keep.txt"
+  ln -s "$test_root/foreign" "$tool_root/9.0.117"
+  run env HOME="$test_home" "$tool_path" remove notes --yes
+  [ "$status" -ne 0 ]
+  [ -e "$tool_root/notes/keep.txt" ]
+  run env HOME="$test_home" "$tool_path" remove 9.0.117 --yes
+  [ "$status" -ne 0 ]
+  [ "$(cat "$test_root/foreign/keep.txt")" = external ]
+}
+
+@test "Failed directory rename leaves the original SDK and no incomplete removal success" {
+  version='9.0.118'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/rename-tools"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'retain' > "$install_dir/keep.txt"
+  cat > "$fake_bin/mv" <<'EOF'
+#!/usr/bin/env bash
+exit 71
+EOF
+  chmod +x "$fake_bin/mv"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"was removed."* ]]
+  [ "$(cat "$install_dir/keep.txt")" = retain ]
+  [ ! -e "$tool_root/.pending-removals/$version" ]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$install_dir" ]
+}
