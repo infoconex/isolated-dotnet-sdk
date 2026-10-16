@@ -1652,7 +1652,7 @@ function Select-InstallVersion {
 function Select-RemoveVersion {
     $script:BackToMain = $false
     $SdkVersions = @(Get-OrderedSdkVersion @(
-            @(Get-IsolatedSdkVersion) + @(Get-PendingRemovalVersions) |
+            @(Get-IsolatedSdkVersion) + @(Get-PendingRemovalVersion) |
                 Sort-Object -Unique
         ))
 
@@ -2606,6 +2606,9 @@ function Invoke-IsolatedSdkBuildServerShutdown {
         [string]$SdkVersion,
         [switch]$AllowUnsupportedShutdown
     )
+    # Retained for backwards-compatible Remove callers. Verified legacy
+    # fallback no longer requires a second authorization switch.
+    $null = $AllowUnsupportedShutdown
 
     # Historic SDKs must not resolve ambient global.json or System SDKs.
     # The explicit opt-in is strictly limited to owner-verified early releases;
@@ -2712,7 +2715,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
 }
 
 
-function Get-PendingRemovalVersions {
+function Get-PendingRemovalVersion {
     $Root = Join-Path $SdkRoot '.pending-removals'
     if (-not (Test-Path -LiteralPath $Root)) { return @() }
     $Info = Get-Item -LiteralPath $Root -Force -ErrorAction Stop
@@ -2767,7 +2770,7 @@ function Get-PendingRemoval {
     return [pscustomobject]@{ Record = $Record; Stage = $Stage; Proof = $Proof }
 }
 
-function Start-ConfirmedSdkRemoval {
+function Invoke-ConfirmedSdkRemovalStaging {
     param([string]$Version)
     $InstallDir = Join-Path $SdkRoot $Version
     $Root = Join-Path $SdkRoot '.pending-removals'
@@ -2933,7 +2936,7 @@ function Remove-IsolatedSdk {
     }
     Invoke-IsolatedSdkBuildServerShutdown @ShutdownArguments
 
-    Start-ConfirmedSdkRemoval -Version $SdkVersion
+    Invoke-ConfirmedSdkRemovalStaging -Version $SdkVersion
     Write-ToolInfo "Removing $InstallDir..."
     Complete-PendingRemoval -Version $SdkVersion
 
