@@ -2807,7 +2807,7 @@ function Get-PendingRemoval {
 # Diagnostics are advisory and read-only. Windows can report access denied
 # for open handles as well as filesystem permissions; neither an ACL read
 # nor an executable-path match conclusively identifies the blocking process.
-function Get-SdkRemovalFailureDiagnostics {
+function Get-SdkRemovalFailureDiagnostic {
     param(
         [string]$InstallDirectory,
         [System.Exception]$Failure
@@ -2939,11 +2939,11 @@ function Invoke-ConfirmedSdkRemovalStaging {
             else {
                 'Removal staging could not be prepared.'
             }
-            $Diagnostics = Get-SdkRemovalFailureDiagnostics -InstallDirectory $InstallDir -Failure $_.Exception
+            $Diagnostics = Get-SdkRemovalFailureDiagnostic -InstallDirectory $InstallDir -Failure $_.Exception
             throw "Unable to remove isolated SDK $Version. $Explanation The original installation remains intact; no SDK files were removed. Close applications using this SDK, check filesystem permissions, and try Remove again.`nDiagnostics:`n$Diagnostics`nDetails: $OriginalError"
         }
 
-        $Diagnostics = Get-SdkRemovalFailureDiagnostics -InstallDirectory $InstallDir -Failure $_.Exception
+        $Diagnostics = Get-SdkRemovalFailureDiagnostic -InstallDirectory $InstallDir -Failure $_.Exception
         throw "Unable to remove isolated SDK $Version. Removal staging did not complete, and the filesystem state could not be verified. Do not retry until the SDK and recovery directories have been inspected.`nDiagnostics:`n$Diagnostics`nDetails: $OriginalError"
     }
 }
@@ -2957,7 +2957,7 @@ function Complete-PendingRemoval {
             Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $State.Stage
         }
         catch {
-            $Diagnostics = Get-SdkRemovalFailureDiagnostics -InstallDirectory $State.Stage -Failure $_.Exception
+            $Diagnostics = Get-SdkRemovalFailureDiagnostic -InstallDirectory $State.Stage -Failure $_.Exception
             throw "SDK $Version removal incomplete at $($State.Stage). Files may be in use or partially deleted. Free blocking processes, check filesystem permissions, and try Remove again.`nDiagnostics:`n$Diagnostics`nDetails: $($_.Exception.Message)"
         }
         finally { $script:RemovalProofPath = $null }
