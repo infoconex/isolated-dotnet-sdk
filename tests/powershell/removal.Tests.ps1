@@ -79,6 +79,36 @@ Describe 'PowerShell removal behavior' {
             ($whatIfOutput -join [Environment]::NewLine) | Should -Match 'What if:'
         }
 
+        It 'returns the underlying Windows rename error on the error stream while preserving a locked SDK' -Skip:(-not $IsWindows) {
+            $version = '99.0.199'
+            $installDirectory = Join-Path $script:ToolRoot $version
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            $lockedFile = Join-Path $installDirectory 'lock-test.tmp'
+            Set-Content -LiteralPath $lockedFile -Value 'Windows exclusive lock test'
+            $lockHandle = [IO.File]::Open($lockedFile, [IO.FileMode]::Open,
+                [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            try {
+                $output = @(
+                    & pwsh -NoProfile -File $script:ToolScript -Action Remove -SdkVersion $version -Yes *>&1 |
+                        ForEach-Object { [string]$_ }
+                )
+                $exitCode = $LASTEXITCODE
+
+                $exitCode | Should -Be 1
+                Test-Path -LiteralPath $installDirectory | Should -BeTrue
+                Test-Path -LiteralPath $lockedFile | Should -BeTrue
+                $text = $output -join "`n"
+                $text | Should -Match 'Error:'
+                $text | Should -Match 'Diagnostics:'
+                $text | Should -Match 'Details:'
+                $text | Should -Match 'Underlying error:'
+                $text | Should -Match 'Access to the path'
+            }
+            finally {
+                $lockHandle.Dispose()
+            }
+        }
+
         It 'forwards the legacy opt-in through bootstrap while WhatIf preserves the target' {
             $version = '1.0.4'
             $publicInstallDirectory = Join-Path $script:ToolRoot $version
@@ -129,21 +159,49 @@ Describe 'PowerShell removal behavior' {
             $script:SdkVersion = $script:RemovalVersion
         }
 
-        It 'prints contextual removal diagnostics and native errors as distinct readable lines' {
+        It 'prints removal errors and native details under distinct uncolored headings when ANSI is unavailable' {
             $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nNo matching SDK processes found.`nDetails: Exception calling Move: access denied."
+            $originalRendering = $PSStyle.OutputRendering
+            try {
+                $PSStyle.OutputRendering = 'PlainText'
+                $displayLines = @(
+                    Write-ToolRemovalFailure -Message $message 6>&1 |
+                        ForEach-Object { [string]$_ }
+                )
+            }
+            finally {
+                $PSStyle.OutputRendering = $originalRendering
+            }
 
-            $displayLines = @(
-                Write-ToolRemovalFailure -Message $message 6>&1 |
-                    ForEach-Object { [string]$_ }
-            )
-
-            $displayLines | Should -Contain 'ERROR: Unable to remove isolated SDK 99.0.0. SDK intact.'
+            $displayLines | Should -Contain 'Error:'
+            $displayLines | Should -Contain '  Unable to remove isolated SDK 99.0.0. SDK intact.'
             $displayLines | Should -Contain 'Diagnostics:'
             $displayLines | Should -Contain '  Access denied can also mean a lock.'
             $displayLines | Should -Contain '  No matching SDK processes found.'
             $displayLines | Should -Contain 'Details:'
             $displayLines | Should -Contain '  Exception calling Move: access denied.'
-            $displayLines.Count | Should -BeGreaterThan 7
+            $displayLines.Count | Should -BeGreaterThan 8
+        }
+
+        It 'colors only the removal diagnostic headings in ANSI terminals' {
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied.`nDetails: Native failure."
+            $originalRendering = $PSStyle.OutputRendering
+            try {
+                $PSStyle.OutputRendering = 'Ansi'
+                $displayLines = @(
+                    Write-ToolRemovalFailure -Message $message 6>&1 |
+                        ForEach-Object { [string]$_ }
+                )
+            }
+            finally {
+                $PSStyle.OutputRendering = $originalRendering
+            }
+
+            $displayLines | Should -Contain "$($PSStyle.Foreground.Red)Error:$($PSStyle.Reset)"
+            $displayLines | Should -Contain "$($PSStyle.Foreground.Yellow)Diagnostics:$($PSStyle.Reset)"
+            $displayLines | Should -Contain "$($PSStyle.Foreground.Cyan)Details:$($PSStyle.Reset)"
+            $displayLines | Should -Contain '  Unable to remove isolated SDK 99.0.0. SDK intact.'
+            $displayLines | Should -Contain '  Native failure.'
         }
 
         It 'discovers damaged version directories for Remove but excludes unrelated folders' {
