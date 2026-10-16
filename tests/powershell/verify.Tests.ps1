@@ -31,7 +31,7 @@ Describe 'PowerShell isolated SDK verification' {
                 @{ Text = '            $ExpectedOrigin = [System.IO.Path]::GetFullPath((Join-Path $InstallDirectory ''sdk'')).TrimEnd('; Before = 'local-proof-inventory-validated'; After = '' }
                 @{ Text = '            if (-not $FoundVersion) {'; Before = 'local-proof-origin-comparison-complete'; After = '' }
                 @{ Text = '                $Checks.Add([pscustomobject]@{ Label = ''SDK inventory''; Status = ''OK''; Detail = "$Version from $ExpectedOrigin" })'; Before = 'local-proof-version-start'; After = '' }
-                @{ Text = '                    elseif (($ResolvedVersion -join '''').Trim() -cne $Version) {'; Before = 'local-proof-version-complete'; After = '' }
+                @{ Text = '                    $Checks.Add([pscustomobject]@{ Label = ''SDK resolution''; Status = ''OK''; Detail = $Version })'; Before = 'local-proof-version-complete'; After = '' }
                 @{ Text = '        [Environment]::SetEnvironmentVariable(''DOTNET_MULTILEVEL_LOOKUP'', $PreviousMultiLevel, ''Process'')'; Before = 'local-proof-cleanup-in-progress'; After = '' }
                 @{ Text = 'function Test-IsolatedSdk {'; Before = ''; After = 'verify-function-enter' }
                 @{ Text = "    Write-ToolHeading 'Verify isolated .NET SDK'"; Before = 'local-proof-complete'; After = '' }
