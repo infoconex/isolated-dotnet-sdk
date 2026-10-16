@@ -270,6 +270,9 @@ The resulting archive additionally includes:
   managed instruction, command handling, output, and process-exit event.
 - `stack-host-startup-summary.csv` — automatically correlated process-created,
   managed-entry, and exit UTC events, grouped by invocation ID and process ID.
+  For the normal SDK inventory command, the summary also correlates the
+  PowerShell-local-proof marker with OS process creation, splitting its total
+  duration into call-to-process, process-to-managed-entry, and managed execution.
 
 The existing `step-timings.csv` adds UTC markers for the test/child
 scopes, product bootstrap, selected action, SDK validation, failure
