@@ -2830,7 +2830,7 @@ function Get-SdkRemovalFailureDiagnostics {
 
     if ($IsWindows) {
         try {
-            $SdkPath = [IO.Path]::GetFullPath($InstallDirectory).TrimEnd('\\', '/') + [IO.Path]::DirectorySeparatorChar
+            $SdkPath = [IO.Path]::GetFullPath($InstallDirectory).TrimEnd([char]'\', [char]'/') + [IO.Path]::DirectorySeparatorChar
             $MatchingProcesses = @(
                 Get-CimInstance -ClassName Win32_Process -ErrorAction Stop |
                     Where-Object {
@@ -2843,8 +2843,8 @@ function Get-SdkRemovalFailureDiagnostics {
             )
 
             if ($MatchingProcesses.Count -gt 0) {
-                $Matches = @($MatchingProcesses | ForEach-Object { "$($_.Name) (PID $($_.ProcessId))" })
-                $Lines.Add("Processes referencing this SDK (not confirmed file-lock holders): $($Matches -join ', ')")
+                $MatchingDescriptions = @($MatchingProcesses | ForEach-Object { "$($_.Name) (PID $($_.ProcessId))" })
+                $Lines.Add("Processes referencing this SDK (not confirmed file-lock holders): $($MatchingDescriptions -join ', ')")
             }
             else {
                 $Lines.Add('No running processes referencing the SDK were found; this does not rule out open file handles.')
