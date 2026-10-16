@@ -396,6 +396,12 @@ Describe 'PowerShell removal behavior' {
                     $message | Should -Match 'Unable to remove isolated SDK'
                     $message | Should -Match 'The installation directory could not be renamed'
                     $message | Should -Match 'The original installation remains intact'
+                    $message | Should -Match '(?s)Diagnostics:.*Possible causes:'
+                    $message | Should -Match 'file handles'
+                    if ($IsWindows) {
+                        $message | Should -Match 'Resource Monitor'
+                        $message | Should -Match 'icacls'
+                    }
                     $message | Should -Match '(?s)Details:\s*\S+'
                     # A failed rename must not relocate individual SDK files
                     # or destroy the original installation/recovery identity.
@@ -427,7 +433,7 @@ Describe 'PowerShell removal behavior' {
                 throw 'simulated locked file'
             }
 
-            { Remove-IsolatedSdk -Yes } | Should -Throw '*incomplete*Details: simulated locked file*'
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*incomplete*Diagnostics:*Details: simulated locked file*'
             Test-Path -LiteralPath $installDirectory | Should -BeFalse
             $record = Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion
             Test-Path -LiteralPath $record -PathType Leaf | Should -BeTrue
