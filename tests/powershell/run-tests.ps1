@@ -229,6 +229,59 @@ try {
                     @($probeRows | Where-Object { $_.Mode -eq 'DirectProcess' -and $_.Phase -eq 'native-list-sdks-complete' }).Count -lt 3) {
                     throw 'Stack launch profiling requires multiple measured invocations for both mechanisms.'
                 }
+                # Join OS process creation, first managed instruction and exit
+                # by invocation ID plus PID. These are separate UTC sources.
+                $startupPath = Join-Path $traceRoot 'stack-host-startup.tsv'
+                if (-not (Test-Path -LiteralPath $startupPath -PathType Leaf)) {
+                    throw 'The fake dotnet host emitted no deep process startup phases.'
+                }
+                $hostEvents = @(
+                    foreach ($line in (Get-Content -LiteralPath $startupPath)) {
+                        $columns = $line.Split([char]9)
+                        if ($columns.Count -ne 7) {
+                            throw "Invalid fake host startup event: $line"
+                        }
+                        [pscustomobject]@{
+                            Utc = [datetimeoffset]::Parse($columns[0], [System.Globalization.CultureInfo]::InvariantCulture)
+                            InvocationId = $columns[2]
+                            ProcessId = $columns[3]
+                            Command = $columns[4]
+                            Phase = $columns[5]
+                        }
+                    }
+                )
+                $startupRows = @(
+                    foreach ($group in ($hostEvents | Group-Object InvocationId, ProcessId)) {
+                        $events = @($group.Group)
+                        $osStart = @($events | Where-Object Phase -eq 'os-process-created' | Select-Object -First 1)
+                        $mainEntry = @($events | Where-Object Phase -eq 'main-entry' | Select-Object -First 1)
+                        $exitEvent = @($events | Where-Object Phase -eq 'process-exit' | Select-Object -First 1)
+                        if ($osStart.Count -eq 0 -or $mainEntry.Count -eq 0 -or $exitEvent.Count -eq 0) {
+                            continue
+                        }
+                        [pscustomobject]@{
+                            InvocationId = $events[0].InvocationId
+                            ProcessId = $events[0].ProcessId
+                            Command = $events[0].Command
+                            ProcessCreatedUtc = $osStart[0].Utc.ToString('o')
+                            ManagedMainUtc = $mainEntry[0].Utc.ToString('o')
+                            ProcessExitUtc = $exitEvent[0].Utc.ToString('o')
+                            OsProcessToManagedMainMs = [math]::Round(($mainEntry[0].Utc - $osStart[0].Utc).TotalMilliseconds, 3)
+                            ManagedMainToExitMs = [math]::Round(($exitEvent[0].Utc - $mainEntry[0].Utc).TotalMilliseconds, 3)
+                        }
+                    }
+                )
+                if ($startupRows.Count -lt 4) {
+                    throw "Expected at least four startup pairs; found $($startupRows.Count)."
+                }
+                $startupRows |
+                    Export-Csv -LiteralPath (Join-Path $traceRoot 'stack-host-startup-summary.csv') -NoTypeInformation -Encoding utf8
+                Write-Output ('Compiled fake host startup/managed phases: {0} correlated processes' -f $startupRows.Count)
+                $startupRows |
+                    Select-Object -First 16 Command, OsProcessToManagedMainMs, ManagedMainToExitMs |
+                    Format-Table -AutoSize |
+                    Out-String -Width 180 |
+                    Write-Output
                 Write-Output ('Independent launch controls: {0} rows' -f $probeRows.Count)
                 $probeRows |
                     Where-Object Phase -eq 'native-list-sdks-complete' |
