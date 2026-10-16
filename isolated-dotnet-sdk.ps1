@@ -2836,6 +2836,7 @@ function Invoke-ConfirmedSdkRemovalStaging {
         $Stream.Write($Bytes, 0, $Bytes.Length)
     }
     finally { $Stream.Dispose() }
+    $StagePhase = 'preparation'
     try {
         $ProofStream = [IO.File]::Open($Proof, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
         try {
@@ -2846,9 +2847,13 @@ function Invoke-ConfirmedSdkRemovalStaging {
         # PowerShell Move-Item can move individual children before failing on a
         # locked Windows file, leaving a split SDK. Both paths are siblings on
         # the same volume; use an atomic directory rename instead.
+        $StagePhase = 'rename'
         [System.IO.Directory]::Move($InstallDir, $Stage)
     }
     catch {
+        # Preserve the exception text: an access error may have causes other
+        # than a file lock, and the native message is useful for diagnosis.
+        $OriginalError = $_.Exception.Message
         $OriginalExists = $null -ne (Get-Item -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue)
         $StageExists = $null -ne (Get-Item -LiteralPath $Stage -Force -ErrorAction SilentlyContinue)
 
@@ -2859,7 +2864,20 @@ function Invoke-ConfirmedSdkRemovalStaging {
             Remove-Item -LiteralPath $Proof -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue
         }
-        throw
+
+        $RecordExists = $null -ne (Get-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue)
+        $ProofExists = $null -ne (Get-Item -LiteralPath $Proof -Force -ErrorAction SilentlyContinue)
+        if ($OriginalExists -and -not $StageExists -and -not $RecordExists -and -not $ProofExists) {
+            $Explanation = if ($StagePhase -eq 'rename') {
+                'The installation directory could not be renamed.'
+            }
+            else {
+                'Removal staging could not be prepared.'
+            }
+            throw "Unable to remove isolated SDK $Version. $Explanation The original installation remains intact; no SDK files were removed. Close applications using this SDK, check filesystem permissions, and try Remove again.`nDetails: $OriginalError"
+        }
+
+        throw "Unable to remove isolated SDK $Version. Removal staging did not complete, and the filesystem state could not be verified. Do not retry until the SDK and recovery directories have been inspected.`nDetails: $OriginalError"
     }
 }
 
@@ -2872,7 +2890,7 @@ function Complete-PendingRemoval {
             Invoke-IsolatedSdkDirectoryRemoval -InstallDirectory $State.Stage
         }
         catch {
-            throw "SDK $Version removal incomplete at $($State.Stage). Files may be in use or partially deleted. Free blocking processes and run Remove again. $($_.Exception.Message)"
+            throw "SDK $Version removal incomplete at $($State.Stage). Files may be in use or partially deleted. Free blocking processes, check filesystem permissions, and try Remove again.`nDetails: $($_.Exception.Message)"
         }
         finally { $script:RemovalProofPath = $null }
     }
