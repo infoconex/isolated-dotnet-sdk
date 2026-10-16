@@ -123,13 +123,3 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
-
-      # Temporary opt-in smoke run for Issue #181's diagnostic PR only.
-      - name: Run Issue 181 Verify step profiler
-        if: github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
-        shell: pwsh
-        run: |
-          & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifySteps
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
-          }
