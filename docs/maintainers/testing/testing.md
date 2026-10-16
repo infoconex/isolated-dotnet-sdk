@@ -207,7 +207,7 @@ the step flag already enables the latter's existing child and fake-host events.
 
 The runner prints buffered per-step timings at the end and creates the same
 temporary ZIP report as regular Verify tracing, with one additional file:
-`step-timings.csv`. Each row has `Scope` (`Test` or `Child`),
+`step-timings.csv`. Each row has `Scope` (`Test`, `Child`, or `Native`),
 `InvocationId`, `Scenario`, `Step`, `ElapsedMs` since the preceding
 marker **within that scope/invocation**, and `CumulativeMs` since the scope
 started (blank for `Native`). Follow each scenario's rows in recorded order;
@@ -218,8 +218,9 @@ probes and process startup.
 
 For this diagnostic **only**, the test creates an instrumented *copy* of the
 already-installed PowerShell tool in its unique temporary HOME. Markers inside
-that copy bracket local SDK proof, metadata classification, component
-gathering, failure handling, and report presentation. The child also records
+that copy bracket local SDK proof (including filesystem preflight, environment
+preparation, SDK inventory, origin comparison, and version resolution), metadata
+classification, component gathering, failure handling, and report presentation. The child also records
 metadata mock, product invocation, and return milestones. The original native
 `dotnet` invocation statements are **not altered**. Existing fake-host start
 and exit events yield additional `Scope=Native` rows with the native
@@ -230,9 +231,9 @@ return, and once for the test after teardown. No step events are collected
 without the flag.
 
 **Measurement limitations:** the first child-side marker occurs *after*
-PowerShell startup. Native host intervals bracket invocation and return but
-do not individually separate native startup, teardown, or PowerShell stream
-processing. Product-function intervals can contain nested instrumentation;
+PowerShell startup. Native host intervals cover only the compiled fake host's managed
+`Main` to `ProcessExit`: they exclude process creation, runtime initialization
+before `Main`, and PowerShell native-command dispatch and stream processing. Product-function intervals can contain nested instrumentation;
 do not sum overlapping parent and child spans. Reporting and test-only code
 insertion introduce measurement overhead, so this is a **diagnostic breakdown**,
 not a valid before/after throughput benchmark or proof of a production
