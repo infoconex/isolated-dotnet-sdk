@@ -4,6 +4,57 @@ Describe 'PowerShell isolated SDK verification' {
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
         $script:HomeVariableName = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
 
+        function Add-VerifyTestStep {
+            param([string]$Step)
+            if ($null -eq $script:VerifyStepTimer) { return }
+            $nowMs = $script:VerifyStepTimer.Elapsed.TotalMilliseconds
+            $script:VerifyStepRecords.Add([pscustomobject]@{
+                    Scope = 'Test'
+                    InvocationId = ''
+                    Scenario = $script:VerifyStepScenario
+                    Step = $Step
+                    ElapsedMs = [math]::Round($nowMs - $script:VerifyStepLastMs, 3)
+                    CumulativeMs = [math]::Round($nowMs, 3)
+                })
+            $script:VerifyStepLastMs = $nowMs
+        }
+
+        function Initialize-VerifyStepInstrumentedTool {
+            # Modify only the one case's temporary installed-tool copy.
+            # The committed product script and other cases are untouched.
+            $content = Get-Content -LiteralPath $script:ToolPath -Raw
+            $markers = @(
+                @{ Text = 'function Test-IsolatedSdk {'; Before = ''; After = 'verify-function-enter' }
+                @{ Text = '    $Validation = Get-LocalIsolatedSdkValidation -Version $SdkVersion -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet'; Before = 'local-proof-start'; After = 'local-proof-complete' }
+                @{ Text = '        $Classification = Get-VerifyAuditClassification -Version $SdkVersion'; Before = 'classification-start'; After = 'classification-complete' }
+                @{ Text = "    Write-ToolHeading 'SDK information:'"; Before = 'report-sdk-information-start'; After = '' }
+                @{ Text = "    Write-ToolHeading 'Installed components:'"; Before = 'report-sdk-information-complete'; After = '' }
+                @{ Text = '        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet -Version $SdkVersion'; Before = 'components-start'; After = 'components-complete' }
+                @{ Text = "    Write-ToolHeading 'Verification:'"; Before = 'report-verification-start'; After = '' }
+                @{ Text = '        $Inventory = @(& $DotNetPath --list-sdks)'; Before = 'native-list-sdks-start'; After = 'native-list-sdks-complete' }
+                @{ Text = '                    $ResolvedVersion = @(& $DotNetPath --version)'; Before = 'native-version-start'; After = 'native-version-complete' }
+                @{ Text = '        $InfoLines = @(& $DotNetPath --info 2>$null)'; Before = 'native-info-start'; After = 'native-info-complete' }
+                @{ Text = '        $RuntimeLines = @(& $DotNetPath --list-runtimes 2>$null)'; Before = 'native-runtimes-start'; After = 'native-runtimes-complete' }
+            )
+            foreach ($marker in $markers) {
+                $needle = [string]$marker.Text
+                if ($content.Split(@($needle), [System.StringSplitOptions]::None).Count -ne 2) {
+                    throw "Verify step instrumentation boundary changed: $needle"
+                }
+                $prefix = if ($marker.Before) {
+                    "Mark-VerifyChildStep '$($marker.Before)'" + [Environment]::NewLine
+                }
+                else { '' }
+                $suffix = if ($marker.After) {
+                    [Environment]::NewLine + "Mark-VerifyChildStep '$($marker.After)'"
+                }
+                else { '' }
+                $content = $content.Replace($needle, $prefix + $needle + $suffix)
+            }
+            [System.IO.File]::WriteAllText(
+                $script:ToolPath, $content, [System.Text.UTF8Encoding]::new($false))
+        }
+
         function Install-FakeIsolatedHost {
             param(
                 [Alias('SdkVersion')]
@@ -28,6 +79,7 @@ Describe 'PowerShell isolated SDK verification' {
             param([string]$Version = '')
             $env:VERIFY_TARGET_VERSION = $Version
             $env:VERIFY_TOOL_PATH = $script:ToolPath
+            Add-VerifyTestStep 'child-parameters-ready'
             $command = @'
 function Invoke-RestMethod {
     param([string]$Uri)
@@ -87,6 +139,50 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
                         [Environment]::NewLine +
                         'exit $verifyExitCode')
             }
+            if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH)) {
+                # Buffer monotonic child timestamps; write them only after Verify returns.
+                $stepPrefix = @'
+$verifyStepTimer = [System.Diagnostics.Stopwatch]::StartNew()
+$script:verifyStepLastMs = 0.0
+$verifyStepEvents = [System.Collections.Generic.List[object]]::new()
+function Mark-VerifyChildStep {
+    param([string]$Step)
+    $nowMs = $verifyStepTimer.Elapsed.TotalMilliseconds
+    $verifyStepEvents.Add([pscustomobject]@{
+        Scope = 'Child'
+        InvocationId = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION
+        Scenario = $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO
+        Step = $Step
+        ElapsedMs = [math]::Round($nowMs - $script:verifyStepLastMs, 3)
+        CumulativeMs = [math]::Round($nowMs, 3)
+    })
+    $script:verifyStepLastMs = $nowMs
+}
+Mark-VerifyChildStep 'child-command-start'
+'@
+                $command = $stepPrefix + [Environment]::NewLine + $command
+                $stepChanges = @(
+                    @{ Old = 'function Invoke-RestMethod {'; New = "Mark-VerifyChildStep 'metadata-mock-definition'" + [Environment]::NewLine + 'function Invoke-RestMethod {' }
+                    @{ Old = '    param([string]$Uri)'; New = '    param([string]$Uri)' + [Environment]::NewLine + "    Mark-VerifyChildStep 'metadata-mock-enter'" }
+                    @{ Old = '        $path = Join-Path $env:VERIFY_METADATA_ROOT $name'; New = '        $path = Join-Path $env:VERIFY_METADATA_ROOT $name' + [Environment]::NewLine + "        Mark-VerifyChildStep 'metadata-path-selected'" }
+                    @{ Old = '            Write-VerifyChildTraceEvent -EventName ''metadata-success'' -Detail $Uri'; New = "            Mark-VerifyChildStep 'metadata-json-parsed'" + [Environment]::NewLine + '            Write-VerifyChildTraceEvent -EventName ''metadata-success'' -Detail $Uri' }
+                    @{ Old = '    Write-VerifyChildTraceEvent -EventName ''metadata-failure'' -Detail $Uri'; New = "    Mark-VerifyChildStep 'metadata-unavailable'" + [Environment]::NewLine + '    Write-VerifyChildTraceEvent -EventName ''metadata-failure'' -Detail $Uri' }
+                    @{ Old = 'Write-VerifyChildTraceEvent -EventName ''product-entry'''; New = "Mark-VerifyChildStep 'product-entry'" + [Environment]::NewLine + 'Write-VerifyChildTraceEvent -EventName ''product-entry''' }
+                    @{ Old = '$verifyExitCode = $LASTEXITCODE'; New = '$verifyExitCode = $LASTEXITCODE' + [Environment]::NewLine + "Mark-VerifyChildStep 'product-return'" }
+                    @{ Old = 'exit $verifyExitCode'; New = @'
+Mark-VerifyChildStep 'child-buffer-flush'
+$verifyStepEvents | Export-Csv -LiteralPath $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -Append -NoTypeInformation -Encoding utf8
+exit $verifyExitCode
+'@ }
+                )
+                foreach ($change in $stepChanges) {
+                    if (-not $command.Contains($change.Old)) {
+                        throw "Verify child step marker changed: $($change.Old)"
+                    }
+                    $command = $command.Replace($change.Old, $change.New)
+                }
+                Add-VerifyTestStep 'child-command-instrumented'
+            }
             if ([string]::IsNullOrWhiteSpace($tracePath)) {
                 $lines = @(& pwsh -NoProfile -Command $command 2>&1)
                 $script:VerifyExitCode = $LASTEXITCODE
@@ -108,6 +204,7 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
                         'ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', $previousInvocation, 'Process')
                 }
                 $script:VerifyExitCode = $exitCode
+                Add-VerifyTestStep 'child-process-completed'
                 [pscustomobject]@{
                     StartedUtc = $startedUtc.ToString('o')
                     EndedUtc = [DateTime]::UtcNow.ToString('o')
@@ -117,18 +214,29 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
                     ChildPwshMs = [math]::Round($timer.Elapsed.TotalMilliseconds, 2)
                     ExitCode = $exitCode
                 } | Export-Csv -LiteralPath $tracePath -Append -NoTypeInformation -Encoding utf8
+                Add-VerifyTestStep 'child-invocation-recorded'
             }
             return $lines
         }
     }
 
     BeforeEach {
+        $script:VerifyStepTimer = $null
+        $script:VerifyStepRecords = $null
+        $script:VerifyStepLastMs = 0.0
+        $script:VerifyStepScenario = 'setup'
+        if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH)) {
+            $script:VerifyStepTimer = [System.Diagnostics.Stopwatch]::StartNew()
+            $script:VerifyStepRecords = [System.Collections.Generic.List[object]]::new()
+            Add-VerifyTestStep 'beforeeach-start'
+        }
         $script:TestRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("isolated-dotnet-sdk-verify-tests-{0}" -f [guid]::NewGuid())
         $script:TestHome = Join-Path $script:TestRoot 'home'
         $script:ToolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $script:ToolPath = Join-Path $script:ToolRoot 'isolated-dotnet-sdk.ps1'
         $script:SourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk-source.ps1'
         $script:OriginalHomeValue = [Environment]::GetEnvironmentVariable($script:HomeVariableName, 'Process')
+        Add-VerifyTestStep 'test-paths-prepared'
         $script:OriginalTraceCase = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE', 'Process')
         if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH)) {
             $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE = [IO.Path]::GetFileName($script:TestRoot)
@@ -139,24 +247,40 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
         # unrelated bootstrap process before each test.
         New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
         Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+        Add-VerifyTestStep 'tool-fixture-copied'
         Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:TestHome, 'Process')
+        Add-VerifyTestStep 'beforeeach-complete'
     }
 
     AfterEach {
+        Add-VerifyTestStep 'aftereach-start'
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE', $script:OriginalTraceCase, 'Process')
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO -ErrorAction SilentlyContinue
         foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_SUPPRESS_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO', 'FAKE_DOTNET_RUNTIME_EXIT_CODE', 'FAKE_DOTNET_RUNTIME_PROBE_MARKER')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Add-VerifyTestStep 'aftereach-cleanup-complete'
+        if ($null -ne $script:VerifyStepRecords) {
+            $script:VerifyStepRecords |
+                Export-Csv -LiteralPath $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -Append -NoTypeInformation -Encoding utf8
+            $script:VerifyStepRecords = $null
+            $script:VerifyStepTimer = $null
+        }
     }
 
-    It 'preserves success and failure exit codes in optional Verify tracing' {
+    It 'preserves success and failure exit codes in optional Verify tracing' -Tag VerifyStepProfile {
         $previousTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', 'Process')
         $previousChildTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', 'Process')
         try {
+            if ($null -ne $script:VerifyStepRecords) {
+                Add-VerifyTestStep 'scenario-start'
+                Initialize-VerifyStepInstrumentedTool
+                Add-VerifyTestStep 'tool-copy-instrumented'
+            }
             # Exercise the actual traced child command even in an ordinary CI run.
             $tracePath = if ([string]::IsNullOrWhiteSpace($previousTrace)) {
                 Join-Path $script:TestRoot 'verify-invocations.csv'
@@ -172,6 +296,7 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
             }
             $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH = $tracePath
             $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH = $childTracePath
+            Add-VerifyTestStep 'trace-paths-ready'
             $previousCount = if (Test-Path -LiteralPath $tracePath -PathType Leaf) {
                 @(Import-Csv -LiteralPath $tracePath).Count
             }
@@ -179,20 +304,36 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
                 0
             }
 
+            $script:VerifyStepScenario = 'missing-sdk'
+            if ($null -ne $script:VerifyStepRecords) {
+                $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO = $script:VerifyStepScenario
+            }
+            Add-VerifyTestStep 'missing-sdk-invocation-start'
             $missing = @(Invoke-VerifyTool -Version '99.0.100')
+            Add-VerifyTestStep 'missing-sdk-invocation-complete'
             $script:VerifyExitCode | Should -Be 1
             ($missing -join [Environment]::NewLine) | Should -Match 'not installed'
+            Add-VerifyTestStep 'missing-sdk-assertions-complete'
 
+            $script:VerifyStepScenario = 'healthy-sdk'
+            if ($null -ne $script:VerifyStepRecords) {
+                $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO = $script:VerifyStepScenario
+            }
+            Add-VerifyTestStep 'healthy-fixture-install-start'
             Install-FakeIsolatedHost -Version '99.0.100' | Out-Null
+            Add-VerifyTestStep 'healthy-fixture-install-complete'
             $healthy = @(Invoke-VerifyTool -Version '99.0.100')
+            Add-VerifyTestStep 'healthy-sdk-invocation-complete'
             $script:VerifyExitCode | Should -Be 0
             ($healthy -join [Environment]::NewLine) | Should -Match 'verified successfully'
+            Add-VerifyTestStep 'healthy-sdk-assertions-complete'
 
             $newCalls = @(Import-Csv -LiteralPath $tracePath | Select-Object -Skip $previousCount)
             $newCalls.Count | Should -Be 2
             $newCalls[0].ExitCode | Should -Be '1'
             $newCalls[1].ExitCode | Should -Be '0'
             (Get-Content -LiteralPath $childTracePath -Raw) | Should -Match 'product-return'
+            Add-VerifyTestStep 'trace-assertions-complete'
         }
         finally {
             [Environment]::SetEnvironmentVariable(
