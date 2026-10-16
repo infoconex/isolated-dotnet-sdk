@@ -327,6 +327,15 @@ Mark-VerifyChildStep 'child-command-start'
             Add-VerifyTestStep 'healthy-fixture-install-complete'
             $healthy = @(Invoke-VerifyTool -Version '99.0.100')
             Add-VerifyTestStep 'healthy-sdk-invocation-complete'
+            if ($null -ne $script:VerifyStepRecords -and $script:VerifyExitCode -ne 0) {
+                # On an unexpected failure keep the child output outside the disposable
+                # HOME and print it before Pester reports the failed exit-code assertion.
+                $errorText = ($healthy | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+                $diagnosticPath = Join-Path (Split-Path -Parent $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH) 'unexpected-healthy-output.txt'
+                [System.IO.File]::WriteAllText($diagnosticPath, $errorText)
+                Write-Host 'Unexpected healthy Verify child output:'
+                Write-Host $errorText
+            }
             $script:VerifyExitCode | Should -Be 0
             ($healthy -join [Environment]::NewLine) | Should -Match 'verified successfully'
             Add-VerifyTestStep 'healthy-sdk-assertions-complete'
