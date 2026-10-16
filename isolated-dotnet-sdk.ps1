@@ -160,8 +160,26 @@ function Write-ToolRemovalFailure {
     Write-ToolDisplay "  $($Sections[0])"
     Write-ToolDisplay
     Write-ToolDisplay (Format-ToolMessage -Kind Diagnostics -Message 'Diagnostics:')
+    $NestedHeadings = @('Possible causes:', 'To find a file-lock holder:')
     foreach ($Line in ($Details[0] -split "`n")) {
-        Write-ToolDisplay "  $Line"
+        $NestedHeading = $null
+        foreach ($Candidate in $NestedHeadings) {
+            if ($Line.StartsWith($Candidate, [StringComparison]::Ordinal)) {
+                $NestedHeading = $Candidate
+                break
+            }
+        }
+        if ($null -ne $NestedHeading) {
+            Write-ToolDisplay
+            Write-ToolDisplay "  $(Format-ToolMessage -Kind Details -Message $NestedHeading)"
+            $Explanation = $Line.Substring($NestedHeading.Length).TrimStart()
+            if (-not [string]::IsNullOrWhiteSpace($Explanation)) {
+                Write-ToolDisplay "    $Explanation"
+            }
+        }
+        else {
+            Write-ToolDisplay "  $Line"
+        }
     }
     Write-ToolDisplay
     Write-ToolDisplay (Format-ToolMessage -Kind Details -Message 'Details:')
