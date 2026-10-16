@@ -334,8 +334,8 @@ Mark-VerifyChildStep 'child-command-start'
                 $errorText = ($healthy | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
                 $diagnosticPath = Join-Path (Split-Path -Parent $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH) 'unexpected-healthy-output.txt'
                 [System.IO.File]::WriteAllText($diagnosticPath, $errorText)
-                Write-Host 'Unexpected healthy Verify child output:'
-                Write-Host $errorText
+                Write-Information 'Unexpected healthy Verify child output:' -InformationAction Continue
+                Write-Information $errorText -InformationAction Continue
             }
             $script:VerifyExitCode | Should -Be 0
             ($healthy -join [Environment]::NewLine) | Should -Match 'verified successfully'
