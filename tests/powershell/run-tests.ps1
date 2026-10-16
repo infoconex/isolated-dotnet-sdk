@@ -68,6 +68,9 @@ if ($traceEnabled) {
     if ($TraceVerifySteps) {
         $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH = Join-Path $traceRoot 'step-timings.csv'
     }
+    else {
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -ErrorAction SilentlyContinue
+    }
     if ($TraceVerifyStack) {
         $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH = Join-Path $traceRoot 'stack-launch-probes.csv'
         $env:ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH = Join-Path $traceRoot 'stack-host-startup.tsv'
@@ -75,9 +78,6 @@ if ($traceEnabled) {
     else {
         Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH -ErrorAction SilentlyContinue
-    }
-    else {
-        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -ErrorAction SilentlyContinue
     }
 }
 
