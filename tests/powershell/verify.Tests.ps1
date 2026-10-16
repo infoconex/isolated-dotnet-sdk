@@ -48,6 +48,11 @@ Describe 'PowerShell isolated SDK verification' {
                 @{ Text = '        $Classification = Get-VerifyAuditClassification -Version $SdkVersion'; Before = 'classification-start'; After = 'classification-complete' }
                 @{ Text = "    Write-ToolHeading 'SDK information:'"; Before = 'report-sdk-information-start'; After = '' }
                 @{ Text = "    Write-ToolHeading 'Installed components:'"; Before = 'report-sdk-information-complete'; After = '' }
+                @{ Text = '        # Legacy hosts expose architecture in the RID but not as a separate field.'; Before = 'components-info-native-finished'; After = '' }
+                @{ Text = '        # Original 1.x and early 2.x hosts do not support --list-runtimes.'; Before = 'components-info-processed'; After = '' }
+                @{ Text = '            $Items = [System.Collections.Generic.List[object]]::new()'; Before = 'components-runtimes-native-finished'; After = '' }
+                @{ Text = '            $Result.Runtimes = @($Items | Sort-Object Name, Version)'; Before = 'components-runtimes-parsed'; After = '' }
+                @{ Text = '        [Environment]::SetEnvironmentVariable(''DOTNET_MULTILEVEL_LOOKUP'', $PreviousMulti, ''Process'')'; Before = 'components-cleanup-start'; After = '' }
                 @{ Text = '        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet -Version $SdkVersion'; Before = 'components-start'; After = 'components-complete' }
                 @{ Text = "    Write-ToolHeading 'Verification:'"; Before = 'report-verification-start'; After = '' }
             )
