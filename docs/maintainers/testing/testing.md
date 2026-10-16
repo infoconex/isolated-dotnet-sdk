@@ -240,6 +240,49 @@ not a valid before/after throughput benchmark or proof of a production
 performance regression. The unmodified `-TraceVerifyProcesses` mode remains
 available for full Verify tracing.
 
+### Deep native Verify stack instrumentation (experimental)
+
+On Windows, the following command enables the full diagnostic stack:
+
+```powershell
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifyStack
+```
+
+This experimental flag implies `-TraceVerifySteps`, `-TraceVerifyProcesses`, and the
+test-only native-host phase markers. Do not combine these switches. It
+runs the same one tagged Pester case, plus **four additional fresh child
+PowerShell processes**. Each of the latter runs the fake `dotnet.exe --list-sdks`
+three times, alternating PowerShell's native-command pipeline and direct
+`System.Diagnostics.Process` calls. Only this flag enables the extra
+processes; regular validation is unchanged.
+
+The resulting archive additionally includes:
+
+- `stack-launch-probes.csv` — buffered command timings in each
+  control child process, with unique invocation IDs, UTC timestamps, mode,
+  exit code, and diagnostics.
+- `stack-probe-processes.csv` — total lifecycle wall time for each
+  control child PowerShell process.
+- `stack-host-startup.tsv` — native fake-host managed `Main`
+  checkpoints, including the Windows process creation UTC timestamp, first
+  managed instruction, command handling, output, and process-exit event.
+
+The existing `step-timings.csv` adds UTC markers for the test/child
+scopes, product bootstrap, selected action, SDK validation, failure
+`Write-Error` boundary and return. All step/host records are
+buffered and written at the end of each measured process. The optional
+existing per-process trace remains a separate timestamp source.
+
+**Limits:** The Windows OS process-start timestamp is an estimate of the
+boundary before managed `Main`, not a continuous trace of the OS loader,
+antivirus, or CLR boot internals. Independent clocks and instrumentation
+overhead introduce imprecision. Correlate by invocation ID and UTC events,
+not by adding overlapping parent, child, and native durations. Cold/warm
+commands are ordered controls, not a randomized benchmark; a large
+difference identifies a phase to investigate, not its definitive cause.
+Do not disable real subprocess validation or change the product to
+accommodate profiling results.
+
 ### Historical Windows reference
 
 The successful [Issue #161 Validate run](https://github.com/infoconex/isolated-dotnet-sdk/actions/runs/38745162881)
