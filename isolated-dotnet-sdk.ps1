@@ -2619,7 +2619,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
         }
 
         $KnownLegacyVersions = @('1.0.4', '1.1.5', '1.1.14', '2.0.3', '2.1.105')
-        if ($AllowUnsupportedShutdown -and $SdkVersion -in $KnownLegacyVersions) {
+        if ($SdkVersion -in $KnownLegacyVersions) {
             $SdkPayload = Join-Path (Join-Path $IsolatedRoot 'sdk') $SdkVersion
             if (-not (Test-Path -LiteralPath $SdkPayload -PathType Container)) {
                 throw "Unable to classify legacy shutdown for SDK $($SdkVersion): SDK payload missing."
@@ -2649,7 +2649,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
                 if (-not (Test-Path -LiteralPath $Compiler -PathType Leaf)) {
                     throw "Legacy compiler shutdown unavailable for SDK $SdkVersion; removal stopped."
                 }
-                Write-ToolWarning "Legacy SDK $SdkVersion lacks unified shutdown; using SDK-local Roslyn shutdown by explicit opt-in. Other build processes may remain."
+                Write-ToolWarning "Legacy SDK $SdkVersion lacks unified shutdown; using SDK-local Roslyn shutdown. Other build processes may remain and files in use may prevent complete removal."
                 $null = & $DotNetPath exec $Compiler -shutdown
                 $ExitCode = $LASTEXITCODE
             }
@@ -2658,7 +2658,7 @@ function Invoke-IsolatedSdkBuildServerShutdown {
                 if ($CompilerServers.Count -gt 0) {
                     throw "Unrecognized compiler-server payload in SDK $SdkVersion; removal stopped."
                 }
-                Write-ToolWarning "Legacy SDK $SdkVersion has no supported shutdown command; bypass authorized explicitly. Other build processes may remain."
+                Write-ToolWarning "Legacy SDK $SdkVersion has no supported shutdown command. Other build processes may remain and files in use may prevent complete removal."
                 $ExitCode = 0
             }
         }

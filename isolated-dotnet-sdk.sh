@@ -2491,7 +2491,7 @@ remove_isolated_sdk() {
             1.0.4|1.1.5|1.1.14|2.0.3|2.1.105) legacy_version=true ;;
         esac
 
-        if [[ "$ALLOW_UNSUPPORTED_SHUTDOWN" == "true" && "$legacy_version" == "true" ]]; then
+        if [[ "$legacy_version" == "true" ]]; then
             # An exact, owner-verified SDK release and its payload directory are
             # prerequisites; never classify arbitrary host exit 1 as unsupported.
             sdk_payload="$install_dir/sdk/$VERSION"
@@ -2522,7 +2522,7 @@ remove_isolated_sdk() {
                     printf 'Legacy compiler shutdown unavailable for SDK %s; removal stopped.\n' "$VERSION" >&2
                     exit 92
                 fi
-                tool_warn "Legacy SDK $VERSION lacks unified shutdown; using SDK-local Roslyn shutdown by explicit opt-in. Other build processes may remain."
+                tool_warn "Legacy SDK $VERSION lacks unified shutdown; using SDK-local Roslyn shutdown. Other build processes may remain and files in use may prevent complete removal."
                 "$isolated_dotnet" exec "$compiler" -shutdown >/dev/null
                 exit $?
             fi
@@ -2538,7 +2538,7 @@ remove_isolated_sdk() {
                 printf 'Unable to inspect SDK %s compiler-server payload; removal stopped.\n' "$VERSION" >&2
                 exit 92
             fi
-            tool_warn "Legacy SDK $VERSION has no supported shutdown command; bypass authorized explicitly. Other build processes may remain."
+            tool_warn "Legacy SDK $VERSION has no supported shutdown command. Other build processes may remain and files in use may prevent complete removal."
             exit 0
         fi
 
