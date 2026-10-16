@@ -336,6 +336,51 @@ Mark-VerifyChildStep 'child-command-start'
                 [System.IO.File]::WriteAllText($diagnosticPath, $errorText)
                 Write-Information 'Unexpected healthy Verify child output:' -InformationAction Continue
                 Write-Information $errorText -InformationAction Continue
+
+                # Diagnostic-only independent launch. This is deliberately after
+                # the measured child process, and runs only if that process fails.
+                # Keep native probe events separate from the normal trace.
+                $hostExe = Join-Path (Join-Path $script:ToolRoot '99.0.100') 'dotnet.exe'
+                $probeLines = [System.Collections.Generic.List[string]]::new()
+                $probeLines.Add("Host exists: $(Test-Path -LiteralPath $hostExe -PathType Leaf)")
+                $probeLines.Add("PowerShell: $($PSVersionTable.PSVersion)")
+                $probeLines.Add("Host file: $hostExe")
+                if (Test-Path -LiteralPath $hostExe -PathType Leaf) {
+                    $probeLines.Add("Host length: $((Get-Item -LiteralPath $hostExe).Length)")
+                    $probeProcess = $null
+                    $previousHostTrace = [Environment]::GetEnvironmentVariable(
+                        'ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', 'Process')
+                    try {
+                        $env:ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH = Join-Path (
+                            Split-Path -Parent $diagnosticPath) 'probe-fake-host-events.tsv'
+                        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+                        $startInfo.FileName = $hostExe
+                        $startInfo.Arguments = '--list-sdks'
+                        $startInfo.UseShellExecute = $false
+                        $startInfo.RedirectStandardOutput = $true
+                        $startInfo.RedirectStandardError = $true
+                        $startInfo.CreateNoWindow = $true
+                        $probeProcess = [System.Diagnostics.Process]::Start($startInfo)
+                        $stdout = $probeProcess.StandardOutput.ReadToEnd()
+                        $stderr = $probeProcess.StandardError.ReadToEnd()
+                        $probeProcess.WaitForExit()
+                        $probeLines.Add("Direct .NET launch exit: $($probeProcess.ExitCode)")
+                        $probeLines.Add("Direct .NET stdout: $stdout")
+                        $probeLines.Add("Direct .NET stderr: $stderr")
+                    }
+                    catch {
+                        $probeLines.Add("Direct .NET launch exception: $($_.Exception.ToString())")
+                    }
+                    finally {
+                        if ($null -ne $probeProcess) { $probeProcess.Dispose() }
+                        [Environment]::SetEnvironmentVariable(
+                            'ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', $previousHostTrace, 'Process')
+                    }
+                }
+                $probeText = $probeLines -join [Environment]::NewLine
+                [System.IO.File]::AppendAllText(
+                    $diagnosticPath, [Environment]::NewLine + $probeText)
+                Write-Information $probeText -InformationAction Continue
             }
             $script:VerifyExitCode | Should -Be 0
             ($healthy -join [Environment]::NewLine) | Should -Match 'verified successfully'
