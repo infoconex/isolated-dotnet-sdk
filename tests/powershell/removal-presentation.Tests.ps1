@@ -134,6 +134,63 @@ Describe 'PowerShell removal presentation' {
         }
     }
 
+    It 'classifies the documented stable pre-unified servicing bands only' {
+        foreach ($version in @('1.0.1', '1.1.12', '2.0.0', '2.1.3', '2.1.4', '2.1.100', '2.1.104', '2.1.200', '2.1.202')) {
+            Test-PreUnifiedSdkVersion -Version $version | Should -BeTrue
+        }
+        foreach ($version in @('1.1.99', '2.1.203', '2.1.299', '2.1.300', '2.1.818', '2.2.207', '2.1.200-preview1')) {
+            Test-PreUnifiedSdkVersion -Version $version | Should -BeFalse
+        }
+    }
+
+    It 'requires an SDK-local Roslyn shutdown on early 2.1.1xx and 2.1.2xx SDKs' {
+        foreach ($version in @('2.1.100', '2.1.104', '2.1.200', '2.1.202')) {
+            $root = Join-Path $TestDrive $version
+            $hostPath = Join-Path $root 'dotnet.cmd'
+            $compilerPath = Join-Path $root "sdk/$version/Roslyn/bincore/VBCSCompiler.dll"
+            New-Item -ItemType Directory -Path (Split-Path $compilerPath -Parent) -Force | Out-Null
+            Set-Content -LiteralPath $compilerPath -Value 'fake'
+            Set-Content -LiteralPath $hostPath -Value (@(
+                    '@echo off'
+                    'if /I "%1 %2"=="build-server --help" ('
+                    '  echo No executable found matching command "dotnet-build-server"'
+                    '  exit /b 1'
+                    ')'
+                    'if /I "%1 %2"=="buildserver --help" ('
+                    '  echo No executable found matching command "dotnet-buildserver"'
+                    '  exit /b 1'
+                    ')'
+                    'if /I "%1"=="exec" if /I "%3"=="-shutdown" exit /b 0'
+                    'exit /b 82'
+                ) -join [Environment]::NewLine)
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } | Should -Not -Throw
+            Remove-Item -LiteralPath $compilerPath -Force
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } |
+                Should -Throw '*Legacy compiler shutdown unavailable*'
+        }
+    }
+
+    It 'handles documented pre-Roslyn servicing releases without invoking unsupported shutdown' {
+        foreach ($version in @('1.0.1', '1.1.12', '2.0.0', '2.1.3', '2.1.4')) {
+            $root = Join-Path $TestDrive $version
+            $hostPath = Join-Path $root 'dotnet.cmd'
+            New-Item -ItemType Directory -Path (Join-Path $root "sdk/$version") -Force | Out-Null
+            Set-Content -LiteralPath $hostPath -Value (@(
+                    '@echo off'
+                    'if /I "%1 %2"=="build-server --help" ('
+                    '  echo No executable found matching command "dotnet-build-server"'
+                    '  exit /b 1'
+                    ')'
+                    'if /I "%1 %2"=="buildserver --help" ('
+                    '  echo No executable found matching command "dotnet-buildserver"'
+                    '  exit /b 1'
+                    ')'
+                    'exit /b 83'
+                ) -join [Environment]::NewLine)
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } | Should -Not -Throw
+        }
+    }
+
     It 'automatically classifies proven historical unsupported shutdown without extra authorization' {
         foreach ($version in @('1.0.4', '1.1.5', '1.1.14', '2.0.3')) {
             $root = Join-Path $TestDrive $version
