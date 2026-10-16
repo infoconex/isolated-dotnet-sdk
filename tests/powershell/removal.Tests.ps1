@@ -160,7 +160,7 @@ Describe 'PowerShell removal behavior' {
         }
 
         It 'prints removal errors and native details under distinct uncolored headings when ANSI is unavailable' {
-            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nPossible causes: open handles or insufficient permissions.`nNo matching SDK processes found.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls "C:\some\sdk".`nDetails: Exception calling Move: access denied."
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nPossible causes: open handles or insufficient permissions.`nNo matching SDK processes found.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls `"C:\some\sdk`".`nDetails: Exception calling Move: access denied."
             $originalRendering = $PSStyle.OutputRendering
             try {
                 $PSStyle.OutputRendering = 'PlainText'
@@ -196,7 +196,7 @@ Describe 'PowerShell removal behavior' {
         }
 
         It 'colors only the removal diagnostic headings in ANSI terminals' {
-            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied.`nPossible causes: open handles or permissions.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls "C:\some\sdk".`nDetails: Native failure."
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied.`nPossible causes: open handles or permissions.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls `"C:\some\sdk`".`nDetails: Native failure."
             $originalRendering = $PSStyle.OutputRendering
             try {
                 $PSStyle.OutputRendering = 'Ansi'
