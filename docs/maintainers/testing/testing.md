@@ -210,17 +210,20 @@ temporary ZIP report as regular Verify tracing, with one additional file:
 `step-timings.csv`. Each row has `Scope` (`Test` or `Child`),
 `InvocationId`, `Scenario`, `Step`, `ElapsedMs` since the preceding
 marker **within that scope/invocation**, and `CumulativeMs` since the scope
-started. Follow each scenario's rows in recorded order; test-level spans
-contain the child's time and **must not** be added to child spans as independent
-work. Correlate child rows with `verify-invocations.csv`,
+started (blank for `Native`). Follow each scenario's rows in recorded order;
+test-level spans contain the child's time and **must not** be added to child
+or native spans as independent work. Correlate child rows with `verify-invocations.csv`,
 `verify-child-events.tsv`, and `fake-host-events.tsv` when examining host
 probes and process startup.
 
 For this diagnostic **only**, the test creates an instrumented *copy* of the
 already-installed PowerShell tool in its unique temporary HOME. Markers inside
-that copy bracket local SDK proof, metadata classification, native `dotnet`
-probes, component gathering, and report presentation. The child also records
-metadata mock, product invocation, and return milestones. The repository's
+that copy bracket local SDK proof, metadata classification, component
+gathering, failure handling, and report presentation. The child also records
+metadata mock, product invocation, and return milestones. The original native
+`dotnet` invocation statements are **not altered**. Existing fake-host start
+and exit events yield additional `Scope=Native` rows with the native
+`dotnet.exe` command and its **Main-to-ProcessExit** duration. The repository's
 production tool source is **not edited**, and other tests run the ordinary tool.
 Step events accumulate in memory and are written once per child process at
 return, and once for the test after teardown. No step events are collected
