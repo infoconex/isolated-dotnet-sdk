@@ -46,7 +46,7 @@ $previousInvocation = [Environment]::GetEnvironmentVariable(
     'ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', 'Process')
 try {
     for ($iteration = 1; $iteration -le $Iterations; $iteration++) {
-        $invocationId = "probe-$Mode-$iteration"
+        $invocationId = "probe-$Mode-$iteration-$([guid]::NewGuid().ToString('N'))"
         $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION = $invocationId
         $startUtc = [datetime]::UtcNow
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
