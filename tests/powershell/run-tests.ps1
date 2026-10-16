@@ -110,7 +110,7 @@ try {
     }
     if ($TraceVerifySteps) {
         # Tag selects exactly one existing test, including both failure and success subcases.
-        $pesterArguments.Tag = 'VerifyStepProfile'
+        $pesterArguments.TagFilter = 'VerifyStepProfile'
     }
     $result = Invoke-Pester @pesterArguments
 
