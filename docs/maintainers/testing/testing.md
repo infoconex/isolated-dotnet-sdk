@@ -189,6 +189,53 @@ Tracing creates
 additional file I/O and should not be used as the before/after performance
 benchmark. Normal CI and local runs remain uninstrumented.
 
+### Detailed single-case Verify step profile
+
+For a focused, **opt-in** step-by-step diagnostic on Windows, run:
+
+```powershell
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifySteps
+```
+
+This runs **one tagged Pester test** (the existing optional-tracing regression
+case), not the full Verify suite. It exercises two representative subprocess
+scenarios in independent sequence: first an expected failure for a missing SDK,
+then a successful Verify after installing the deterministic fake SDK fixture.
+The original exit-code, output, and trace-correspondence assertions remain
+active. Do not combine `-TraceVerifySteps` with `-TraceVerifyProcesses`;
+the step flag already enables the latter's existing child and fake-host events.
+
+The runner prints buffered per-step timings at the end and creates the same
+temporary ZIP report as regular Verify tracing, with one additional file:
+`step-timings.csv`. Each row has `Scope` (`Test` or `Child`),
+`InvocationId`, `Scenario`, `Step`, `ElapsedMs` since the preceding
+marker **within that scope/invocation**, and `CumulativeMs` since the scope
+started. Follow each scenario's rows in recorded order; test-level spans
+contain the child's time and **must not** be added to child spans as independent
+work. Correlate child rows with `verify-invocations.csv`,
+`verify-child-events.tsv`, and `fake-host-events.tsv` when examining host
+probes and process startup.
+
+For this diagnostic **only**, the test creates an instrumented *copy* of the
+already-installed PowerShell tool in its unique temporary HOME. Markers inside
+that copy bracket local SDK proof, metadata classification, native `dotnet`
+probes, component gathering, and report presentation. The child also records
+metadata mock, product invocation, and return milestones. The repository's
+production tool source is **not edited**, and other tests run the ordinary tool.
+Step events accumulate in memory and are written once per child process at
+return, and once for the test after teardown. No step events are collected
+without the flag.
+
+**Measurement limitations:** the first child-side marker occurs *after*
+PowerShell startup. Native host intervals bracket invocation and return but
+do not individually separate native startup, teardown, or PowerShell stream
+processing. Product-function intervals can contain nested instrumentation;
+do not sum overlapping parent and child spans. Reporting and test-only code
+insertion introduce measurement overhead, so this is a **diagnostic breakdown**,
+not a valid before/after throughput benchmark or proof of a production
+performance regression. The unmodified `-TraceVerifyProcesses` mode remains
+available for full Verify tracing.
+
 ### Historical Windows reference
 
 The successful [Issue #161 Validate run](https://github.com/infoconex/isolated-dotnet-sdk/actions/runs/38745162881)
