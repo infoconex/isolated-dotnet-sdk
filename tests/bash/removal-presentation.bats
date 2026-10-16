@@ -548,3 +548,31 @@ EOF
   [ "$status" -eq 0 ]
   [ ! -d "$install_dir" ]
 }
+
+@test "Different-filesystem staging is blocked without copying or deleting SDK contents" {
+  version='9.0.119'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/different-device-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'retain' > "$install_dir/keep.txt"
+  cat > "$fake_bin/stat" <<'EOF'
+#!/usr/bin/env bash
+if [[ ( "$1" == "-c" || "$1" == "-f" ) && "$2" == "%d" ]]; then
+  if [[ "$3" == "$SDK_TEST_DEV_ROOT" ]]; then
+    echo 100
+  else
+    echo 200
+  fi
+  exit 0
+fi
+exec /usr/bin/stat "$@"
+EOF
+  chmod +x "$fake_bin/stat"
+
+  run env HOME="$test_home" SDK_TEST_DEV_ROOT="$tool_root" PATH="$fake_bin:$PATH" \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"different filesystem"* ]]
+  [ "$(cat "$install_dir/keep.txt")" = retain ]
+  [ ! -e "$tool_root/.pending-removals/$version" ]
+}

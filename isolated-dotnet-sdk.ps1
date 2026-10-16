@@ -2920,7 +2920,7 @@ function Remove-IsolatedSdk {
         }
         $HostInfo = Get-Item -LiteralPath $IsolatedDotNet -Force -ErrorAction SilentlyContinue
         $HostAvailable = $null -ne $HostInfo -and -not $HostInfo.PSIsContainer -and
-            -not ($HostInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)
+        -not ($HostInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)
     }
 
     if (-not $SelectedInteractively) {
