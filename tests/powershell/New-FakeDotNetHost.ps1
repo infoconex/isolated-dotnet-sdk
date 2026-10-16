@@ -19,6 +19,50 @@ public static class Program
 {
     public static int Main(string[] args)
     {
+        // Opt-in records cover the managed fake-host stack. Windows loader and CLR
+        // initialization occur before Main; process StartTime anchors that gap.
+        var stackPath = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH");
+        var stackRows = string.IsNullOrWhiteSpace(stackPath) ? null : new System.Collections.Generic.List<string>();
+        var mainClock = System.Diagnostics.Stopwatch.StartNew();
+        var stackInvocation = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "";
+        var stackCase = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "";
+        var stackArgument = string.Join(" ", args);
+        var stackPid = stackRows == null ? 0 : System.Diagnostics.Process.GetCurrentProcess().Id;
+        Action<string> markStack = delegate(string phase)
+        {
+            if (stackRows != null)
+            {
+                stackRows.Add(DateTime.UtcNow.ToString("o") + "\t" + stackCase +
+                    "\t" + stackInvocation + "\t" + stackPid + "\t" + stackArgument +
+                    "\t" + phase + "\t" + mainClock.Elapsed.TotalMilliseconds.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture));
+            }
+        };
+        markStack("main-entry");
+        if (stackRows != null)
+        {
+            try
+            {
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                {
+                    stackRows.Add(process.StartTime.ToUniversalTime().ToString("o") + "\t" + stackCase +
+                        "\t" + stackInvocation + "\t" + stackPid + "\t" + stackArgument +
+                        "\t" + "os-process-created" + "\t" + "0");
+                }
+                markStack("os-process-time-read");
+            }
+            catch (Exception ex)
+            {
+                markStack("os-process-time-unavailable-" + ex.GetType().Name);
+            }
+            AppDomain.CurrentDomain.ProcessExit += delegate(object sender, EventArgs e)
+            {
+                markStack("process-exit");
+                // Buffered write at exit, off by default.
+                File.AppendAllLines(stackPath, stackRows);
+            };
+            markStack("stack-exit-handler-registered");
+        }
         // Optional, test-only process markers. Never enabled during normal validation.
         var tracePath = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH");
         if (!string.IsNullOrWhiteSpace(tracePath))
@@ -42,6 +86,7 @@ public static class Program
             };
         }
 
+        markStack("fake-exit-code-check-start");
         var exitText = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXIT_CODE");
         int exitCode;
         if (!string.IsNullOrWhiteSpace(exitText) && int.TryParse(exitText, out exitCode) && exitCode != 0)
@@ -49,8 +94,10 @@ public static class Program
             return exitCode;
         }
 
+        markStack("fake-exit-code-check-end");
         if (args.Length > 0 && args[0] == "--info")
         {
+            markStack("info-enter");
             if (string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_HOST"), "true", StringComparison.OrdinalIgnoreCase))
             {
                 var legacyVersion = Environment.GetEnvironmentVariable("FAKE_DOTNET_RESOLVED_VERSION")
@@ -84,8 +131,10 @@ public static class Program
                 Console.WriteLine("  Architecture: x64");
             }
         }
+        markStack("runtime-command-dispatch");
         if (args.Length > 0 && args[0] == "--list-runtimes")
         {
+            markStack("runtime-enter");
             var probeMarker = Environment.GetEnvironmentVariable("FAKE_DOTNET_RUNTIME_PROBE_MARKER");
             if (!string.IsNullOrWhiteSpace(probeMarker)) { File.WriteAllText(probeMarker, "probed"); }
         }
@@ -110,6 +159,7 @@ public static class Program
 
         if (args.Length > 0 && args[0] == "--list-sdks")
         {
+            markStack("inventory-enter");
             if (string.Equals(Environment.GetEnvironmentVariable("FAKE_DOTNET_LEGACY_HOST"), "true", StringComparison.OrdinalIgnoreCase))
             {
                 Console.Error.WriteLine("Unknown option: --list-sdks");
@@ -124,11 +174,14 @@ public static class Program
 
             var version = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
             var origin = Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_ORIGIN") ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sdk");
+            markStack("inventory-output-start");
             Console.WriteLine(version + " [" + origin + "]");
+            markStack("inventory-output-complete");
         }
 
         if (args.Length > 0 && args[0] == "--version")
         {
+            markStack("version-enter");
             var resolved = Environment.GetEnvironmentVariable("FAKE_DOTNET_RESOLVED_VERSION")
                 ?? Environment.GetEnvironmentVariable("FAKE_DOTNET_SDK_VERSION") ?? "99.0.100";
             var expectedLookup = Environment.GetEnvironmentVariable("FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP");
@@ -160,6 +213,7 @@ public static class Program
             if (extraVersion != null) { Console.WriteLine(extraVersion); }
         }
 
+        markStack("main-success-return");
         return 0;
     }
 }
