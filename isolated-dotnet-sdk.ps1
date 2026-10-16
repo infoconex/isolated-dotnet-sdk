@@ -147,6 +147,28 @@ function Write-ToolDisplay {
     Write-Information -MessageData $Message -InformationAction Continue
 }
 
+# Render diagnostic blocks through the application's information output.
+# PowerShell's concise Write-Error view flattens embedded newlines.
+function Write-ToolRemovalFailure {
+    param([string]$Message)
+
+    $Sections = $Message -split "`nDiagnostics:`n", 2
+    $Details = $Sections[1] -split "`nDetails: ", 2
+
+    Write-ToolDisplay
+    Write-ToolDisplay "ERROR: $($Sections[0])"
+    Write-ToolDisplay
+    Write-ToolDisplay 'Diagnostics:'
+    foreach ($Line in ($Details[0] -split "`n")) {
+        Write-ToolDisplay "  $Line"
+    }
+    Write-ToolDisplay
+    Write-ToolDisplay 'Details:'
+    foreach ($Line in ($Details[1] -split "`n")) {
+        Write-ToolDisplay "  $Line"
+    }
+}
+
 function Format-ToolMessage {
     param(
         [ValidateSet('Heading', 'Accent', 'Success')]
@@ -3243,7 +3265,20 @@ try {
         Invoke-SelectedAction
     }
     catch {
-        Write-Error -Message $_.Exception.Message -ErrorAction Continue
+        $FailureMessage = $_.Exception.Message
+        if (($FailureMessage.StartsWith('Unable to remove isolated SDK ', [StringComparison]::Ordinal) -or
+                $FailureMessage -match '^SDK [^\r\n]+ removal incomplete at ') -and
+            $FailureMessage.Contains("`nDiagnostics:`n") -and
+            $FailureMessage.Contains("`nDetails: ")) {
+            Write-ToolRemovalFailure -Message $FailureMessage
+            # Retain a PowerShell error record and nonzero status for callers.
+            # The detailed, line-separated report above remains readable in
+            # a normal interactive terminal rather than being flattened.
+            Write-Error -Message 'Isolated SDK removal failed; see diagnostics above.' -ErrorAction Continue
+        }
+        else {
+            Write-Error -Message $FailureMessage -ErrorAction Continue
+        }
         exit 1
     }
 }
