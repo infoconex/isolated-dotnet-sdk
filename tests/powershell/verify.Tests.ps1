@@ -25,7 +25,11 @@ Describe 'PowerShell isolated SDK verification' {
             $content = Get-Content -LiteralPath $script:ToolPath -Raw
             $markers = @(
                 @{ Text = 'function Test-IsolatedSdk {'; Before = ''; After = 'verify-function-enter' }
-                @{ Text = '    $Validation = Get-LocalIsolatedSdkValidation -Version $SdkVersion -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet'; Before = 'local-proof-start'; After = 'local-proof-complete' }
+                @{ Text = "    Write-ToolHeading 'Verify isolated .NET SDK'"; Before = 'local-proof-complete'; After = '' }
+                @{ Text = '        # Microsoft lifecycle information is optional; local checks remain authoritative.'; Before = 'classification-error-caught'; After = '' }
+                @{ Text = 'function Write-ToolActionFailure {'; Before = ''; After = 'error-render-function-enter' }
+                @{ Text = '        throw $Validation.Failure'; Before = 'verification-failure-thrown'; After = '' }
+                @{ Text = '    Write-ToolSuccess "Isolated SDK $SdkVersion verified successfully."'; Before = 'verify-success-render-start'; After = '' }
                 @{ Text = '        $Classification = Get-VerifyAuditClassification -Version $SdkVersion'; Before = 'classification-start'; After = 'classification-complete' }
                 @{ Text = "    Write-ToolHeading 'SDK information:'"; Before = 'report-sdk-information-start'; After = '' }
                 @{ Text = "    Write-ToolHeading 'Installed components:'"; Before = 'report-sdk-information-complete'; After = '' }
