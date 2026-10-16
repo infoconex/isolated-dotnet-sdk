@@ -35,10 +35,6 @@ Describe 'PowerShell isolated SDK verification' {
                 @{ Text = "    Write-ToolHeading 'Installed components:'"; Before = 'report-sdk-information-complete'; After = '' }
                 @{ Text = '        Get-IsolatedSdkComponent -InstallDirectory $InstallDir -DotNetPath $IsolatedDotNet -Version $SdkVersion'; Before = 'components-start'; After = 'components-complete' }
                 @{ Text = "    Write-ToolHeading 'Verification:'"; Before = 'report-verification-start'; After = '' }
-                @{ Text = '        $Inventory = @(& $DotNetPath --list-sdks)'; Before = 'native-list-sdks-start'; After = 'native-list-sdks-complete' }
-                @{ Text = '                    $ResolvedVersion = @(& $DotNetPath --version)'; Before = 'native-version-start'; After = 'native-version-complete' }
-                @{ Text = '        $InfoLines = @(& $DotNetPath --info 2>$null)'; Before = 'native-info-start'; After = 'native-info-complete' }
-                @{ Text = '        $RuntimeLines = @(& $DotNetPath --list-runtimes 2>$null)'; Before = 'native-runtimes-start'; After = 'native-runtimes-complete' }
             )
             foreach ($marker in $markers) {
                 $needle = [string]$marker.Text
@@ -146,21 +142,26 @@ Write-VerifyChildTraceEvent -EventName 'child-command-start'
             if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH)) {
                 # Buffer monotonic child timestamps; write them only after Verify returns.
                 $stepPrefix = @'
-$verifyStepTimer = [System.Diagnostics.Stopwatch]::StartNew()
-$script:verifyStepLastMs = 0.0
-$verifyStepEvents = [System.Collections.Generic.List[object]]::new()
+$global:VerifyStepState = [pscustomobject]@{
+    Timer = [System.Diagnostics.Stopwatch]::StartNew()
+    LastMs = 0.0
+    Events = [System.Collections.Generic.List[object]]::new()
+}
 function Mark-VerifyChildStep {
     param([string]$Step)
-    $nowMs = $verifyStepTimer.Elapsed.TotalMilliseconds
-    $verifyStepEvents.Add([pscustomobject]@{
+    # Global state is private to this disposable child pwsh process. Unlike
+    # $script: variables, it is shared by the command and the invoked .ps1.
+    $state = $global:VerifyStepState
+    $nowMs = $state.Timer.Elapsed.TotalMilliseconds
+    $state.Events.Add([pscustomobject]@{
         Scope = 'Child'
         InvocationId = $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION
         Scenario = $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO
         Step = $Step
-        ElapsedMs = [math]::Round($nowMs - $script:verifyStepLastMs, 3)
+        ElapsedMs = [math]::Round($nowMs - $state.LastMs, 3)
         CumulativeMs = [math]::Round($nowMs, 3)
     })
-    $script:verifyStepLastMs = $nowMs
+    $state.LastMs = $nowMs
 }
 Mark-VerifyChildStep 'child-command-start'
 '@
@@ -175,7 +176,7 @@ Mark-VerifyChildStep 'child-command-start'
                     @{ Old = '$verifyExitCode = $LASTEXITCODE'; New = '$verifyExitCode = $LASTEXITCODE' + [Environment]::NewLine + "Mark-VerifyChildStep 'product-return'" }
                     @{ Old = 'exit $verifyExitCode'; New = "Mark-VerifyChildStep 'child-buffer-flush'" +
                             [Environment]::NewLine +
-                            '$verifyStepEvents | Export-Csv -LiteralPath $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -Append -NoTypeInformation -Encoding utf8' +
+                            '$global:VerifyStepState.Events | Export-Csv -LiteralPath $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -Append -NoTypeInformation -Encoding utf8' +
                             [Environment]::NewLine + 'exit $verifyExitCode' }
                 )
                 foreach ($change in $stepChanges) {
