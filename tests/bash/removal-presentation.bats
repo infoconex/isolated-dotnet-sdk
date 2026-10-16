@@ -576,3 +576,82 @@ EOF
   [ "$(cat "$install_dir/keep.txt")" = retain ]
   [ ! -e "$tool_root/.pending-removals/$version" ]
 }
+
+
+@test "documented earlier pre-unified SDK releases remove after exact two-command probe" {
+  for version in 1.0.1 1.1.12 2.0.0 2.1.3 2.1.4; do
+    install_dir="$tool_root/$version"
+    mkdir -p "$install_dir/sdk/$version"
+    cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+exit 91
+EOF
+    chmod +x "$install_dir/dotnet"
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Legacy SDK $version has no supported shutdown command"* ]]
+    [ ! -d "$install_dir" ]
+  done
+}
+
+@test "2.1.1xx and 2.1.2xx require targeted compiler-server shutdown" {
+  for version in 2.1.100 2.1.104 2.1.200 2.1.202; do
+    install_dir="$tool_root/$version"
+    compiler="$install_dir/sdk/$version/Roslyn/bincore/VBCSCompiler.dll"
+    mkdir -p "$(dirname "$compiler")"
+    printf 'fixture' > "$compiler"
+    cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+if [[ "$1" == exec && "$3" == -shutdown && -f "$2" ]]; then
+  [[ "${SDK_TEST_COMPILER_FAILURE:-}" == true ]] && exit 79
+  exit 0
+fi
+exit 91
+EOF
+    chmod +x "$install_dir/dotnet"
+    run env HOME="$test_home" SDK_TEST_COMPILER_FAILURE=true "$tool_path" remove "$version" --yes
+    [ "$status" -ne 0 ]
+    [ -d "$install_dir" ]
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"SDK-local Roslyn shutdown"* ]]
+    [ ! -d "$install_dir" ]
+  done
+}
+
+@test "unknown early versions and SDK 2.1.300 cannot skip real shutdown failures" {
+  for version in 1.1.99 2.1.203 2.1.299 2.1.300; do
+    install_dir="$tool_root/$version"
+    mkdir -p "$install_dir/sdk/$version"
+    cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$2" == shutdown ]]; then exit 73; fi
+if [[ "$2" == --help ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+exit 91
+EOF
+    chmod +x "$install_dir/dotnet"
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes
+    [ "$status" -ne 0 ]
+    [ -d "$install_dir" ]
+    [ ! -e "$tool_root/.pending-removals/$version" ]
+  done
+}
