@@ -427,6 +427,17 @@ Mark-VerifyChildStep 'child-command-start'
                     $diagnosticPath, [Environment]::NewLine + $probeText)
                 Write-Information $probeText -InformationAction Continue
             }
+            if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
+                $script:VerifyStepScenario = 'stack-probe'
+                Add-VerifyTestStep 'stack-launch-controls-start'
+                try {
+                    Invoke-VerifyStackLaunchProbe
+                }
+                finally {
+                    Add-VerifyTestStep 'stack-launch-controls-complete'
+                    $script:VerifyStepScenario = 'healthy-sdk'
+                }
+            }
             $script:VerifyExitCode | Should -Be 0
             ($healthy -join [Environment]::NewLine) | Should -Match 'verified successfully'
             Add-VerifyTestStep 'healthy-sdk-assertions-complete'
@@ -437,12 +448,6 @@ Mark-VerifyChildStep 'child-command-start'
             $newCalls[1].ExitCode | Should -Be '0'
             (Get-Content -LiteralPath $childTracePath -Raw) | Should -Match 'product-return'
             Add-VerifyTestStep 'trace-assertions-complete'
-            if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
-                $script:VerifyStepScenario = 'stack-probe'
-                Add-VerifyTestStep 'stack-launch-controls-start'
-                Invoke-VerifyStackLaunchProbe
-                Add-VerifyTestStep 'stack-launch-controls-complete'
-            }
         }
         finally {
             [Environment]::SetEnvironmentVariable(
