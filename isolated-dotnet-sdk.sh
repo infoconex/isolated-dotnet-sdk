@@ -2612,6 +2612,24 @@ finish_pending_removal() {
     rmdir "$SDK_ROOT/.pending-removals" 2>/dev/null || true
 }
 
+# Public unified build-server shutdown was introduced with SDK 2.1.300.
+# Only stable early servicing bands can enter the strict two-command probe.
+# Matching a version alone never authorizes a shutdown bypass.
+is_pre_unified_sdk_version() {
+    case "$1" in
+        1.0.[0-4]|1.1.[0-9]|1.1.1[0-4]|2.0.[0-3]|2.1.[0-4]|2.1.10[0-5]|2.1.20[0-2])
+            return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_pre_unified_roslyn_sdk_version() {
+    case "$1" in
+        2.1.10[0-5]|2.1.20[0-2]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 remove_isolated_sdk() {
     local selected_interactively="false"
     if [[ -z "$VERSION" ]]; then
@@ -2693,14 +2711,9 @@ remove_isolated_sdk() {
         export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
         export DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
 
-        legacy_version=false
-        case "$VERSION" in
-            1.0.4|1.1.5|1.1.14|2.0.3|2.1.105) legacy_version=true ;;
-        esac
-
-        if [[ "$legacy_version" == "true" ]]; then
-            # An exact, owner-verified SDK release and its payload directory are
-            # prerequisites; never classify arbitrary host exit 1 as unsupported.
+        if is_pre_unified_sdk_version "$VERSION"; then
+            # An exact SDK payload and both precise command probes are required.
+            # An arbitrary exit 1 is never proof that shutdown is unsupported.
             sdk_payload="$install_dir/sdk/$VERSION"
             if [[ ! -d "$sdk_payload" ]]; then
                 printf 'Unable to classify legacy shutdown for SDK %s: SDK payload missing.\n' "$VERSION" >&2
@@ -2723,7 +2736,7 @@ remove_isolated_sdk() {
                 fi
             done
 
-            if [[ "$VERSION" == "2.1.105" ]]; then
+            if is_pre_unified_roslyn_sdk_version "$VERSION"; then
                 compiler="$sdk_payload/Roslyn/bincore/VBCSCompiler.dll"
                 if [[ ! -f "$compiler" ]]; then
                     printf 'Legacy compiler shutdown unavailable for SDK %s; removal stopped.\n' "$VERSION" >&2
@@ -2734,8 +2747,8 @@ remove_isolated_sdk() {
                 exit $?
             fi
 
-            # The four inspected pre-Roslyn-server SDKs must not silently grow
-            # a compiler-server payload without a corresponding shutdown step.
+            # Earlier stable SDK servicing bands must not silently acquire
+            # an unrecognized compiler server without a shutdown mechanism.
             if server_path="$(find "$sdk_payload" -name 'VBCSCompiler*' -print)"; then
                 if [[ -n "$server_path" ]]; then
                     printf 'Unrecognized compiler-server payload in SDK %s; removal stopped.\n' "$VERSION" >&2
