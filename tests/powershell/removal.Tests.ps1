@@ -503,8 +503,8 @@ Describe 'PowerShell removal behavior' {
                     if ($IsWindows) {
                         $message | Should -Match 'Resource Monitor'
                         $message | Should -Match 'Search Handles'
-                        $message | Should -Match [regex]::Escape($script:SdkVersion)
-                        $message | Should -Match [regex]::Escape((Split-Path -Path $script:SdkRoot -Leaf))
+                        $message | Should -Match ([regex]::Escape($script:SdkVersion))
+                        $message | Should -Match ([regex]::Escape((Split-Path -Path $script:SdkRoot -Leaf)))
                         $message | Should -Match 'compare the process name and PID'
                         $message | Should -Match 'icacls'
                     }
