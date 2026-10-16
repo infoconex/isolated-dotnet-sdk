@@ -147,13 +147,16 @@ function Write-ToolDisplay {
     Write-Information -MessageData $Message -InformationAction Continue
 }
 
-# Render diagnostic blocks through the application's information output.
-# PowerShell's concise Write-Error view flattens embedded newlines.
+# Render readable contextual diagnostics through the information stream.
+# The original native exception is emitted once by Write-Error below, where
+# the error stream and failure exit code remain available to callers.
 function Write-ToolRemovalFailure {
     param([string]$Message)
 
     $Sections = $Message -split "`nDiagnostics:`n", 2
-    $Details = $Sections[1] -split "`nDetails: ", 2
+    # The exception stays in the original failure record for Write-Error;
+    # do not print it again in the application diagnostics.
+    $DiagnosticText = ($Sections[1] -split "`nDetails: ", 2)[0]
 
     Write-ToolDisplay
     Write-ToolDisplay (Format-ToolMessage -Kind Error -Message 'Error:')
@@ -161,7 +164,7 @@ function Write-ToolRemovalFailure {
     Write-ToolDisplay
     Write-ToolDisplay (Format-ToolMessage -Kind Diagnostics -Message 'Diagnostics:')
     $NestedHeadings = @('Possible causes:', 'To find a file-lock holder:', 'To inspect filesystem permissions:')
-    foreach ($Line in ($Details[0] -split "`n")) {
+    foreach ($Line in ($DiagnosticText -split "`n")) {
         $NestedHeading = $null
         foreach ($Candidate in $NestedHeadings) {
             if ($Line.StartsWith($Candidate, [StringComparison]::Ordinal)) {
@@ -171,7 +174,7 @@ function Write-ToolRemovalFailure {
         }
         if ($null -ne $NestedHeading) {
             Write-ToolDisplay
-            Write-ToolDisplay "  $(Format-ToolMessage -Kind Details -Message $NestedHeading)"
+            Write-ToolDisplay "  $(Format-ToolMessage -Kind DiagnosticSubheading -Message $NestedHeading)"
             $Explanation = $Line.Substring($NestedHeading.Length).TrimStart()
             if (-not [string]::IsNullOrWhiteSpace($Explanation)) {
                 Write-ToolDisplay "    $Explanation"
@@ -182,15 +185,11 @@ function Write-ToolRemovalFailure {
         }
     }
     Write-ToolDisplay
-    Write-ToolDisplay (Format-ToolMessage -Kind Details -Message 'Details:')
-    foreach ($Line in ($Details[1] -split "`n")) {
-        Write-ToolDisplay "  $Line"
-    }
 }
 
 function Format-ToolMessage {
     param(
-        [ValidateSet('Heading', 'Accent', 'Success', 'Error', 'Diagnostics', 'Details')]
+        [ValidateSet('Heading', 'Accent', 'Success', 'Error', 'Diagnostics', 'DiagnosticSubheading')]
         [string]$Kind,
         [string]$Message
     )
@@ -3290,9 +3289,8 @@ try {
             $FailureMessage.Contains("`nDiagnostics:`n") -and
             $FailureMessage.Contains("`nDetails: ")) {
             Write-ToolRemovalFailure -Message $FailureMessage
-            # Keep an actionable error record for automation and stderr
-            # consumers, with the original failure rather than a reference to
-            # console output. Do not repeat the longer diagnostic report here.
+            # Emit the original native failure on the error stream once;
+            # the report above contains context and advice without duplication.
             $NativeDetails = ($FailureMessage -split "`nDetails: ", 2)[1]
             Write-Error -Message "Unable to remove isolated SDK $script:SdkVersion. Underlying error: $NativeDetails" -ErrorAction Continue
         }
