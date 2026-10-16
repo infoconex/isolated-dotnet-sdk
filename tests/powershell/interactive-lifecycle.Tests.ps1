@@ -152,7 +152,7 @@ Describe 'PowerShell interactive lifecycle' {
         $source | Should -Match '(?s)while \(\$true\) \{\s*Write-ToolDisplay\s*if \(\$ClearSdkScreen\) \{\s*Clear-InteractiveScreen'
         $source | Should -Match '(?s)if \(\$SelectedInteractively\) \{\s*Write-ToolDisplay\s*Clear-InteractiveScreen'
         $source | Should -Match '(?s)if \(-not \(Select-VerifyVersion\)\) \{\s*return\s*\}\s*Write-ToolDisplay\s*Clear-InteractiveScreen'
-        $source | Should -Match '(?s)if \(-not \(Select-Action\)\) \{\s*return\s*\}\s*Write-ToolDisplay\s*Clear-InteractiveScreen\s*while \(\$true\) \{\s*Invoke-SelectedAction'
+        $source | Should -Match '(?s)if \(-not \(Select-Action\)\) \{\s*return\s*\}\s*Write-ToolDisplay\s*Clear-InteractiveScreen\s*while \(\$true\) \{\s*try \{\s*Invoke-SelectedAction'
     }
 
     It 'clears only a capable persistent terminal and ignores clear failures' {
@@ -282,6 +282,39 @@ function Invoke-RestMethod { throw 'transport failure' }
         (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'Unable to load .NET release metadata from Microsoft\.'
         $result.Output | Should -Not -Match 'Exiting\.'
+    }
+
+    It 'keeps the interactive Remove picker alive after a locked-file failure' -Skip:(-not $IsWindows) {
+        $version = '99.0.189'
+        $installDirectory = Join-Path $script:ToolRoot $version
+        New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+        $lockedFile = Join-Path $installDirectory 'issue-186-lock-test.tmp'
+        Set-Content -LiteralPath $lockedFile -Value 'locked removal test'
+        $lockHandle = [IO.File]::Open(
+            $lockedFile, [IO.FileMode]::Open,
+            [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+
+        try {
+            # Captured output skips the Enter acknowledgement, but the
+            # persistent Main/Remove navigation must remain active.
+            $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', '1', 'y', 'b', 'e')
+
+            $result.ExitCode | Should -Be 0
+            (Get-MainPromptCount $result.Output) | Should -Be 2
+            ([regex]::Matches($result.Output, 'Select an isolated SDK to remove:')).Count |
+                Should -Be 2
+            (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
+            $result.Output | Should -Match 'The installation directory could not be renamed'
+            $result.Output | Should -Match 'To find a file-lock holder:'
+            $result.Output | Should -Match 'Underlying error:'
+            $result.Output | Should -Match 'Exiting\.'
+            $result.Output | Should -Not -Match 'Isolated SDK 99\.0\.189 was removed\.'
+            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+            Test-Path -LiteralPath $lockedFile | Should -BeTrue
+        }
+        finally {
+            $lockHandle.Dispose()
+        }
     }
 
     It 'returns from Install channel selection to Main with Back' {
@@ -593,6 +626,22 @@ function Invoke-RestMethod {
         (Get-MainPromptCount $result.Output) | Should -Be 2
         $result.Output | Should -Match 'B\. Back to Main'
         $result.Output | Should -Not -Match 'Continue\?'
+    }
+
+    It 'returns to Remove when only a damaged hostless SDK folder remains' {
+        Install-FakeInteractiveHost -Version '99.0.100'
+        $damaged = Join-Path $script:ToolRoot '98.0.100'
+        New-Item -ItemType Directory -Path $damaged -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $damaged 'leftover.txt') -Value 'retained'
+
+        $result = Invoke-InteractiveToolProcess -ToolPath $script:ToolPath -InputLines @('r', '1', 'b', 'e') -Command '& $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Yes'
+
+        $result.ExitCode | Should -Be 0
+        $result.Output | Should -Match 'Isolated SDK 99\.0\.100 was removed\.'
+        ([regex]::Matches($result.Output, 'Select an isolated SDK to remove:')).Count | Should -Be 2
+        $result.Output | Should -Match '98\.0\.100 \(incomplete\)'
+        Test-Path -LiteralPath $damaged -PathType Container | Should -BeTrue
+        (Get-MainPromptCount $result.Output) | Should -Be 2
     }
 
     It 'returns a completed Remove result to the Remove SDK list' {

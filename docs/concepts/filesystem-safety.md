@@ -6,9 +6,15 @@ This document records the filesystem-safety contract shared by the PowerShell an
 
 The tool owns `~/dotnet-sdks` and creates that directory when needed. If the path cannot be created or is occupied by a non-directory entry, the operation fails. A filesystem failure must not be followed by a misleading success message.
 
-SDK versions are validated before version-scoped destructive work. Removal is limited to the selected version directory directly beneath the isolated SDK root. Failure to remove that directory is an operation failure; sibling SDK directories and unrelated tool-owned files are not cleanup targets.
+SDK-version-shaped names and direct-child path types are checked before version-scoped destructive work. A Remove candidate **need not have a usable dotnet host or pass Verify**: the owner explicitly authorizes confirmed cleanup of damaged SDK directories under the isolated root. Removal targets only that chosen eligible version directory and, after an authorized same-root rename, its operation-owned quarantine. An incomplete deletion is an operational failure; sibling SDK directories, unrelated tool-owned files, and System SDKs are not cleanup targets.
 
-After Remove confirmation, build-server shutdown uses a fresh operation-owned temporary directory for its working directory and CLI home. That directory is separate from the selected SDK directory and is cleaned before deletion is attempted; a failure to create or clean it prevents SDK deletion. The original working directory and environment are preserved. An available shutdown command must still succeed, even on legacy SDKs. Only an explicitly authorized, exact-version legacy compatibility path may proceed when both historical shutdown command spellings are positively identified as unsupported; SDK 2.1.105 must first pass its own Roslyn compiler-server shutdown. An unknown failure, ambiguous classification, or temporary-state cleanup failure never permits SDK deletion. User confirmation is separate from authorization for this exception.
+After Remove confirmation, build-server shutdown uses a fresh operation-owned temporary directory for its working directory and CLI home. That directory is separate from the selected SDK directory and is cleaned before deletion is attempted; a failure to create or clean it prevents SDK deletion. The original working directory and environment are preserved. An available shutdown command must still succeed, even on legacy SDKs. Only bounded, stable pre-2.1.300 historical servicing windows can use the verified missing-command compatibility path after both historical shutdown spellings are positively identified as unsupported; no separate permission is required beyond normal removal confirmation. SDKs in the pre-unified 2.1.1xx and 2.1.2xx bands must successfully execute their own SDK-local Roslyn compiler-server shutdown. An unknown failure, ambiguous classification, or temporary-state cleanup failure never permits SDK deletion.
+
+## Incomplete Remove recovery
+
+After normal confirmation and successful supported shutdown/preflight **when a usable host exists**, or an informative no-host warning for a confirmed damaged directory, Remove creates a recovery record outside the selected SDK directory and a matching operation-owned proof inside it, then renames the direct-child directory into a unique same-root `.removing-*` quarantine. A failed move leaves the original directory in place. Deletion preserves the internal proof until the other contents have been removed. After a failed deletion, only a new user-initiated Remove may continue removing the verified quarantined contents without a now-missing SDK host.
+
+The recovery record and proof must match the exact SDK version and unique removal operation ID. The original version path must remain absent and the quarantine must be an actual directory, not a symlink/junction. Missing or inconsistent proof with remaining files, path replacement and unexpected state all fail closed. Recovery records are not general permission to remove arbitrary directories. No background retry, process killing, or rollback is implied. Full success requires directory absence and recovery-state cleanup; lingering files cause nonzero failure with retry guidance. Install refuses that version until recovery is complete, and normal SDK inventory excludes quarantined directories.
 
 ## Saved-tool replacement
 
@@ -57,8 +63,8 @@ The portable contract is based on observable filesystem success or failure rathe
 
 - directory/path-type conflicts fail on all supported platforms;
 - access, replacement, extraction, or deletion failures propagate and do not produce success output;
-- PowerShell removal verifies that the target no longer exists after `Remove-Item`;
-- Bash relies on the `rm` exit status and also verifies that the target directory is gone;
+- PowerShell removal verifies its quarantined target no longer exists after child deletion;
+- Bash relies on `rm` errors and also verifies that the quarantined target is gone;
 - deterministic tests inject filesystem-command failures instead of depending on timing-sensitive lock behavior that differs between Windows, macOS, and Linux.
 
 This means a Windows locked-file failure and a Unix permission/deletion failure may originate differently, but both must satisfy the same external contract: non-success, no false success message, and no broadened destructive scope.

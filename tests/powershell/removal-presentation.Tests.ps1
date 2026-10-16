@@ -13,21 +13,30 @@ Describe 'PowerShell removal presentation' {
             throw "Unable to parse product script: $($errors[0].Message)"
         }
 
-        $functionDefinition = $ast.FindAll(
+        # Import the shutdown operation and its version-boundary classifiers
+        # from the exact product script, rather than duplicating policy in tests.
+        $functionDefinitions = $ast.FindAll(
             {
                 param($node)
-                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-                    $node.Name -eq 'Invoke-IsolatedSdkBuildServerShutdown'
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
             },
-            $true) | Select-Object -First 1
-
-        $bodyText = $functionDefinition.Body.Extent.Text
-        $bodyText = $bodyText.Substring(1, $bodyText.Length - 2)
-        Set-Item `
-            -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown `
-            -Value ([scriptblock]::Create($bodyText))
-        # Only the shutdown function is imported from the product script. Its
-        # warning helper must also exist when exercising the legacy fallback.
+            $true)
+        foreach ($name in @(
+                'Test-PreUnifiedSdkVersion',
+                'Test-PreUnifiedRoslynSdkVersion',
+                'Invoke-IsolatedSdkBuildServerShutdown'
+            )) {
+            $functionDefinition = $functionDefinitions |
+                Where-Object { $_.Name -eq $name } |
+                Select-Object -First 1
+            if ($null -eq $functionDefinition) {
+                throw "Missing expected product function $name in removal tests."
+            }
+            $bodyText = $functionDefinition.Body.Extent.Text
+            $bodyText = $bodyText.Substring(1, $bodyText.Length - 2)
+            Set-Item -Path "Function:script:$name" -Value ([scriptblock]::Create($bodyText))
+        }
+        # The warning helper must also exist for the legacy fallback.
         Set-Item -Path Function:script:Write-ToolWarning -Value {
             param([string]$Message)
             Write-Warning $Message
@@ -134,7 +143,64 @@ Describe 'PowerShell removal presentation' {
         }
     }
 
-    It 'requires explicit opt-in to bypass missing shutdown on verified early SDKs' {
+    It 'classifies the documented stable pre-unified servicing bands only' {
+        foreach ($version in @('1.0.1', '1.1.12', '2.0.0', '2.1.3', '2.1.4', '2.1.100', '2.1.104', '2.1.200', '2.1.202')) {
+            Test-PreUnifiedSdkVersion -Version $version | Should -BeTrue
+        }
+        foreach ($version in @('1.1.99', '2.1.203', '2.1.299', '2.1.300', '2.1.818', '2.2.207', '2.1.200-preview1')) {
+            Test-PreUnifiedSdkVersion -Version $version | Should -BeFalse
+        }
+    }
+
+    It 'requires an SDK-local Roslyn shutdown on early 2.1.1xx and 2.1.2xx SDKs' {
+        foreach ($version in @('2.1.100', '2.1.104', '2.1.200', '2.1.202')) {
+            $root = Join-Path $TestDrive $version
+            $hostPath = Join-Path $root 'dotnet.cmd'
+            $compilerPath = Join-Path $root "sdk/$version/Roslyn/bincore/VBCSCompiler.dll"
+            New-Item -ItemType Directory -Path (Split-Path $compilerPath -Parent) -Force | Out-Null
+            Set-Content -LiteralPath $compilerPath -Value 'fake'
+            Set-Content -LiteralPath $hostPath -Value (@(
+                    '@echo off'
+                    'if /I "%1 %2"=="build-server --help" ('
+                    '  echo No executable found matching command "dotnet-build-server"'
+                    '  exit /b 1'
+                    ')'
+                    'if /I "%1 %2"=="buildserver --help" ('
+                    '  echo No executable found matching command "dotnet-buildserver"'
+                    '  exit /b 1'
+                    ')'
+                    'if /I "%1"=="exec" if /I "%3"=="-shutdown" exit /b 0'
+                    'exit /b 82'
+                ) -join [Environment]::NewLine)
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } | Should -Not -Throw
+            Remove-Item -LiteralPath $compilerPath -Force
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } |
+                Should -Throw '*Legacy compiler shutdown unavailable*'
+        }
+    }
+
+    It 'handles documented pre-Roslyn servicing releases without invoking unsupported shutdown' {
+        foreach ($version in @('1.0.1', '1.1.12', '2.0.0', '2.1.3', '2.1.4')) {
+            $root = Join-Path $TestDrive $version
+            $hostPath = Join-Path $root 'dotnet.cmd'
+            New-Item -ItemType Directory -Path (Join-Path $root "sdk/$version") -Force | Out-Null
+            Set-Content -LiteralPath $hostPath -Value (@(
+                    '@echo off'
+                    'if /I "%1 %2"=="build-server --help" ('
+                    '  echo No executable found matching command "dotnet-build-server"'
+                    '  exit /b 1'
+                    ')'
+                    'if /I "%1 %2"=="buildserver --help" ('
+                    '  echo No executable found matching command "dotnet-buildserver"'
+                    '  exit /b 1'
+                    ')'
+                    'exit /b 83'
+                ) -join [Environment]::NewLine)
+            { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } | Should -Not -Throw
+        }
+    }
+
+    It 'automatically classifies proven historical unsupported shutdown without extra authorization' {
         foreach ($version in @('1.0.4', '1.1.5', '1.1.14', '2.0.3')) {
             $root = Join-Path $TestDrive $version
             $hostPath = Join-Path $root 'dotnet.cmd'
@@ -153,7 +219,7 @@ Describe 'PowerShell removal presentation' {
                 ) -join "`r`n")
 
             { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version } |
-                Should -Throw '*exit code 72*'
+                Should -Not -Throw
 
             { Invoke-IsolatedSdkBuildServerShutdown -DotNetPath $hostPath -SdkVersion $version -AllowUnsupportedShutdown } |
                 Should -Not -Throw
@@ -257,9 +323,14 @@ Describe 'PowerShell removal presentation' {
         $warningIndex | Should -BeGreaterThan 3
         # Before a supported clear, interactive Remove already emitted the separator;
         # exact-version/direct Remove retains it immediately before the warning.
-        $lines[$warningIndex - 3].Trim() | Should -Be 'if (-not $SelectedInteractively) {'
-        $lines[$warningIndex - 2].Trim() | Should -Be 'Write-ToolDisplay'
-        $lines[$warningIndex - 1].Trim() | Should -Be '}'
-        $lines[$warningIndex + 1].Trim() | Should -Be 'Write-ToolDisplay'
+        $lines[$warningIndex - 7].Trim() | Should -Be 'if (-not $SelectedInteractively) {'
+        $lines[$warningIndex - 6].Trim() | Should -Be 'Write-ToolDisplay'
+        $lines[$warningIndex - 5].Trim() | Should -Be '}'
+        $lines[$warningIndex - 4].Trim() | Should -Be 'if ($Recovery) {'
+        $lines[$warningIndex - 1].Trim() | Should -Be 'else {'
+        $lines[$warningIndex + 1].Trim() | Should -Be '}'
+        $lines[$warningIndex + 2].Trim() | Should -Be 'if (-not $Recovery -and -not $HostAvailable) {'
+        $lines[$warningIndex + 3].Trim() | Should -Match 'cannot be shut down'
+        $lines[$warningIndex + 5].Trim() | Should -Be 'Write-ToolDisplay'
     }
 }

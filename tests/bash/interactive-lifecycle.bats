@@ -649,6 +649,28 @@ EOF
   [[ "$output" != *"Continue?"* ]]
 }
 
+@test "completed Remove returns to picker while only a hostless SDK directory remains" {
+  bootstrap_tool
+  healthy='99.0.100'
+  incomplete='98.0.100'
+  mkdir -p "$tool_root/$healthy" "$tool_root/$incomplete"
+  printf 'retained\n' > "$tool_root/$incomplete/leftover.txt"
+  cat > "$tool_root/$healthy/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$tool_root/$healthy/dotnet"
+
+  run bash -c 'printf "r\n1\nb\ne\n" | env HOME="$1" "$2" --yes' _ "$test_home" "$tool_path"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Isolated SDK $healthy was removed."* ]]
+  [ "$(printf '%s\n' "$output" | grep -c 'Select an isolated SDK to remove:' || true)" -eq 2 ]
+  [[ "$output" == *"$incomplete (incomplete)"* ]]
+  [ "$(cat "$tool_root/$incomplete/leftover.txt")" = retained ]
+  [ "$(count_main_prompts "$output")" -eq 2 ]
+}
+
 @test "completed Remove returns to the Remove SDK list" {
   bootstrap_tool
   for version in '99.0.100' '98.0.100'; do

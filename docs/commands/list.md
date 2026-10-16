@@ -6,7 +6,7 @@ For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-po
 
 ## Isolated SDKs
 
-Isolated SDKs are recognized SDK installations under the current user's `dotnet-sdks` root. Each entry includes the SDK version and its concrete version directory.
+Isolated SDKs are recognized SDK installations under the current user's `dotnet-sdks` root. Unlike **Remove**, which offers safe cleanup of version-named directories whose host has disappeared, **List** uses the host-based discovery rule and does not show missing-host or quarantined removal targets. Each entry includes the SDK version and its concrete version directory.
 
 An empty isolated inventory is shown as `None`.
 

@@ -102,7 +102,7 @@ EOF
   [ -f "$sibling_dir/sentinel.txt" ]
 }
 
-@test "verified early SDKs require distinct explicit unsupported-shutdown approval" {
+@test "verified early SDKs remove without a second opt-in" {
   for version in 1.0.4 1.1.5 1.1.14 2.0.3; do
     install_dir="$tool_root/$version"
     mkdir -p "$install_dir/sdk/$version"
@@ -121,17 +121,13 @@ EOF
     chmod +x "$install_dir/dotnet"
 
     run env HOME="$test_home" "$tool_path" remove "$version" --yes
-    [ "$status" -ne 0 ]
-    [ -d "$install_dir" ]
-
-    run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
     [ "$status" -eq 0 ]
     [[ "$output" == *"Other build processes may remain"* ]]
     [ ! -d "$install_dir" ]
   done
 }
 
-@test "2.1.105 requires successful SDK-local Roslyn shutdown before removal" {
+@test "2.1.105 requires SDK-local Roslyn shutdown automatically" {
   version='2.1.105'
   install_dir="$tool_root/$version"
   compiler="$install_dir/sdk/$version/Roslyn/bincore/VBCSCompiler.dll"
@@ -157,13 +153,13 @@ EOF
   chmod +x "$install_dir/dotnet"
   marker="$test_root/roslyn.txt"
   run env HOME="$test_home" SDK_TEST_ROSLYN_MARKER="$marker" \
-    SDK_TEST_ROSLYN_FAILURE=true "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+    SDK_TEST_ROSLYN_FAILURE=true "$tool_path" remove "$version" --yes
   [ "$status" -ne 0 ]
   [ -d "$install_dir" ]
   [ ! -e "$marker" ]
 
   run env HOME="$test_home" SDK_TEST_ROSLYN_MARKER="$marker" \
-    "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+    "$tool_path" remove "$version" --yes
   [ "$status" -eq 0 ]
   [ "$(cat "$marker")" = "$compiler" ]
   [ ! -d "$install_dir" ]
@@ -182,7 +178,7 @@ fi
 exit 73
 EOF
   chmod +x "$install_dir/dotnet"
-  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
   [ "$status" -ne 0 ]
   [ -d "$install_dir" ]
 
@@ -193,7 +189,7 @@ if [[ "$1 $2" == "build-server shutdown" ]]; then exit 74; fi
 exit 1
 EOF
   chmod +x "$install_dir/dotnet"
-  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
   [ "$status" -ne 0 ]
   [ -d "$install_dir" ]
 
@@ -223,7 +219,7 @@ fi
 exit 97
 EOF
   chmod +x "$install_dir/dotnet"
-  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
   [ "$status" -ne 0 ]
   [[ "$output" == *"Unrecognized compiler-server payload"* ]]
   [ -d "$install_dir" ]
@@ -246,7 +242,7 @@ fi
 exit 97
 EOF
   chmod +x "$install_dir/dotnet"
-  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
   [ "$status" -ne 0 ]
   [[ "$output" == *"Legacy compiler shutdown unavailable"* ]]
   [ -d "$install_dir" ]
@@ -267,7 +263,7 @@ if [[ "$1 $2" == "buildserver shutdown" ]]; then exit 79; fi
 exit 97
 EOF
   chmod +x "$install_dir/dotnet"
-  run env HOME="$test_home" "$tool_path" remove "$version" --yes --allow-unsupported-shutdown
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
   [ "$status" -ne 0 ]
   [ -d "$install_dir" ]
 }
@@ -282,12 +278,380 @@ EOF
   warning_line="$(grep -n 'tool_warn "Isolated SDK \$VERSION will be removed from \$install_dir"' "$repo_root/isolated-dotnet-sdk.sh" | cut -d: -f1)"
   [ -n "$warning_line" ]
 
-  preceding_block="$(sed -n "$((warning_line - 3)),$((warning_line - 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
-  next_line="$(sed -n "$((warning_line + 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
+  preceding_block="$(sed -n "$((warning_line - 6)),$((warning_line - 1))p" "$repo_root/isolated-dotnet-sdk.sh")"
+  following_block="$(sed -n "$((warning_line + 1)),$((warning_line + 5))p" "$repo_root/isolated-dotnet-sdk.sh")"
 
-  # The outer selection boundary supplies the separator before a clear.
-  # Direct and non-clearing Remove still need one blank line before the warning.
+  # The outer selection boundary retains the separator when no clear occurred;
+  # both initial and incomplete-removal warning paths share its trailing blank.
   [[ "$preceding_block" == *'if [[ "$selected_interactively" != "true" ]]; then'* ]]
   [[ "$preceding_block" == *$'\n        echo\n'* ]]
-  [[ "$next_line" =~ ^[[:space:]]*echo[[:space:]]*$ ]]
+  [[ "$preceding_block" == *'if [[ "$recovery" == "true" ]]; then'* ]]
+  [[ "$following_block" == *'if [[ "$recovery" != "true" && "$host_available" != "true" ]]; then'* ]]
+  [[ "$following_block" == *$'\n    echo'* ]]
+}
+
+@test "partial removal remains retryable after SDK host loss" {
+  version='99.0.100'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf '%s\n' "locked content" > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == "true" && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"incomplete"* ]]
+  [ ! -e "$install_dir/dotnet" ]
+  [[ "$output" != *"was removed."* ]]
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"incomplete"* ]]
+  [ -f "$tool_root/.pending-removals/$version" ]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"was removed."* ]]
+  [ ! -e "$install_dir" ]
+  [ ! -e "$tool_root/.pending-removals/$version" ]
+}
+
+@test "partial removal is visible in Remove picker but not as installed SDK" {
+  version='99.0.101'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'locked' > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == "true" && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+
+  run bash -c 'printf "q\n" | env HOME="$1" "$2" remove' _ "$test_home" "$tool_path"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$version (incomplete removal)"* ]]
+
+  run env HOME="$test_home" "$tool_path" list
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"$version  $install_dir"* ]]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+}
+
+@test "an incomplete removal retry needs normal confirmation" {
+  version='99.0.102'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'locked' > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == true && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [ -e "$tool_root/.pending-removals/$version" ]
+
+  run bash -c 'printf "n\n" | env HOME="$1" "$2" remove "$3"' \
+    _ "$test_home" "$tool_path" "$version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removal cancelled."* ]]
+  [ -e "$tool_root/.pending-removals/$version" ]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [ ! -e "$tool_root/.pending-removals/$version" ]
+}
+
+@test "tampered partial-removal proof cannot delete another directory" {
+  version='99.0.103'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'locked' > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == true && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [ -f "$tool_root/.pending-removals/$version" ]
+
+  sibling="$tool_root/99.0.104"
+  mkdir -p "$sibling"
+  printf 'do not delete' > "$sibling/data.txt"
+  printf 'bad-token' > "$tool_root/.pending-removals/$version"
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid incomplete-removal recovery token"* ]]
+  [ "$(cat "$sibling/data.txt")" = 'do not delete' ]
+}
+
+@test "replacing a quarantined recovery target with a symlink is rejected" {
+  version='99.0.105'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'locked' > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == true && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  token="$(cat "$tool_root/.pending-removals/$version")"
+  stage="$tool_root/.removing-$version-$token"
+  [ -d "$stage" ]
+  preserved="$test_root/preserved"
+  mv "$stage" "$preserved"
+  mkdir -p "$test_root/unrelated"
+  printf 'protect' > "$test_root/unrelated/keep.txt"
+  ln -s "$test_root/unrelated" "$stage"
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unsafe incomplete-removal target"* ]]
+  [ "$(cat "$test_root/unrelated/keep.txt")" = "protect" ]
+}
+
+
+@test "Remove discovers version folders without hosts and excludes unrelated or linked folders" {
+  version='9.0.115'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir" "$tool_root/notes" "$test_root/outside"
+  printf 'preserve' > "$tool_root/notes/readme.txt"
+  printf 'outside' > "$test_root/outside/keep.txt"
+  ln -s "$test_root/outside" "$tool_root/7.0.400"
+  run bash -c 'printf "q\n" | env HOME="$1" "$2" remove' _ "$test_home" "$tool_path"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$version (incomplete)"* ]]
+  [[ "$output" != *"7.0.400"* ]]
+  [[ "$output" != *"notes"* ]]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cannot be shut down"* ]]
+  [[ "$output" == *"Isolated SDK $version was removed."* ]]
+  [ ! -e "$install_dir" ]
+  [ "$(cat "$tool_root/notes/readme.txt")" = preserve ]
+  [ "$(cat "$test_root/outside/keep.txt")" = outside ]
+}
+
+@test "No-host Remove requires ordinary confirmation and supports an unexecutable host" {
+  version='9.0.116'
+  install_dir="$tool_root/$version"
+  mkdir -p "$install_dir"
+  printf 'not executable' > "$install_dir/dotnet"
+
+  run bash -c 'printf "n\n" | env HOME="$1" "$2" remove "$3"' _ "$test_home" "$tool_path" "$version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removal cancelled."* ]]
+  [ -e "$install_dir/dotnet" ]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cannot be shut down"* ]]
+  [ ! -e "$install_dir" ]
+}
+
+@test "Remove rejects invalid version names and linked SDK directories without touching their targets" {
+  mkdir -p "$tool_root/notes" "$test_root/foreign"
+  printf 'unrelated' > "$tool_root/notes/keep.txt"
+  printf 'external' > "$test_root/foreign/keep.txt"
+  ln -s "$test_root/foreign" "$tool_root/9.0.117"
+  run env HOME="$test_home" "$tool_path" remove notes --yes
+  [ "$status" -ne 0 ]
+  [ -e "$tool_root/notes/keep.txt" ]
+  run env HOME="$test_home" "$tool_path" remove 9.0.117 --yes
+  [ "$status" -ne 0 ]
+  [ "$(cat "$test_root/foreign/keep.txt")" = external ]
+}
+
+@test "Failed directory rename leaves the original SDK and no incomplete removal success" {
+  version='9.0.118'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/rename-tools"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'retain' > "$install_dir/keep.txt"
+  cat > "$fake_bin/mv" <<'EOF'
+#!/usr/bin/env bash
+exit 71
+EOF
+  chmod +x "$fake_bin/mv"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"was removed."* ]]
+  [ "$(cat "$install_dir/keep.txt")" = retain ]
+  [ ! -e "$tool_root/.pending-removals/$version" ]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$install_dir" ]
+}
+
+@test "Different-filesystem staging is blocked without copying or deleting SDK contents" {
+  version='9.0.119'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/different-device-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'retain' > "$install_dir/keep.txt"
+  cat > "$fake_bin/stat" <<'EOF'
+#!/usr/bin/env bash
+if [[ ( "$1" == "-c" || "$1" == "-f" ) && "$2" == "%d" ]]; then
+  if [[ "$3" == "$SDK_TEST_DEV_ROOT" ]]; then
+    echo 100
+  else
+    echo 200
+  fi
+  exit 0
+fi
+exec /usr/bin/stat "$@"
+EOF
+  chmod +x "$fake_bin/stat"
+
+  run env HOME="$test_home" SDK_TEST_DEV_ROOT="$tool_root" PATH="$fake_bin:$PATH" \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"different filesystem"* ]]
+  [ "$(cat "$install_dir/keep.txt")" = retain ]
+  [ ! -e "$tool_root/.pending-removals/$version" ]
+}
+
+
+@test "documented earlier pre-unified SDK releases remove after exact two-command probe" {
+  for version in 1.0.1 1.1.12 2.0.0 2.1.3 2.1.4; do
+    install_dir="$tool_root/$version"
+    mkdir -p "$install_dir/sdk/$version"
+    cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+exit 91
+EOF
+    chmod +x "$install_dir/dotnet"
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Legacy SDK $version has no supported shutdown command"* ]]
+    [ ! -d "$install_dir" ]
+  done
+}
+
+@test "2.1.1xx and 2.1.2xx require targeted compiler-server shutdown" {
+  for version in 2.1.100 2.1.104 2.1.200 2.1.202; do
+    install_dir="$tool_root/$version"
+    compiler="$install_dir/sdk/$version/Roslyn/bincore/VBCSCompiler.dll"
+    mkdir -p "$(dirname "$compiler")"
+    printf 'fixture' > "$compiler"
+    cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "build-server --help" ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+if [[ "$1 $2" == "buildserver --help" ]]; then
+  echo 'No executable found matching command "dotnet-buildserver"'
+  exit 1
+fi
+if [[ "$1" == exec && "$3" == -shutdown && -f "$2" ]]; then
+  [[ "${SDK_TEST_COMPILER_FAILURE:-}" == true ]] && exit 79
+  exit 0
+fi
+exit 91
+EOF
+    chmod +x "$install_dir/dotnet"
+    run env HOME="$test_home" SDK_TEST_COMPILER_FAILURE=true "$tool_path" remove "$version" --yes
+    [ "$status" -ne 0 ]
+    [ -d "$install_dir" ]
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"SDK-local Roslyn shutdown"* ]]
+    [ ! -d "$install_dir" ]
+  done
+}
+
+@test "unknown early versions and SDK 2.1.300 cannot skip real shutdown failures" {
+  for version in 1.1.99 2.1.203 2.1.299 2.1.300; do
+    install_dir="$tool_root/$version"
+    mkdir -p "$install_dir/sdk/$version"
+    cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$2" == shutdown ]]; then exit 73; fi
+if [[ "$2" == --help ]]; then
+  echo 'No executable found matching command "dotnet-build-server"'
+  exit 1
+fi
+exit 91
+EOF
+    chmod +x "$install_dir/dotnet"
+    run env HOME="$test_home" "$tool_path" remove "$version" --yes
+    [ "$status" -ne 0 ]
+    [ -d "$install_dir" ]
+    [ ! -e "$tool_root/.pending-removals/$version" ]
+  done
 }

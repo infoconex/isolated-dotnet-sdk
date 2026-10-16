@@ -59,7 +59,7 @@ When a persistent interactive screen is successfully cleared, its first heading 
 
 Screen clearing is strictly a persistent, terminal-backed presentation feature. Explicit one-shot commands, redirected or captured input/output, pipes, CI, and automation do not emit clearing controls.
 
-This acknowledgement is a completed-result boundary, not another decision menu. It is enabled only when both input and output are attached to an interactive terminal. Redirected input, redirected/captured output, pipes, CI, and automation never wait for it; they still follow the same parent-screen navigation without pausing. Back and Exit navigation do not require acknowledgement. A genuine operational failure terminates nonzero rather than navigating to a parent screen where a later successful Exit could mask it.
+This acknowledgement is a result boundary, not another decision menu. It is enabled only when both input and output are attached to an interactive terminal. Redirected input, redirected/captured output, pipes, CI, and automation never wait for it; they still follow the same parent-screen navigation without pausing. Back and Exit navigation do not require acknowledgement. **Exception for persistent interactive Remove:** a failed attempt retains its displayed error and diagnostics, waits for Enter when terminal-capable, then returns to the Remove SDK list (or Main if no targets remain). The user may release a lock, select the same version, and retry; incomplete removals remain available for retry. Other operational failures still terminate nonzero rather than being masked by a later Exit. An explicit one-shot `-Action Remove` still reports a nonzero failure exit code and the underlying PowerShell error record. Since the persistent session can continue after a failed Remove, its eventual Exit status is not a reliable record of each attempted removal; automation must use the explicit one-shot command.
 
 ## One-shot commands
 
@@ -116,6 +116,12 @@ The default Install SDK picker depends on whether the selected channel is curren
 Classification uses Microsoft's latest SDK for the channel when it is present in the discovered versions. If that field is missing or disagrees with discovered releases, the newest discovered SDK determines the default view; no missing `latest` marker is invented. A stable channel is not classified as prerelease merely because older Preview/RC versions remain in its history.
 
 Install choices may be marked `latest`, `installed system-sdk`, and/or `installed isolated-sdk` to describe current metadata and ownership state, combining applicable markers. The picker uses SDK-aware ordering rather than fixed menu positions. The same defaults apply if an explicit, one-shot Install command needs to open a picker.
+
+## Remove selection
+
+The Remove SDK picker differs intentionally from List and Verify: it shows direct-child folders whose names have a full SDK-version shape, even when their dotnet host is missing or unusable. Such candidates are labeled `(incomplete)` rather than treated as verified installations. A previously authorized removal left in operation-owned quarantine appears as `(incomplete removal)` and can be retried after the blocking process is released.
+
+Selecting either kind of candidate uses the same ordinary default-no confirmation, without an additional recovery approval. A damaged/no-host SDK displays a warning that build-server shutdown cannot run and that files may still be in use. A target with an available host must still pass actual shutdown or the narrowly verified historical fallback. System SDKs, unrelated directories, and linked or redirected directory targets are never offered. Failed initial rename leaves the original directory intact; a later user-initiated Remove can try again.
 
 ## Verify selection
 

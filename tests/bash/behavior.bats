@@ -190,7 +190,7 @@ EOF
   mkdir -p "$fake_bin"
   cat > "$fake_bin/rm" <<'EOF'
 #!/usr/bin/env bash
-if [[ "$*" == "-rf $RM_TARGET" ]]; then
+if [[ "$*" == *"/.removing-$RM_VERSION-"* && "$*" == *"/dotnet" ]]; then
   printf '%s\n' "$*" > "$RM_LOG"
   exit 74
 fi
@@ -198,15 +198,17 @@ exec /bin/rm "$@"
 EOF
   chmod +x "$fake_bin/rm"
 
-  run env HOME="$test_home" PATH="$fake_bin:$PATH" RM_LOG="$rm_log" RM_TARGET="$install_dir" \
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" RM_LOG="$rm_log" RM_VERSION="$version" \
     "$tool_path" remove "$version" --yes
 
-  [ "$status" -eq 74 ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"removal incomplete"* ]]
   [[ "$output" != *"Isolated SDK $version was removed."* ]]
-  [ -d "$install_dir" ]
+  [ ! -d "$install_dir" ]
+  [ -f "$tool_root/.pending-removals/$version" ]
   [ -f "$sibling_dir/sentinel.txt" ]
   [ "$(cat "$sibling_dir/sentinel.txt")" = 'sibling sentinel' ]
-  [ "$(cat "$rm_log")" = "-rf $install_dir" ]
+  [[ "$(cat "$rm_log")" == *"/.removing-$version-"*"/dotnet" ]]
 }
 
 @test "release-index network failure is reported with deterministic metadata context" {

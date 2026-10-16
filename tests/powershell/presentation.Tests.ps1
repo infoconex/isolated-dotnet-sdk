@@ -91,7 +91,7 @@ Describe 'PowerShell CLI presentation contract' {
     It 'defines a semantic accent role for labels and picker metadata' {
         $source = Get-Content -LiteralPath $script:SourceCopy -Raw
 
-        $source | Should -Match "ValidateSet\('Heading', 'Accent', 'Success'\)"
+        $source | Should -Match "ValidateSet\('Heading', 'Accent', 'Success', 'Error', 'Diagnostics', 'DiagnosticSubheading'\)"
         $source | Should -Match 'function Write-ToolLabelValue'
         $source | Should -Match 'function Format-ToolAccent'
         $source | Should -Match '(?s)\$SelectedInteractively = \[string\]::IsNullOrWhiteSpace\(\$script:SdkVersion\).*?if \(\$SelectedInteractively\) \{\s*Write-ToolDisplay\s*Clear-InteractiveScreen'

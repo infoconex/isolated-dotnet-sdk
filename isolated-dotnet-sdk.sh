@@ -300,6 +300,22 @@ get_system_sdk_versions() {
     return 0
 }
 
+
+# Remove discovery differs deliberately from List/Verify: a damaged SDK
+# can be selected for cleanup even if its executable has been deleted.
+is_removable_sdk_version() {
+    [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z][0-9A-Za-z.+-]*)?$ ]]
+}
+get_remove_sdk_candidate_versions() {
+    local path version
+    for path in "$SDK_ROOT"/*; do
+        [[ -d "$path" && ! -L "$path" ]] || continue
+        version="${path##*/}"
+        is_removable_sdk_version "$version" || continue
+        printf '%s\n' "$version"
+    done
+}
+
 get_isolated_sdk_versions() {
     local path
 
@@ -1441,7 +1457,12 @@ select_remove_version() {
     local i=0
     local sdk_versions=()
 
-    versions="$(get_isolated_sdk_versions)"
+    versions="$(get_remove_sdk_candidate_versions)"
+    local pending
+    pending="$(pending_removal_versions)"
+    if [[ -n "$pending" ]]; then
+        versions="$(printf '%s\n%s\n' "$versions" "$pending" | sed '/^$/d' | sort -u)"
+    fi
 
     if [[ -z "$versions" ]]; then
         tool_info "No isolated SDKs are installed under $SDK_ROOT."
@@ -1459,7 +1480,13 @@ select_remove_version() {
         echo
 
         for ((i=0; i<${#sdk_versions[@]}; i++)); do
-            printf "  %d. %s\n" "$((i + 1))" "${sdk_versions[$i]}"
+            if [[ -f "$SDK_ROOT/.pending-removals/${sdk_versions[$i]}" ]]; then
+                printf "  %d. %s (incomplete removal)\n" "$((i + 1))" "${sdk_versions[$i]}"
+            elif [[ ! -x "$SDK_ROOT/${sdk_versions[$i]}/dotnet" ]]; then
+                printf "  %d. %s (incomplete)\n" "$((i + 1))" "${sdk_versions[$i]}"
+            else
+                printf "  %d. %s\n" "$((i + 1))" "${sdk_versions[$i]}"
+            fi
         done
 
         echo
@@ -1908,6 +1935,9 @@ install_isolated_sdk() {
     fi
 
     local install_dir="$SDK_ROOT/$VERSION"
+    if [[ -e "$SDK_ROOT/.pending-removals/$VERSION" || -L "$SDK_ROOT/.pending-removals/$VERSION" ]]; then
+        tool_fail "SDK $VERSION has an incomplete removal; finish Remove before installing this version."
+    fi
     local isolated_dotnet="$install_dir/dotnet"
     local installed_sdks=""
     local system_sdk_line=""
@@ -2436,6 +2466,170 @@ verify_isolated_sdk() {
     tool_success "Isolated SDK $VERSION verified successfully."
 }
 
+
+pending_removal_versions() {
+    local state_root="$SDK_ROOT/.pending-removals" entry
+    [[ ! -e "$state_root" && ! -L "$state_root" ]] && return 0
+    [[ -d "$state_root" && ! -L "$state_root" ]] ||
+        tool_fail "Unsafe incomplete-removal recovery directory: $state_root"
+    for entry in "$state_root"/*; do
+        [[ -e "$entry" || -L "$entry" ]] || continue
+        [[ -f "$entry" && ! -L "$entry" ]] ||
+            tool_fail "Invalid incomplete-removal recovery record: $entry"
+        basename "$entry"
+    done
+}
+
+# Reuse a previous authorized removal only when the journal and the surviving
+# quarantined directory corroborate the exact same operation identity.
+read_pending_removal() {
+    local state_root="$SDK_ROOT/.pending-removals"
+    local record="$state_root/$VERSION"
+    local token="" proof="" contents="" entry=""
+    PENDING_REMOVAL_DIR=""
+    PENDING_REMOVAL_PROOF=""
+    PENDING_REMOVAL_RECORD="$record"
+    [[ -d "$state_root" && ! -L "$state_root" ]] ||
+        tool_fail "Incomplete-removal recovery directory is missing or unsafe: $state_root"
+    [[ -f "$record" && ! -L "$record" ]] ||
+        tool_fail "Incomplete-removal recovery record is missing or unsafe: $record"
+    token="$(cat "$record")" ||
+        tool_fail "Unable to read incomplete-removal record for SDK $VERSION."
+    [[ "$token" =~ ^[0-9a-f]{32}$ ]] ||
+        tool_fail "Invalid incomplete-removal recovery token for SDK $VERSION."
+    PENDING_REMOVAL_DIR="$SDK_ROOT/.removing-$VERSION-$token"
+    proof="$PENDING_REMOVAL_DIR/.isolated-sdk-remove-$token"
+    PENDING_REMOVAL_PROOF="$proof"
+    [[ ! -e "$SDK_ROOT/$VERSION" && ! -L "$SDK_ROOT/$VERSION" ]] ||
+        tool_fail "SDK $VERSION was replaced during incomplete removal; manual recovery is required."
+    [[ ! -L "$PENDING_REMOVAL_DIR" ]] ||
+        tool_fail "Unsafe incomplete-removal target for SDK $VERSION."
+    if [[ ! -e "$PENDING_REMOVAL_DIR" ]]; then
+        return 0
+    fi
+    [[ -d "$PENDING_REMOVAL_DIR" ]] ||
+        tool_fail "Invalid incomplete-removal target for SDK $VERSION."
+    if [[ -f "$proof" && ! -L "$proof" ]]; then
+        contents="$(cat "$proof")" ||
+            tool_fail "Unable to read removal proof for SDK $VERSION."
+        [[ "$contents" == "$VERSION:$token" ]] ||
+            tool_fail "Removal proof mismatch for SDK $VERSION; manual recovery is required."
+    else
+        for entry in "$PENDING_REMOVAL_DIR"/* "$PENDING_REMOVAL_DIR"/.[!.]* "$PENDING_REMOVAL_DIR"/..?*; do
+            [[ -e "$entry" || -L "$entry" ]] || continue
+            tool_fail "Removal proof missing while SDK $VERSION still has files; manual recovery is required."
+        done
+    fi
+}
+
+stage_confirmed_removal() {
+    local install_dir="$SDK_ROOT/$VERSION"
+    local state_root="$SDK_ROOT/.pending-removals"
+    local record="$state_root/$VERSION"
+    local token="" proof="" stage=""
+    [[ -d "$install_dir" && ! -L "$install_dir" ]] ||
+        tool_fail "Unsafe SDK removal target: $install_dir"
+    [[ ! -e "$record" && ! -L "$record" ]] ||
+        tool_fail "SDK $VERSION has an existing incomplete-removal record; removal stopped."
+    if [[ ! -e "$state_root" && ! -L "$state_root" ]]; then
+        mkdir -m 700 "$state_root" ||
+            tool_fail "Unable to create removal recovery state."
+    fi
+    [[ -d "$state_root" && ! -L "$state_root" ]] ||
+        tool_fail "Unsafe removal recovery directory: $state_root"
+    token="$(od -An -N16 -tx1 /dev/urandom | tr -d '[:space:]')" ||
+        tool_fail "Unable to generate removal recovery identity."
+    [[ "$token" =~ ^[0-9a-f]{32}$ ]] ||
+        tool_fail "Unable to generate a valid removal recovery identity."
+    stage="$SDK_ROOT/.removing-$VERSION-$token"
+    proof="$install_dir/.isolated-sdk-remove-$token"
+    [[ ! -e "$stage" && ! -L "$stage" && ! -e "$proof" && ! -L "$proof" ]] ||
+        tool_fail "Removal recovery identity conflict; removal stopped."
+
+    # Write the outside journal first, then the proof retained inside the SDK
+    # directory. Neither file is allowed to replace pre-existing user state.
+    if ! (set -C; printf '%s\n' "$token" > "$record"); then
+        tool_fail "Unable to record authorized SDK removal before deletion."
+    fi
+    if ! (set -C; printf '%s:%s\n' "$VERSION" "$token" > "$proof"); then
+        rm -f "$record" || true
+        tool_fail "Unable to record SDK directory removal proof."
+    fi
+    # A directory mountpoint can live inside the isolated root but on a
+    # different device. Prevent mv's cross-device copy-and-delete fallback:
+    # a removal stage must be a rename on the same filesystem.
+    local root_device="" source_device=""
+    if root_device="$(stat -c %d "$SDK_ROOT" 2>/dev/null)" &&
+       source_device="$(stat -c %d "$install_dir" 2>/dev/null)"; then
+        :
+    elif root_device="$(stat -f %d "$SDK_ROOT" 2>/dev/null)" &&
+         source_device="$(stat -f %d "$install_dir" 2>/dev/null)"; then
+        :
+    else
+        rm -f "$proof" "$record" ||
+            tool_fail "Unable to clean removal markers after filesystem preflight failed."
+        tool_fail "Unable to establish same-filesystem rename safety for SDK $VERSION."
+    fi
+    if [[ "$root_device" != "$source_device" ]]; then
+        rm -f "$proof" "$record" ||
+            tool_fail "Unable to clean removal markers after cross-device staging was blocked."
+        tool_fail "SDK $VERSION is on a different filesystem; removal cannot safely stage it."
+    fi
+
+    if ! mv "$install_dir" "$stage"; then
+        rm -f "$proof" "$record" ||
+            tool_fail "SDK $VERSION could not be staged and recovery markers could not be cleaned."
+        tool_fail "Unable to stage SDK $VERSION for removal; its installation was not deleted. Close active processes and retry."
+    fi
+    PENDING_REMOVAL_DIR="$stage"
+    PENDING_REMOVAL_PROOF="$stage/.isolated-sdk-remove-$token"
+    PENDING_REMOVAL_RECORD="$record"
+}
+
+finish_pending_removal() {
+    local stage="" proof="" entry=""
+    read_pending_removal
+    stage="$PENDING_REMOVAL_DIR"
+    proof="$PENDING_REMOVAL_PROOF"
+    if [[ -d "$stage" ]]; then
+        for entry in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
+            [[ -e "$entry" || -L "$entry" ]] || continue
+            [[ "$entry" == "$proof" ]] && continue
+            rm -rf "$entry" ||
+                tool_fail "SDK $VERSION removal incomplete at $stage. Files may be in use or partially deleted. Free blocking processes and run Remove again."
+        done
+        if [[ -f "$proof" ]]; then
+            rm -f "$proof" ||
+                tool_fail "SDK $VERSION removal incomplete at $stage. Free blocking processes and retry Remove."
+        fi
+        rmdir "$stage" ||
+            tool_fail "SDK $VERSION removal incomplete at $stage. Free blocking processes and retry Remove."
+    fi
+    [[ ! -e "$stage" && ! -L "$stage" ]] ||
+        tool_fail "SDK $VERSION removal incomplete at $stage. Free blocking processes and retry Remove."
+    rm -f "$PENDING_REMOVAL_RECORD" ||
+        tool_fail "SDK $VERSION files were removed, but recovery cleanup failed; retry Remove."
+    rmdir "$SDK_ROOT/.pending-removals" 2>/dev/null || true
+}
+
+# Public unified build-server shutdown was introduced with SDK 2.1.300.
+# Only stable early servicing bands can enter the strict two-command probe.
+# Matching a version alone never authorizes a shutdown bypass.
+is_pre_unified_sdk_version() {
+    case "$1" in
+        1.0.[0-4]|1.1.[0-9]|1.1.1[0-4]|2.0.[0-3]|2.1.[0-4]|2.1.10[0-5]|2.1.20[0-2])
+            return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_pre_unified_roslyn_sdk_version() {
+    case "$1" in
+        2.1.10[0-5]|2.1.20[0-2]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 remove_isolated_sdk() {
     local selected_interactively="false"
     if [[ -z "$VERSION" ]]; then
@@ -2453,19 +2647,50 @@ remove_isolated_sdk() {
     local isolated_dotnet="$install_dir/dotnet"
     local status=0
 
-    if [[ ! -x "$isolated_dotnet" ]]; then
-        tool_fail "Isolated SDK $VERSION was not found at $install_dir"
+    local recovery="false"
+    local host_available="false"
+    is_removable_sdk_version "$VERSION" ||
+        tool_fail "Invalid SDK version for Remove: $VERSION"
+    if [[ -e "$SDK_ROOT/.pending-removals/$VERSION" || -L "$SDK_ROOT/.pending-removals/$VERSION" ]]; then
+        read_pending_removal
+        recovery="true"
+    elif [[ ! -d "$install_dir" || -L "$install_dir" ]]; then
+        tool_fail "Unsafe or missing isolated SDK directory: $install_dir"
+    elif [[ -x "$isolated_dotnet" && -f "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
+        host_available="true"
     fi
 
     if [[ "$selected_interactively" != "true" ]]; then
         echo
     fi
-    tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
+    if [[ "$recovery" == "true" ]]; then
+        tool_warn "SDK $VERSION has an incomplete removal. The remaining files in $PENDING_REMOVAL_DIR will be removed."
+    else
+        tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
+    fi
+    if [[ "$recovery" != "true" && "$host_available" != "true" ]]; then
+        tool_warn "SDK $VERSION has no usable isolated dotnet host and cannot be shut down. Build processes may remain, and files in use may prevent removal."
+    fi
     echo
 
     if ! confirm_action "Continue?"; then
         tool_info "Removal cancelled."
         return
+    fi
+
+    if [[ "$recovery" == "true" ]]; then
+        tool_info "Retrying incomplete removal of SDK $VERSION..."
+        finish_pending_removal
+        tool_success "Isolated SDK $VERSION was removed."
+        return 0
+    fi
+
+    if [[ "$host_available" != "true" ]]; then
+        stage_confirmed_removal
+        tool_info "Removing $install_dir..."
+        finish_pending_removal
+        tool_success "Isolated SDK $VERSION was removed."
+        return 0
     fi
 
     tool_info "Shutting down build servers for SDK $VERSION..."
@@ -2486,14 +2711,9 @@ remove_isolated_sdk() {
         export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
         export DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
 
-        legacy_version=false
-        case "$VERSION" in
-            1.0.4|1.1.5|1.1.14|2.0.3|2.1.105) legacy_version=true ;;
-        esac
-
-        if [[ "$ALLOW_UNSUPPORTED_SHUTDOWN" == "true" && "$legacy_version" == "true" ]]; then
-            # An exact, owner-verified SDK release and its payload directory are
-            # prerequisites; never classify arbitrary host exit 1 as unsupported.
+        if is_pre_unified_sdk_version "$VERSION"; then
+            # An exact SDK payload and both precise command probes are required.
+            # An arbitrary exit 1 is never proof that shutdown is unsupported.
             sdk_payload="$install_dir/sdk/$VERSION"
             if [[ ! -d "$sdk_payload" ]]; then
                 printf 'Unable to classify legacy shutdown for SDK %s: SDK payload missing.\n' "$VERSION" >&2
@@ -2516,19 +2736,19 @@ remove_isolated_sdk() {
                 fi
             done
 
-            if [[ "$VERSION" == "2.1.105" ]]; then
+            if is_pre_unified_roslyn_sdk_version "$VERSION"; then
                 compiler="$sdk_payload/Roslyn/bincore/VBCSCompiler.dll"
                 if [[ ! -f "$compiler" ]]; then
                     printf 'Legacy compiler shutdown unavailable for SDK %s; removal stopped.\n' "$VERSION" >&2
                     exit 92
                 fi
-                tool_warn "Legacy SDK $VERSION lacks unified shutdown; using SDK-local Roslyn shutdown by explicit opt-in. Other build processes may remain."
+                tool_warn "Legacy SDK $VERSION lacks unified shutdown; using SDK-local Roslyn shutdown. Other build processes may remain and files in use may prevent complete removal."
                 "$isolated_dotnet" exec "$compiler" -shutdown >/dev/null
                 exit $?
             fi
 
-            # The four inspected pre-Roslyn-server SDKs must not silently grow
-            # a compiler-server payload without a corresponding shutdown step.
+            # Earlier stable SDK servicing bands must not silently acquire
+            # an unrecognized compiler server without a shutdown mechanism.
             if server_path="$(find "$sdk_payload" -name 'VBCSCompiler*' -print)"; then
                 if [[ -n "$server_path" ]]; then
                     printf 'Unrecognized compiler-server payload in SDK %s; removal stopped.\n' "$VERSION" >&2
@@ -2538,7 +2758,7 @@ remove_isolated_sdk() {
                 printf 'Unable to inspect SDK %s compiler-server payload; removal stopped.\n' "$VERSION" >&2
                 exit 92
             fi
-            tool_warn "Legacy SDK $VERSION has no supported shutdown command; bypass authorized explicitly. Other build processes may remain."
+            tool_warn "Legacy SDK $VERSION has no supported shutdown command. Other build processes may remain and files in use may prevent complete removal."
             exit 0
         fi
 
@@ -2556,11 +2776,11 @@ remove_isolated_sdk() {
     rm -rf "$shutdown_work_dir" ||
         tool_fail "Unable to clean temporary shutdown state for SDK $VERSION; removal stopped."
 
+    # An atomic same-root rename preserves identity for retries even if the
+    # SDK host is deleted before a later locked-file failure.
+    stage_confirmed_removal
     tool_info "Removing $install_dir..."
-    rm -rf "$install_dir"
-
-    [[ ! -d "$install_dir" ]] || tool_fail "SDK directory still exists after removal."
-
+    finish_pending_removal
     tool_success "Isolated SDK $VERSION was removed."
 }
 
@@ -2625,7 +2845,7 @@ Commands:
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
-  --allow-unsupported-shutdown  Remove-only explicit authorization for verified early SDKs lacking unified shutdown; never ignores failed shutdown.
+  --allow-unsupported-shutdown  Deprecated Remove-only compatibility option; historical fallback is automatic and real shutdown failures still block deletion.
   --sdk-version <v>  Select the exact .NET SDK version. Without an action, Install is selected.
   --version          Show the tool release/source identity and exit.
   --help, -h         Show this help text.
@@ -2794,7 +3014,8 @@ if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
                     destination="$INSTALL_RESULT_PARENT"
                     ;;
                 remove)
-                    if [[ -n "$(get_isolated_sdk_versions)" ]]; then
+                    if [[ -n "$(get_remove_sdk_candidate_versions)" ||
+                          -n "$(pending_removal_versions)" ]]; then
                         destination="Remove"
                     else
                         destination="Main"
