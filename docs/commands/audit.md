@@ -100,7 +100,7 @@ For a channel whose support phase is `go-live`, the normal release JSON does not
 
 If neither ownership group contains an installed SDK, Audit reports both groups as `None` without requesting Microsoft release metadata.
 
-List and Verify remain local operations and do not gain Audit's network dependency.
+List remains network-independent. Verify's **local host/version/origin proof** determines its result even when online metadata is unavailable, though Verify may attempt optional online release/lifecycle enrichment. Audit requires online metadata for recognized installed channels when assessing lifecycle and updates.
 
 ## Related commands
 
@@ -109,3 +109,4 @@ List and Verify remain local operations and do not gain Audit's network dependen
 - [Install](install.md)
 - [Interactive mode](interactive.md)
 - [SDK discovery and release metadata](../concepts/sdk-discovery.md)
+- [Troubleshooting and safe recovery](../guides/troubleshooting.md)

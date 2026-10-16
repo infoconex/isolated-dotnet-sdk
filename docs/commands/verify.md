@@ -66,4 +66,4 @@ A failed local check is shown as `FAIL` with a precise reason and exits nonzero.
 
 Verify does not compile applications, repair/reinstall/update/remove SDKs, calculate installation sizes, hash extracted SDK trees, authenticate independent publishers, scan for CVEs, manage System SDKs, change PATH, or alter SDK content. The SHA-512 verification of the Microsoft archive occurs at install time and is a separate integrity boundary.
 
-See [Interactive mode](interactive.md), [Native-command failure boundaries](../contracts/native-command-failures.md), and [Supply-chain integrity](../concepts/supply-chain-integrity.md).
+See [Interactive mode](interactive.md), [Native-command failure boundaries](../contracts/native-command-failures.md), [Supply-chain integrity](../concepts/supply-chain-integrity.md), and [Troubleshooting and safe recovery](../guides/troubleshooting.md).

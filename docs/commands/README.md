@@ -9,6 +9,7 @@ These pages define the product-level behavior of each operation. They intentiona
 - [Remove](remove.md) — remove one SDK managed under the isolated SDK root
 - [Tool version](tool-version.md) — identify the running tool release or development source
 - [Interactive mode](interactive.md) — persistent sessions, navigation, and SDK selection
+- [Troubleshooting and safe recovery](../guides/troubleshooting.md) — failure symptoms, safe next actions, and recovery boundaries
 
 For exact commands and copy/paste examples, use the supported platform guide:
 
@@ -21,6 +22,6 @@ Starting the tool without an action or exact version opens the persistent intera
 
 The tool-version query is also one-shot, but it identifies `isolated-dotnet-sdk` itself rather than selecting a .NET SDK. It exits before bootstrap, SDK discovery, release-metadata access, prompting, or mutation. PowerShell uses `-Version` and Bash uses `--version` for tool identity. Exact SDK selection is `-SdkVersion <version>` in PowerShell and `--sdk-version <version>` in Bash, and both shells also accept the exact SDK version positionally.
 
-The tool owns SDKs only under the current user's `dotnet-sdks` directory. System SDKs are supplemental read-only inventory and never become removable merely because the tool can see them. List and Verify stay local; Audit is the explicit online read-only operation for servicing and lifecycle assessment.
+The tool owns SDKs only under the current user's `dotnet-sdks` directory. System SDKs are supplemental read-only inventory and never become removable merely because the tool can see them. List remains network-independent; Verify's local proof is authoritative but optional Microsoft release/lifecycle enrichment can use the network. Audit is the explicit online read-only operation for servicing and lifecycle assessment.
 
 For detailed cross-shell behavior and intentional platform differences, see [PowerShell and Bash behavioral parity](../contracts/behavioral-parity.md).

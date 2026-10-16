@@ -113,7 +113,7 @@ The default Install SDK picker depends on whether the selected channel is curren
 
 Classification uses Microsoft's latest SDK for the channel when it is present in the discovered versions. If that field is missing or disagrees with discovered releases, the newest discovered SDK determines the default view; no missing `latest` marker is invented. A stable channel is not classified as prerelease merely because older Preview/RC versions remain in its history.
 
-Install choices may be marked `latest`, `isolated`, and/or `system` to describe current metadata and ownership state. The picker uses SDK-aware ordering rather than fixed menu positions. The same defaults apply if an explicit, one-shot Install command needs to open a picker.
+Install choices may be marked `latest`, `installed system-sdk`, and/or `installed isolated-sdk` to describe current metadata and ownership state, combining applicable markers. The picker uses SDK-aware ordering rather than fixed menu positions. The same defaults apply if an explicit, one-shot Install command needs to open a picker.
 
 ## Verify selection
 
@@ -136,3 +136,4 @@ An explicit user cancellation or default-no confirmation remains a successful no
 - [Audit](audit.md)
 - [SDK discovery and release metadata](../concepts/sdk-discovery.md)
 - [PowerShell and Bash behavioral parity](../contracts/behavioral-parity.md)
+- [Troubleshooting and safe recovery](../guides/troubleshooting.md)

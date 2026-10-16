@@ -71,15 +71,15 @@ Explicit Install, List, Audit, Verify, Remove, and exact-version invocations rem
 
 ## What the tool does
 
-- **Install** an exact SDK under `~/dotnet-sdks/<version>` using Microsoft release metadata, SHA-512 payload verification, staging, exact-version verification, and promotion.
+- **Install** an exact SDK under `~/dotnet-sdks/<version>` using Microsoft release metadata, a Microsoft-published payload checksum (SHA-512 for modern SDKs; SHA-256 only for eligible historical .NET 1.x archives), staging, exact-version/isolated-origin verification, and promotion.
 - **List** recognized Isolated SDKs first, followed by read-only System SDKs visible through the normally resolved `dotnet` host.
 - **Audit** installed Isolated and System SDKs against current Microsoft servicing and lifecycle metadata without mutating either inventory.
-- **Verify** one installed isolated SDK with a read-only exact-version health check.
+- **Verify** one installed isolated SDK with a read-only local exact-version/origin health check and optional online lifecycle information.
 - **Remove** only SDKs managed under the isolated SDK root.
 - **Identify** the running tool release/source directly or on Main without checking for updates.
 - **Use** an isolated SDK by invoking its version-specific `dotnet` host directly; the tool does not permanently modify normal `PATH`.
 
-See the [command documentation](docs/commands/README.md) for the behavioral contract of each operation.
+See the [command documentation](docs/commands/README.md) for the behavioral contract of each operation. For common failures and safe next steps, see [Troubleshooting and recovery](docs/guides/troubleshooting.md).
 
 ## Security and isolation at a glance
 
@@ -87,7 +87,7 @@ See the [command documentation](docs/commands/README.md) for the behavioral cont
 - Isolation describes SDK installation location; it is not a security sandbox. Tool and SDK code runs with the current user's permissions and may create ordinary per-user state.
 - Latest-stable bootstrap trusts the small piped Pages entry point through HTTPS delivery, then verifies the resolved tagged release script against that release's `SHA256SUMS` before the product script executes.
 - Explicit pinned stable bootstrap remains available for reproducibility and rollback and performs the same released-script checksum verification.
-- SDK installation verifies the Microsoft-published SHA-512 for the exact platform archive before extraction, then separately verifies the staged host reports the requested SDK before promotion.
+- SDK installation verifies the Microsoft-published SHA-512 for modern SDK archives (or SHA-256 for eligible historical .NET 1.x archives) before extraction, then separately proves the staged host's exact SDK version and isolated origin with host-generation-appropriate checks before promotion.
 - GitHub, project Pages delivery, Microsoft distribution infrastructure, TLS, repository administration, and local platform tools remain trust boundaries; same-publisher checksums are integrity controls, not independent publisher signatures.
 
 For the full model, see [Supply-chain integrity](docs/concepts/supply-chain-integrity.md) and [Filesystem safety](docs/concepts/filesystem-safety.md).

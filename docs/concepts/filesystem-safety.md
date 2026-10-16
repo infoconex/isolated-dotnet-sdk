@@ -20,7 +20,7 @@ A directory at the stable saved-tool path is treated as a conflict rather than a
 
 ## Release-metadata temporary files
 
-Interactive release selection uses collision-resistant metadata files beneath the isolated SDK root where filesystem-backed metadata processing is required. Installation of an exact SDK also uses operation-owned release metadata to resolve the exact platform archive and its SHA-512. Those files are transaction state, not persistent product state.
+Interactive release selection uses collision-resistant metadata files beneath the isolated SDK root where filesystem-backed metadata processing is required. Installation of an exact SDK also uses operation-owned release metadata to resolve the exact platform archive and supported Microsoft-published checksum (SHA-512 for 2.x+ and modern SDKs; SHA-256 only for eligible historical .NET 1.x SDKs). Those files are transaction state, not persistent product state.
 
 Operation-owned metadata files are removed after normal processing and on failure where cleanup is possible. Similarly named pre-existing files are not considered operation-owned and must not be removed by cleanup.
 
@@ -32,15 +32,15 @@ A new SDK installation never targets the final `~/dotnet-sdks/<version>` directo
 - an operation-scoped downloaded SDK payload archive;
 - an operation-scoped SDK staging directory.
 
-The exact SDK artifact URL and SHA-512 are resolved from Microsoft's release metadata for the requested version and supported runtime identifier. The archive is downloaded into operation-owned state and its SHA-512 is verified before extraction. Missing or malformed required metadata, payload download failure, or checksum mismatch fails before extraction. The tool does not fall back to an unverified archive.
+The exact SDK artifact URL and supported checksum are resolved from Microsoft's release metadata for the requested version and platform identifier. The downloaded archive is verified **before extraction** using Microsoft's published SHA-512 (2.x and newer) or, only for eligible historical .NET 1.x archives, its published SHA-256. Missing, malformed, mismatched, or unsupported checksums and failed downloads stop installation before extraction; unverified archives are never accepted.
 
-Only a verified archive is extracted into the operation-owned staging directory. Extraction failure, a missing staged host, a nonzero staged-host inventory command, or an inventory that omits the requested exact SDK all fail before promotion. The staging directory and transaction files are then removed where cleanup is possible, so an attempt that started without a final destination leaves no partial final version directory.
+Only a verified archive is extracted into operation-owned staging. Modern hosts must pass exact `--list-sdks` version/origin and controlled `--version` proof. Original 1.x and early 2.x hosts (before 2.1.300) instead require exact pinned `--version` and SDK `Base Path` from `--info` inside staging because `--list-sdks` is unsupported. Extraction failure, missing host, failed proof, wrong version, or wrong origin blocks promotion. The tool attempts to remove operation-owned staging and transaction files on failure; cleanup itself may fail and must not conceal the primary error.
 
 After staged verification succeeds, the tool checks the final destination again and promotes the staging directory only when that destination is still absent. If a destination appears before promotion, or promotion otherwise fails, the pre-existing/newly appeared final destination is preserved and cleanup remains limited to the operation-owned transaction state.
 
 If the final version destination already exists before an installation attempt:
 
-- a working isolated host that reports the requested exact version retains the existing `already installed` behavior;
+- an existing installation that passes the generation-appropriate exact version **and isolated origin** proof retains the existing `already installed` behavior;
 - every other existing file or directory state is treated as recovery/user state and causes deterministic destination-conflict failure;
 - no payload is downloaded or extracted into that destination;
 - the tool does not delete, replace, merge into, or repair that state automatically.
