@@ -357,3 +357,73 @@ EOF
   run env HOME="$test_home" "$tool_path" remove "$version" --yes
   [ "$status" -eq 0 ]
 }
+
+@test "an incomplete removal retry needs normal confirmation" {
+  version='99.0.102'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'locked' > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == true && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [ -e "$tool_root/.pending-removals/$version" ]
+
+  run bash -c 'printf "n\n" | env HOME="$1" "$2" remove "$3"' \
+    _ "$test_home" "$tool_path" "$version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removal cancelled."* ]]
+  [ -e "$tool_root/.pending-removals/$version" ]
+
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -eq 0 ]
+  [ ! -e "$tool_root/.pending-removals/$version" ]
+}
+
+@test "tampered partial-removal proof cannot delete another directory" {
+  version='99.0.103'
+  install_dir="$tool_root/$version"
+  fake_bin="$test_root/fake-rm-bin"
+  mkdir -p "$install_dir" "$fake_bin"
+  printf 'locked' > "$install_dir/locked.txt"
+  cat > "$install_dir/dotnet" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$install_dir/dotnet"
+  cat > "$fake_bin/rm" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SDK_TEST_LOCK_REMOVAL:-}" == true && "$*" == *"/locked.txt"* ]]; then
+  exit 77
+fi
+exec /bin/rm "$@"
+EOF
+  chmod +x "$fake_bin/rm"
+
+  run env HOME="$test_home" PATH="$fake_bin:$PATH" SDK_TEST_LOCK_REMOVAL=true \
+    "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [ -f "$tool_root/.pending-removals/$version" ]
+
+  sibling="$tool_root/99.0.104"
+  mkdir -p "$sibling"
+  printf 'do not delete' > "$sibling/data.txt"
+  printf 'bad-token' > "$tool_root/.pending-removals/$version"
+  run env HOME="$test_home" "$tool_path" remove "$version" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid incomplete-removal recovery token"* ]]
+  [ "$(cat "$sibling/data.txt")" = 'do not delete' ]
+}
