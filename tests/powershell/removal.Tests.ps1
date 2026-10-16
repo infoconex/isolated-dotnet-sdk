@@ -228,7 +228,7 @@ Describe 'PowerShell removal behavior' {
             Test-Path -LiteralPath $installDirectory | Should -BeFalse
         }
 
-        It 'does not treat -Yes as a legacy bypass and forwards explicit opt-in only when supplied' {
+        It 'does not require a separate legacy shutdown permission after normal approval' {
             $script:SdkVersion = '2.1.105'
             $installDirectory = Initialize-TestRemovalTarget
             $script:ShutdownApprovals = [System.Collections.Generic.List[bool]]::new()
@@ -241,16 +241,17 @@ Describe 'PowerShell removal behavior' {
                 $null = $DotNetPath
                 $null = $SdkVersion
                 $script:ShutdownApprovals.Add([bool]$AllowUnsupportedShutdown)
-                if (-not $AllowUnsupportedShutdown) {
-                    throw 'legacy opt-in required'
-                }
             }
 
-            { Remove-IsolatedSdk -Yes } | Should -Throw '*legacy opt-in required*'
-            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+            Remove-IsolatedSdk -Yes
+            $script:ShutdownApprovals.Count | Should -Be 1
+            $script:ShutdownApprovals[0] | Should -BeFalse
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
 
+            $installDirectory = Initialize-TestRemovalTarget
             Remove-IsolatedSdk -Yes -AllowUnsupportedShutdown
-            ($script:ShutdownApprovals -join ',') | Should -Be 'False,True'
+            $script:ShutdownApprovals.Count | Should -Be 2
+            $script:ShutdownApprovals[1] | Should -BeTrue
             Test-Path -LiteralPath $installDirectory | Should -BeFalse
         }
 
@@ -323,7 +324,8 @@ Describe 'PowerShell removal behavior' {
             { Remove-IsolatedSdk -InformationVariable removalInformation } |
                 Should -Throw '*simulated deletion failure*'
 
-            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion) | Should -BeTrue
             ($removalInformation.MessageData -join [Environment]::NewLine) | Should -Not -Match 'was removed'
         }
     }
