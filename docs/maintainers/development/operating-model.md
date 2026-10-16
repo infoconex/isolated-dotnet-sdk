@@ -16,7 +16,7 @@ Default to strengthening the product that already exists:
 
 Do not add new capability merely because it is plausible or interesting. New capability requires explicit owner agreement and evidence that it is a material omission or important requirement.
 
-The current evaluation is tracked in [v0.4.0 hardening and evaluation tracker](https://github.com/infoconex/isolated-dotnet-sdk/issues/133).
+The original v0.4.0 hardening plan was recorded in the [completed evaluation tracker](https://github.com/infoconex/isolated-dotnet-sdk/issues/133), which is **closed** and retained for planning history. Ongoing review evidence and remaining readiness decisions are recorded in independent issues such as [documentation review #143](https://github.com/infoconex/isolated-dotnet-sdk/issues/143) and [owner evaluation #140](https://github.com/infoconex/isolated-dotnet-sdk/issues/140), not in an active #133 tracker.
 
 ## Engineering principles
 
