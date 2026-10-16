@@ -187,6 +187,30 @@ function Write-ToolRemovalFailure {
     Write-ToolDisplay
 }
 
+# Preserve failure diagnostics and stderr in both invocation modes. The
+# interactive Remove menu catches its own failures so the session survives;
+# explicit one-shot invocation still exits nonzero in the outer handler.
+function Write-ToolActionFailure {
+    param(
+        [string]$Message,
+        [string]$FailedSdkVersion
+    )
+
+    if (($Message.StartsWith('Unable to remove isolated SDK ', [StringComparison]::Ordinal) -or
+            $Message -match '^SDK [^\r\n]+ removal incomplete at ') -and
+        $Message.Contains("`nDiagnostics:`n") -and
+        $Message.Contains("`nDetails: ")) {
+        Write-ToolRemovalFailure -Message $Message
+        # Surface the original exception on stderr once, not in a second
+        # Details section on the information stream.
+        $NativeDetails = ($Message -split "`nDetails: ", 2)[1]
+        Write-Error -Message "Unable to remove isolated SDK $FailedSdkVersion. Underlying error: $NativeDetails" -ErrorAction Continue
+    }
+    else {
+        Write-Error -Message $Message -ErrorAction Continue
+    }
+}
+
 function Format-ToolMessage {
     param(
         [ValidateSet('Heading', 'Accent', 'Success', 'Error', 'Diagnostics', 'DiagnosticSubheading')]
@@ -3225,7 +3249,20 @@ try {
                 Write-ToolDisplay
                 Clear-InteractiveScreen
                 while ($true) {
-                    Invoke-SelectedAction
+                    try {
+                        Invoke-SelectedAction
+                    }
+                    catch {
+                        if ($script:Action -ne 'Remove') {
+                            throw
+                        }
+
+                        # An interactive Remove attempt may fail (including an
+                        # incomplete deletion) without ending the session.
+                        # Keep the error visible through the normal result
+                        # acknowledgement, then rediscover available targets.
+                        Write-ToolActionFailure -Message $_.Exception.Message -FailedSdkVersion $script:SdkVersion
+                    }
 
                     if ($script:ExitRequested) {
                         return
@@ -3285,20 +3322,7 @@ try {
         Invoke-SelectedAction
     }
     catch {
-        $FailureMessage = $_.Exception.Message
-        if (($FailureMessage.StartsWith('Unable to remove isolated SDK ', [StringComparison]::Ordinal) -or
-                $FailureMessage -match '^SDK [^\r\n]+ removal incomplete at ') -and
-            $FailureMessage.Contains("`nDiagnostics:`n") -and
-            $FailureMessage.Contains("`nDetails: ")) {
-            Write-ToolRemovalFailure -Message $FailureMessage
-            # Emit the original native failure on the error stream once;
-            # the report above contains context and advice without duplication.
-            $NativeDetails = ($FailureMessage -split "`nDetails: ", 2)[1]
-            Write-Error -Message "Unable to remove isolated SDK $script:SdkVersion. Underlying error: $NativeDetails" -ErrorAction Continue
-        }
-        else {
-            Write-Error -Message $FailureMessage -ErrorAction Continue
-        }
+        Write-ToolActionFailure -Message $_.Exception.Message -FailedSdkVersion $script:SdkVersion
         exit 1
     }
 }
