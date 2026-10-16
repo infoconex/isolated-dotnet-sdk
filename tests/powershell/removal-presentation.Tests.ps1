@@ -13,21 +13,30 @@ Describe 'PowerShell removal presentation' {
             throw "Unable to parse product script: $($errors[0].Message)"
         }
 
-        $functionDefinition = $ast.FindAll(
+        # Import the shutdown operation and its version-boundary classifiers
+        # from the exact product script, rather than duplicating policy in tests.
+        $functionDefinitions = $ast.FindAll(
             {
                 param($node)
-                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-                    $node.Name -eq 'Invoke-IsolatedSdkBuildServerShutdown'
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
             },
-            $true) | Select-Object -First 1
-
-        $bodyText = $functionDefinition.Body.Extent.Text
-        $bodyText = $bodyText.Substring(1, $bodyText.Length - 2)
-        Set-Item `
-            -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown `
-            -Value ([scriptblock]::Create($bodyText))
-        # Only the shutdown function is imported from the product script. Its
-        # warning helper must also exist when exercising the legacy fallback.
+            $true)
+        foreach ($name in @(
+                'Test-PreUnifiedSdkVersion',
+                'Test-PreUnifiedRoslynSdkVersion',
+                'Invoke-IsolatedSdkBuildServerShutdown'
+            )) {
+            $functionDefinition = $functionDefinitions |
+                Where-Object { $_.Name -eq $name } |
+                Select-Object -First 1
+            if ($null -eq $functionDefinition) {
+                throw "Missing expected product function $name in removal tests."
+            }
+            $bodyText = $functionDefinition.Body.Extent.Text
+            $bodyText = $bodyText.Substring(1, $bodyText.Length - 2)
+            Set-Item -Path "Function:script:$name" -Value ([scriptblock]::Create($bodyText))
+        }
+        # The warning helper must also exist for the legacy fallback.
         Set-Item -Path Function:script:Write-ToolWarning -Value {
             param([string]$Message)
             Write-Warning $Message
