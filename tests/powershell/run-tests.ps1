@@ -2,7 +2,9 @@ param(
     [ValidateSet('All', 'Verify')]
     [string]$Suite = 'All',
 
-    [switch]$TraceVerifyProcesses
+    [switch]$TraceVerifyProcesses,
+
+    [switch]$TraceVerifySteps
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,14 +31,23 @@ Import-Module Pester -RequiredVersion $expectedVersion -Force
 if ($TraceVerifyProcesses -and $Suite -ne 'Verify') {
     throw '-TraceVerifyProcesses requires -Suite Verify to keep traces scoped to one test file.'
 }
+if ($TraceVerifySteps -and $Suite -ne 'Verify') {
+    throw '-TraceVerifySteps requires -Suite Verify.'
+}
+if ($TraceVerifySteps -and $TraceVerifyProcesses) {
+    throw '-TraceVerifySteps already includes the existing Verify process trace; do not specify both switches.'
+}
+$traceEnabled = $TraceVerifyProcesses -or $TraceVerifySteps
 
 $traceRoot = $null
 $previousVerifyTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', 'Process')
 $previousHostTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', 'Process')
 $previousChildTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', 'Process')
 $previousInvocation = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', 'Process')
+$previousStepTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH', 'Process')
+$previousStepScenario = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO', 'Process')
 
-if ($TraceVerifyProcesses) {
+if ($traceEnabled) {
     $traceRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
         'isolated-dotnet-sdk-verify-trace-{0}-{1}' -f
         (Get-Date -Format 'yyyyMMdd-HHmmss'), [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -44,6 +55,12 @@ if ($TraceVerifyProcesses) {
     $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH = Join-Path $traceRoot 'verify-invocations.csv'
     $env:ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH = Join-Path $traceRoot 'fake-host-events.tsv'
     $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH = Join-Path $traceRoot 'verify-child-events.tsv'
+    if ($TraceVerifySteps) {
+        $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH = Join-Path $traceRoot 'step-timings.csv'
+    }
+    else {
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-ProfileTestRow {
@@ -86,15 +103,21 @@ try {
         Join-Path $PSScriptRoot '*.Tests.ps1'
     }
 
-    $result = Invoke-Pester `
-        -Path $testPath `
-        -PassThru `
-        -Output Detailed
+    $pesterArguments = @{
+        Path = $testPath
+        PassThru = $true
+        Output = 'Detailed'
+    }
+    if ($TraceVerifySteps) {
+        # Tag selects exactly one existing test, including both failure and success subcases.
+        $pesterArguments.Tag = 'VerifyStepProfile'
+    }
+    $result = Invoke-Pester @pesterArguments
 
     $suiteTimer.Stop()
     Write-Output ("PowerShell behavioral validation wall time: {0:N2}s" -f $suiteTimer.Elapsed.TotalSeconds)
 
-    if ($TraceVerifyProcesses) {
+    if ($traceEnabled) {
         $rows = @(
             foreach ($container in $result.Containers) {
                 foreach ($block in $container.Blocks) {
@@ -128,6 +151,24 @@ try {
             TracedChildMs = [math]::Round(($calls | Measure-Object -Property ChildPwshMs -Sum).Sum, 2)
         } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $traceRoot 'summary.json') -Encoding utf8
 
+        if ($TraceVerifySteps) {
+            $stepPath = Join-Path $traceRoot 'step-timings.csv'
+            if (-not (Test-Path -LiteralPath $stepPath -PathType Leaf)) {
+                throw 'The selected Verify test produced no step-timing report.'
+            }
+            $steps = @(Import-Csv -LiteralPath $stepPath)
+            if (@($steps | Where-Object Scope -eq 'Child').Count -eq 0 -or
+                @($steps | Where-Object Scope -eq 'Test').Count -eq 0) {
+                throw 'The step-timing report must contain child and test steps.'
+            }
+            Write-Output ("Recorded {0} buffered step timings from the selected Verify test:" -f $steps.Count)
+            $steps |
+                Select-Object Scope, Scenario, Step, ElapsedMs |
+                Format-Table -AutoSize |
+                Out-String -Width 180 |
+                Write-Output
+        }
+
         $reportFiles = @(Get-ChildItem -LiteralPath $traceRoot -File)
         $archivePath = "$traceRoot.zip"
         Compress-Archive -LiteralPath $reportFiles.FullName -DestinationPath $archivePath -Force
@@ -139,7 +180,9 @@ try {
     }
 }
 finally {
-    if ($TraceVerifyProcesses) {
+    if ($traceEnabled) {
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH', $previousStepTrace, 'Process')
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO', $previousStepScenario, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', $previousVerifyTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', $previousHostTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', $previousChildTrace, 'Process')
