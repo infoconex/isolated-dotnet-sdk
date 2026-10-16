@@ -168,7 +168,7 @@ Describe 'PowerShell transactional SDK installation' {
         $LASTEXITCODE | Should -Not -Be 0
         ($failureOutput -join [Environment]::NewLine) | Should -Match 'Unable to verify isolated SDK 99\.0\.100 with exit code 74\.'
         ($failureOutput -join [Environment]::NewLine) |
-            Should -Match 'Staged SDK verification failed at .*\.install-99\.0\.100-'
+            Should -Match '(?s)Staged SDK verification failed at\s+.*\.install-99\.0\.100-'
         Test-Path -LiteralPath $script:InstallDir | Should -BeFalse
     }
 
