@@ -143,6 +143,18 @@ Describe 'PowerShell interactive lifecycle' {
         $source | Should -Not -Match '(?s)while \(\$true\) \{\s*Clear-InteractiveScreen\s*\$script:Action = \$null'
     }
 
+    It 'places screen-leading separators before a clear, keeping the first row visible' {
+        $source = Get-Content -LiteralPath $script:ToolScript -Raw
+
+        # A blank separator after a successful clear leaves the top terminal row empty.
+        $source | Should -Not -Match 'Clear-InteractiveScreen\s*Write-ToolDisplay\b'
+        $source | Should -Match '(?s)Write-ToolDisplay\s*if \(\$ClearChannelScreen\) \{\s*Clear-InteractiveScreen'
+        $source | Should -Match '(?s)while \(\$true\) \{\s*Write-ToolDisplay\s*if \(\$ClearSdkScreen\) \{\s*Clear-InteractiveScreen'
+        $source | Should -Match '(?s)if \(\$SelectedInteractively\) \{\s*Write-ToolDisplay\s*Clear-InteractiveScreen'
+        $source | Should -Match '(?s)if \(-not \(Select-VerifyVersion\)\) \{\s*return\s*\}\s*Write-ToolDisplay\s*Clear-InteractiveScreen'
+        $source | Should -Match '(?s)if \(-not \(Select-Action\)\) \{\s*return\s*\}\s*Write-ToolDisplay\s*Clear-InteractiveScreen\s*while \(\$true\) \{\s*Invoke-SelectedAction'
+    }
+
     It 'clears only a capable persistent terminal and ignores clear failures' {
         $tokens = $null
         $parseErrors = $null
