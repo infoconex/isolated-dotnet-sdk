@@ -70,7 +70,7 @@ Describe 'PowerShell isolated SDK verification' {
                 $script:ToolPath, $content, [System.Text.UTF8Encoding]::new($false))
         }
 
-        function Invoke-VerifyStackLaunchProbes {
+        function Invoke-VerifyStackLaunchProbe {
             $probeFile = Join-Path $script:RepositoryRoot 'tests/powershell/Invoke-VerifyLaunchProbe.ps1'
             $hostPath = Join-Path (Join-Path $script:ToolRoot '99.0.100') 'dotnet.exe'
             $reportPath = $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH
@@ -435,7 +435,7 @@ Mark-VerifyChildStep 'child-command-start'
             if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
                 $script:VerifyStepScenario = 'stack-probe'
                 Add-VerifyTestStep 'stack-launch-controls-start'
-                Invoke-VerifyStackLaunchProbes
+                Invoke-VerifyStackLaunchProbe
                 Add-VerifyTestStep 'stack-launch-controls-complete'
             }
         }
