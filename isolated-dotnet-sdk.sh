@@ -300,6 +300,22 @@ get_system_sdk_versions() {
     return 0
 }
 
+
+# Remove discovery differs deliberately from List/Verify: a damaged SDK
+# can be selected for cleanup even if its executable has been deleted.
+is_removable_sdk_version() {
+    [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z][0-9A-Za-z.+-]*)?$ ]]
+}
+get_remove_sdk_candidate_versions() {
+    local path version
+    for path in "$SDK_ROOT"/*; do
+        [[ -d "$path" && ! -L "$path" ]] || continue
+        version="${path##*/}"
+        is_removable_sdk_version "$version" || continue
+        printf '%s\n' "$version"
+    done
+}
+
 get_isolated_sdk_versions() {
     local path
 
@@ -1441,7 +1457,7 @@ select_remove_version() {
     local i=0
     local sdk_versions=()
 
-    versions="$(get_isolated_sdk_versions)"
+    versions="$(get_remove_sdk_candidate_versions)"
     local pending
     pending="$(pending_removal_versions)"
     if [[ -n "$pending" ]]; then
@@ -1466,6 +1482,8 @@ select_remove_version() {
         for ((i=0; i<${#sdk_versions[@]}; i++)); do
             if [[ -f "$SDK_ROOT/.pending-removals/${sdk_versions[$i]}" ]]; then
                 printf "  %d. %s (incomplete removal)\n" "$((i + 1))" "${sdk_versions[$i]}"
+            elif [[ ! -x "$SDK_ROOT/${sdk_versions[$i]}/dotnet" ]]; then
+                printf "  %d. %s (incomplete)\n" "$((i + 1))" "${sdk_versions[$i]}"
             else
                 printf "  %d. %s\n" "$((i + 1))" "${sdk_versions[$i]}"
             fi
@@ -2591,11 +2609,16 @@ remove_isolated_sdk() {
     local status=0
 
     local recovery="false"
+    local host_available="false"
+    is_removable_sdk_version "$VERSION" ||
+        tool_fail "Invalid SDK version for Remove: $VERSION"
     if [[ -e "$SDK_ROOT/.pending-removals/$VERSION" || -L "$SDK_ROOT/.pending-removals/$VERSION" ]]; then
         read_pending_removal
         recovery="true"
-    elif [[ ! -x "$isolated_dotnet" || ! -d "$install_dir" || -L "$install_dir" ]]; then
-        tool_fail "Isolated SDK $VERSION was not found at $install_dir"
+    elif [[ ! -d "$install_dir" || -L "$install_dir" ]]; then
+        tool_fail "Unsafe or missing isolated SDK directory: $install_dir"
+    elif [[ -x "$isolated_dotnet" && -f "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
+        host_available="true"
     fi
 
     if [[ "$selected_interactively" != "true" ]]; then
@@ -2606,6 +2629,9 @@ remove_isolated_sdk() {
     else
         tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
     fi
+    if [[ "$recovery" != "true" && "$host_available" != "true" ]]; then
+        tool_warn "SDK $VERSION has no usable isolated dotnet host and cannot be shut down. Build processes may remain, and files in use may prevent removal."
+    fi
     echo
 
     if ! confirm_action "Continue?"; then
@@ -2615,6 +2641,14 @@ remove_isolated_sdk() {
 
     if [[ "$recovery" == "true" ]]; then
         tool_info "Retrying incomplete removal of SDK $VERSION..."
+        finish_pending_removal
+        tool_success "Isolated SDK $VERSION was removed."
+        return 0
+    fi
+
+    if [[ "$host_available" != "true" ]]; then
+        stage_confirmed_removal
+        tool_info "Removing $install_dir..."
         finish_pending_removal
         tool_success "Isolated SDK $VERSION was removed."
         return 0
