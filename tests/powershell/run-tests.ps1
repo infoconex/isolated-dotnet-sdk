@@ -232,7 +232,7 @@ try {
         } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $traceRoot 'summary.json') -Encoding utf8
 
         if ($TraceAll) {
-            Save-Issue181TraceEvents
+            Save-Issue181TraceEventBatch
             $allTests = @(
                 foreach ($container in $result.Containers) {
                     foreach ($block in $container.Blocks) { Get-ProfileTestRow -Block $block }
