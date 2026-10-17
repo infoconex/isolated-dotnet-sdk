@@ -5,6 +5,10 @@ param(
     [string]$Mode,
 
     [Parameter(Mandatory = $true)]
+    [ValidateSet('Existing', 'Fresh')]
+    [string]$CopyMode,
+
+    [Parameter(Mandatory = $true)]
     [string]$HostPath,
 
     [Parameter(Mandatory = $true)]
@@ -29,6 +33,7 @@ function Add-LaunchProbeEvent {
     )
     $script:ProbeEvents.Add([pscustomobject]@{
             Mode = $Mode
+            CopyMode = $CopyMode
             Iteration = $Iteration
             Phase = $Phase
             StartedUtc = $StartedUtc.ToString('o')
@@ -46,8 +51,25 @@ $previousInvocation = [Environment]::GetEnvironmentVariable(
     'ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', 'Process')
 try {
     for ($iteration = 1; $iteration -le $Iterations; $iteration++) {
-        $invocationId = "probe-$Mode-$iteration-$([guid]::NewGuid().ToString('N'))"
+        $invocationId = "probe-$Mode-$CopyMode-$iteration-$([guid]::NewGuid().ToString('N'))"
         $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION = $invocationId
+        $effectiveHostPath = $HostPath
+        $copyDirectory = $null
+        if ($CopyMode -eq 'Fresh') {
+            $copyDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+                "isolated-sdk-native-probe-{0}" -f ([guid]::NewGuid().ToString('N')))
+            $copyStartedUtc = [DateTime]::UtcNow
+            $copyClock = [Diagnostics.Stopwatch]::StartNew()
+            try {
+                $null = New-Item -ItemType Directory -Path $copyDirectory -Force -ErrorAction Stop
+                $effectiveHostPath = Join-Path $copyDirectory 'dotnet.exe'
+                [IO.File]::Copy($HostPath, $effectiveHostPath)
+            }
+            finally {
+                $copyClock.Stop()
+            }
+            Add-LaunchProbeEvent -Iteration $iteration -Phase 'fresh-executable-copy-complete' -StartedUtc $copyStartedUtc -ElapsedMs $copyClock.Elapsed.TotalMilliseconds -InvocationId $invocationId
+        }
         $startUtc = [datetime]::UtcNow
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
         $code = ''
@@ -55,7 +77,7 @@ try {
         try {
             if ($Mode -eq 'PowerShellNative') {
                 # Identical native PowerShell invocation mechanism to production Verify.
-                $output = @(& $HostPath --list-sdks)
+                $output = @(& $effectiveHostPath --list-sdks)
                 $code = [string]$LASTEXITCODE
                 if ($code -eq '0' -and ($output -join '') -notmatch '99\.0\.100') {
                     $message = 'Host inventory output was unexpected.'
@@ -64,7 +86,7 @@ try {
             else {
                 # Direct .NET process-launch control, capturing both streams.
                 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-                $startInfo.FileName = $HostPath
+                $startInfo.FileName = $effectiveHostPath
                 $startInfo.Arguments = '--list-sdks'
                 $startInfo.UseShellExecute = $false
                 $startInfo.RedirectStandardOutput = $true
@@ -95,6 +117,9 @@ try {
             $timer.Stop()
         }
         Add-LaunchProbeEvent -Iteration $iteration -Phase 'native-list-sdks-complete' -StartedUtc $startUtc -ElapsedMs $timer.Elapsed.TotalMilliseconds -InvocationId $invocationId -ExitCode $code -Detail $message
+        if ($null -ne $copyDirectory) {
+            Remove-Item -LiteralPath $copyDirectory -Recurse -Force -ErrorAction SilentlyContinue
+        }
 
         # OS-native reference process in the same pwsh session; unlike the
         # compiled fake dotnet host this executable does not initialize CLR.
