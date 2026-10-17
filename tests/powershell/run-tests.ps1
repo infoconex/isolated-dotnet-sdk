@@ -162,7 +162,7 @@ try {
                 $temporaryFile = Join-Path $PSScriptRoot (
                     $source.BaseName + '.Issue181Profile.Tests.ps1')
                 $instrumentedFiles.Add($temporaryFile)
-                New-Issue181InstrumentedPesterFile -OriginalFile $source.FullName -OutputFile $temporaryFile
+                ConvertTo-Issue181InstrumentedPesterFile -OriginalFile $source.FullName -OutputFile $temporaryFile
             }
         )
         $profileSummaries | Export-Csv -LiteralPath (Join-Path $traceRoot 'instrumentation-coverage.csv') -NoTypeInformation
