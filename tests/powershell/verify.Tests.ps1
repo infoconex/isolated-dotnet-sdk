@@ -123,7 +123,9 @@ Describe 'PowerShell isolated SDK verification' {
                 }
             }
 '@
-                $content = $content.Replace($nativeNeedle, $nativePreflight + [char]10 + $nativeNeedle)
+                $inventoryBoundary = "            Mark-VerifyChildStep 'native-inventory-call-start'"
+                $content = $content.Replace(
+                    $nativeNeedle, $nativePreflight + [char]10 + $inventoryBoundary + [char]10 + $nativeNeedle)
             }
             [System.IO.File]::WriteAllText(
                 $script:ToolPath, $content, [System.Text.UTF8Encoding]::new($false))
@@ -500,17 +502,6 @@ Mark-VerifyChildStep 'child-command-start'
                     $diagnosticPath, [Environment]::NewLine + $probeText)
                 Write-Information $probeText -InformationAction Continue
             }
-            if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
-                $script:VerifyStepScenario = 'stack-probe'
-                Add-VerifyTestStep 'stack-launch-controls-start'
-                try {
-                    Invoke-VerifyStackLaunchProbe
-                }
-                finally {
-                    Add-VerifyTestStep 'stack-launch-controls-complete'
-                    $script:VerifyStepScenario = 'healthy-sdk'
-                }
-            }
             $script:VerifyExitCode | Should -Be 0
             ($healthy -join [Environment]::NewLine) | Should -Match 'verified successfully'
             Add-VerifyTestStep 'healthy-sdk-assertions-complete'
@@ -524,18 +515,28 @@ Mark-VerifyChildStep 'child-command-start'
             if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
                 # Fresh installation and child PowerShell for each condition.
                 # The original two-child assertions above are unchanged.
+                # Balanced sequence, before running any independent native
+                # controls, tests whether a later no-preflight session is also
+                # faster. Original healthy/no-preflight case ran first above.
                 $alternateModes = @(
+                    @{ Version = '99.0.103'; Mode = 'None' }
                     @{ Version = '99.0.101'; Mode = 'DirectProcess' }
                     @{ Version = '99.0.102'; Mode = 'PowerShellNative' }
+                    @{ Version = '99.0.104'; Mode = 'None' }
                 )
                 foreach ($alternate in $alternateModes) {
-                    $script:VerifyStepScenario = "internal-preflight-$($alternate.Mode)"
+                    $script:VerifyStepScenario = "verify-control-$($alternate.Mode)-$($alternate.Version)"
                     $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO = $script:VerifyStepScenario
                     Add-VerifyTestStep 'internal-preflight-fixture-start'
                     Install-FakeIsolatedHost -Version $alternate.Version -ReportedVersion $alternate.Version | Out-Null
                     Add-VerifyTestStep 'internal-preflight-fixture-complete'
                     try {
-                        $env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE = $alternate.Mode
+                        if ($alternate.Mode -eq 'None') {
+                            Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE -ErrorAction SilentlyContinue
+                        }
+                        else {
+                            $env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE = $alternate.Mode
+                        }
                         $controlOutput = @(Invoke-VerifyTool -Version $alternate.Version)
                         Add-VerifyTestStep 'internal-preflight-child-complete'
                     }
@@ -545,6 +546,15 @@ Mark-VerifyChildStep 'child-command-start'
                     $script:VerifyExitCode | Should -Be 0
                     ($controlOutput -join [Environment]::NewLine) | Should -Match 'verified successfully'
                     Add-VerifyTestStep 'internal-preflight-assertions-complete'
+                }
+                $script:VerifyStepScenario = 'stack-probe'
+                Add-VerifyTestStep 'stack-launch-controls-start'
+                try {
+                    Invoke-VerifyStackLaunchProbe
+                }
+                finally {
+                    Add-VerifyTestStep 'stack-launch-controls-complete'
+                    $script:VerifyStepScenario = 'healthy-sdk'
                 }
             }
         }
