@@ -6,7 +6,9 @@ param(
 
     [switch]$TraceVerifySteps,
 
-    [switch]$TraceVerifyStack
+    [switch]$TraceVerifyStack,
+
+    [switch]$TraceVerifyPrewarmHost
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +32,9 @@ if ($null -eq $availablePester) {
 
 Import-Module Pester -RequiredVersion $expectedVersion -Force
 
+if ($TraceVerifyPrewarmHost -and -not $TraceVerifyStack) {
+    throw '-TraceVerifyPrewarmHost requires -TraceVerifyStack.'
+}
 if ($TraceVerifyStack -and ($TraceVerifyProcesses -or $TraceVerifySteps)) {
     throw '-TraceVerifyStack includes all step and process tracing; do not combine the switches.'
 }
@@ -56,6 +61,7 @@ $previousStepTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_
 $previousStepScenario = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO', 'Process')
 $previousStackTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH', 'Process')
 $previousStackHostTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH', 'Process')
+$previousParentPrewarm = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST', 'Process')
 
 if ($traceEnabled) {
     $traceRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
@@ -74,10 +80,17 @@ if ($traceEnabled) {
     if ($TraceVerifyStack) {
         $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH = Join-Path $traceRoot 'stack-launch-probes.csv'
         $env:ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH = Join-Path $traceRoot 'stack-host-startup.tsv'
+        if ($TraceVerifyPrewarmHost) {
+            $env:ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST = '1'
+        }
+        else {
+            Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST -ErrorAction SilentlyContinue
+        }
     }
     else {
         Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST -ErrorAction SilentlyContinue
     }
 }
 
@@ -433,6 +446,7 @@ finally {
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO', $previousStepScenario, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH', $previousStackTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH', $previousStackHostTrace, 'Process')
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST', $previousParentPrewarm, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', $previousVerifyTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', $previousHostTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', $previousChildTrace, 'Process')
