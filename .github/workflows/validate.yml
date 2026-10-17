@@ -114,6 +114,22 @@ jobs:
               exit $LASTEXITCODE
           }
 
+      # Diagnostic-only formatting export: commit the canonical result and remove
+      # this one-time step after inspecting the artifact.
+      - name: Prepare canonical formatting for SDK timing diagnostics
+        if: github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File ./scripts/Invoke-PSFormatter.ps1 -Write
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload canonical formatter result for SDK profiler
+        if: github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: issue181-canonical-format
+          path: isolated-dotnet-sdk.ps1
+          retention-days: 2
       - name: Check PowerShell formatting
         shell: pwsh
         run: |
