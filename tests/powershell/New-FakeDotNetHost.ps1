@@ -72,6 +72,23 @@ public static class Program
             var invocationId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "";
             var arguments = string.Join(" ", args);
             var clock = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                // Measures native process creation -> first managed Main code.
+                // It intentionally excludes any delay before the OS created this process.
+                var mainUtc = DateTime.UtcNow;
+                var processStartUtc = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime();
+                var startupMs = (mainUtc - processStartUtc).TotalMilliseconds;
+                File.AppendAllText(tracePath,
+                    mainUtc.ToString("o") + "\t" + caseId + "\t" + processId +
+                    "\tstartup\t" + arguments + "\t" +
+                    startupMs.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                    "\t" + invocationId + Environment.NewLine);
+            }
+            catch
+            {
+                // Tracing must not change native fake-host test behavior.
+            }
             File.AppendAllText(tracePath,
                 DateTime.UtcNow.ToString("o") + "\t" + caseId + "\t" + processId +
                 "\tstart\t" + arguments + "\t0\t" + invocationId + Environment.NewLine);
