@@ -311,18 +311,18 @@ try {
                 # avoids misattributing pre-create delays to CLR execution.
                 $probeCalls = @(
                     foreach ($probe in ($probeRows | Where-Object Phase -eq 'native-list-sdks-complete')) {
-                        $host = @($startupRows | Where-Object {
+                        $matchedHost = @($startupRows | Where-Object {
                                 $_.InvocationId -eq $probe.InvocationId -and $_.Command -eq '--list-sdks'
                             } | Select-Object -First 1)
                         $preCreate = ''
                         $osToManaged = ''
-                        if ($host.Count -gt 0) {
+                        if ($matchedHost.Count -gt 0) {
                             $started = [datetimeoffset]::Parse(
                                 $probe.StartedUtc, [System.Globalization.CultureInfo]::InvariantCulture)
                             $created = [datetimeoffset]::Parse(
-                                $host[0].ProcessCreatedUtc, [System.Globalization.CultureInfo]::InvariantCulture)
+                                $matchedHost[0].ProcessCreatedUtc, [System.Globalization.CultureInfo]::InvariantCulture)
                             $preCreate = [math]::Round(($created - $started).TotalMilliseconds, 3)
-                            $osToManaged = $host[0].OsProcessToManagedMainMs
+                            $osToManaged = $matchedHost[0].OsProcessToManagedMainMs
                         }
                         [pscustomobject]@{
                             Mode = $probe.Mode
