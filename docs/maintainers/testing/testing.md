@@ -264,16 +264,22 @@ Each child also launches Windows `cmd.exe /d /c exit 0` as a process
 reference without the fake host's managed runtime. Only this flag enables
 these extra processes; regular validation is unchanged.
 
-The deep profile also executes two **additional fresh Verify child sessions**
-against separately copied SDK versions. For one session it injects a direct
-`ProcessStartInfo` launch immediately before the product's native inventory
-call; for the other it injects a PowerShell-native preflight command at the
-same boundary. These test-only launches run **inside the Verify function's
-PowerShell process**, not a separate helper, to distinguish initial native
-process-use costs from executable freshness. The original verification
-commands, SDK origin proof and assertions still run afterward. The report
-prints each preflight duration beside the subsequent inventory duration;
-the resulting child and host event files retain distinct scenarios.
+The deep profile also executes four **additional fresh Verify child sessions**
+against separately copied SDK versions **before the standalone launch
+controls**. Two have no preflight; one injects a direct `ProcessStartInfo`
+launch immediately before the product's native inventory call, and the other
+injects a PowerShell-native preflight command at the same boundary. This
+baseline/preflight/preflight/baseline ordering helps expose warming across
+scenarios independently of in-session preflight. The test-only preflight
+launches run **inside the Verify function's PowerShell process**, not a
+separate helper. The original verification commands, SDK origin proof
+and assertions still run afterward. The reporter selects the latest
+preflight-start or actual-inventory-command-start UTC marker preceding each
+OS process-creation timestamp, rather than incorrectly measuring the second
+native process from before the first one began. The report prints each
+preflight duration and subsequent inventory duration alongside the two
+no-preflight controls. The resulting child and host event files retain
+distinct scenarios.
 
 
 The resulting archive additionally includes:
