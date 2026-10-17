@@ -83,15 +83,29 @@ Describe 'PowerShell isolated SDK verification' {
             $hostPath = Join-Path (Join-Path $script:ToolRoot '99.0.100') 'dotnet.exe'
             $reportPath = $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH
             $parentReport = Join-Path (Split-Path -Parent $reportPath) 'stack-probe-processes.csv'
-            # Alternating mode order reduces cache-order bias, but does not eliminate it.
-            foreach ($mode in @('PowerShellNative', 'DirectProcess', 'DirectProcess', 'PowerShellNative')) {
+            # Balance invocation mechanism, new executable copies, and warm
+            # executable reuse across fresh child PowerShell processes.
+            $controls = @(
+                @{ Mode = 'PowerShellNative'; CopyMode = 'Fresh' }
+                @{ Mode = 'DirectProcess'; CopyMode = 'Existing' }
+                @{ Mode = 'DirectProcess'; CopyMode = 'Fresh' }
+                @{ Mode = 'PowerShellNative'; CopyMode = 'Existing' }
+                @{ Mode = 'PowerShellNative'; CopyMode = 'Existing' }
+                @{ Mode = 'DirectProcess'; CopyMode = 'Fresh' }
+                @{ Mode = 'DirectProcess'; CopyMode = 'Existing' }
+                @{ Mode = 'PowerShellNative'; CopyMode = 'Fresh' }
+            )
+            foreach ($control in $controls) {
+                $mode = $control.Mode
+                $copyMode = $control.CopyMode
                 $startedUtc = [DateTime]::UtcNow
                 $clock = [System.Diagnostics.Stopwatch]::StartNew()
-                $output = @(& pwsh -NoProfile -File $probeFile -Mode $mode -HostPath $hostPath -ReportPath $reportPath -Iterations 3 2>&1)
+                $output = @(& pwsh -NoProfile -File $probeFile -Mode $mode -CopyMode $copyMode -HostPath $hostPath -ReportPath $reportPath -Iterations 3 2>&1)
                 $resultCode = $LASTEXITCODE
                 $clock.Stop()
                 [pscustomobject]@{
                     Mode = $mode
+                    CopyMode = $copyMode
                     StartedUtc = $startedUtc.ToString('o')
                     ChildPwshMs = [math]::Round($clock.Elapsed.TotalMilliseconds, 3)
                     ExitCode = $resultCode
