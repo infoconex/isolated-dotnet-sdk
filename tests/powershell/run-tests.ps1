@@ -266,20 +266,34 @@ try {
                         if ($osStart.Count -eq 0 -or $mainEntry.Count -eq 0 -or $exitEvent.Count -eq 0) {
                             continue
                         }
-                        # In the normal healthy Verify child, this marker is
-                        # immediately before the first PowerShell native SDK call.
-                        $inventoryMarker = @($steps | Where-Object {
-                                $_.Scope -eq 'Child' -and
-                                $_.InvocationId -eq $events[0].InvocationId -and
-                                $_.Step -eq 'local-proof-inventory-start'
-                            } | Select-Object -First 1)
+                        # In the temporary product copy, record launch
+                        # boundaries separately for internal preflight and the
+                        # subsequent real SDK inventory call. Choose the latest
+                        # boundary preceding this specific process creation.
                         $callToProcess = ''
-                        if ($events[0].Command -eq '--list-sdks' -and
-                            $inventoryMarker.Count -gt 0 -and
-                            -not [string]::IsNullOrWhiteSpace($inventoryMarker[0].Utc)) {
-                            $callStartUtc = [datetimeoffset]::Parse(
-                                $inventoryMarker[0].Utc, [System.Globalization.CultureInfo]::InvariantCulture)
-                            $callToProcess = [math]::Round(($osStart[0].Utc - $callStartUtc).TotalMilliseconds, 3)
+                        $launchMarkerStep = ''
+                        if ($events[0].Command -eq '--list-sdks') {
+                            $launchMarker = $null
+                            foreach ($candidate in @($steps | Where-Object {
+                                        $_.Scope -eq 'Child' -and
+                                        $_.InvocationId -eq $events[0].InvocationId -and
+                                        $_.Step -in @('internal-preflight-start', 'native-inventory-call-start')
+                                    })) {
+                                $candidateUtc = [datetimeoffset]::Parse(
+                                    $candidate.Utc, [System.Globalization.CultureInfo]::InvariantCulture)
+                                if ($candidateUtc -le $osStart[0].Utc -and
+                                    ($null -eq $launchMarker -or $candidateUtc -gt $launchMarker.Utc)) {
+                                    $launchMarker = [pscustomobject]@{
+                                        Utc = $candidateUtc
+                                        Step = $candidate.Step
+                                    }
+                                }
+                            }
+                            if ($null -ne $launchMarker) {
+                                $callToProcess = [math]::Round(
+                                    ($osStart[0].Utc - $launchMarker.Utc).TotalMilliseconds, 3)
+                                $launchMarkerStep = $launchMarker.Step
+                            }
                         }
                         [pscustomobject]@{
                             InvocationId = $events[0].InvocationId
@@ -288,6 +302,7 @@ try {
                             ProcessCreatedUtc = $osStart[0].Utc.ToString('o')
                             ManagedMainUtc = $mainEntry[0].Utc.ToString('o')
                             ProcessExitUtc = $exitEvent[0].Utc.ToString('o')
+                            LaunchMarkerStep = $launchMarkerStep
                             PowerShellMarkerToOsProcessMs = $callToProcess
                             OsProcessToManagedMainMs = [math]::Round(($mainEntry[0].Utc - $osStart[0].Utc).TotalMilliseconds, 3)
                             ManagedMainToExitMs = [math]::Round(($exitEvent[0].Utc - $mainEntry[0].Utc).TotalMilliseconds, 3)
@@ -387,7 +402,7 @@ try {
                 if (@($internalRows | Where-Object Step -eq 'internal-preflight-complete').Count -lt 2) {
                     throw 'Expected both internal Verify preflight control measurements.'
                 }
-                Write-Output 'First native command versus preflighted Verify inventory:'
+                Write-Output 'First native command versus Verify inventory (including fresh no-preflight controls):'
                 $internalRows |
                     Select-Object Scenario, Step, ElapsedMs |
                     Format-Table -AutoSize |
