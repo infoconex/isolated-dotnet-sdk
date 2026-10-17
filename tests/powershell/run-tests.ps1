@@ -225,7 +225,7 @@ try {
                     throw 'Stack launch profiling produced no process control records.'
                 }
                 $probeRows = @(Import-Csv -LiteralPath $probePath)
-                foreach ($copyMode in @('Fresh', 'Existing')) {
+                foreach ($copyMode in @('Fresh', 'Existing', 'SdkLayout')) {
                     foreach ($mode in @('PowerShellNative', 'DirectProcess')) {
                         if (@($probeRows | Where-Object {
                                     $_.Mode -eq $mode -and
@@ -306,22 +306,70 @@ try {
                     Out-String -Width 180 |
                     Write-Output
                 Write-Output ('Independent launch controls: {0} rows' -f $probeRows.Count)
-                $comparison = @(
-                    $probeRows |
-                        Where-Object Phase -eq 'native-list-sdks-complete' |
-                        Group-Object Mode, CopyMode |
-                        ForEach-Object {
-                            [pscustomobject]@{
-                                Condition = $_.Name
-                                Count = $_.Count
-                                MedianMs = [math]::Round(
-                                    @($_.Group | ForEach-Object { [double]$_.ElapsedMs } | Sort-Object)[
-                                        [int][math]::Floor(($_.Count - 1) / 2)], 3)
-                                Failures = @($_.Group | Where-Object { $_.ExitCode -ne '0' }).Count
-                            }
+                # Correlate control process-start timestamps with the child's
+                # launch-event UTC marker; recording per-process phases separately
+                # avoids misattributing pre-create delays to CLR execution.
+                $probeCalls = @(
+                    foreach ($probe in ($probeRows | Where-Object Phase -eq 'native-list-sdks-complete')) {
+                        $host = @($startupRows | Where-Object {
+                                $_.InvocationId -eq $probe.InvocationId -and $_.Command -eq '--list-sdks'
+                            } | Select-Object -First 1)
+                        $preCreate = ''
+                        $osToManaged = ''
+                        if ($host.Count -gt 0) {
+                            $started = [datetimeoffset]::Parse(
+                                $probe.StartedUtc, [System.Globalization.CultureInfo]::InvariantCulture)
+                            $created = [datetimeoffset]::Parse(
+                                $host[0].ProcessCreatedUtc, [System.Globalization.CultureInfo]::InvariantCulture)
+                            $preCreate = [math]::Round(($created - $started).TotalMilliseconds, 3)
+                            $osToManaged = $host[0].OsProcessToManagedMainMs
                         }
+                        [pscustomobject]@{
+                            Mode = $probe.Mode
+                            CopyMode = $probe.CopyMode
+                            Iteration = $probe.Iteration
+                            InvocationId = $probe.InvocationId
+                            WallMs = [double]$probe.ElapsedMs
+                            BeforeProcessCreatedMs = $preCreate
+                            OsProcessToManagedMainMs = $osToManaged
+                            ExitCode = $probe.ExitCode
+                        }
+                    }
                 )
-                Write-Output 'Existing vs freshly copied executable launch comparison:'
+                $probeCalls |
+                    Export-Csv -LiteralPath (Join-Path $traceRoot 'stack-launch-phase-comparison.csv') -NoTypeInformation -Encoding utf8
+                $comparison = @(
+                    $probeCalls | Group-Object Mode, CopyMode | ForEach-Object {
+                        $ordered = @($_.Group | ForEach-Object WallMs | Sort-Object)
+                        $center = [int][math]::Floor($ordered.Count / 2)
+                        $median = if ($ordered.Count % 2 -eq 0) {
+                            ($ordered[$center - 1] + $ordered[$center]) / 2
+                        }
+                        else {
+                            $ordered[$center]
+                        }
+                        $preCreation = @($_.Group |
+                                Where-Object { $_.BeforeProcessCreatedMs -ne '' } |
+                                ForEach-Object { [double]$_.BeforeProcessCreatedMs } |
+                                Sort-Object)
+                        $preMedian = ''
+                        if ($preCreation.Count -gt 0) {
+                            $mid = [int][math]::Floor($preCreation.Count / 2)
+                            $preMedian = [math]::Round($(if ($preCreation.Count % 2 -eq 0) {
+                                        ($preCreation[$mid - 1] + $preCreation[$mid]) / 2
+                                    }
+                                    else { $preCreation[$mid] }), 3)
+                        }
+                        [pscustomobject]@{
+                            Condition = $_.Name
+                            Count = $_.Count
+                            MedianMs = [math]::Round($median, 3)
+                            PreCreateMedianMs = $preMedian
+                            Failures = @($_.Group | Where-Object { $_.ExitCode -ne '0' }).Count
+                        }
+                    }
+                )
+                Write-Output 'Existing, fresh executable, and isolated SDK fixture launch comparison:'
                 $comparison | Format-Table -AutoSize | Out-String -Width 180 | Write-Output
                 $probeRows |
                     Where-Object Phase -eq 'native-list-sdks-complete' |
