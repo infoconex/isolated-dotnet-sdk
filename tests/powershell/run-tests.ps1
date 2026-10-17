@@ -378,6 +378,22 @@ try {
                     Out-String -Width 180 |
                     Write-Output
             }
+            if ($TraceVerifyStack) {
+                $internalRows = @($steps | Where-Object {
+                        $_.Scope -eq 'Child' -and (
+                            $_.Step -eq 'internal-preflight-complete' -or
+                            $_.Step -eq 'local-proof-inventory-validated')
+                    })
+                if (@($internalRows | Where-Object Step -eq 'internal-preflight-complete').Count -lt 2) {
+                    throw 'Expected both internal Verify preflight control measurements.'
+                }
+                Write-Output 'First native command versus preflighted Verify inventory:'
+                $internalRows |
+                    Select-Object Scenario, Step, ElapsedMs |
+                    Format-Table -AutoSize |
+                    Out-String -Width 180 |
+                    Write-Output
+            }
             Write-Output ("Recorded {0} buffered step timings from the selected Verify test:" -f $steps.Count)
             $steps |
                 Select-Object Scope, Scenario, Step, ElapsedMs |
