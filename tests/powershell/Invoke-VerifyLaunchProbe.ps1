@@ -5,7 +5,7 @@ param(
     [string]$Mode,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Existing', 'Fresh')]
+    [ValidateSet('Existing', 'Fresh', 'SdkLayout')]
     [string]$CopyMode,
 
     [Parameter(Mandatory = $true)]
@@ -55,20 +55,47 @@ try {
         $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION = $invocationId
         $effectiveHostPath = $HostPath
         $copyDirectory = $null
-        if ($CopyMode -eq 'Fresh') {
+        $workDirectory = $null
+        $previousDotNetRoot = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Process')
+        $previousMultiLevel = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
+        if ($CopyMode -ne 'Existing') {
             $copyDirectory = Join-Path ([IO.Path]::GetTempPath()) (
                 "isolated-sdk-native-probe-{0}" -f ([guid]::NewGuid().ToString('N')))
             $copyStartedUtc = [DateTime]::UtcNow
             $copyClock = [Diagnostics.Stopwatch]::StartNew()
             try {
-                $null = New-Item -ItemType Directory -Path $copyDirectory -Force -ErrorAction Stop
-                $effectiveHostPath = Join-Path $copyDirectory 'dotnet.exe'
-                [IO.File]::Copy($HostPath, $effectiveHostPath)
+                if ($CopyMode -eq 'Fresh') {
+                    $null = New-Item -ItemType Directory -Path $copyDirectory -Force -ErrorAction Stop
+                    $effectiveHostPath = Join-Path $copyDirectory 'dotnet.exe'
+                    [IO.File]::Copy($HostPath, $effectiveHostPath)
+                }
+                else {
+                    # Match the test's actual installation directory, wildcard
+                    # Copy-Item operation, companion files and isolated environment.
+                    $isolatedRoot = Join-Path $copyDirectory 'dotnet-sdks'
+                    $installation = Join-Path $isolatedRoot '99.0.100'
+                    $null = New-Item -ItemType Directory -Path $installation -Force -ErrorAction Stop
+                    $sharedFixture = $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT
+                    if (-not (Test-Path -LiteralPath $sharedFixture -PathType Container)) {
+                        throw 'The shared fake host fixture is unavailable for SDK layout controls.'
+                    }
+                    Copy-Item -Path (Join-Path $sharedFixture '*') -Destination $installation -Recurse -Force
+                    $null = New-Item -ItemType Directory -Path (Join-Path $installation 'sdk') -Force
+                    $null = New-Item -ItemType Directory -Path (Join-Path $installation 'shared/Microsoft.NETCore.App') -Force
+                    $effectiveHostPath = Join-Path $installation 'dotnet.exe'
+                    $workDirectory = Join-Path $copyDirectory 'work'
+                    $null = New-Item -ItemType Directory -Path $workDirectory -Force
+                }
             }
             finally {
                 $copyClock.Stop()
             }
             Add-LaunchProbeEvent -Iteration $iteration -Phase 'fresh-executable-copy-complete' -StartedUtc $copyStartedUtc -ElapsedMs $copyClock.Elapsed.TotalMilliseconds -InvocationId $invocationId
+        }
+        if ($CopyMode -eq 'SdkLayout') {
+            Push-Location -LiteralPath $workDirectory
+            $env:DOTNET_MULTILEVEL_LOOKUP = '0'
+            $env:DOTNET_ROOT = Split-Path -Parent $effectiveHostPath
         }
         $startUtc = [datetime]::UtcNow
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -117,6 +144,11 @@ try {
             $timer.Stop()
         }
         Add-LaunchProbeEvent -Iteration $iteration -Phase 'native-list-sdks-complete' -StartedUtc $startUtc -ElapsedMs $timer.Elapsed.TotalMilliseconds -InvocationId $invocationId -ExitCode $code -Detail $message
+        if ($CopyMode -eq 'SdkLayout') {
+            Pop-Location
+            [Environment]::SetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', $previousMultiLevel, 'Process')
+            [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $previousDotNetRoot, 'Process')
+        }
         if ($null -ne $copyDirectory) {
             Remove-Item -LiteralPath $copyDirectory -Recurse -Force -ErrorAction SilentlyContinue
         }
