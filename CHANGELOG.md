@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/).
 
-## [0.4.0] - Unreleased
+## [0.4.0] - 2026-10-17
 
-This entry describes the v0.4.0 candidate. The date will be finalized when the stable release is published; [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases) is authoritative for publication status.
+Published on October 17, 2026. See the [official v0.4.0 GitHub Release](https://github.com/infoconex/isolated-dotnet-sdk/releases/tag/v0.4.0) for the tagged source, release notes, and published checksums.
 
 ### Added
 
