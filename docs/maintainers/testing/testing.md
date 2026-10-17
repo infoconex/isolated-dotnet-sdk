@@ -264,6 +264,18 @@ Each child also launches Windows `cmd.exe /d /c exit 0` as a process
 reference without the fake host's managed runtime. Only this flag enables
 these extra processes; regular validation is unchanged.
 
+The deep profile also executes two **additional fresh Verify child sessions**
+against separately copied SDK versions. For one session it injects a direct
+`ProcessStartInfo` launch immediately before the product's native inventory
+call; for the other it injects a PowerShell-native preflight command at the
+same boundary. These test-only launches run **inside the Verify function's
+PowerShell process**, not a separate helper, to distinguish initial native
+process-use costs from executable freshness. The original verification
+commands, SDK origin proof and assertions still run afterward. The report
+prints each preflight duration beside the subsequent inventory duration;
+the resulting child and host event files retain distinct scenarios.
+
+
 The resulting archive additionally includes:
 
 - `stack-launch-probes.csv` — buffered command timings in each
