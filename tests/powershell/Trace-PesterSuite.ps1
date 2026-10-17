@@ -22,7 +22,7 @@ function Write-Issue181TraceEvent {
     [IO.File]::AppendAllText($path, $line + [Environment]::NewLine)
 }
 
-function New-Issue181InstrumentedPesterFile {
+function ConvertTo-Issue181InstrumentedPesterFile {
     param(
         [Parameter(Mandatory)][string]$OriginalFile,
         [Parameter(Mandatory)][string]$OutputFile
@@ -126,14 +126,14 @@ function Enable-Issue181NativeProcessTrace {
     $real = @(Get-Command pwsh -CommandType Application -ErrorAction Stop |
             Select-Object -First 1)
     if ($real.Count -ne 1) { throw 'Cannot locate the real pwsh executable.' }
-    $global:Issue181RealPwsh = $real[0].Source
+    $env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH = $real[0].Source
     # Proxy ordinary child pwsh invocations while keeping output streaming,
     # stderr, and exit code intact. The deeper ProcessStartInfo test callers
     # remain visible in the instrumented containing helper-function records.
     function global:pwsh {
         $start = [Diagnostics.Stopwatch]::GetTimestamp()
         try {
-            & $global:Issue181RealPwsh @args
+            & $env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH @args
         }
         finally {
             $childExit = $LASTEXITCODE
@@ -146,5 +146,5 @@ function Enable-Issue181NativeProcessTrace {
 
 function Disable-Issue181NativeProcessTrace {
     Remove-Item Function:\pwsh -ErrorAction SilentlyContinue
-    Remove-Variable Issue181RealPwsh -Scope Global -ErrorAction SilentlyContinue
+    Remove-Item Env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH -ErrorAction SilentlyContinue
 }
