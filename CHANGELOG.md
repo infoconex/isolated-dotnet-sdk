@@ -6,7 +6,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.4.0] - 2026-10-17
 
-Published on October 17, 2026. See the [official v0.4.0 GitHub Release](https://github.com/infoconex/isolated-dotnet-sdk/releases/tag/v0.4.0) for its immutable tagged source, notes, and published checksums.
+Published on October 17, 2026. See the [official v0.4.0 GitHub Release](https://github.com/infoconex/isolated-dotnet-sdk/releases/tag/v0.4.0) for the tagged source, release notes, and published checksums.
 
 ### Added
 
