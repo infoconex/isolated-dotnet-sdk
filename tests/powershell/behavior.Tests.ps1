@@ -8,8 +8,26 @@ Describe 'PowerShell process-level behavior' {
             Copy-Item $script:ToolScript $script:SourceCopy -Force
             Add-Content -Path $script:SourceCopy -Value "`n# bootstrap-source-marker"
 
-            & pwsh -NoProfile -File $script:SourceCopy -Action List *> $null
-            $LASTEXITCODE | Should -Be 0
+            # This case exercises exact source preservation through pwsh -File,
+            # not ambient machine SDK inventory. A disposable native command
+            # stub prevents a real system SDK host from dominating its timing.
+            $shimDirectory = Join-Path $script:TestRoot 'bootstrap-system-host'
+            New-Item -ItemType Directory -Path $shimDirectory -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $shimDirectory 'dotnet.cmd') -Value @'
+@echo off
+if "%~1"=="--list-sdks" exit /b 0
+exit /b 67
+'@
+            $originalPath = [Environment]::GetEnvironmentVariable('PATH', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable('PATH', "$shimDirectory;$originalPath", 'Process')
+                & pwsh -NoProfile -File $script:SourceCopy -Action List *> $null
+                $childExit = $LASTEXITCODE
+            }
+            finally {
+                [Environment]::SetEnvironmentVariable('PATH', $originalPath, 'Process')
+            }
+            $childExit | Should -Be 0
         }
 
         function Initialize-InstalledTestTool {
