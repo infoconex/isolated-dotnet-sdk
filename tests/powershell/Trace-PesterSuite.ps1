@@ -28,7 +28,7 @@ function Write-Issue181TraceEvent {
     }
 }
 
-function Save-Issue181TraceEvents {
+function Save-Issue181TraceEventBatch {
     $queue = [AppDomain]::CurrentDomain.GetData('IsolatedDotNetSdkIssue181Trace')
     $path = $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS
     if ($null -eq $queue -or [string]::IsNullOrWhiteSpace($path)) { return }
@@ -186,7 +186,7 @@ function Enable-Issue181NativeProcessTrace {
 }
 
 function Disable-Issue181NativeProcessTrace {
-    Save-Issue181TraceEvents
+    Save-Issue181TraceEventBatch
     [AppDomain]::CurrentDomain.SetData('IsolatedDotNetSdkIssue181Trace', $null)
     Remove-Item Function:\pwsh -ErrorAction SilentlyContinue
     Remove-Item Env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH -ErrorAction SilentlyContinue
