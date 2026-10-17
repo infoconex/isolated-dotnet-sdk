@@ -8,7 +8,9 @@ param(
 
     [switch]$TraceVerifyStack,
 
-    [switch]$TraceVerifyPrewarmHost
+    [switch]$TraceVerifyPrewarmHost,
+
+    [switch]$TraceAll
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,6 +34,9 @@ if ($null -eq $availablePester) {
 
 Import-Module Pester -RequiredVersion $expectedVersion -Force
 
+if ($TraceAll -and ($TraceVerifyStack -or $TraceVerifyProcesses -or $TraceVerifySteps -or $TraceVerifyPrewarmHost)) {
+    throw '-TraceAll profiles the complete selected suite separately from Verify-specific traces.'
+}
 if ($TraceVerifyPrewarmHost -and -not $TraceVerifyStack) {
     throw '-TraceVerifyPrewarmHost requires -TraceVerifyStack.'
 }
@@ -50,7 +55,7 @@ if ($TraceVerifySteps -and $Suite -ne 'Verify') {
 if ($TraceVerifySteps -and $TraceVerifyProcesses) {
     throw '-TraceVerifySteps already includes the existing Verify process trace; do not specify both switches.'
 }
-$traceEnabled = $TraceVerifyProcesses -or $TraceVerifySteps
+$traceEnabled = $TraceVerifyProcesses -or $TraceVerifySteps -or $TraceAll
 
 $traceRoot = $null
 $previousVerifyTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH', 'Process')
@@ -62,6 +67,10 @@ $previousStepScenario = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_S
 $previousStackTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH', 'Process')
 $previousStackHostTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH', 'Process')
 $previousParentPrewarm = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST', 'Process')
+$previousWholeSuiteTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS', 'Process')
+$previousFakeHostTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', 'Process')
+$instrumentedFiles = [Collections.Generic.List[string]]::new()
+$fullSuiteProfileSource = Join-Path $PSScriptRoot 'Trace-PesterSuite.ps1'
 
 if ($traceEnabled) {
     $traceRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
@@ -76,6 +85,10 @@ if ($traceEnabled) {
     }
     else {
         Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH -ErrorAction SilentlyContinue
+    }
+    if ($TraceAll) {
+        $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS = Join-Path $traceRoot 'all-suite-events.tsv'
+        $env:ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH = Join-Path $traceRoot 'all-suite-host-events.tsv'
     }
     if ($TraceVerifyStack) {
         $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH = Join-Path $traceRoot 'stack-launch-probes.csv'
