@@ -115,8 +115,12 @@ function Write-Issue181ToolTrace {
     }
 }
 
-if (-not [string]::IsNullOrWhiteSpace($script:Issue181ToolTracePath)) {
+if (-not [string]::IsNullOrWhiteSpace($script:Issue181ToolTracePath) -and
+    -not [AppDomain]::CurrentDomain.GetData('IsolatedDotNetSdkIssue181ProcessStartRecorded')) {
     try {
+        # Bootstrapping may invoke the same script twice in one PowerShell
+        # process. Report startup only once per process, not once per source.
+        [AppDomain]::CurrentDomain.SetData('IsolatedDotNetSdkIssue181ProcessStartRecorded', $true)
         $processStartUtc = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToUniversalTime()
         $scriptEnteredUtc = [DateTime]::UtcNow
         Write-Issue181ToolTrace -Phase 'process-start-to-script-entry' -ElapsedMs (
