@@ -1,9 +1,11 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const { validateReleaseChangelog } = require('./validate-release-changelog.js');
 
 module.exports = async ({ github, context, core }) => {
   const required = [
     'RELEASE_TAG',
+    'RELEASE_DATE',
     'EXPECTED_SHA',
     'RELEASE_NOTES_PATH',
     'CHECKSUM_PATH',
@@ -19,11 +21,13 @@ module.exports = async ({ github, context, core }) => {
   }
 
   const tag = process.env.RELEASE_TAG;
+  const releaseDate = process.env.RELEASE_DATE;
   const expectedSha = process.env.EXPECTED_SHA;
   const releaseNotesPath = process.env.RELEASE_NOTES_PATH;
   const checksumPath = process.env.CHECKSUM_PATH;
   const { owner, repo } = context.repo;
   const releaseBody = fs.readFileSync(releaseNotesPath, 'utf8');
+  validateReleaseChangelog(fs.readFileSync('CHANGELOG.md', 'utf8'), tag, releaseDate);
   const checksumBytes = fs.readFileSync(checksumPath);
   const powerShellBytes = fs.readFileSync('isolated-dotnet-sdk.ps1');
   const bashBytes = fs.readFileSync('isolated-dotnet-sdk.sh');
@@ -192,8 +196,14 @@ module.exports = async ({ github, context, core }) => {
       throw new Error(`Release metadata verification failed for ${tag}.`);
     }
 
-    if (!shouldBeDraft && !data.published_at) {
-      throw new Error(`Published release ${tag} is missing published_at.`);
+    if (!shouldBeDraft) {
+      const publishedAt = new Date(data.published_at);
+      if (!data.published_at || Number.isNaN(publishedAt.getTime())) {
+        throw new Error(`Published release ${tag} is missing a valid published_at timestamp.`);
+      }
+      if (publishedAt.toISOString().slice(0, 10) !== releaseDate) {
+        throw new Error(`Published release ${tag} UTC date must match the finalized changelog date ${releaseDate}.`);
+      }
     }
 
     const assets = await github.paginate(github.rest.repos.listReleaseAssets, {

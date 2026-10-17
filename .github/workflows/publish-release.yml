@@ -6,6 +6,9 @@ on:
       - .github/workflows/publish-release.yml
       - .github/workflows/verify-release.yml
       - .github/scripts/publish-release.js
+      - .github/scripts/validate-release-changelog.js
+      - CHANGELOG.md
+      - tests/node/publish-release.test.js
       - .github/release-notes/**
       - scripts/New-ReleaseChecksums.ps1
       - scripts/Set-ReleaseToolVersion.ps1
@@ -94,6 +97,12 @@ jobs:
             printf 'Release notes were not found or are empty: %s\n' "$release_notes_path" >&2
             exit 1
           }
+
+          # Freeze the UTC publication date before any tag or draft is created.
+          # A different publication day requires a new reviewed main commit.
+          release_date="$(date -u +%F)"
+          node .github/scripts/validate-release-changelog.js "$release_tag" "$release_date"
+          printf 'RELEASE_DATE=%s\n' "$release_date" >> "$GITHUB_ENV"
 
           printf 'RELEASE_TAG=%s\n' "$release_tag" >> "$GITHUB_ENV"
           printf 'RELEASE_NOTES_PATH=%s\n' "$release_notes_path" >> "$GITHUB_ENV"

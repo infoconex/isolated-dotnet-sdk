@@ -54,6 +54,8 @@ Release documentation has four distinct responsibilities:
 
 Do not duplicate the full changelog into each history page. The history page should summarize the stable release and link to the changelog and relevant durable documentation for deeper detail.
 
+A dated changelog heading on mutable `main` is a **planned UTC publication date**, not proof that publication has occurred. While preparing a future release, write neutral release highlights beneath the dated heading; do **not** say the release is already public or link to an as-yet-nonexistent release. GitHub Releases remains authoritative for publication status. The entry that will become part of the immutable tag must not say `Unreleased`, `candidate`, `not yet published`, or otherwise imply that it awaits publication.
+
 The Pages validation path checks every version-controlled stable release-notes file for a corresponding release-history page, Releases overview link, navigation entry, generated page, and search-index entry. A release documentation set that fails this consistency check is incomplete and must not be published.
 
 ## Release-candidate review before `main`
@@ -77,7 +79,8 @@ Before starting `Publish Release`:
 2. the exact intended `main` commit must have successful post-merge Validate and E2E runs;
 3. the Pages push run for that release-documentation commit must be successful, including the release-history consistency checks;
 4. the intended stable tag and GitHub Release must not already exist; and
-5. no unrelated commit may have landed on `main` after the reviewed release candidate.
+5. no unrelated commit may have landed on `main` after the reviewed release candidate; and
+6. `CHANGELOG.md` must already contain **exactly one** entry for the tag, with a real UTC `YYYY-MM-DD` heading matching the intended publication day and no provisional language **in that entry**. The entry can be dated in advance without claiming publication has occurred. If the UTC publication date slips, update it through the normal reviewed-PR and validation process **before** dispatch; do not correct an already-published tag later.
 
 ## Release identity derivation
 
@@ -100,7 +103,7 @@ Dispatch `Publish Release` from `main` with the explicit stable tag. The workflo
 
 1. the dispatch SHA, checked-out SHA, and current `main` tip are identical;
 2. the tag uses stable `vMAJOR.MINOR.PATCH` form;
-3. the version-controlled release-notes file exists and is non-empty;
+3. the version-controlled release-notes file exists and is non-empty, and the target changelog entry is uniquely present, date-finalized for the frozen UTC publication date, and free of candidate/unreleased wording;
 4. required landed-state Validate/E2E evidence is green for that exact commit, with Pages also green when a Pages run exists;
 5. both product scripts contain exactly one development identity marker before release stamping;
 6. one release-tag input stamps both product scripts and no other working-tree path changes;
@@ -112,7 +115,7 @@ Dispatch `Publish Release` from `main` with the explicit stable tag. The workflo
 12. the draft tag target, release metadata, asset set, uploaded checksum bytes, and derived release commit all match the reviewed state; and
 13. only after those draft checks pass, the workflow publishes the release and reads the public release, tag, checksum asset, and derived commit back again to verify they are unchanged.
 
-The draft stage is a transactional safety gate inside the workflow, not a separate manual publication approval.
+The draft stage is a transactional safety gate inside the workflow, not a separate manual publication approval. The workflow checks changelog readiness **before any tag or draft creation**, and the publisher repeats that check before deriving the commit. Following publication, public `published_at` is checked against that same UTC date. A midnight UTC crossover cannot silently publish a mismatched changelog; it requires manual investigation rather than rewriting an already-public release.
 
 ## Failure and cleanup
 
@@ -147,6 +150,8 @@ This verification is independently rerunnable without asking a maintainer to dup
 The publication workflow records the published release URL, validated `main` commit SHA, derived release commit SHA, checksum-manifest SHA-256, both script SHA-256 values, and final manifest in the workflow summary. Retain that evidence as the publication record together with the landed Validate/E2E/Pages evidence required by the release issue.
 
 The completed release record should also leave the corresponding user-facing history page discoverable from the Releases overview and Pages navigation.
+
+After successful publication, reconcile mutable `main` in a separate, reviewed **documentation-only** PR when the prepublication changelog or history used neutral wording and publication-specific links/dates can now be stated as facts. Do not amend the published lightweight tag, derived commit, published notes, or checksums merely to perform that documentation reconciliation. Any released-version changelog text that is embedded in the tag must already have been date-finalized before its first publication.
 
 After publication and public verification succeed:
 
