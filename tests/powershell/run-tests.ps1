@@ -77,9 +77,17 @@ if ($traceEnabled) {
         'isolated-dotnet-sdk-verify-trace-{0}-{1}' -f
         (Get-Date -Format 'yyyyMMdd-HHmmss'), [guid]::NewGuid().ToString('N').Substring(0, 8))
     New-Item -ItemType Directory -Path $traceRoot -Force | Out-Null
-    $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH = Join-Path $traceRoot 'verify-invocations.csv'
-    $env:ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH = Join-Path $traceRoot 'fake-host-events.tsv'
-    $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH = Join-Path $traceRoot 'verify-child-events.tsv'
+    if ($TraceAll) {
+        # The whole-suite mode must not inadvertently enable the separate
+        # Verify-only trace instrumentation in every Verify child.
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH = Join-Path $traceRoot 'verify-invocations.csv'
+        $env:ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH = Join-Path $traceRoot 'fake-host-events.tsv'
+        $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH = Join-Path $traceRoot 'verify-child-events.tsv'
+    }
     if ($TraceVerifySteps) {
         $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_TRACE_PATH = Join-Path $traceRoot 'step-timings.csv'
     }
