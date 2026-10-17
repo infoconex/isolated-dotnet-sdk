@@ -146,9 +146,34 @@ jobs:
         shell: pwsh
         run: |
           & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite All -TraceAll
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
+          $testExitCode = $LASTEXITCODE
+          # The runner stores profiling ZIPs in a unique TEMP directory and
+          # prints the path. Preserve the latest completed one before checkout
+          # cleanup; upload it even if the profiled tests report a failure.
+          $profileZip = Get-ChildItem -Path $env:TEMP -Filter 'isolated-dotnet-sdk-verify-trace-*.zip' -File |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 1
+          if ($null -ne $profileZip) {
+              $artifactRoot = Join-Path $env:RUNNER_TEMP 'issue181-profile-artifact'
+              New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+              Copy-Item -LiteralPath $profileZip.FullName -Destination (Join-Path $artifactRoot 'all-suite-profile.zip') -Force
+              Write-Output "Saved CI profiler artifact: $artifactRoot"
           }
+          else {
+              Write-Warning 'No complete profiler ZIP was produced by the diagnostic runner.'
+          }
+          if ($testExitCode -ne 0) {
+              exit $testExitCode
+          }
+
+      - name: Upload opt-in PowerShell profile
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: issue181-powershell-profile
+          path: ${{ runner.temp }}/issue181-profile-artifact/all-suite-profile.zip
+          if-no-files-found: warn
+          retention-days: 5
 
       - name: Run PowerShell behavioral tests
         shell: pwsh
