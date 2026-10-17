@@ -524,3 +524,34 @@ Versioned hosted-runner labels intentionally pin the OS/architecture family, not
 CI invokes the same repository-owned behavioral/analyzer/formatting commands documented above instead of maintaining parallel CI-only runners. Syntax/parser checks remain inline because they are small shell/runtime primitives rather than a second test harness. Framework failure output is emitted directly by Bats/Pester/Node so CI retains test names, assertion context, and framework diagnostics.
 
 Syntax/parser checks, static analysis/formatting, and behavioral tests remain separate validation layers because they identify different failure classes. Static analyzers intentionally run once per relevant shell; cross-platform duplication is not added without evidence that it catches a platform-specific analyzer contract.
+
+### Entire PowerShell behavioral-suite profiler (experimental, Issue #181)
+
+The disposable diagnostic PR exposes a separate opt-in full-suite profiler:
+
+```powershell
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite All -TraceAll
+```
+
+It instruments all Pester test cases, `BeforeAll`/`BeforeEach`/`AfterEach`/`AfterAll`
+hooks, script-defined helper functions, ordinary `pwsh` child commands, and
+the deterministic compiled fake `dotnet.exe` host. It creates temporary
+instrumented test copies **beside the original test files** to preserve
+`$PSScriptRoot` fixture paths and automatically deletes them after the run.
+Each case can be associated with inherited environment markers in child
+host events. Events are buffered in the Pester process and flushed on
+completion; the fake host emits separately tagged native-process events.
+
+The profiler packages `instrumentation-coverage.csv`,
+`all-suite-test-timings.csv`, `all-suite-events.tsv`,
+`all-suite-host-events.tsv` and `all-suite-layer-summary.csv` with the
+test result into the temporary diagnostic ZIP. Instrumentation is invasive
+and may change timings or the behavior of tests that require native PowerShell
+command resolution; compare with the exact uninstrumented suite and do not
+weaken assertions to make it pass. The `pwsh` function proxy intentionally
+does not intercept `ProcessStartInfo` launches, which are measured through
+their containing instrumented helper functions. Aggregate time measurements
+are inclusive and **must not be added together** to infer wall time.
+
+This opt-in tool is intended for controlled evaluation and is not part of
+the production SDK functionality or the normal release validation contract.
