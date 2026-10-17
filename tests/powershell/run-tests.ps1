@@ -260,8 +260,11 @@ try {
                 if (Test-Path -LiteralPath $hostPath) {
                     Get-Content -LiteralPath $hostPath | ForEach-Object {
                         $v = $_.Split([char]9)
-                        if ($v.Count -eq 7 -and $v[3] -eq 'exit') {
-                            [pscustomobject]@{ Kind = 'FakeHost'; File = 'dotnet.exe'; Name = $v[4];
+                        if ($v.Count -eq 7 -and $v[3] -in @('exit', 'startup')) {
+                            [pscustomobject]@{
+                                Kind = if ($v[3] -eq 'startup') { 'FakeHostStartup' } else { 'FakeHostManaged' }
+                                File = 'dotnet.exe'
+                                Name = $v[4]
                                 ElapsedMs = [double]::Parse($v[5], [Globalization.CultureInfo]::InvariantCulture);
                                 ExitCode = '' }
                         }
