@@ -225,9 +225,16 @@ try {
                     throw 'Stack launch profiling produced no process control records.'
                 }
                 $probeRows = @(Import-Csv -LiteralPath $probePath)
-                if (@($probeRows | Where-Object { $_.Mode -eq 'PowerShellNative' -and $_.Phase -eq 'native-list-sdks-complete' }).Count -lt 3 -or
-                    @($probeRows | Where-Object { $_.Mode -eq 'DirectProcess' -and $_.Phase -eq 'native-list-sdks-complete' }).Count -lt 3) {
-                    throw 'Stack launch profiling requires multiple measured invocations for both mechanisms.'
+                foreach ($copyMode in @('Fresh', 'Existing')) {
+                    foreach ($mode in @('PowerShellNative', 'DirectProcess')) {
+                        if (@($probeRows | Where-Object {
+                                    $_.Mode -eq $mode -and
+                                    $_.CopyMode -eq $copyMode -and
+                                    $_.Phase -eq 'native-list-sdks-complete'
+                                }).Count -lt 3) {
+                            throw "Full-stack profiling requires multiple launch controls: $mode/$copyMode."
+                        }
+                    }
                 }
                 # Join OS process creation, first managed instruction and exit
                 # by invocation ID plus PID. These are separate UTC sources.
@@ -299,9 +306,26 @@ try {
                     Out-String -Width 180 |
                     Write-Output
                 Write-Output ('Independent launch controls: {0} rows' -f $probeRows.Count)
+                $comparison = @(
+                    $probeRows |
+                        Where-Object Phase -eq 'native-list-sdks-complete' |
+                        Group-Object Mode, CopyMode |
+                        ForEach-Object {
+                            [pscustomobject]@{
+                                Condition = $_.Name
+                                Count = $_.Count
+                                MedianMs = [math]::Round(
+                                    @($_.Group | ForEach-Object { [double]$_.ElapsedMs } | Sort-Object)[
+                                        [int][math]::Floor(($_.Count - 1) / 2)], 3)
+                                Failures = @($_.Group | Where-Object { $_.ExitCode -ne '0' }).Count
+                            }
+                        }
+                )
+                Write-Output 'Existing vs freshly copied executable launch comparison:'
+                $comparison | Format-Table -AutoSize | Out-String -Width 180 | Write-Output
                 $probeRows |
                     Where-Object Phase -eq 'native-list-sdks-complete' |
-                    Select-Object Mode, Iteration, ElapsedMs, ExitCode |
+                    Select-Object Mode, CopyMode, Iteration, ElapsedMs, ExitCode |
                     Format-Table -AutoSize |
                     Out-String -Width 180 |
                     Write-Output
