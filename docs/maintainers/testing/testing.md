@@ -271,15 +271,20 @@ compiled fake host binary, rather than the Verify child process, compare
 two **separate** launches of the test runner. The default
 `-TraceVerifyStack` run is the un-prewarmed baseline; this variant
 copies the same compiled fake host into a fresh scratch SDK fixture and
-launches it once using PowerShell in the Pester **parent** before either
-Verify child starts:
+launches it once using explicit .NET `ProcessStartInfo` with both native streams
+redirected **in the Pester parent** before either Verify child starts.
+The explicit launcher avoids an intermittent PowerShell native-command
+`StandardOutputEncoding` exception observed in the experimental parent control:
 
 ```powershell
 pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifyStack -TraceVerifyPrewarmHost
 ```
 
 This adds `stack-parent-first-host.csv` and matching host
-startup timestamps. No exclusions or security settings are changed. If the
+startup timestamps. If a profiled scenario fails before a child starts, the
+runner still archives whatever raw trace records are available and retains
+the original nonzero test result, rather than replacing the failure with an
+incomplete-trace exception. No exclusions or security settings are changed. If the
 first-execution cost shifts to the parent while the original healthy Verify
 child becomes fast, the evidence favors a shared compiled-host first-use
 effect. If it remains in Verify, investigate the child-specific context.
