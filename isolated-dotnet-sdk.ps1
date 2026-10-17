@@ -92,6 +92,40 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$script:Issue181ToolTracePath = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_TOOL_EVENTS', 'Process')
+
+# Experimental, opt-in process/application timing for Issue #181.
+# This diagnostic branch must not introduce ordinary CLI output or change error handling.
+function Write-Issue181ToolTrace {
+    param([string]$Phase, [double]$ElapsedMs)
+    if ([string]::IsNullOrWhiteSpace($script:Issue181ToolTracePath)) { return }
+    try {
+        $case = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE', 'Process')
+        if ($null -eq $case) { $case = '' }
+        $case = $case.Replace([char]9, ' ').Replace([char]13, ' ').Replace([char]10, ' ')
+        $line = ('{0}{1}{2}{1}{3}{1}{4}{1}{5}{1}{6}' -f
+                [DateTime]::UtcNow.ToString('o'), [char]9, $PID, $case,
+                $Phase, $ElapsedMs.ToString('F3', [Globalization.CultureInfo]::InvariantCulture),
+                [string]$script:Action)
+        [IO.File]::AppendAllText($script:Issue181ToolTracePath, $line + [Environment]::NewLine)
+    }
+    catch {
+        # Diagnostic logging must never alter SDK behavior or mask failures.
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($script:Issue181ToolTracePath)) {
+    try {
+        $processStartUtc = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToUniversalTime()
+        $scriptEnteredUtc = [DateTime]::UtcNow
+        Write-Issue181ToolTrace -Phase 'process-start-to-script-entry' -ElapsedMs (
+            ($scriptEnteredUtc - $processStartUtc).TotalMilliseconds)
+    }
+    catch {
+        # No functional dependency on OS process timing availability.
+    }
+}
+
 $RepositoryRawBase = 'https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main'
 $ReleaseIndexUrl = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json'
 $ReleaseScheduleUrl = 'https://raw.githubusercontent.com/dotnet/core/main/release-notes/README.md'
@@ -415,6 +449,9 @@ function Confirm-Action {
 # Bootstrap to the per-user tool path. File-based execution preserves the exact source;
 # piped execution downloads the current main-branch source before re-executing.
 function Install-ToolIfNeeded {
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
     New-Item -ItemType Directory -Path $SdkRoot -Force -WhatIf:$false -Confirm:$false | Out-Null
 
     $CurrentPath = $null
@@ -504,6 +541,13 @@ function Install-ToolIfNeeded {
     }
 
     $script:Bootstrapped = $true
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Install-ToolIfNeeded' -ElapsedMs $elapsedMs
+        }
+    }
 }
 
 function Get-IsolatedDotNetPath {
@@ -512,6 +556,9 @@ function Get-IsolatedDotNetPath {
 }
 
 function Get-SystemSdkInventory {
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         return @()
     }
@@ -545,6 +592,13 @@ function Get-SystemSdkInventory {
                 }
             }
     )
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Get-SystemSdkInventory' -ElapsedMs $elapsedMs
+        }
+    }
 }
 
 function Get-SystemSdkVersion {
@@ -1286,6 +1340,9 @@ function Format-SdkAuditRow {
 }
 
 function Invoke-SdkAudit {
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
     $IsolatedVersions = @(Get-OrderedSdkVersion @(Get-IsolatedSdkVersion))
     $SystemSdks = @(Get-OrderedSdkInventory @(Get-SystemSdkInventory))
 
@@ -1372,6 +1429,13 @@ function Invoke-SdkAudit {
     else {
         foreach ($Sdk in $SystemSdks) {
             Write-ToolDisplay (Format-SdkAuditRow -Classification $ClassificationByVersion[$Sdk.Version] -Layout $Layout)
+        }
+    }
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Invoke-SdkAudit' -ElapsedMs $elapsedMs
         }
     }
 }
@@ -2008,6 +2072,9 @@ function Resolve-SdkArtifact {
 }
 
 function Install-IsolatedSdk {
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
     $SelectedInteractively = [string]::IsNullOrWhiteSpace($script:SdkVersion)
     if (-not (Resolve-InstallVersion)) {
         return
@@ -2201,6 +2268,13 @@ function Install-IsolatedSdk {
     Write-ToolDisplay
     Write-ToolSuccess 'Isolated SDK installation completed successfully.'
     Write-ToolLabelValue -Label 'Location:' -Value $InstallDir
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Install-IsolatedSdk' -ElapsedMs $elapsedMs
+        }
+    }
 }
 
 # Local SDK proof stays independent of online metadata and report presentation.
@@ -2211,6 +2285,9 @@ function Get-LocalIsolatedSdkValidation {
         [string]$InstallDirectory,
         [string]$DotNetPath
     )
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
 
     $Checks = [System.Collections.Generic.List[object]]::new()
     $Result = [ordered]@{ Checks = $Checks; Failure = '' }
@@ -2422,6 +2499,13 @@ function Get-LocalIsolatedSdkValidation {
         }
     }
     return [pscustomobject]$Result
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Get-LocalIsolatedSdkValidation' -ElapsedMs $elapsedMs
+        }
+    }
 }
 
 function Get-VerifyAuditClassification {
@@ -2464,6 +2548,9 @@ function Get-IsolatedSdkComponent {
         [string]$DotNetPath,
         [string]$Version = ''
     )
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
     $Result = [ordered]@{ HostVersion = ''; Architecture = ''; Rid = ''; Runtimes = @() }
     $PreviousMulti = [Environment]::GetEnvironmentVariable('DOTNET_MULTILEVEL_LOOKUP', 'Process')
     $PreviousRoot = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Process')
@@ -2567,9 +2654,19 @@ function Get-IsolatedSdkComponent {
         }
     }
     return [pscustomobject]$Result
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Get-IsolatedSdkComponent' -ElapsedMs $elapsedMs
+        }
+    }
 }
 
 function Test-IsolatedSdk {
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
     if ([string]::IsNullOrWhiteSpace($script:SdkVersion)) {
         throw '-SdkVersion is required with -Action Verify.'
     }
@@ -2682,6 +2779,13 @@ function Test-IsolatedSdk {
         throw $Validation.Failure
     }
     Write-ToolSuccess "Isolated SDK $SdkVersion verified successfully."
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Test-IsolatedSdk' -ElapsedMs $elapsedMs
+        }
+    }
 }
 
 # Public unified build-server shutdown arrived with SDK 2.1.300. Keep the
@@ -3161,6 +3265,9 @@ function Remove-IsolatedSdk {
 }
 
 function Invoke-SelectedAction {
+    $__issue181StartTicks = if ($script:Issue181ToolTracePath) { [Diagnostics.Stopwatch]::GetTimestamp() } else { 0 }
+    try {
+
     Assert-ActionParameterUsage
 
     switch ($script:Action) {
@@ -3193,6 +3300,13 @@ function Invoke-SelectedAction {
                 Clear-InteractiveScreen
             }
             Test-IsolatedSdk
+        }
+    }
+
+    } finally {
+        if ($script:Issue181ToolTracePath) {
+            $elapsedMs = ([Diagnostics.Stopwatch]::GetTimestamp() - $__issue181StartTicks) * 1000.0 / [Diagnostics.Stopwatch]::Frequency
+            Write-Issue181ToolTrace -Phase 'ToolFunction:Invoke-SelectedAction' -ElapsedMs $elapsedMs
         }
     }
 }
