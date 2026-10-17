@@ -264,6 +264,28 @@ Each child also launches Windows `cmd.exe /d /c exit 0` as a process
 reference without the fake host's managed runtime. Only this flag enables
 these extra processes; regular validation is unchanged.
 
+#### Controlled first execution in the Pester parent (experimental)
+
+To determine whether the large first-launch cost follows the newly
+compiled fake host binary, rather than the Verify child process, compare
+two **separate** launches of the test runner. The default
+`-TraceVerifyStack` run is the un-prewarmed baseline; this variant
+copies the same compiled fake host into a fresh scratch SDK fixture and
+launches it once using PowerShell in the Pester **parent** before either
+Verify child starts:
+
+```powershell
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifyStack -TraceVerifyPrewarmHost
+```
+
+This adds `stack-parent-first-host.csv` and matching host
+startup timestamps. No exclusions or security settings are changed. If the
+first-execution cost shifts to the parent while the original healthy Verify
+child becomes fast, the evidence favors a shared compiled-host first-use
+effect. If it remains in Verify, investigate the child-specific context.
+This is **diagnostic only**; no production warmup is proposed. The test
+fixture and launcher are cleaned up in the Pester process.
+
 The deep profile also executes four **additional fresh Verify child sessions**
 against separately copied SDK versions **before the standalone launch
 controls**. Two have no preflight; one injects a direct `ProcessStartInfo`
