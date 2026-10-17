@@ -444,25 +444,48 @@ Mark-VerifyChildStep 'child-command-start'
                     $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION = $prewarmInvocation
                     $prewarmStartedUtc = [DateTime]::UtcNow
                     $prewarmClock.Start()
-                    $prewarmOutput = @(& $prewarmExecutable --list-sdks)
-                    $prewarmExitCode = [string]$LASTEXITCODE
+                    # Explicit stream redirection avoids PowerShell's intermittent
+                    # StandardOutputEncoding error when launching native commands
+                    # from this Pester host. Launch only the disposable fake SDK.
+                    $prewarmInfo = [Diagnostics.ProcessStartInfo]::new()
+                    $prewarmInfo.FileName = $prewarmExecutable
+                    $prewarmInfo.Arguments = '--list-sdks'
+                    $prewarmInfo.UseShellExecute = $false
+                    $prewarmInfo.RedirectStandardOutput = $true
+                    $prewarmInfo.RedirectStandardError = $true
+                    $prewarmInfo.CreateNoWindow = $true
+                    $prewarmProcess = $null
+                    try {
+                        $prewarmProcess = [Diagnostics.Process]::Start($prewarmInfo)
+                        $prewarmOutput = $prewarmProcess.StandardOutput.ReadToEnd()
+                        $prewarmError = $prewarmProcess.StandardError.ReadToEnd()
+                        $prewarmProcess.WaitForExit()
+                        $prewarmExitCode = [string]$prewarmProcess.ExitCode
+                    }
+                    finally {
+                        if ($null -ne $prewarmProcess) { $prewarmProcess.Dispose() }
+                    }
                     $prewarmClock.Stop()
                     Add-VerifyTestStep 'parent-first-host-launch-complete'
+                    if (-not [string]::IsNullOrWhiteSpace($prewarmError)) {
+                        throw "Parent first-launch control produced unexpected standard error: $prewarmError"
+                    }
                     if ($prewarmExitCode -ne '0') {
                         throw "Parent first-launch control returned $prewarmExitCode."
                     }
-                    if (($prewarmOutput -join '') -notmatch '99\.0\.099') {
+                    if ($prewarmOutput -notmatch '99\.0\.099') {
                         throw 'Parent first-launch control returned unexpected SDK inventory.'
                     }
                 }
                 finally {
                     $prewarmClock.Stop()
                     [pscustomobject]@{
-                        Mode = 'ParentPowerShellNative'
+                        Mode = 'ParentDirectProcess'
                         InvocationId = $prewarmInvocation
                         StartedUtc = $prewarmStartedUtc.ToString('o')
                         ElapsedMs = [math]::Round($prewarmClock.Elapsed.TotalMilliseconds, 3)
                         ExitCode = $prewarmExitCode
+                        Error = if ($null -ne $prewarmError) { $prewarmError } else { '' }
                     } | Export-Csv -LiteralPath (
                         Join-Path (Split-Path -Parent $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH) 'stack-parent-first-host.csv'
                     ) -NoTypeInformation -Encoding utf8
