@@ -182,7 +182,7 @@ try {
             TracedChildMs = [math]::Round(($calls | Measure-Object -Property ChildPwshMs -Sum).Sum, 2)
         } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $traceRoot 'summary.json') -Encoding utf8
 
-        if ($TraceVerifySteps) {
+        if ($TraceVerifySteps -and $result.Result -eq 'Passed') {
             $stepPath = Join-Path $traceRoot 'step-timings.csv'
             if (-not (Test-Path -LiteralPath $stepPath -PathType Leaf)) {
                 throw 'The selected Verify test produced no step-timing report.'
@@ -428,6 +428,12 @@ try {
                 Format-Table -AutoSize |
                 Out-String -Width 180 |
                 Write-Output
+        }
+        elseif ($TraceVerifySteps) {
+            # The instrumented Pester test can fail before it starts any child
+            # processes. Preserve all available raw trace records rather than
+            # throwing another exception that masks the original failure.
+            Write-Warning 'The Verify profile failed; archiving available partial trace files without complete-phase assertions.'
         }
 
         $reportFiles = @(Get-ChildItem -LiteralPath $traceRoot -File)
