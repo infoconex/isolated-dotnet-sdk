@@ -68,6 +68,7 @@ $previousStackTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK
 $previousStackHostTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_STACK_TRACE_PATH', 'Process')
 $previousParentPrewarm = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST', 'Process')
 $previousWholeSuiteTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS', 'Process')
+$previousToolTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_TOOL_EVENTS', 'Process')
 $previousFakeHostTrace = [Environment]::GetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', 'Process')
 $instrumentedFiles = [Collections.Generic.List[string]]::new()
 $fullSuiteProfileSource = Join-Path $PSScriptRoot 'Trace-PesterSuite.ps1'
@@ -96,6 +97,7 @@ if ($traceEnabled) {
     }
     if ($TraceAll) {
         $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS = Join-Path $traceRoot 'all-suite-events.tsv'
+        $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_TOOL_EVENTS = Join-Path $traceRoot 'tool-child-events.tsv'
         $env:ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH = Join-Path $traceRoot 'all-suite-host-events.tsv'
     }
     if ($TraceVerifyStack) {
@@ -267,6 +269,21 @@ try {
                 }
             )
             $allEvents += $hostEvents
+            $toolPath = $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_TOOL_EVENTS
+            $toolRows = @(
+                if (Test-Path -LiteralPath $toolPath) {
+                    Get-Content -LiteralPath $toolPath | ForEach-Object {
+                        $v = $_.Split([char]9)
+                        if ($v.Count -eq 6) {
+                            [pscustomobject]@{ Kind = $v[3]; File = $v[2]; Name = $v[5];
+                                ElapsedMs = [double]::Parse($v[4], [Globalization.CultureInfo]::InvariantCulture);
+                                ExitCode = '' }
+                        }
+                    }
+                }
+            )
+            $allEvents += $toolRows
+            Write-Output ('Tool-internal diagnostic phases: {0}.' -f $toolRows.Count)
             $summary = @(
                 $allEvents | Group-Object Kind, File | ForEach-Object {
                     $sorted = @($_.Group | ForEach-Object ElapsedMs | Sort-Object)
@@ -563,6 +580,7 @@ finally {
             Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
         }
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS', $previousWholeSuiteTrace, 'Process')
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_TOOL_EVENTS', $previousToolTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', $previousFakeHostTrace, 'Process')
     }
     Remove-Item Env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT -ErrorAction SilentlyContinue
