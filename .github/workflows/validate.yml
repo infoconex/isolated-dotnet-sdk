@@ -137,11 +137,11 @@ jobs:
           }
 
       # Temporary opt-in suite-wide timing pass on this diagnostic PR only.
-      - name: Smoke test comprehensive PowerShell suite instrumentation
+      - name: Profile all PowerShell behavioral tests (experimental)
         if: github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
         shell: pwsh
         run: |
-          & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceAll
+          & pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite All -TraceAll
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
