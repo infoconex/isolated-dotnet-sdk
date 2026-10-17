@@ -421,6 +421,61 @@ Mark-VerifyChildStep 'child-command-start'
             $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_PATH = $tracePath
             $env:ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH = $childTracePath
             Add-VerifyTestStep 'trace-paths-ready'
+            if ($env:ISOLATED_DOTNET_SDK_VERIFY_PARENT_PREWARM_HOST -eq '1') {
+                # Probe the first execution of the compiled fake host before
+                # the missing/healthy Verify child sessions. This is separate
+                # from the default deep stack tracing and does not alter the
+                # product or weaken any assertions.
+                $script:VerifyStepScenario = 'parent-first-host'
+                Add-VerifyTestStep 'parent-first-host-setup-start'
+                $previousFakeVersion = [Environment]::GetEnvironmentVariable(
+                    'FAKE_DOTNET_SDK_VERSION', 'Process')
+                $previousNativeInvocation = [Environment]::GetEnvironmentVariable(
+                    'ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', 'Process')
+                $prewarmDirectory = $null
+                $prewarmStartedUtc = [DateTime]::UtcNow
+                $prewarmClock = [Diagnostics.Stopwatch]::new()
+                $prewarmExitCode = ''
+                $prewarmInvocation = 'parent-first-host-' + [guid]::NewGuid().ToString('N')
+                try {
+                    $prewarmDirectory = Install-FakeIsolatedHost -Version '99.0.099' -ReportedVersion '99.0.099'
+                    Add-VerifyTestStep 'parent-first-host-setup-complete'
+                    $prewarmExecutable = Join-Path $prewarmDirectory 'dotnet.exe'
+                    $env:ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION = $prewarmInvocation
+                    $prewarmStartedUtc = [DateTime]::UtcNow
+                    $prewarmClock.Start()
+                    $prewarmOutput = @(& $prewarmExecutable --list-sdks)
+                    $prewarmExitCode = [string]$LASTEXITCODE
+                    $prewarmClock.Stop()
+                    Add-VerifyTestStep 'parent-first-host-launch-complete'
+                    if ($prewarmExitCode -ne '0') {
+                        throw "Parent first-launch control returned $prewarmExitCode."
+                    }
+                    if (($prewarmOutput -join '') -notmatch '99\.0\.099') {
+                        throw 'Parent first-launch control returned unexpected SDK inventory.'
+                    }
+                }
+                finally {
+                    $prewarmClock.Stop()
+                    [pscustomobject]@{
+                        Mode = 'ParentPowerShellNative'
+                        InvocationId = $prewarmInvocation
+                        StartedUtc = $prewarmStartedUtc.ToString('o')
+                        ElapsedMs = [math]::Round($prewarmClock.Elapsed.TotalMilliseconds, 3)
+                        ExitCode = $prewarmExitCode
+                    } | Export-Csv -LiteralPath (
+                        Join-Path (Split-Path -Parent $env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH) 'stack-parent-first-host.csv'
+                    ) -NoTypeInformation -Encoding utf8
+                    [Environment]::SetEnvironmentVariable(
+                        'ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', $previousNativeInvocation, 'Process')
+                    [Environment]::SetEnvironmentVariable(
+                        'FAKE_DOTNET_SDK_VERSION', $previousFakeVersion, 'Process')
+                    if ($null -ne $prewarmDirectory) {
+                        Remove-Item -LiteralPath $prewarmDirectory -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                }
+                $script:VerifyStepScenario = 'setup'
+            }
             $previousCount = if (Test-Path -LiteralPath $tracePath -PathType Leaf) {
                 @(Import-Csv -LiteralPath $tracePath).Count
             }
