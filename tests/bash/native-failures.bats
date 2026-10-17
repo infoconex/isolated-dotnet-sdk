@@ -16,7 +16,7 @@ teardown() { payload_test_teardown; }
   ! compgen -G "$tool_root/.sdk-payload-$version.*" >/dev/null
 }
 
-@test "existing isolated host failure stops installation before acquisition" {
+@test "failed existing host proof preserves its destination and stops before acquisition" {
   mkdir -p "$install_dir"
   cat > "$install_dir/dotnet" <<'EOF'
 #!/usr/bin/env bash
@@ -27,7 +27,7 @@ EOF
   run_payload_install
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"Unable to inspect existing isolated SDK $version with exit code 72."* ]]
+  [[ "$output" == *"destination already exists and cannot be replaced"* ]]
   [ ! -e "$test_home/curl.log" ]
 }
 

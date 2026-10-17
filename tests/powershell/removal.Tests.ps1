@@ -79,6 +79,51 @@ Describe 'PowerShell removal behavior' {
             ($whatIfOutput -join [Environment]::NewLine) | Should -Match 'What if:'
         }
 
+        It 'returns the underlying Windows rename error on the error stream while preserving a locked SDK' -Skip:(-not $IsWindows) {
+            $version = '99.0.199'
+            $installDirectory = Join-Path $script:ToolRoot $version
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            $lockedFile = Join-Path $installDirectory 'lock-test.tmp'
+            Set-Content -LiteralPath $lockedFile -Value 'Windows exclusive lock test'
+            $lockHandle = [IO.File]::Open($lockedFile, [IO.FileMode]::Open,
+                [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            try {
+                $output = @(
+                    & pwsh -NoProfile -File $script:ToolScript -Action Remove -SdkVersion $version -Yes *>&1 |
+                        ForEach-Object { [string]$_ }
+                )
+                $exitCode = $LASTEXITCODE
+
+                $exitCode | Should -Be 1
+                Test-Path -LiteralPath $installDirectory | Should -BeTrue
+                Test-Path -LiteralPath $lockedFile | Should -BeTrue
+                $text = $output -join "`n"
+                $text | Should -Match 'Error:'
+                $text | Should -Match 'Diagnostics:'
+                $text | Should -Not -Match '(?m)^\s*Details:'
+                $text | Should -Match 'Underlying error: Exception calling "Move"'
+                # PowerShell may wrap the native error at the host width.
+                $text | Should -Match 'Access'
+                $text | Should -Match 'is denied\.'
+            }
+            finally {
+                $lockHandle.Dispose()
+            }
+        }
+
+        It 'forwards the legacy opt-in through bootstrap while WhatIf preserves the target' {
+            $version = '1.0.4'
+            $publicInstallDirectory = Join-Path $script:ToolRoot $version
+            New-Item -ItemType Directory -Path $publicInstallDirectory -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $publicInstallDirectory 'dotnet.exe') -Force | Out-Null
+
+            $whatIfOutput = @(& pwsh -NoProfile -File $script:ToolScript -Action Remove -SdkVersion $version -AllowUnsupportedShutdown -Yes -WhatIf *>&1)
+
+            $LASTEXITCODE | Should -Be 0
+            Test-Path -LiteralPath $publicInstallDirectory | Should -BeTrue
+            ($whatIfOutput -join [Environment]::NewLine) | Should -Match 'What if:'
+        }
+
         It 'rejects removal-only risk-mitigation parameters on unsupported actions' {
             Install-TestTool
 
@@ -86,6 +131,14 @@ Describe 'PowerShell removal behavior' {
 
             $LASTEXITCODE | Should -Not -Be 0
             ($unsupportedOutput -join [Environment]::NewLine) | Should -Match 'supported only with.*Remove'
+        }
+
+        It 'rejects legacy shutdown approval on actions other than Remove' {
+            Install-TestTool
+            $output = @(& pwsh -NoProfile -File $script:InstalledToolPath -Action List -AllowUnsupportedShutdown 2>&1)
+
+            $LASTEXITCODE | Should -Not -Be 0
+            ($output -join [Environment]::NewLine) | Should -Match 'supported only with.*Remove'
         }
 
         It 'fails safely for non-interactive removal without explicit approval' {
@@ -108,11 +161,136 @@ Describe 'PowerShell removal behavior' {
             $script:SdkVersion = $script:RemovalVersion
         }
 
+        It 'prints contextual removal guidance without duplicating native details in plain text' {
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied can also mean a lock.`nPossible causes: open handles or insufficient permissions.`nNo matching SDK processes found.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls `"C:\some\sdk`".`nDetails: Exception calling Move: access denied."
+            $originalRendering = $PSStyle.OutputRendering
+            try {
+                $PSStyle.OutputRendering = 'PlainText'
+                $displayLines = @(
+                    Write-ToolRemovalFailure -Message $message 6>&1 |
+                        ForEach-Object { [string]$_ }
+                )
+            }
+            finally {
+                $PSStyle.OutputRendering = $originalRendering
+            }
+
+            $displayLines | Should -Contain 'Error:'
+            $displayLines | Should -Contain '  Unable to remove isolated SDK 99.0.0. SDK intact.'
+            $displayLines | Should -Contain 'Diagnostics:'
+            $displayLines | Should -Contain '  Access denied can also mean a lock.'
+            $displayLines | Should -Contain '  No matching SDK processes found.'
+            $possibleIndex = [array]::IndexOf($displayLines, '  Possible causes:')
+            $possibleIndex | Should -BeGreaterThan 0
+            $displayLines[$possibleIndex - 1] | Should -Be ''
+            $displayLines[$possibleIndex + 1] | Should -Be '    open handles or insufficient permissions.'
+            $fileLockIndex = [array]::IndexOf($displayLines, '  To find a file-lock holder:')
+            $fileLockIndex | Should -BeGreaterThan $possibleIndex
+            $displayLines[$fileLockIndex - 1] | Should -Be ''
+            $displayLines[$fileLockIndex + 1] | Should -Be '    use Resource Monitor.'
+            $permissionsIndex = [array]::IndexOf($displayLines, '  To inspect filesystem permissions:')
+            $permissionsIndex | Should -BeGreaterThan $fileLockIndex
+            $displayLines[$permissionsIndex - 1] | Should -Be ''
+            $displayLines[$permissionsIndex + 1] | Should -Be '    icacls "C:\some\sdk".'
+            $displayLines | Should -Not -Contain 'Details:'
+            ($displayLines -join "`n") | Should -Not -Match 'Exception calling Move'
+            $displayLines.Count | Should -BeGreaterThan 8
+        }
+
+        It 'colors error and diagnostic headings without displaying native exception twice' {
+            $message = "Unable to remove isolated SDK 99.0.0. SDK intact.`nDiagnostics:`nAccess denied.`nPossible causes: open handles or permissions.`nTo find a file-lock holder: use Resource Monitor.`nTo inspect filesystem permissions: icacls `"C:\some\sdk`".`nDetails: Native failure."
+            $originalRendering = $PSStyle.OutputRendering
+            try {
+                $PSStyle.OutputRendering = 'Ansi'
+                $displayLines = @(
+                    Write-ToolRemovalFailure -Message $message 6>&1 |
+                        ForEach-Object { [string]$_ }
+                )
+            }
+            finally {
+                $PSStyle.OutputRendering = $originalRendering
+            }
+
+            $displayLines | Should -Contain "$($PSStyle.Foreground.Red)Error:$($PSStyle.Reset)"
+            $displayLines | Should -Contain "$($PSStyle.Foreground.Yellow)Diagnostics:$($PSStyle.Reset)"
+            $displayLines | Should -Not -Contain "$($PSStyle.Foreground.Cyan)Details:$($PSStyle.Reset)"
+            $possibleIndex = [array]::IndexOf($displayLines, "  $($PSStyle.Foreground.Cyan)Possible causes:$($PSStyle.Reset)")
+            $possibleIndex | Should -BeGreaterThan 0
+            $displayLines[$possibleIndex - 1] | Should -Be ''
+            $displayLines[$possibleIndex + 1] | Should -Be '    open handles or permissions.'
+            $fileLockIndex = [array]::IndexOf($displayLines, "  $($PSStyle.Foreground.Cyan)To find a file-lock holder:$($PSStyle.Reset)")
+            $fileLockIndex | Should -BeGreaterThan $possibleIndex
+            $displayLines[$fileLockIndex - 1] | Should -Be ''
+            $displayLines[$fileLockIndex + 1] | Should -Be '    use Resource Monitor.'
+            $permissionsIndex = [array]::IndexOf($displayLines, "  $($PSStyle.Foreground.Cyan)To inspect filesystem permissions:$($PSStyle.Reset)")
+            $permissionsIndex | Should -BeGreaterThan $fileLockIndex
+            $displayLines[$permissionsIndex - 1] | Should -Be ''
+            $displayLines[$permissionsIndex + 1] | Should -Be '    icacls "C:\some\sdk".'
+            $displayLines | Should -Contain '  Unable to remove isolated SDK 99.0.0. SDK intact.'
+            $displayLines | Should -Not -Contain '  Native failure.'
+            ($displayLines -join "`n") | Should -Not -Match 'Details:'
+        }
+
+        It 'discovers damaged version directories for Remove but excludes unrelated folders' {
+            Import-ToolFunctionDefinition
+            New-Item -ItemType Directory -Path $script:SdkRoot -Force | Out-Null
+            $valid = Join-Path $script:SdkRoot '8.0.426'
+            $other = Join-Path $script:SdkRoot 'notes'
+            New-Item -ItemType Directory -Path $valid -Force | Out-Null
+            New-Item -ItemType Directory -Path $other -Force | Out-Null
+            $versions = @(Get-RemoveSdkCandidateVersion)
+            $versions | Should -Contain '8.0.426'
+            $versions | Should -Not -Contain 'notes'
+        }
+
+        It 'removes an incomplete no-host SDK after ordinary approval without invoking shutdown' {
+            $installDirectory = Join-Path $script:SdkRoot $script:SdkVersion
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $installDirectory 'leftover.txt') -Value 'safe fixture'
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                throw 'shutdown must not run without a host'
+            }
+
+            Remove-IsolatedSdk -Yes
+
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion) | Should -BeFalse
+        }
+
+        It 'preserves a no-host SDK under -WhatIf without creating recovery state' {
+            $installDirectory = Join-Path $script:SdkRoot $script:SdkVersion
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+
+            Remove-IsolatedSdk -Yes -WhatIf
+
+            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion) | Should -BeFalse
+        }
+
+        It 'rejects arbitrary directory names and symlinked SDK targets on direct Remove' {
+            New-Item -ItemType Directory -Path $script:SdkRoot -Force | Out-Null
+            $other = Join-Path $script:SdkRoot 'notes'
+            New-Item -ItemType Directory -Path $other -Force | Out-Null
+            $script:SdkVersion = 'notes'
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*Invalid*'
+            Test-Path -LiteralPath $other | Should -BeTrue
+
+            $outside = Join-Path $script:TestRoot 'outside'
+            New-Item -ItemType Directory -Path $outside -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $outside 'keep.txt') -Value 'protected'
+            $script:SdkVersion = '9.0.117'
+            $link = Join-Path $script:SdkRoot $script:SdkVersion
+            New-Item -ItemType SymbolicLink -Path $link -Target $outside -ErrorAction Stop | Out-Null
+            { Remove-IsolatedSdk -Yes } | Should -Throw
+            Get-Content -LiteralPath (Join-Path $outside 'keep.txt') | Should -Be 'protected'
+        }
+
         It 'exposes native WhatIf and Confirm parameters' {
             $removeCommand = Get-Command Remove-IsolatedSdk -CommandType Function
 
             $removeCommand.Parameters.ContainsKey('WhatIf') | Should -BeTrue
             $removeCommand.Parameters.ContainsKey('Confirm') | Should -BeTrue
+            $removeCommand.Parameters.ContainsKey('AllowUnsupportedShutdown') | Should -BeTrue
         }
 
         It 'keeps the SDK and skips shutdown after default cancellation' {
@@ -206,6 +384,45 @@ Describe 'PowerShell removal behavior' {
             Test-Path -LiteralPath $installDirectory | Should -BeFalse
         }
 
+        It 'does not require a separate legacy shutdown permission after normal approval' {
+            $script:SdkVersion = '2.1.105'
+            $installDirectory = Initialize-TestRemovalTarget
+            $script:ShutdownApprovals = [System.Collections.Generic.List[bool]]::new()
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                param(
+                    [string]$DotNetPath,
+                    [string]$SdkVersion,
+                    [switch]$AllowUnsupportedShutdown
+                )
+                $null = $DotNetPath
+                $null = $SdkVersion
+                $script:ShutdownApprovals.Add([bool]$AllowUnsupportedShutdown)
+            }
+
+            Remove-IsolatedSdk -Yes
+            $script:ShutdownApprovals.Count | Should -Be 1
+            $script:ShutdownApprovals[0] | Should -BeFalse
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+
+            $installDirectory = Initialize-TestRemovalTarget
+            Remove-IsolatedSdk -Yes -AllowUnsupportedShutdown
+            $script:ShutdownApprovals.Count | Should -Be 2
+            $script:ShutdownApprovals[1] | Should -BeTrue
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+        }
+
+        It 'gives -WhatIf precedence over explicit legacy approval' {
+            $script:SdkVersion = '2.1.105'
+            $installDirectory = Initialize-TestRemovalTarget
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                throw 'shutdown must never run for WhatIf'
+            }
+
+            Remove-IsolatedSdk -Yes -AllowUnsupportedShutdown -WhatIf
+
+            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+        }
+
         It 'gives -WhatIf precedence over -Yes' {
             $installDirectory = Initialize-TestRemovalTarget
             $script:ShutdownCallCount = 0
@@ -241,6 +458,131 @@ Describe 'PowerShell removal behavior' {
             Test-Path -LiteralPath $installDirectory | Should -BeTrue
         }
 
+        It 'keeps locked SDK contents together while staging with an atomic directory rename' {
+            $installDirectory = Initialize-TestRemovalTarget
+            $lockedFile = Join-Path $installDirectory 'locked-test-file.txt'
+            Set-Content -LiteralPath $lockedFile -Value 'locked fixture'
+            $record = Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion
+            $lockHandle = [IO.File]::Open($lockedFile, [IO.FileMode]::Open,
+                [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            $staged = $false
+            $stagingFailure = $null
+
+            try {
+                try {
+                    Invoke-ConfirmedSdkRemovalStaging -Version $script:SdkVersion
+                    $staged = $true
+                }
+                catch {
+                    # Windows may reject renaming a directory containing an
+                    # exclusively opened file. That is an acceptable failure,
+                    # provided the entire original SDK remains intact.
+                    $stagingFailure = $_
+                }
+
+                $stages = @(Get-ChildItem -LiteralPath $script:SdkRoot -Directory -Force |
+                        Where-Object { $_.Name -like ".removing-$($script:SdkVersion)-*" })
+                if ($staged) {
+                    # Platforms that permit renaming a directory with an open
+                    # child file must still stage everything together.
+                    Test-Path -LiteralPath $installDirectory | Should -BeFalse
+                    $stages.Count | Should -Be 1
+                    Test-Path -LiteralPath $record -PathType Leaf | Should -BeTrue
+                    $state = Get-PendingRemoval -Version $script:SdkVersion
+                    Test-Path -LiteralPath (Join-Path $state.Stage 'dotnet.exe') | Should -BeTrue
+                    Test-Path -LiteralPath (Join-Path $state.Stage 'locked-test-file.txt') | Should -BeTrue
+                }
+                else {
+                    $stagingFailure | Should -Not -BeNullOrEmpty
+                    $message = $stagingFailure.Exception.Message
+                    $message | Should -Match 'Unable to remove isolated SDK'
+                    $message | Should -Match 'The installation directory could not be renamed'
+                    $message | Should -Match 'The original installation remains intact'
+                    $message | Should -Match '(?s)Diagnostics:.*Possible causes:'
+                    $message | Should -Match 'file handles'
+                    if ($IsWindows) {
+                        $message | Should -Match 'Resource Monitor'
+                        $message | Should -Match 'Search Handles'
+                        $message | Should -Match ([regex]::Escape($script:SdkVersion))
+                        $message | Should -Match ([regex]::Escape((Split-Path -Path $script:SdkRoot -Leaf)))
+                        $message | Should -Match 'compare the process name and PID'
+                        $message | Should -Match 'icacls'
+                    }
+                    $message | Should -Match '(?s)Details:\s*\S+'
+                    # A failed rename must not relocate individual SDK files
+                    # or destroy the original installation/recovery identity.
+                    Test-Path -LiteralPath $installDirectory | Should -BeTrue
+                    Test-Path -LiteralPath (Join-Path $installDirectory 'dotnet.exe') | Should -BeTrue
+                    Test-Path -LiteralPath $lockedFile | Should -BeTrue
+                    $stages.Count | Should -Be 0
+                    Test-Path -LiteralPath $record | Should -BeFalse
+                }
+            }
+            finally {
+                $lockHandle.Dispose()
+            }
+
+            if ($staged) {
+                Complete-PendingRemoval -Version $script:SdkVersion
+                Test-Path -LiteralPath $record | Should -BeFalse
+                Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            }
+        }
+
+        It 'retries an incomplete removal after its SDK host was deleted' {
+            $installDirectory = Initialize-TestRemovalTarget
+            $script:SdkVersion = $script:RemovalVersion
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {}
+            Set-Item -Path Function:script:Invoke-IsolatedSdkDirectoryRemoval -Value {
+                param([string]$InstallDirectory)
+                Remove-Item -LiteralPath (Join-Path $InstallDirectory 'dotnet.exe') -Force -ErrorAction Stop
+                throw 'simulated locked file'
+            }
+
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*incomplete*Diagnostics:*Details: simulated locked file*'
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            $record = Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion
+            Test-Path -LiteralPath $record -PathType Leaf | Should -BeTrue
+            $state = Get-PendingRemoval -Version $script:SdkVersion
+            Test-Path -LiteralPath $state.Stage -PathType Container | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $state.Stage 'dotnet.exe') | Should -BeFalse
+
+            Remove-IsolatedSdk -Yes -WhatIf
+            Test-Path -LiteralPath $record | Should -BeTrue
+            Test-Path -LiteralPath $state.Stage | Should -BeTrue
+
+            # Restore the real removal helper to exercise a second invocation
+            # without a host or another build-server shutdown.
+            Import-ToolFunctionDefinition
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {
+                throw 'shutdown must not run during incomplete removal retry'
+            }
+            Remove-IsolatedSdk -Yes
+
+            Test-Path -LiteralPath $record | Should -BeFalse
+            Test-Path -LiteralPath $state.Stage | Should -BeFalse
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+        }
+
+        It 'does not retry against a newly replaced version directory' {
+            $installDirectory = Initialize-TestRemovalTarget
+            Set-Item -Path Function:script:Invoke-IsolatedSdkBuildServerShutdown -Value {}
+            Set-Item -Path Function:script:Invoke-IsolatedSdkDirectoryRemoval -Value {
+                param([string]$InstallDirectory)
+                Remove-Item -LiteralPath (Join-Path $InstallDirectory 'dotnet.exe') -Force -ErrorAction Stop
+                throw 'simulated locked file'
+            }
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*incomplete*'
+            $state = Get-PendingRemoval -Version $script:SdkVersion
+            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            $sentinel = Join-Path $installDirectory 'preserve.txt'
+            Set-Content -LiteralPath $sentinel -Value 'unrelated data'
+
+            { Remove-IsolatedSdk -Yes } | Should -Throw '*replaced*'
+            Get-Content -LiteralPath $sentinel | Should -Be 'unrelated data'
+            Test-Path -LiteralPath $state.Stage | Should -BeTrue
+        }
+
         It 'propagates deletion failure and does not report success' {
             $installDirectory = Initialize-TestRemovalTarget
             Set-Item -Path Function:script:Confirm-Action -Value {
@@ -263,7 +605,8 @@ Describe 'PowerShell removal behavior' {
             { Remove-IsolatedSdk -InformationVariable removalInformation } |
                 Should -Throw '*simulated deletion failure*'
 
-            Test-Path -LiteralPath $installDirectory | Should -BeTrue
+            Test-Path -LiteralPath $installDirectory | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path (Join-Path $script:SdkRoot '.pending-removals') $script:SdkVersion) | Should -BeTrue
             ($removalInformation.MessageData -join [Environment]::NewLine) | Should -Not -Match 'was removed'
         }
     }

@@ -18,7 +18,7 @@ Describe 'PowerShell interactive Verify' {
             $startInfo.RedirectStandardError = $true
             $startInfo.ArgumentList.Add('-NoProfile')
             $startInfo.ArgumentList.Add('-Command')
-            $startInfo.ArgumentList.Add($Command)
+            $startInfo.ArgumentList.Add('function Invoke-RestMethod { throw "Fixture metadata unavailable" }; ' + $Command)
             $startInfo.Environment['ISOLATED_DOTNET_SDK_TOOL_PATH'] = $script:ToolPath
             $startInfo.Environment['HOME'] = $script:TestHome
             $startInfo.Environment['USERPROFILE'] = $script:TestHome
@@ -53,6 +53,11 @@ Describe 'PowerShell interactive Verify' {
             return ([regex]::Matches($Output, 'What would you like to do\?')).Count
         }
 
+        function Get-AcknowledgementPromptCount {
+            param([string]$Output)
+            return ([regex]::Matches($Output, 'Press Enter to return to [^\r\n]+\.\.\.')).Count
+        }
+
         function Install-FakeInteractiveVerifyHost {
             param(
                 [string]$Version = '99.0.100',
@@ -60,7 +65,7 @@ Describe 'PowerShell interactive Verify' {
             )
 
             $installDirectory = Join-Path $script:ToolRoot $Version
-            New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $installDirectory 'sdk') -Force | Out-Null
             Copy-Item `
                 -Path (Join-Path $env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT '*') `
                 -Destination $installDirectory `
@@ -76,20 +81,12 @@ Describe 'PowerShell interactive Verify' {
         $script:TestHome = Join-Path $script:TestRoot 'home'
         $script:ToolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $script:ToolPath = Join-Path $script:ToolRoot 'isolated-dotnet-sdk.ps1'
-        $script:SourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk-source.ps1'
-        New-Item -ItemType Directory -Path $script:TestHome -Force | Out-Null
-
-        Copy-Item $script:ToolScript $script:SourceCopy -Force
-        $homeVariable = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
-        $originalHome = [Environment]::GetEnvironmentVariable($homeVariable, 'Process')
-        try {
-            [Environment]::SetEnvironmentVariable($homeVariable, $script:TestHome, 'Process')
-            & pwsh -NoProfile -File $script:SourceCopy -Action List *> $null
-            $LASTEXITCODE | Should -Be 0
-        }
-        finally {
-            [Environment]::SetEnvironmentVariable($homeVariable, $originalHome, 'Process')
-        }
+        # The interactive subprocesses under test use this independently
+        # installed tool; launching an extra bootstrap process per case adds
+        # no coverage to their prompt, input, and exit-code contracts.
+        New-Item -ItemType Directory -Path $script:ToolRoot -Force | Out-Null
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
     }
 
     AfterEach {
@@ -97,17 +94,19 @@ Describe 'PowerShell interactive Verify' {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'exposes Verify on Main and returns to Main after a healthy Verify' {
+    It 'returns a healthy Verify result to the Verify SDK list' {
         $version = '99.0.100'
         Install-FakeInteractiveVerifyHost -Version $version -ReportedVersion $version | Out-Null
 
-        $result = Invoke-InteractiveVerifyTool -InputLines @('v', '1', 'e')
+        $result = Invoke-InteractiveVerifyTool -InputLines @('v', '1', 'b', 'e')
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'V\. Verify an isolated SDK'
-        $result.Output | Should -Match 'Select an isolated SDK to verify:'
-        $result.Output | Should -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
+        ([regex]::Matches($result.Output, 'Select an isolated SDK to verify:')).Count | Should -Be 2
+        $result.Output | Should -Match '(?:^|\r?\n)1\r?\n\r?\nVerify isolated \.NET SDK'
+        $result.Output | Should -Match "Isolated SDK $([regex]::Escape($version)) verified successfully\."
         $result.Output | Should -Match 'Exiting\.'
     }
 
@@ -116,6 +115,7 @@ Describe 'PowerShell interactive Verify' {
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'No isolated SDKs are installed under'
         $result.Output | Should -Not -Match 'Select an isolated SDK to verify:'
     }
@@ -128,10 +128,27 @@ Describe 'PowerShell interactive Verify' {
 
         $result.ExitCode | Should -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 2
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match 'B\. Back to Main'
         $result.Output | Should -Match 'E\. Exit'
         $result.Output | Should -Match 'Exiting\.'
-        $result.Output | Should -Not -Match "Isolated SDK $([regex]::Escape($version)) is healthy\."
+        $result.Output | Should -Not -Match "Isolated SDK $([regex]::Escape($version)) verified successfully\."
+    }
+
+    It 'sorts Verify choices newest to oldest' {
+        foreach ($version in @('8.0.425', '11.0.100-rc.1.26425.128', '10.0.401')) {
+            Install-FakeInteractiveVerifyHost -Version $version -ReportedVersion $version | Out-Null
+        }
+
+        $result = Invoke-InteractiveVerifyTool -InputLines @('v', 'b', 'e')
+
+        $result.ExitCode | Should -Be 0
+        $verifyStart = $result.Output.IndexOf('Select an isolated SDK to verify:')
+        $verifyEnd = $result.Output.IndexOf('B. Back to Main', $verifyStart)
+        $verifySection = $result.Output.Substring($verifyStart, $verifyEnd - $verifyStart)
+        $verifySection | Should -Match '1\. 11\.0\.100-rc\.1\.26425\.128'
+        $verifySection | Should -Match '2\. 10\.0\.401'
+        $verifySection | Should -Match '3\. 8\.0\.425'
     }
 
     It 'never offers System SDKs as interactive Verify targets' {
@@ -166,6 +183,7 @@ exit /b 0
 
         $result.ExitCode | Should -Not -Be 0
         (Get-MainPromptCount $result.Output) | Should -Be 1
+        (Get-AcknowledgementPromptCount $result.Output) | Should -Be 0
         $result.Output | Should -Match "Isolated SDK $([regex]::Escape($version)) failed verification: the host did not report SDK $([regex]::Escape($version))\."
         $result.Output | Should -Not -Match 'Exiting\.'
     }
@@ -183,4 +201,22 @@ exit /b 0
         $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.'
         $result.Output | Should -Match 'Invalid selection: 6\. Choose 1, B, or E\.\r?\n\r?\nSelect an isolated SDK to verify:'
     }
+
+    It 'uses the same legacy SDK origin checks in interactive Verify' {
+        $version = '1.1.14'
+        $directory = Install-FakeInteractiveVerifyHost -Version $version -ReportedVersion $version
+        New-Item -ItemType Directory -Path (Join-Path $directory "sdk/$version") -Force | Out-Null
+        $env:FAKE_DOTNET_LEGACY_HOST = 'true'
+        try {
+            $result = Invoke-InteractiveVerifyTool -InputLines @('v', '1', 'b', 'e')
+            $result.ExitCode | Should -Be 0
+            $result.Output | Should -Match 'SDK origin\s+OK\s+Exact SDK Base Path in isolated installation'
+            $result.Output | Should -Match 'Isolated SDK 1\.1\.14 verified successfully'
+            $result.Output | Should -Not -Match 'Unknown option: --list-sdks'
+        }
+        finally {
+            Remove-Item Env:FAKE_DOTNET_LEGACY_HOST -ErrorAction SilentlyContinue
+        }
+    }
+
 }

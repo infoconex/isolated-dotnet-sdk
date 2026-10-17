@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main"
 RELEASE_INDEX_URL="https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
+RELEASE_SCHEDULE_URL="https://raw.githubusercontent.com/dotnet/core/main/release-notes/README.md"
 TOOL_NAME="isolated-dotnet-sdk.sh"
 TOOL_RELEASE_IDENTITY="development"
 SDK_ROOT="$HOME/dotnet-sdks"
@@ -13,11 +14,13 @@ if [[ -t 1 ]]; then
     CYAN='\033[0;36m'
     YELLOW='\033[0;33m'
     GREEN='\033[0;32m'
+    DISPLAY_RED='\033[0;31m'
     RESET='\033[0m'
 else
     CYAN=''
     YELLOW=''
     GREEN=''
+    DISPLAY_RED=''
     RESET=''
 fi
 
@@ -72,7 +75,12 @@ tool_exit() {
 tool_label_value() {
     local label="$1"
     local value="$2"
-    printf "%b%s%b %s\n" "$CYAN" "$label" "$RESET" "$value"
+    local value_kind="${3:-}"
+    local value_color=""
+    if [[ "$value_kind" == "success" ]]; then
+        value_color="$GREEN"
+    fi
+    printf "%b%s%b %b%s%b\n" "$CYAN" "$label" "$RESET" "$value_color" "$value" "${value_color:+$RESET}"
 }
 
 tool_metadata() {
@@ -145,6 +153,29 @@ read_tool_input() {
     if ! IFS= read -r -p "$prompt" TOOL_INPUT; then
         tool_fail "Interactive input is unavailable."
     fi
+}
+
+wait_for_interactive_result_acknowledgement() {
+    local destination="${1:-Main}"
+    [[ "$INTERACTIVE_SESSION" == "true" ]] || return 0
+    [[ -t 0 && -t 1 ]] || return 0
+
+    echo
+    printf 'Press Enter to return to %s...\n' "$destination"
+    read_tool_input ""
+}
+
+clear_interactive_screen() {
+    # A navigation presentation action, never a requirement for correct operation.
+    [[ "$INTERACTIVE_SESSION" == "true" && -t 0 && -t 1 ]] || return 0
+    [[ -n "${TERM:-}" && "$TERM" != "dumb" ]] || return 0
+    command -v tput >/dev/null 2>&1 || return 0
+
+    local sequence=""
+    if sequence="$(tput clear 2>/dev/null)" && [[ -n "$sequence" ]]; then
+        printf '%s' "$sequence"
+    fi
+    return 0
 }
 
 bootstrap_if_needed() {
@@ -269,6 +300,22 @@ get_system_sdk_versions() {
     return 0
 }
 
+
+# Remove discovery differs deliberately from List/Verify: a damaged SDK
+# can be selected for cleanup even if its executable has been deleted.
+is_removable_sdk_version() {
+    [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z][0-9A-Za-z.+-]*)?$ ]]
+}
+get_remove_sdk_candidate_versions() {
+    local path version
+    for path in "$SDK_ROOT"/*; do
+        [[ -d "$path" && ! -L "$path" ]] || continue
+        version="${path##*/}"
+        is_removable_sdk_version "$version" || continue
+        printf '%s\n' "$version"
+    done
+}
+
 get_isolated_sdk_versions() {
     local path
 
@@ -307,9 +354,23 @@ parse_release_index() {
             sub(/".*$/, "", value)
             return value
         }
+        function emit_record() {
+            if (channel != "" && phase != "" && url != "") {
+                print channel "|" latest "|" phase "|" type "|" url "|" eol
+            }
+            channel=latest=phase=type=url=eol=""
+        }
         {
             value = json_string($0, "channel-version")
-            if (value != "") channel=value
+            if (value != "") {
+                if (channel != "") {
+                    emit_record()
+                }
+                else {
+                    latest=phase=type=url=eol=""
+                }
+                channel=value
+            }
             value = json_string($0, "latest-sdk")
             if (value != "") latest=value
             value = json_string($0, "support-phase")
@@ -317,21 +378,73 @@ parse_release_index() {
             value = json_string($0, "release-type")
             if (value != "") type=value
             value = json_string($0, "releases.json")
-            if (value != "") {
-                url=value
-                if (channel != "" && phase != "" && url != "") {
-                    print channel "|" latest "|" phase "|" type "|" url
-                }
-                channel=latest=phase=type=url=""
-            }
+            if (value != "") url=value
+            value = json_string($0, "eol-date")
+            if (value != "") eol=value
+        }
+        END {
+            if (channel != "") emit_record()
         }
     '
+}
+
+# Sort whole release-index records by numeric channel major/minor, not SDK.
+# Malformed versions follow valid ones in their original encounter order.
+sort_channel_records() {
+    local line="" channel="" major="" minor="" index=0
+    local tab=$'\t'
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        channel="$(printf '%s\n' "$line" | cut -d '|' -f1)"
+        if [[ "$channel" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            IFS='.' read -r major minor <<< "$channel"
+            printf '1\t%s\t%s\t%09d\t%s\n' "$major" "$minor" "$index" "$line"
+        else
+            printf '0\t0\t0\t%09d\t%s\n' "$index" "$line"
+        fi
+        index=$((index + 1))
+    done | LC_ALL=C sort -t "$tab" -k1,1nr -k2,2nr -k3,3nr -k4,4n | cut -f5-
 }
 
 extract_sdk_versions() {
     grep -oE '/dotnet/Sdk/[^/"[:space:]]+' |
         sed 's#^.*/Sdk/##' |
         awk '!seen[$0]++'
+}
+
+
+extract_sdk_release_date() {
+    local expected_version="$1"
+    awk -v expected="$expected_version" '
+        function json_string(line, key, marker, value) {
+            marker = "\"" key "\"[[:space:]]*:[[:space:]]*\""
+            if (!match(line, marker)) return ""
+            value = substr(line, RSTART + RLENGTH)
+            sub(/".*$/, "", value)
+            return value
+        }
+        {
+            value = json_string($0, "release-date")
+            if (value != "") release_date=value
+
+            if (found != "") next
+
+            line=$0
+            while (match(line, /\/dotnet\/Sdk\/[^\/"[:space:]]+/)) {
+                version=substr(line, RSTART, RLENGTH)
+                sub(/^.*\/Sdk\//, "", version)
+                if (version == expected && release_date != "") {
+                    found=release_date
+                    break
+                }
+                line=substr(line, RSTART + RLENGTH)
+            }
+        }
+        END {
+            if (found != "") print found
+        }
+    '
 }
 
 sdk_version_sort_key() {
@@ -382,6 +495,36 @@ sort_sdk_versions() {
     for version in "$@"; do
         key="$(sdk_version_sort_key "$version")"
         printf '%s\t%09d\t%s\n' "$key" "$index" "$version"
+        index=$((index + 1))
+    done | LC_ALL=C sort -t "$tab" -k1,1r -k2,2n | cut -f3-
+}
+
+sort_sdk_version_lines() {
+    local version
+    local ordered_versions=()
+
+    while IFS= read -r version; do
+        [[ -n "$version" ]] || continue
+        ordered_versions+=("$version")
+    done
+
+    if (( ${#ordered_versions[@]} > 0 )); then
+        sort_sdk_versions "${ordered_versions[@]}"
+    fi
+}
+
+sort_sdk_inventory() {
+    local line
+    local version
+    local key
+    local index=0
+    local tab=$'\t'
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        version="${line%%[[:space:]]*}"
+        key="$(sdk_version_sort_key "$version")"
+        printf '%s\t%09d\t%s\n' "$key" "$index" "$line"
         index=$((index + 1))
     done | LC_ALL=C sort -t "$tab" -k1,1r -k2,2n | cut -f3-
 }
@@ -449,6 +592,22 @@ extract_security_sdk_versions() {
     '
 }
 
+# SDKs 2.1.0-2.1.202 belong to the .NET Core 2.0 channel.
+# .NET Core 2.1 starts with the SDK 2.1.300 feature band.
+is_early_dotnet2_sdk() {
+    local version="$1"
+    local feature=""
+
+    [[ "$version" =~ ^2\.0\. ]] && return 0
+    if [[ "$version" =~ ^2\.1\.([0-9]+)($|-) ]]; then
+        feature="${BASH_REMATCH[1]}"
+        if (( ${#feature} <= 9 )) && (( 10#$feature < 300 )); then
+            return 0
+        fi
+    fi
+    return 1
+}
+
 sdk_channel_from_version() {
     local version="$1"
     local core="${version%%-*}"
@@ -459,6 +618,11 @@ sdk_channel_from_version() {
     IFS='.' read -r major minor rest <<< "$core"
     if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
         return 1
+    fi
+
+    if is_early_dotnet2_sdk "$version"; then
+        printf '2.0'
+        return
     fi
 
     printf '%s.%s' "$major" "$minor"
@@ -479,21 +643,34 @@ compare_sdk_versions() {
     fi
 }
 
-audit_lifecycle_label() {
-    case "$1" in
-        active) printf '%s' '' ;;
-        maintenance) printf '%s' 'Maintenance' ;;
-        preview) printf '%s' 'Preview' ;;
-        go-live) printf '%s' 'Go Live' ;;
-        eol) printf '%s' 'End of life' ;;
-        *) printf '%s' 'Unsupported' ;;
-    esac
+audit_prerelease_label() {
+    local version="$1"
+
+    if [[ "$version" =~ -preview\.([0-9]+)(\.|$) ]]; then
+        printf 'Preview %s' "${BASH_REMATCH[1]}"
+        return
+    fi
+
+    if [[ "$version" =~ -rc\.([0-9]+)(\.|$) ]]; then
+        printf 'RC%s' "${BASH_REMATCH[1]}"
+        return
+    fi
 }
 
 AUDIT_METADATA_CHANNELS=()
 AUDIT_METADATA_VALUES=()
 AUDIT_METADATA_RESULT=""
-AUDIT_STATUS=""
+AUDIT_RELEASE_SCHEDULE_LOADED="false"
+AUDIT_RELEASE_SCHEDULE=""
+AUDIT_RELEASE_TYPE=""
+AUDIT_SERVICING_STATUS=""
+AUDIT_STATUS_TOKEN=""
+AUDIT_RELEASE_DATE=""
+AUDIT_GO_LIVE_DATE=""
+AUDIT_END_OF_SUPPORT_DATE=""
+AUDIT_VERSION_WIDTH=0
+AUDIT_RELEASE_TYPE_WIDTH=0
+AUDIT_LIFECYCLE_WIDTH=0
 
 load_audit_channel_metadata() {
     local channel="$1"
@@ -523,7 +700,62 @@ load_audit_channel_metadata() {
     AUDIT_METADATA_RESULT="$metadata"
 }
 
-resolve_audit_status() {
+load_audit_release_schedule() {
+    if [[ "$AUDIT_RELEASE_SCHEDULE_LOADED" == "true" ]]; then
+        return
+    fi
+
+    AUDIT_RELEASE_SCHEDULE_LOADED="true"
+    if AUDIT_RELEASE_SCHEDULE="$(curl -fsSL "$RELEASE_SCHEDULE_URL" 2>/dev/null)"; then
+        :
+    else
+        AUDIT_RELEASE_SCHEDULE=""
+    fi
+}
+
+resolve_audit_go_live_date() {
+    local channel="$1"
+    AUDIT_GO_LIVE_DATE=""
+
+    load_audit_release_schedule
+    if [[ -z "$AUDIT_RELEASE_SCHEDULE" ]]; then
+        return 0
+    fi
+
+    AUDIT_GO_LIVE_DATE="$(
+        printf '%s\n' "$AUDIT_RELEASE_SCHEDULE" |
+            awk -F '|' -v expected="$channel" '
+                function trim(value) {
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+                    return value
+                }
+                BEGIN {
+                    months["January"]="01"; months["February"]="02"; months["March"]="03"; months["April"]="04"
+                    months["May"]="05"; months["June"]="06"; months["July"]="07"; months["August"]="08"
+                    months["September"]="09"; months["October"]="10"; months["November"]="11"; months["December"]="12"
+                }
+                {
+                    version=trim($2)
+                    phase=trim($5)
+                    if (version !~ ("\\.NET[[:space:]]+" expected "([^0-9.]|$)") || phase != "Go-Live") next
+
+                    date=trim($3)
+                    if (date ~ /^\[/) {
+                        sub(/^\[/, "", date)
+                        sub(/\]\(.*/, "", date)
+                    }
+                    gsub(/,/, "", date)
+                    split(date, parts, /[[:space:]]+/)
+                    if (parts[1] in months && parts[2] ~ /^[0-9]+$/ && parts[3] ~ /^[0-9][0-9][0-9][0-9]$/) {
+                        printf "%04d-%s-%02d", parts[3], months[parts[1]], parts[2]
+                    }
+                    exit
+                }
+            '
+    )"
+}
+
+resolve_audit_classification() {
     local version="$1"
     local channel_data="$2"
     local channel=""
@@ -532,21 +764,28 @@ resolve_audit_status() {
     local phase=""
     local release_type=""
     local releases_url=""
+    local eol_date=""
     local row_channel=""
     local metadata=""
     local versions=""
     local security_versions=""
     local security_version=""
     local comparison=0
-    local servicing=""
-    local lifecycle=""
+    local prerelease_label=""
+
+    AUDIT_RELEASE_TYPE=""
+    AUDIT_SERVICING_STATUS=""
+    AUDIT_STATUS_TOKEN=""
+    AUDIT_RELEASE_DATE=""
+    AUDIT_GO_LIVE_DATE=""
+    AUDIT_END_OF_SUPPORT_DATE=""
 
     if ! channel="$(sdk_channel_from_version "$version")"; then
-        AUDIT_STATUS="Unknown channel"
+        AUDIT_STATUS_TOKEN="Unknown channel"
         return
     fi
 
-    while IFS='|' read -r row_channel latest_sdk phase release_type releases_url; do
+    while IFS='|' read -r row_channel latest_sdk phase release_type releases_url eol_date; do
         if [[ "$row_channel" == "$channel" ]]; then
             found="true"
             break
@@ -554,10 +793,10 @@ resolve_audit_status() {
     done <<< "$channel_data"
 
     if [[ "$found" != "true" ]]; then
-        AUDIT_STATUS="Unknown channel"
+        AUDIT_STATUS_TOKEN="Unknown channel"
         return
     fi
-    if [[ -z "$latest_sdk" || -z "$phase" || -z "$releases_url" ]]; then
+    if [[ -z "$latest_sdk" || -z "$phase" || -z "$releases_url" || ( "$release_type" != "lts" && "$release_type" != "sts" ) ]]; then
         tool_fail "Invalid .NET release metadata for .NET $channel."
     fi
 
@@ -566,37 +805,132 @@ resolve_audit_status() {
     versions="$(printf '%s\n' "$metadata" | extract_sdk_versions || true)"
     contains_line "$versions" "$latest_sdk" || tool_fail "Invalid release metadata for .NET $channel."
 
+    AUDIT_RELEASE_TYPE="$(printf '%s' "$release_type" | tr '[:lower:]' '[:upper:]')"
+    AUDIT_RELEASE_DATE="$(printf '%s\n' "$metadata" | extract_sdk_release_date "$version" || true)"
+    AUDIT_END_OF_SUPPORT_DATE="$eol_date"
+
+    if [[ "$phase" == "go-live" ]]; then
+        resolve_audit_go_live_date "$channel"
+    fi
+
     if [[ "$phase" == "eol" ]]; then
-        AUDIT_STATUS="End of life"
+        AUDIT_STATUS_TOKEN="EOL"
         return
     fi
 
     comparison="$(compare_sdk_versions "$version" "$latest_sdk")"
     if (( comparison > 0 )); then
-        servicing="Newer than known metadata"
+        AUDIT_SERVICING_STATUS="Newer than known metadata"
     elif (( comparison == 0 )); then
-        servicing="Current"
+        AUDIT_SERVICING_STATUS="Current"
     else
-        servicing="Update available -> $latest_sdk"
+        AUDIT_SERVICING_STATUS="Update available -> $latest_sdk"
         if [[ "$phase" != "preview" && "$version" != *-* ]] && contains_line "$versions" "$version"; then
             security_versions="$(printf '%s\n' "$metadata" | extract_security_sdk_versions || true)"
             while IFS= read -r security_version; do
                 [[ -n "$security_version" ]] || continue
                 if (( $(compare_sdk_versions "$security_version" "$version") > 0 )); then
-                    servicing="Security update available -> $latest_sdk"
+                    AUDIT_SERVICING_STATUS="Security update available -> $latest_sdk"
                     break
                 fi
             done <<< "$security_versions"
         fi
     fi
 
-    lifecycle="$(audit_lifecycle_label "$phase")"
-    if [[ "$servicing" == "Current" && -n "$lifecycle" ]]; then
-        AUDIT_STATUS="$lifecycle"
-    elif [[ -n "$lifecycle" ]]; then
-        AUDIT_STATUS="$servicing  $lifecycle"
+    prerelease_label="$(audit_prerelease_label "$version")"
+    if [[ -n "$prerelease_label" ]]; then
+        AUDIT_STATUS_TOKEN="$prerelease_label"
     else
-        AUDIT_STATUS="$servicing"
+        case "$phase" in
+            maintenance) AUDIT_STATUS_TOKEN="Maintenance" ;;
+            preview) AUDIT_STATUS_TOKEN="Preview" ;;
+            go-live) AUDIT_STATUS_TOKEN="Go Live" ;;
+            active)
+                if [[ "$AUDIT_SERVICING_STATUS" == "Current" ]]; then
+                    AUDIT_STATUS_TOKEN="Current"
+                else
+                    AUDIT_STATUS_TOKEN="Active"
+                fi
+                ;;
+            *) AUDIT_STATUS_TOKEN="Unsupported" ;;
+        esac
+    fi
+
+    if [[ "$AUDIT_SERVICING_STATUS" == "Current" ]]; then
+        [[ -n "$AUDIT_STATUS_TOKEN" ]] || AUDIT_STATUS_TOKEN="Current"
+        AUDIT_SERVICING_STATUS=""
+    fi
+}
+
+audit_status_color() {
+    case "$1" in
+        Current) printf '%s' "$GREEN" ;;
+        Maintenance) printf '%s' "$YELLOW" ;;
+        EOL) printf '%s' "$DISPLAY_RED" ;;
+        *) printf '%s' '' ;;
+    esac
+}
+
+update_audit_layout_widths() {
+    local version="$1"
+
+    if (( ${#version} > AUDIT_VERSION_WIDTH )); then
+        AUDIT_VERSION_WIDTH=${#version}
+    fi
+    if (( ${#AUDIT_RELEASE_TYPE} > AUDIT_RELEASE_TYPE_WIDTH )); then
+        AUDIT_RELEASE_TYPE_WIDTH=${#AUDIT_RELEASE_TYPE}
+    fi
+    if (( ${#AUDIT_STATUS_TOKEN} > AUDIT_LIFECYCLE_WIDTH )); then
+        AUDIT_LIFECYCLE_WIDTH=${#AUDIT_STATUS_TOKEN}
+    fi
+}
+
+format_audit_row() {
+    local version="$1"
+    local color=""
+    local lifecycle_padding=0
+    local servicing_display="$AUDIT_SERVICING_STATUS"
+    local update_target=""
+
+    case "$servicing_display" in
+        "Update available -> "*|"Security update available -> "*)
+            update_target="${servicing_display##* -> }"
+            servicing_display="Update -> $update_target"
+            ;;
+    esac
+
+    printf '  %-*s' "$AUDIT_VERSION_WIDTH" "$version"
+    if (( AUDIT_RELEASE_TYPE_WIDTH > 0 )); then
+        printf '  %-*s' "$AUDIT_RELEASE_TYPE_WIDTH" "$AUDIT_RELEASE_TYPE"
+    fi
+    if (( AUDIT_LIFECYCLE_WIDTH > 0 )); then
+        printf '  '
+        if [[ -n "$AUDIT_STATUS_TOKEN" ]]; then
+            color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
+            if [[ -n "$color" ]]; then
+                printf '%b%s%b' "$color" "$AUDIT_STATUS_TOKEN" "$RESET"
+            else
+                printf '%s' "$AUDIT_STATUS_TOKEN"
+            fi
+        fi
+
+        lifecycle_padding=$((AUDIT_LIFECYCLE_WIDTH - ${#AUDIT_STATUS_TOKEN}))
+        if (( lifecycle_padding > 0 )); then
+            printf '%*s' "$lifecycle_padding" ''
+        fi
+    fi
+
+    if [[ -n "$AUDIT_RELEASE_DATE" ]]; then
+        printf '  Release: %s' "$AUDIT_RELEASE_DATE"
+    fi
+    if [[ -n "$AUDIT_GO_LIVE_DATE" ]]; then
+        printf '  Go Live: %s' "$AUDIT_GO_LIVE_DATE"
+    fi
+    if [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]]; then
+        printf '  EOS: %s' "$AUDIT_END_OF_SUPPORT_DATE"
+    fi
+    if [[ -n "$servicing_display" ]]; then
+        printf '  %s' "$servicing_display"
     fi
 }
 
@@ -610,11 +944,15 @@ audit_installed_sdks() {
     local i=0
     local audit_isolated_versions=()
     local audit_system_versions=()
-    local audit_isolated_statuses=()
-    local audit_system_statuses=()
 
     isolated_output="$(get_isolated_sdk_versions)"
     system_output="$(get_system_sdk_inventory)"
+    if [[ -n "$isolated_output" ]]; then
+        isolated_output="$(printf '%s\n' "$isolated_output" | sort_sdk_version_lines)"
+    fi
+    if [[ -n "$system_output" ]]; then
+        system_output="$(printf '%s\n' "$system_output" | sort_sdk_inventory)"
+    fi
 
     while IFS= read -r line; do
         [[ -n "$line" ]] && audit_isolated_versions+=("$line")
@@ -647,13 +985,19 @@ audit_installed_sdks() {
 
     AUDIT_METADATA_CHANNELS=()
     AUDIT_METADATA_VALUES=()
+    AUDIT_RELEASE_SCHEDULE_LOADED="false"
+    AUDIT_RELEASE_SCHEDULE=""
+    AUDIT_VERSION_WIDTH=0
+    AUDIT_RELEASE_TYPE_WIDTH=0
+    AUDIT_LIFECYCLE_WIDTH=0
+
     for version in "${audit_isolated_versions[@]+"${audit_isolated_versions[@]}"}"; do
-        resolve_audit_status "$version" "$channel_data"
-        audit_isolated_statuses+=("$AUDIT_STATUS")
+        resolve_audit_classification "$version" "$channel_data"
+        update_audit_layout_widths "$version"
     done
     for version in "${audit_system_versions[@]+"${audit_system_versions[@]}"}"; do
-        resolve_audit_status "$version" "$channel_data"
-        audit_system_statuses+=("$AUDIT_STATUS")
+        resolve_audit_classification "$version" "$channel_data"
+        update_audit_layout_widths "$version"
     done
 
     tool_heading ".NET SDK audit"
@@ -663,7 +1007,10 @@ audit_installed_sdks() {
         echo "  None"
     else
         for ((i=0; i<${#audit_isolated_versions[@]}; i++)); do
-            printf '  %s  %s\n' "${audit_isolated_versions[$i]}" "${audit_isolated_statuses[$i]}"
+            version="${audit_isolated_versions[$i]}"
+            resolve_audit_classification "$version" "$channel_data"
+            format_audit_row "$version"
+            printf '\n'
         done
     fi
 
@@ -673,7 +1020,10 @@ audit_installed_sdks() {
         echo "  None"
     else
         for ((i=0; i<${#audit_system_versions[@]}; i++)); do
-            printf '  %s  %s\n' "${audit_system_versions[$i]}" "${audit_system_statuses[$i]}"
+            version="${audit_system_versions[$i]}"
+            resolve_audit_classification "$version" "$channel_data"
+            format_audit_row "$version"
+            printf '\n'
         done
     fi
 }
@@ -719,6 +1069,7 @@ select_install_version() {
     local selection=""
     local channel=""
     local latest_sdk=""
+    local current_sdk=""
     local phase=""
     local release_type=""
     local releases_url=""
@@ -733,22 +1084,53 @@ select_install_version() {
     local isolated_versions=""
     local line=""
     local i=0
+    local resume_channel="$INSTALL_RESUME_CHANNEL"
+    local resume_latest_sdk="$INSTALL_RESUME_LATEST_SDK"
+    local resume_releases_url="$INSTALL_RESUME_RELEASES_URL"
+    local resume_channel_data="$INSTALL_RESUME_CHANNEL_DATA"
+    local resume_versions="$INSTALL_RESUME_VERSIONS"
+    local reusable_versions=""
+    local clear_channel_screen="true"
 
-    tool_info "Loading available .NET SDK releases from Microsoft..."
-    index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
-        tool_fail "Unable to load .NET release metadata from Microsoft."
+    INSTALL_RESUME_CHANNEL=""
+    INSTALL_RESUME_LATEST_SDK=""
+    INSTALL_RESUME_RELEASES_URL=""
+    INSTALL_RESUME_CHANNEL_DATA=""
+    INSTALL_RESUME_VERSIONS=""
 
-    if ! looks_like_json_object "$index_json" || \
-       [[ "$index_json" != *'"releases-index"'* ]]; then
-        tool_fail "Invalid .NET release metadata from Microsoft."
+    if [[ -n "$resume_channel" && -n "$resume_channel_data" ]]; then
+        # Consume validated discovery from the acknowledged Install result.
+        channel_data="$resume_channel_data"
+    else
+        tool_info "Loading available .NET SDK releases from Microsoft..."
+        index_json="$(curl -fsSL "$RELEASE_INDEX_URL")" || \
+            tool_fail "Unable to load .NET release metadata from Microsoft."
+
+        if ! looks_like_json_object "$index_json" || \
+           [[ "$index_json" != *'"releases-index"'* ]]; then
+            tool_fail "Invalid .NET release metadata from Microsoft."
+        fi
+
+        channel_data="$(printf "%s\n" "$index_json" | parse_release_index | sort_channel_records)"
+        [[ -n "$channel_data" ]] || \
+            tool_fail "No selectable .NET channels were found in Microsoft release metadata."
     fi
 
-    channel_data="$(printf "%s\n" "$index_json" | parse_release_index)"
-    [[ -n "$channel_data" ]] || \
-        tool_fail "No selectable .NET channels were found in Microsoft release metadata."
-
     while true; do
+        reusable_versions=""
+        if [[ -n "$resume_channel" ]]; then
+            channel="$resume_channel"
+            latest_sdk="$resume_latest_sdk"
+            releases_url="$resume_releases_url"
+            reusable_versions="$resume_versions"
+            resume_channel=""
+            resume_versions=""
+        else
         echo
+        if [[ "$clear_channel_screen" == "true" ]]; then
+            clear_interactive_screen
+            clear_channel_screen="false"
+        fi
         if [[ "$show_archived" == "true" ]]; then
             tool_heading "Select an end-of-life .NET channel:"
         else
@@ -762,7 +1144,7 @@ select_install_version() {
         local release_types=()
         local release_urls=()
 
-        while IFS='|' read -r channel latest_sdk phase release_type releases_url; do
+        while IFS='|' read -r channel latest_sdk phase release_type releases_url _; do
             [[ -n "$channel" ]] || continue
 
             if [[ "$show_archived" == "true" ]]; then
@@ -820,6 +1202,7 @@ select_install_version() {
                 VERSION="$TOOL_INPUT"
                 [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                 validate_version
+                INSTALL_RESULT_PARENT=".NET channels"
                 return 0
                 ;;
             [eE])
@@ -836,6 +1219,7 @@ select_install_version() {
                 ;;
             [bB])
                 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    BACK_TO_MAIN="true"
                     return 2
                 fi
                 ;;
@@ -845,6 +1229,7 @@ select_install_version() {
                 else
                     show_archived="true"
                 fi
+                clear_channel_screen="true"
                 continue
                 ;;
         esac
@@ -867,31 +1252,36 @@ select_install_version() {
             warn_invalid_selection "$selection" "$channel_choices"
             continue
         fi
-
-        metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
-        trap 'rm -f "$metadata_file" || true' EXIT
-        trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$$"' TERM
-        trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$$"' INT
-        trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$$"' HUP
-
-        if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
-            trap - EXIT TERM INT HUP
-            rm -f "$metadata_file" || true
-            tool_fail "Unable to load release metadata for .NET $channel."
         fi
 
-        metadata_json="$(cat "$metadata_file")"
-        if ! looks_like_json_object "$metadata_json" || \
-           [[ "$metadata_json" != *'"releases"'* ]]; then
+        if [[ -n "$reusable_versions" ]]; then
+            versions="$reusable_versions"
+        else
+            metadata_file="$(mktemp "$SDK_ROOT/.release-metadata.XXXXXX")"
+            trap 'rm -f "$metadata_file" || true' EXIT
+            trap 'rm -f "$metadata_file" || true; trap - TERM; kill -TERM "$$"' TERM
+            trap 'rm -f "$metadata_file" || true; trap - INT; kill -INT "$$"' INT
+            trap 'rm -f "$metadata_file" || true; trap - HUP; kill -HUP "$$"' HUP
+
+            if ! curl -fsSL "$releases_url" -o "$metadata_file"; then
+                trap - EXIT TERM INT HUP
+                rm -f "$metadata_file" || true
+                tool_fail "Unable to load release metadata for .NET $channel."
+            fi
+
+            metadata_json="$(cat "$metadata_file")"
+            if ! looks_like_json_object "$metadata_json" || \
+               [[ "$metadata_json" != *'"releases"'* ]]; then
+                trap - EXIT TERM INT HUP
+                rm -f "$metadata_file" || true
+                tool_fail "Invalid release metadata for .NET $channel."
+            fi
+
+            versions="$(extract_sdk_versions < "$metadata_file" || true)"
             trap - EXIT TERM INT HUP
             rm -f "$metadata_file" || true
-            tool_fail "Invalid release metadata for .NET $channel."
+            metadata_file=""
         fi
-
-        versions="$(extract_sdk_versions < "$metadata_file" || true)"
-        trap - EXIT TERM INT HUP
-        rm -f "$metadata_file" || true
-        metadata_file=""
 
         [[ -n "$versions" ]] || tool_fail "No SDK versions were found for .NET $channel."
 
@@ -903,13 +1293,28 @@ select_install_version() {
 
         all_versions="$(sort_sdk_versions "${discovered_versions[@]}")"
         compact_versions="$(build_compact_sdk_versions "$all_versions" "$latest_sdk")"
+        # Trust the channel's latest SDK only when it was actually discovered.
+        # Otherwise classify the highest SDK-aware sorted release, not a made-up
+        # latest marker or an older prerelease from a stable channel's history.
+        current_sdk="$latest_sdk"
+        if [[ -z "$current_sdk" ]] || ! contains_line "$all_versions" "$current_sdk"; then
+            current_sdk="${all_versions%%$'\n'*}"
+        fi
         show_all_versions="false"
+        if [[ "$current_sdk" =~ -(preview|rc)\.[0-9]+(\.|$) ]]; then
+            show_all_versions="true"
+        fi
 
         system_versions="$(get_system_sdk_versions)"
         isolated_versions="$(get_isolated_sdk_versions)"
+        local clear_sdk_screen="true"
 
         while true; do
             echo
+            if [[ "$clear_sdk_screen" == "true" ]]; then
+                clear_interactive_screen
+                clear_sdk_screen="false"
+            fi
             tool_heading "Available .NET $channel SDKs:"
             echo
 
@@ -933,10 +1338,10 @@ select_install_version() {
                     markers="latest"
                 fi
                 if contains_line "$system_versions" "$line"; then
-                    markers="${markers:+$markers, }system"
+                    markers="${markers:+$markers, }installed system-sdk"
                 fi
                 if contains_line "$isolated_versions" "$line"; then
-                    markers="${markers:+$markers, }isolated"
+                    markers="${markers:+$markers, }installed isolated-sdk"
                 fi
 
                 if [[ -n "$markers" ]]; then
@@ -966,7 +1371,13 @@ select_install_version() {
             selection="$TOOL_INPUT"
 
             case "$selection" in
-                [bB]) break ;;
+                [bB])
+                    INSTALL_RESUME_CHANNEL=""
+                    INSTALL_RESUME_LATEST_SDK=""
+                    INSTALL_RESUME_RELEASES_URL=""
+                    clear_channel_screen="true"
+                    break
+                    ;;
                 [sS])
                     if [[ "$compact_versions" != "$all_versions" ]]; then
                         if [[ "$show_all_versions" == "true" ]]; then
@@ -974,6 +1385,7 @@ select_install_version() {
                         else
                             show_all_versions="true"
                         fi
+                        clear_sdk_screen="true"
                         continue
                     fi
                     ;;
@@ -982,6 +1394,12 @@ select_install_version() {
                     VERSION="$TOOL_INPUT"
                     [[ -n "$VERSION" ]] || tool_fail "An SDK version is required."
                     validate_version
+                    INSTALL_RESUME_CHANNEL="$channel"
+                    INSTALL_RESUME_LATEST_SDK="$latest_sdk"
+                    INSTALL_RESUME_RELEASES_URL="$releases_url"
+                    INSTALL_RESUME_CHANNEL_DATA="$channel_data"
+                    INSTALL_RESUME_VERSIONS="$versions"
+                    INSTALL_RESULT_PARENT="SDK selection"
                     return 0
                     ;;
                 [eE])
@@ -1002,6 +1420,12 @@ select_install_version() {
                (( selection >= 1 && selection <= ${#sdk_versions[@]} )); then
                 VERSION="${sdk_versions[$((selection - 1))]}"
                 validate_version
+                INSTALL_RESUME_CHANNEL="$channel"
+                INSTALL_RESUME_LATEST_SDK="$latest_sdk"
+                INSTALL_RESUME_RELEASES_URL="$releases_url"
+                INSTALL_RESUME_CHANNEL_DATA="$channel_data"
+                INSTALL_RESUME_VERSIONS="$versions"
+                INSTALL_RESULT_PARENT="SDK selection"
                 return 0
             fi
 
@@ -1033,12 +1457,18 @@ select_remove_version() {
     local i=0
     local sdk_versions=()
 
-    versions="$(get_isolated_sdk_versions)"
+    versions="$(get_remove_sdk_candidate_versions)"
+    local pending
+    pending="$(pending_removal_versions)"
+    if [[ -n "$pending" ]]; then
+        versions="$(printf '%s\n%s\n' "$versions" "$pending" | sed '/^$/d' | sort -u)"
+    fi
 
     if [[ -z "$versions" ]]; then
         tool_info "No isolated SDKs are installed under $SDK_ROOT."
         return 1
     fi
+    versions="$(printf '%s\n' "$versions" | sort_sdk_version_lines)"
 
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
@@ -1050,7 +1480,13 @@ select_remove_version() {
         echo
 
         for ((i=0; i<${#sdk_versions[@]}; i++)); do
-            printf "  %d. %s\n" "$((i + 1))" "${sdk_versions[$i]}"
+            if [[ -f "$SDK_ROOT/.pending-removals/${sdk_versions[$i]}" ]]; then
+                printf "  %d. %s (incomplete removal)\n" "$((i + 1))" "${sdk_versions[$i]}"
+            elif [[ ! -x "$SDK_ROOT/${sdk_versions[$i]}/dotnet" ]]; then
+                printf "  %d. %s (incomplete)\n" "$((i + 1))" "${sdk_versions[$i]}"
+            else
+                printf "  %d. %s\n" "$((i + 1))" "${sdk_versions[$i]}"
+            fi
         done
 
         echo
@@ -1067,6 +1503,7 @@ select_remove_version() {
         case "$selection" in
             [bB])
                 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+                    BACK_TO_MAIN="true"
                     return 2
                 fi
                 ;;
@@ -1117,6 +1554,7 @@ select_verify_version() {
         tool_info "No isolated SDKs are installed under $SDK_ROOT."
         return 1
     fi
+    versions="$(printf '%s\n' "$versions" | sort_sdk_version_lines)"
 
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
@@ -1139,7 +1577,10 @@ select_verify_version() {
         selection="$TOOL_INPUT"
 
         case "$selection" in
-            [bB]) return 1 ;;
+            [bB])
+                BACK_TO_MAIN="true"
+                return 1
+                ;;
             [eE])
                 EXIT_REQUESTED="true"
                 tool_exit
@@ -1218,6 +1659,12 @@ list_installed_sdks() {
 
     isolated_versions="$(get_isolated_sdk_versions)"
     system_inventory="$(get_system_sdk_inventory)"
+    if [[ -n "$isolated_versions" ]]; then
+        isolated_versions="$(printf '%s\n' "$isolated_versions" | sort_sdk_version_lines)"
+    fi
+    if [[ -n "$system_inventory" ]]; then
+        system_inventory="$(printf '%s\n' "$system_inventory" | sort_sdk_inventory)"
+    fi
 
     tool_heading "Installed .NET SDKs"
     echo
@@ -1281,16 +1728,31 @@ cleanup_install_transaction() {
     [[ "$cleanup_failed" == "false" ]]
 }
 
-calculate_sha512() {
+calculate_sdk_payload_hash() {
     local path="$1"
+    local algorithm="$2"
+    local coreutils_command=""
+    local shasum_length=""
 
-    if command -v sha512sum >/dev/null 2>&1; then
-        sha512sum "$path" | awk '{print tolower($1)}'
+    case "$algorithm" in
+        SHA512)
+            coreutils_command="sha512sum"
+            shasum_length="512"
+            ;;
+        SHA256)
+            coreutils_command="sha256sum"
+            shasum_length="256"
+            ;;
+        *) return 1 ;;
+    esac
+
+    if command -v "$coreutils_command" >/dev/null 2>&1; then
+        "$coreutils_command" "$path" | awk '{print tolower($1)}'
         return
     fi
 
     if command -v shasum >/dev/null 2>&1; then
-        shasum -a 512 "$path" | awk '{print tolower($1)}'
+        shasum -a "$shasum_length" "$path" | awk '{print tolower($1)}'
         return
     fi
 
@@ -1298,17 +1760,9 @@ calculate_sha512() {
 }
 
 get_sdk_channel() {
-    local core="${VERSION%%-*}"
-    local major=""
-    local minor=""
-    local rest=""
-
-    IFS='.' read -r major minor rest <<< "$core"
-    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
+    if ! sdk_channel_from_version "$VERSION"; then
         tool_fail "Unable to determine the .NET release channel for SDK $VERSION."
     fi
-
-    printf '%s.%s' "$major" "$minor"
 }
 
 get_sdk_rid() {
@@ -1341,27 +1795,130 @@ get_sdk_rid() {
     printf '%s-%s' "$os" "$arch"
 }
 
+# Select archives only from exact-version SDK objects, never Runtime records.
+# Release metadata publishes a portable artifact name, RID, URL and hash.
+# Earlier SDKs put the version before the archive extension in the URL.
 extract_sdk_artifact_metadata() {
-    local expected_url="$1"
+    local version="$1"
+    local rid="$2"
 
-    awk -v expected="$expected_url" '
-        /"url"[[:space:]]*:/ {
-            value=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", value)
+    awk -v expected_version="$version" -v expected_rid="$rid" '
+        function json_string(line, key, marker, value) {
+            marker = "\"" key "\"[[:space:]]*:[[:space:]]*\""
+            if (!match(line, marker)) return ""
+            value = substr(line, RSTART + RLENGTH)
             sub(/".*$/, "", value)
-            if (value == expected) {
-                candidate=value
+            return value
+        }
+        # Track object/array nesting outside quoted JSON strings. This avoids
+        # treating Runtime files and other releases as SDK file candidates.
+        function depth_delta(line, opening, closing, i, char, in_string, escaped, difference) {
+            in_string=escaped=difference=0
+            for (i=1; i<=length(line); i++) {
+                char=substr(line, i, 1)
+                if (escaped) { escaped=0; continue }
+                if (in_string && char == "\\") { escaped=1; continue }
+                if (char == "\"") { in_string=!in_string; continue }
+                if (!in_string && char == opening) difference++
+                if (!in_string && char == closing) difference--
             }
-            next
+            return difference
         }
-        candidate != "" && /"hash"[[:space:]]*:/ {
-            hash=$0
-            sub(/^[^:]*:[[:space:]]*"/, "", hash)
-            sub(/".*$/, "", hash)
-            print candidate "|" hash
-            candidate=""
+        function eligible(name, url, hash, stem, expected_url, legacy_url, key, extension, base) {
+            extension = (expected_rid ~ /^win-/ ? ".zip" : ".tar.gz")
+            base = "https://builds.dotnet.microsoft.com/dotnet/Sdk/" expected_version "/"
+            expected_url = base "dotnet-sdk-" expected_version "-" expected_rid extension
+
+            if (name == "" && url != expected_url) return
+            if (name != "" &&
+                name != "dotnet-sdk-" expected_rid extension &&
+                name != "dotnet-dev-" expected_rid extension) return
+
+            if (name != "") {
+                stem = substr(name, 1, length(name) - length(extension))
+                legacy_url = base stem "." expected_version extension
+            } else {
+                legacy_url = ""
+            }
+
+            if (url != legacy_url &&
+                !(url == expected_url && (name == "" || name == "dotnet-sdk-" expected_rid extension))) return
+
+            key = url "|" hash
+            if (!seen[key]++) print key
         }
-    ' | awk '!seen[$0]++'
+        {
+            line=$0
+            if (!sdks_active && line ~ /"sdks"[[:space:]]*:[[:space:]]*\[/) {
+                sdks_active=1
+                sdks_depth=array_depth+1
+            }
+
+            if (!sdk_active && line ~ /"sdk"[[:space:]]*:[[:space:]]*\{/) {
+                sdk_active=1
+                sdk_depth=object_depth+1
+                sdk_version=""
+                file_count=0
+            }
+            else if (!sdk_active && sdks_active && line ~ /^[[:space:]]*\{[[:space:]]*,?[[:space:]]*$/) {
+                sdk_active=1
+                sdk_depth=object_depth+1
+                sdk_version=""
+                file_count=0
+            }
+
+            if (sdk_active) {
+                if (object_depth == sdk_depth) {
+                    value=json_string(line, "version")
+                    if (value != "") sdk_version=value
+                    if (!files_active && line ~ /"files"[[:space:]]*:[[:space:]]*\[/) {
+                        files_active=1
+                        files_depth=array_depth+1
+                    }
+                }
+                if (files_active && !file_active && line ~ /^[[:space:]]*\{/) {
+                    file_active=1
+                    file_depth=object_depth+1
+                    file_name=file_rid=file_url=file_hash=""
+                }
+                if (file_active) {
+                    value=json_string(line, "name")
+                    if (value != "") file_name=value
+                    value=json_string(line, "rid")
+                    if (value != "") file_rid=value
+                    value=json_string(line, "url")
+                    if (value != "") file_url=value
+                    value=json_string(line, "hash")
+                    if (value != "") file_hash=value
+                }
+            }
+
+            object_depth += depth_delta(line, "{", "}")
+            array_depth += depth_delta(line, "[", "]")
+
+            if (file_active && object_depth < file_depth) {
+                if (file_rid == expected_rid) {
+                    file_count++
+                    file_names[file_count]=file_name
+                    file_urls[file_count]=file_url
+                    file_hashes[file_count]=file_hash
+                }
+                file_active=0
+            }
+            if (files_active && array_depth < files_depth) files_active=0
+
+            if (sdk_active && object_depth < sdk_depth) {
+                if (sdk_version == expected_version) {
+                    for (i=1; i<=file_count; i++) {
+                        eligible(file_names[i], file_urls[i], file_hashes[i])
+                    }
+                }
+                sdk_active=0
+                file_active=files_active=0
+            }
+            if (sdks_active && array_depth < sdks_depth) sdks_active=0
+        }
+    '
 }
 
 install_isolated_sdk() {
@@ -1374,14 +1931,17 @@ install_isolated_sdk() {
 
     if [[ "$selected_interactively" == "true" ]]; then
         echo
+        clear_interactive_screen
     fi
 
     local install_dir="$SDK_ROOT/$VERSION"
+    if [[ -e "$SDK_ROOT/.pending-removals/$VERSION" || -L "$SDK_ROOT/.pending-removals/$VERSION" ]]; then
+        tool_fail "SDK $VERSION has an incomplete removal; finish Remove before installing this version."
+    fi
     local isolated_dotnet="$install_dir/dotnet"
     local installed_sdks=""
     local system_sdk_line=""
     local system_sdk_path=""
-    local isolated_sdks=""
     local isolated_installed="false"
     local metadata_file=""
     local archive_file=""
@@ -1390,7 +1950,6 @@ install_isolated_sdk() {
     local channel=""
     local rid=""
     local metadata_url=""
-    local expected_artifact_url=""
     local artifact_data=""
     local artifact_count=0
     local artifact_url=""
@@ -1413,21 +1972,16 @@ install_isolated_sdk() {
         fi
     fi
 
+    # Only a successful local origin-and-resolution proof means this isolated
+    # installation exists. A rejected target is never overwritten.
     if [[ -x "$isolated_dotnet" ]]; then
-        if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
-            :
-        else
-            status=$?
-            tool_fail "Unable to inspect existing isolated SDK $VERSION with exit code $status."
-        fi
-
-        if printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
+        if validate_local_isolated_sdk "$VERSION" "$install_dir"; then
             isolated_installed="true"
         fi
     fi
 
     if [[ "$isolated_installed" == "true" ]]; then
-        tool_label_value "Isolated SDK:" "Already installed"
+        tool_label_value "Isolated SDK:" "Already installed" success
         tool_label_value "Location:" "$install_dir"
     else
         tool_label_value "Isolated SDK:" "Not installed"
@@ -1436,7 +1990,7 @@ install_isolated_sdk() {
     echo
 
     if [[ -n "$system_sdk_line" ]]; then
-        tool_label_value "System SDK:" "Already installed"
+        tool_label_value "System SDK:" "Already installed" success
         if [[ -n "$system_sdk_path" ]]; then
             tool_label_value "Location:" "$system_sdk_path"
         fi
@@ -1464,7 +2018,6 @@ install_isolated_sdk() {
     channel="$(get_sdk_channel)"
     rid="$(get_sdk_rid)"
     metadata_url="https://builds.dotnet.microsoft.com/dotnet/release-metadata/$channel/releases.json"
-    expected_artifact_url="https://builds.dotnet.microsoft.com/dotnet/Sdk/$VERSION/dotnet-sdk-$VERSION-$rid.tar.gz"
     metadata_file="$(mktemp "$SDK_ROOT/.release-metadata-$VERSION.XXXXXX")"
     archive_file="$(mktemp "$SDK_ROOT/.sdk-payload-$VERSION.XXXXXX")"
     trap 'cleanup_install_transaction "$metadata_file" "$archive_file" "$staging_dir" || true' EXIT
@@ -1482,18 +2035,23 @@ install_isolated_sdk() {
         tool_fail "Invalid Microsoft release metadata for SDK $VERSION."
     fi
 
-    artifact_data="$(extract_sdk_artifact_metadata "$expected_artifact_url" < "$metadata_file")"
+    artifact_data="$(extract_sdk_artifact_metadata "$VERSION" "$rid" < "$metadata_file")"
     artifact_count="$(printf '%s\n' "$artifact_data" | awk 'NF { count++ } END { print count + 0 }')"
     if (( artifact_count != 1 )); then
         tool_fail "Microsoft release metadata did not contain exactly one SDK archive for $VERSION and $rid."
     fi
 
     IFS='|' read -r artifact_url expected_hash <<< "$artifact_data"
-    if [[ "$artifact_url" != "$expected_artifact_url" ]]; then
-        tool_fail "Microsoft release metadata returned an unexpected SDK archive URL for $VERSION and $rid."
-    fi
-    if [[ ! "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
-        tool_fail "Microsoft release metadata contained an invalid SHA-512 hash for SDK $VERSION and $rid."
+    local hash_algorithm=""
+    if [[ "$expected_hash" =~ ^[0-9A-Fa-f]{128}$ ]]; then
+        hash_algorithm="SHA512"
+    elif [[ "$expected_hash" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+        if [[ ! "$VERSION" =~ ^1\. ]]; then
+            tool_fail "Microsoft release metadata published SHA-256 for SDK $VERSION and $rid; SHA-256 is supported only for historical .NET 1.x SDKs."
+        fi
+        hash_algorithm="SHA256"
+    else
+        tool_fail "Microsoft release metadata contained an unsupported or malformed checksum for SDK $VERSION and $rid."
     fi
     expected_hash="$(printf '%s' "$expected_hash" | tr '[:upper:]' '[:lower:]')"
 
@@ -1505,8 +2063,8 @@ install_isolated_sdk() {
         tool_fail "Unable to download the .NET SDK $VERSION payload with exit code $status."
     fi
 
-    if ! actual_hash="$(calculate_sha512 "$archive_file")"; then
-        tool_fail "Unable to verify the .NET SDK $VERSION payload because no SHA-512 utility is available."
+    if ! actual_hash="$(calculate_sdk_payload_hash "$archive_file" "$hash_algorithm")"; then
+        tool_fail "Unable to verify the .NET SDK $VERSION payload because no $hash_algorithm utility is available."
     fi
 
     if [[ "$actual_hash" != "$expected_hash" ]]; then
@@ -1531,16 +2089,9 @@ install_isolated_sdk() {
         tool_fail "The isolated dotnet executable was not found at $staged_dotnet"
     fi
 
-    if isolated_sdks="$("$staged_dotnet" --list-sdks)"; then
-        :
-    else
-        status=$?
-        tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
-    fi
-    printf "%s\n" "$isolated_sdks"
-
-    if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        tool_fail "SDK $VERSION was not found after installation."
+    # One shared proof validates exact origin and resolution before promotion.
+    if ! validate_local_isolated_sdk "$VERSION" "$staging_dir"; then
+        tool_fail "Staged SDK verification failed at $staging_dir: $VERIFY_ERROR"
     fi
 
     if [[ -e "$install_dir" || -L "$install_dir" ]]; then
@@ -1572,56 +2123,554 @@ install_isolated_sdk() {
     tool_label_value "Location:" "$install_dir"
 }
 
+# Shared local proof: keep this separate from Verify's optional online report so
+# Install reuses exactly these version-and-origin guarantees at both boundaries.
+VERIFY_CHECKS=()
+VERIFY_ERROR=""
+verify_check() {
+    VERIFY_CHECKS+=("$1|$2|$3")
+}
+
+validate_local_isolated_sdk() {
+    local version="$1"
+    # An explicit root validates staging with the same local Verify proof.
+    local install_dir="${2:-$SDK_ROOT/$version}"
+    local isolated_dotnet="$install_dir/dotnet"
+    local work_dir=""
+    local inventory=""
+    local resolved_version=""
+    local origin=""
+    local expected_origin=""
+    local line=""
+    local reported_version=""
+    local reported_origin=""
+    local has_version="false"
+    local has_origin="false"
+    local status=0
+
+    VERIFY_CHECKS=()
+    VERIFY_ERROR=""
+    if [[ ! -d "$install_dir" ]]; then
+        verify_check "Installation directory" "FAIL" "$install_dir"
+        VERIFY_ERROR="Isolated SDK $version is not installed under $SDK_ROOT."
+        return 1
+    fi
+    verify_check "Installation directory" "OK" "$install_dir"
+
+    if [[ ! -e "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Isolated SDK $version is incomplete: expected dotnet host was not found at $isolated_dotnet."
+        return 1
+    fi
+    if [[ ! -x "$isolated_dotnet" ]]; then
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Isolated SDK $version host is not executable: $isolated_dotnet"
+        return 1
+    fi
+
+    # A fresh work directory cannot contain a caller's global.json. On older
+    # Windows hosts, DOTNET_MULTILEVEL_LOOKUP=0 also prevents system SDK lookup.
+    if ! work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-verify.XXXXXX")"; then
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Unable to prepare isolated SDK $version verification directory."
+        return 1
+    fi
+    # Original 1.x and early 2.x hosts lack --list-sdks; share
+    # exact --version plus --info Base Path proof with granular Verify checks.
+    if [[ "$version" == 1.* ]] || is_early_dotnet2_sdk "$version"; then
+        local legacy_info="" reported_base="" actual_base="" expected_base=""
+        printf '{"sdk":{"version":"%s"}}\n' "$version" > "$work_dir/global.json"
+        if resolved_version="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --version 2>&1)"; then
+            :
+        else
+            status=$?
+            rm -rf -- "$work_dir"
+            verify_check ".NET host" "FAIL" "$isolated_dotnet"
+            VERIFY_ERROR="Isolated SDK $version failed verification: --version exited with code $status."
+            return 1
+        fi
+        verify_check ".NET host" "OK" "$isolated_dotnet"
+        if [[ "$resolved_version" != "$version" ]]; then
+            rm -rf -- "$work_dir"
+            verify_check "SDK resolution" "FAIL" "wrong or ambiguous --version result"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy --version did not resolve the exact requested SDK."
+            return 1
+        fi
+        verify_check "SDK resolution" "OK" "$version"
+
+        expected_base="$install_dir/sdk/$version"
+        if [[ ! -d "$expected_base" ]]; then
+            rm -rf -- "$work_dir"
+            verify_check "SDK origin" "FAIL" "$expected_base missing"
+            VERIFY_ERROR="Isolated SDK $version failed verification: isolated SDK Base Path is missing at $expected_base."
+            return 1
+        fi
+        if legacy_info="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --info 2>&1)"; then
+            :
+        else
+            status=$?
+            rm -rf -- "$work_dir"
+            verify_check "SDK origin" "FAIL" "--info exited $status"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy --info exited with code $status."
+            return 1
+        fi
+        reported_base="$(printf '%s\n' "$legacy_info" | awk '
+            /^[[:space:]]*Base Path:[[:space:]]*/ {
+                sub(/^[[:space:]]*Base Path:[[:space:]]*/, "")
+                sub(/[[:space:]]*$/, "")
+                print
+            }
+        ')"
+        if [[ -z "$reported_base" || "$reported_base" == *$'\n'* || "$reported_base" != /* || ! -d "$reported_base" ]]; then
+            rm -rf -- "$work_dir"
+            verify_check "SDK origin" "FAIL" "missing or ambiguous SDK Base Path"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy --info did not report one valid SDK Base Path."
+            return 1
+        fi
+        actual_base="$(cd "$reported_base" && pwd -P)"
+        expected_base="$(cd "$expected_base" && pwd -P)"
+        local canonical_install=""
+        canonical_install="$(cd "$install_dir" && pwd -P)"
+        rm -rf -- "$work_dir"
+        # Do not accept an SDK directory redirected outside the isolated tree.
+        if [[ "$expected_base" != "$canonical_install/sdk/$version" || "$actual_base" != "$expected_base" ]]; then
+            verify_check "SDK origin" "FAIL" "unexpected SDK Base Path"
+            VERIFY_ERROR="Isolated SDK $version failed verification: legacy SDK Base Path does not match the isolated directory."
+            return 1
+        fi
+        verify_check "SDK origin" "OK" "$expected_base"
+        return 0
+    fi
+
+    if inventory="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --list-sdks)"; then
+        :
+    else
+        status=$?
+        rm -rf -- "$work_dir"
+        verify_check ".NET host" "FAIL" "$isolated_dotnet"
+        VERIFY_ERROR="Unable to verify isolated SDK $version with exit code $status."
+        return 1
+    fi
+    verify_check ".NET host" "OK" "$isolated_dotnet"
+
+    if [[ -d "$install_dir/sdk" ]]; then
+        expected_origin="$(cd "$install_dir/sdk" && pwd -P)"
+    fi
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+\[(.*)\][[:space:]]*$ ]]; then
+            reported_version="${BASH_REMATCH[1]}"
+            reported_origin="${BASH_REMATCH[2]}"
+            if [[ "$reported_version" == "$version" ]]; then
+                has_version="true"
+                if [[ -d "$reported_origin" ]]; then
+                    origin="$(cd "$reported_origin" && pwd -P)"
+                    if [[ -n "$expected_origin" && "$origin" == "$expected_origin" ]]; then
+                        has_origin="true"
+                        break
+                    fi
+                fi
+            fi
+        fi
+    done <<< "$inventory"
+    if [[ "$has_version" != "true" ]]; then
+        rm -rf -- "$work_dir"
+        verify_check "SDK inventory" "FAIL" "$version missing"
+        VERIFY_ERROR="Isolated SDK $version failed verification: the host did not report SDK $version."
+        return 1
+    fi
+    if [[ "$has_origin" != "true" ]]; then
+        rm -rf -- "$work_dir"
+        verify_check "SDK inventory" "FAIL" "$version from unexpected SDK root"
+        VERIFY_ERROR="Isolated SDK $version failed verification: SDK $version was not reported from $install_dir/sdk."
+        return 1
+    fi
+    verify_check "SDK inventory" "OK" "$version from $expected_origin"
+
+    if resolved_version="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$isolated_dotnet" --version)"; then
+        :
+    else
+        status=$?
+        rm -rf -- "$work_dir"
+        verify_check "SDK resolution" "FAIL" "host exited $status"
+        VERIFY_ERROR="Isolated SDK $version failed verification: --version exited with code $status."
+        return 1
+    fi
+    rm -rf -- "$work_dir"
+    if [[ "$resolved_version" != "$version" ]]; then
+        verify_check "SDK resolution" "FAIL" "$resolved_version"
+        VERIFY_ERROR="Isolated SDK $version failed verification: --version resolved $resolved_version instead of $version."
+        return 1
+    fi
+    verify_check "SDK resolution" "OK" "$resolved_version"
+}
+
+# Metadata is optional; reuse Audit's classification in a protected subprocess.
+verify_audit_details() {
+    local version="$1"
+    local index_json=""
+    local channel_data=""
+    if ! index_json="$(curl -fsSL --connect-timeout 4 --max-time 12 "$RELEASE_INDEX_URL" 2>/dev/null)"; then
+        return 1
+    fi
+    if ! looks_like_json_object "$index_json" || [[ "$index_json" != *'"releases-index"'* ]]; then
+        return 1
+    fi
+    channel_data="$(printf '%s\n' "$index_json" | parse_release_index)"
+    [[ -n "$channel_data" ]] || return 1
+    AUDIT_METADATA_CHANNELS=()
+    AUDIT_METADATA_VALUES=()
+    AUDIT_RELEASE_SCHEDULE_LOADED="false"
+    AUDIT_RELEASE_SCHEDULE=""
+    AUDIT_VERSION_WIDTH=0
+    AUDIT_RELEASE_TYPE_WIDTH=0
+    AUDIT_LIFECYCLE_WIDTH=0
+    resolve_audit_classification "$version" "$channel_data"
+    [[ -n "$AUDIT_RELEASE_TYPE" ]] && printf '  %-19s %s\n' 'Support type' "$AUDIT_RELEASE_TYPE"
+    local status_color=""
+    status_color="$(audit_status_color "$AUDIT_STATUS_TOKEN")"
+    printf '  %-19s %b%s%b\n' 'Status' "$status_color" "$AUDIT_STATUS_TOKEN" "$RESET"
+    [[ -n "$AUDIT_RELEASE_DATE" ]] && printf '  %-19s %s\n' 'SDK release date' "$AUDIT_RELEASE_DATE"
+    [[ -n "$AUDIT_GO_LIVE_DATE" ]] && printf '  %-19s %s\n' 'Go Live date' "$AUDIT_GO_LIVE_DATE"
+    [[ -n "$AUDIT_END_OF_SUPPORT_DATE" ]] && printf '  %-19s %s\n' 'Channel EOS date' "$AUDIT_END_OF_SUPPORT_DATE"
+    if [[ -n "$AUDIT_SERVICING_STATUS" ]]; then
+        case "$AUDIT_SERVICING_STATUS" in
+            "Update available -> "*|"Security update available -> "*)
+                printf '  %-19s %s\n' 'Update available' "${AUDIT_SERVICING_STATUS##* -> }"
+                ;;
+            *)
+                printf '  %-19s %s\n' 'Servicing status' "$AUDIT_SERVICING_STATUS"
+                ;;
+        esac
+    fi
+}
+
+# Best-effort component diagnostics. Never import runtimes from system installations.
+verify_installed_components() {
+    local install_dir="$1"
+    local dotnet="$install_dir/dotnet"
+    local work_dir="" info="" runtimes="" section=""
+    local host_version="" architecture="" rid=""
+    local line="" name="" runtime_version="" runtime_root="" expected_root=""
+    local count=0
+
+    if [[ -x "$dotnet" ]] && work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-components.XXXXXX")"; then
+        info="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --info 2>/dev/null)" || info=""
+        # Original 1.x hosts do not support --list-runtimes.
+        if [[ "${2:-}" != 1.* ]]; then
+            runtimes="$(cd "$work_dir" && DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROOT="$install_dir" "$dotnet" --list-runtimes 2>/dev/null)" || runtimes=""
+        fi
+        rm -rf -- "$work_dir"
+    fi
+
+    while IFS= read -r line; do
+        case "$line" in
+            'Runtime Environment:') section="runtime"; continue ;;
+            'Host:'|'Host (useful for support):') section="host"; continue ;;
+        esac
+        if [[ "$line" =~ ^[^[:space:]][^:]*:[[:space:]]*$ ]]; then
+            section=""
+            continue
+        fi
+        if [[ "$section" == "host" && "$line" =~ ^[[:space:]]*Version:[[:space:]]*([^[:space:]]+) ]]; then
+            host_version="${BASH_REMATCH[1]}"
+        elif [[ "$section" == "host" && "$line" =~ ^[[:space:]]*Architecture:[[:space:]]*([^[:space:]]+) ]]; then
+            architecture="${BASH_REMATCH[1]}"
+        elif [[ "$section" == "runtime" && "$line" =~ ^[[:space:]]*RID:[[:space:]]*([^[:space:]]+) ]]; then
+            rid="${BASH_REMATCH[1]}"
+        fi
+    done <<< "$info"
+
+    # Legacy hosts expose architecture in the RID but not as a separate field.
+    if [[ -z "$architecture" && "$rid" =~ -(x64|x86|arm64|arm)$ ]]; then
+        architecture="${BASH_REMATCH[1]}"
+    fi
+
+    printf '  %-19s %s\n' 'Host version' "${host_version:-Unavailable}"
+    printf '  %-19s %s\n' 'Architecture' "${architecture:-Unavailable}"
+    printf '  %-19s %s\n' 'Runtime identifier' "${rid:-Unavailable}"
+    echo
+    printf '  .NET runtimes:\n'
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+\[(.*)\][[:space:]]*$ ]]; then
+            name="${BASH_REMATCH[1]}"
+            runtime_version="${BASH_REMATCH[2]}"
+            runtime_root="${BASH_REMATCH[3]}"
+            expected_root="$install_dir/shared/$name"
+            if [[ -d "$runtime_root" && -d "$expected_root" ]] &&
+               [[ "$(cd "$runtime_root" && pwd -P)" == "$(cd "$expected_root" && pwd -P)" ]]; then
+                printf '    %-31s %s\n' "$name" "$runtime_version"
+                count=$((count + 1))
+            fi
+        fi
+    done <<< "$runtimes"
+    if (( count == 0 )); then
+        printf '    Unavailable\n'
+    fi
+}
+
 verify_isolated_sdk() {
     [[ -n "$VERSION" ]] || tool_fail "An exact SDK version is required with verify."
     validate_version
 
     local install_dir="$SDK_ROOT/$VERSION"
-    local isolated_dotnet="$install_dir/dotnet"
-    local isolated_sdks=""
-    local status=0
+    local details="" label="" result="" detail="" check=""
+    local is_valid="true"
 
-    if [[ ! -d "$install_dir" ]]; then
-        tool_fail "Isolated SDK $VERSION is not installed under $SDK_ROOT."
-    fi
-
-    if [[ ! -e "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
-        tool_fail "Isolated SDK $VERSION is incomplete: expected dotnet host was not found at $isolated_dotnet."
-    fi
-
-    if [[ ! -x "$isolated_dotnet" ]]; then
-        tool_fail "Isolated SDK $VERSION host is not executable: $isolated_dotnet"
-    fi
-
-    if isolated_sdks="$("$isolated_dotnet" --list-sdks)"; then
+    if validate_local_isolated_sdk "$VERSION"; then
         :
     else
-        status=$?
-        tool_fail "Unable to verify isolated SDK $VERSION with exit code $status."
+        is_valid="false"
     fi
 
-    if ! printf "%s\n" "$isolated_sdks" | awk '{print $1}' | grep -Fxq "$VERSION"; then
-        tool_fail "Isolated SDK $VERSION failed verification: the host did not report SDK $VERSION."
+    tool_heading "Verify isolated .NET SDK"
+    echo
+    tool_heading "SDK information:"
+    printf '  %-19s %s\n' 'SDK version' "$VERSION"
+    printf '  %-19s %s\n' '.NET channel' "$(sdk_channel_from_version "$VERSION")"
+    if details="$(verify_audit_details "$VERSION" 2>/dev/null)"; then
+        printf '%s\n' "$details"
+    else
+        printf '  Release/lifecycle   Unavailable (Microsoft metadata could not be loaded).\n'
+    fi
+    echo
+    tool_heading "Installed components:"
+    if [[ "$is_valid" == "true" ]]; then
+        verify_installed_components "$install_dir" "$VERSION"
+    else
+        printf '  %-19s %s\n' 'Host version' 'Unavailable'
+        printf '  %-19s %s\n' 'Architecture' 'Unavailable'
+        printf '  %-19s %s\n' 'Runtime identifier' 'Unavailable'
+        echo
+        printf '  .NET runtimes:\n    Unavailable\n'
+    fi
+    echo
+    tool_heading "Verification:"
+    for check in "${VERIFY_CHECKS[@]}"; do
+        IFS='|' read -r label result detail <<< "$check"
+        if [[ "$result" == "OK" ]]; then
+            case "$label" in
+                '.NET host') detail='Host executable found and launched' ;;
+                'SDK inventory') detail='Exact SDK found in isolated installation' ;;
+                'SDK origin') detail='Exact SDK Base Path in isolated installation' ;;
+                'SDK resolution') detail='Correct SDK selected' ;;
+            esac
+            printf '  %-23s %bOK%b  %s\n' "$label" "$GREEN" "$RESET" "$detail"
+        else
+            printf '  %-23s FAIL  %s\n' "$label" "$detail"
+        fi
+    done
+    echo
+    if [[ "$is_valid" != "true" ]]; then
+        tool_fail "$VERIFY_ERROR"
+    fi
+    tool_success "Isolated SDK $VERSION verified successfully."
+}
+
+
+pending_removal_versions() {
+    local state_root="$SDK_ROOT/.pending-removals" entry
+    [[ ! -e "$state_root" && ! -L "$state_root" ]] && return 0
+    [[ -d "$state_root" && ! -L "$state_root" ]] ||
+        tool_fail "Unsafe incomplete-removal recovery directory: $state_root"
+    for entry in "$state_root"/*; do
+        [[ -e "$entry" || -L "$entry" ]] || continue
+        [[ -f "$entry" && ! -L "$entry" ]] ||
+            tool_fail "Invalid incomplete-removal recovery record: $entry"
+        basename "$entry"
+    done
+}
+
+# Reuse a previous authorized removal only when the journal and the surviving
+# quarantined directory corroborate the exact same operation identity.
+read_pending_removal() {
+    local state_root="$SDK_ROOT/.pending-removals"
+    local record="$state_root/$VERSION"
+    local token="" proof="" contents="" entry=""
+    PENDING_REMOVAL_DIR=""
+    PENDING_REMOVAL_PROOF=""
+    PENDING_REMOVAL_RECORD="$record"
+    [[ -d "$state_root" && ! -L "$state_root" ]] ||
+        tool_fail "Incomplete-removal recovery directory is missing or unsafe: $state_root"
+    [[ -f "$record" && ! -L "$record" ]] ||
+        tool_fail "Incomplete-removal recovery record is missing or unsafe: $record"
+    token="$(cat "$record")" ||
+        tool_fail "Unable to read incomplete-removal record for SDK $VERSION."
+    [[ "$token" =~ ^[0-9a-f]{32}$ ]] ||
+        tool_fail "Invalid incomplete-removal recovery token for SDK $VERSION."
+    PENDING_REMOVAL_DIR="$SDK_ROOT/.removing-$VERSION-$token"
+    proof="$PENDING_REMOVAL_DIR/.isolated-sdk-remove-$token"
+    PENDING_REMOVAL_PROOF="$proof"
+    [[ ! -e "$SDK_ROOT/$VERSION" && ! -L "$SDK_ROOT/$VERSION" ]] ||
+        tool_fail "SDK $VERSION was replaced during incomplete removal; manual recovery is required."
+    [[ ! -L "$PENDING_REMOVAL_DIR" ]] ||
+        tool_fail "Unsafe incomplete-removal target for SDK $VERSION."
+    if [[ ! -e "$PENDING_REMOVAL_DIR" ]]; then
+        return 0
+    fi
+    [[ -d "$PENDING_REMOVAL_DIR" ]] ||
+        tool_fail "Invalid incomplete-removal target for SDK $VERSION."
+    if [[ -f "$proof" && ! -L "$proof" ]]; then
+        contents="$(cat "$proof")" ||
+            tool_fail "Unable to read removal proof for SDK $VERSION."
+        [[ "$contents" == "$VERSION:$token" ]] ||
+            tool_fail "Removal proof mismatch for SDK $VERSION; manual recovery is required."
+    else
+        for entry in "$PENDING_REMOVAL_DIR"/* "$PENDING_REMOVAL_DIR"/.[!.]* "$PENDING_REMOVAL_DIR"/..?*; do
+            [[ -e "$entry" || -L "$entry" ]] || continue
+            tool_fail "Removal proof missing while SDK $VERSION still has files; manual recovery is required."
+        done
+    fi
+}
+
+stage_confirmed_removal() {
+    local install_dir="$SDK_ROOT/$VERSION"
+    local state_root="$SDK_ROOT/.pending-removals"
+    local record="$state_root/$VERSION"
+    local token="" proof="" stage=""
+    [[ -d "$install_dir" && ! -L "$install_dir" ]] ||
+        tool_fail "Unsafe SDK removal target: $install_dir"
+    [[ ! -e "$record" && ! -L "$record" ]] ||
+        tool_fail "SDK $VERSION has an existing incomplete-removal record; removal stopped."
+    if [[ ! -e "$state_root" && ! -L "$state_root" ]]; then
+        mkdir -m 700 "$state_root" ||
+            tool_fail "Unable to create removal recovery state."
+    fi
+    [[ -d "$state_root" && ! -L "$state_root" ]] ||
+        tool_fail "Unsafe removal recovery directory: $state_root"
+    token="$(od -An -N16 -tx1 /dev/urandom | tr -d '[:space:]')" ||
+        tool_fail "Unable to generate removal recovery identity."
+    [[ "$token" =~ ^[0-9a-f]{32}$ ]] ||
+        tool_fail "Unable to generate a valid removal recovery identity."
+    stage="$SDK_ROOT/.removing-$VERSION-$token"
+    proof="$install_dir/.isolated-sdk-remove-$token"
+    [[ ! -e "$stage" && ! -L "$stage" && ! -e "$proof" && ! -L "$proof" ]] ||
+        tool_fail "Removal recovery identity conflict; removal stopped."
+
+    # Write the outside journal first, then the proof retained inside the SDK
+    # directory. Neither file is allowed to replace pre-existing user state.
+    if ! (set -C; printf '%s\n' "$token" > "$record"); then
+        tool_fail "Unable to record authorized SDK removal before deletion."
+    fi
+    if ! (set -C; printf '%s:%s\n' "$VERSION" "$token" > "$proof"); then
+        rm -f "$record" || true
+        tool_fail "Unable to record SDK directory removal proof."
+    fi
+    # A directory mountpoint can live inside the isolated root but on a
+    # different device. Prevent mv's cross-device copy-and-delete fallback:
+    # a removal stage must be a rename on the same filesystem.
+    local root_device="" source_device=""
+    if root_device="$(stat -c %d "$SDK_ROOT" 2>/dev/null)" &&
+       source_device="$(stat -c %d "$install_dir" 2>/dev/null)"; then
+        :
+    elif root_device="$(stat -f %d "$SDK_ROOT" 2>/dev/null)" &&
+         source_device="$(stat -f %d "$install_dir" 2>/dev/null)"; then
+        :
+    else
+        rm -f "$proof" "$record" ||
+            tool_fail "Unable to clean removal markers after filesystem preflight failed."
+        tool_fail "Unable to establish same-filesystem rename safety for SDK $VERSION."
+    fi
+    if [[ "$root_device" != "$source_device" ]]; then
+        rm -f "$proof" "$record" ||
+            tool_fail "Unable to clean removal markers after cross-device staging was blocked."
+        tool_fail "SDK $VERSION is on a different filesystem; removal cannot safely stage it."
     fi
 
-    tool_success "Isolated SDK $VERSION is healthy."
-    tool_label_value "Location:" "$install_dir"
+    if ! mv "$install_dir" "$stage"; then
+        rm -f "$proof" "$record" ||
+            tool_fail "SDK $VERSION could not be staged and recovery markers could not be cleaned."
+        tool_fail "Unable to stage SDK $VERSION for removal; its installation was not deleted. Close active processes and retry."
+    fi
+    PENDING_REMOVAL_DIR="$stage"
+    PENDING_REMOVAL_PROOF="$stage/.isolated-sdk-remove-$token"
+    PENDING_REMOVAL_RECORD="$record"
+}
+
+finish_pending_removal() {
+    local stage="" proof="" entry=""
+    read_pending_removal
+    stage="$PENDING_REMOVAL_DIR"
+    proof="$PENDING_REMOVAL_PROOF"
+    if [[ -d "$stage" ]]; then
+        for entry in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
+            [[ -e "$entry" || -L "$entry" ]] || continue
+            [[ "$entry" == "$proof" ]] && continue
+            rm -rf "$entry" ||
+                tool_fail "SDK $VERSION removal incomplete at $stage. Files may be in use or partially deleted. Free blocking processes and run Remove again."
+        done
+        if [[ -f "$proof" ]]; then
+            rm -f "$proof" ||
+                tool_fail "SDK $VERSION removal incomplete at $stage. Free blocking processes and retry Remove."
+        fi
+        rmdir "$stage" ||
+            tool_fail "SDK $VERSION removal incomplete at $stage. Free blocking processes and retry Remove."
+    fi
+    [[ ! -e "$stage" && ! -L "$stage" ]] ||
+        tool_fail "SDK $VERSION removal incomplete at $stage. Free blocking processes and retry Remove."
+    rm -f "$PENDING_REMOVAL_RECORD" ||
+        tool_fail "SDK $VERSION files were removed, but recovery cleanup failed; retry Remove."
+    rmdir "$SDK_ROOT/.pending-removals" 2>/dev/null || true
+}
+
+# Public unified build-server shutdown was introduced with SDK 2.1.300.
+# Only stable early servicing bands can enter the strict two-command probe.
+# Matching a version alone never authorizes a shutdown bypass.
+is_pre_unified_sdk_version() {
+    case "$1" in
+        1.0.[0-4]|1.1.[0-9]|1.1.1[0-4]|2.0.[0-3]|2.1.[0-4]|2.1.10[0-5]|2.1.20[0-2])
+            return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_pre_unified_roslyn_sdk_version() {
+    case "$1" in
+        2.1.10[0-5]|2.1.20[0-2]) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 remove_isolated_sdk() {
+    local selected_interactively="false"
+    if [[ -z "$VERSION" ]]; then
+        selected_interactively="true"
+    fi
+
     resolve_remove_version || return 0
+    if [[ "$selected_interactively" == "true" ]]; then
+        echo
+        clear_interactive_screen
+    fi
 
     # Removal is intentionally scoped to the selected version directory under SDK_ROOT.
     local install_dir="$SDK_ROOT/$VERSION"
     local isolated_dotnet="$install_dir/dotnet"
     local status=0
 
-    if [[ ! -x "$isolated_dotnet" ]]; then
-        tool_fail "Isolated SDK $VERSION was not found at $install_dir"
+    local recovery="false"
+    local host_available="false"
+    is_removable_sdk_version "$VERSION" ||
+        tool_fail "Invalid SDK version for Remove: $VERSION"
+    if [[ -e "$SDK_ROOT/.pending-removals/$VERSION" || -L "$SDK_ROOT/.pending-removals/$VERSION" ]]; then
+        read_pending_removal
+        recovery="true"
+    elif [[ ! -d "$install_dir" || -L "$install_dir" ]]; then
+        tool_fail "Unsafe or missing isolated SDK directory: $install_dir"
+    elif [[ -x "$isolated_dotnet" && -f "$isolated_dotnet" && ! -L "$isolated_dotnet" ]]; then
+        host_available="true"
     fi
 
-    echo
-    tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
+    if [[ "$selected_interactively" != "true" ]]; then
+        echo
+    fi
+    if [[ "$recovery" == "true" ]]; then
+        tool_warn "SDK $VERSION has an incomplete removal. The remaining files in $PENDING_REMOVAL_DIR will be removed."
+    else
+        tool_warn "Isolated SDK $VERSION will be removed from $install_dir"
+    fi
+    if [[ "$recovery" != "true" && "$host_available" != "true" ]]; then
+        tool_warn "SDK $VERSION has no usable isolated dotnet host and cannot be shut down. Build processes may remain, and files in use may prevent removal."
+    fi
     echo
 
     if ! confirm_action "Continue?"; then
@@ -1629,26 +2678,116 @@ remove_isolated_sdk() {
         return
     fi
 
+    if [[ "$recovery" == "true" ]]; then
+        tool_info "Retrying incomplete removal of SDK $VERSION..."
+        finish_pending_removal
+        tool_success "Isolated SDK $VERSION was removed."
+        return 0
+    fi
+
+    if [[ "$host_available" != "true" ]]; then
+        stage_confirmed_removal
+        tool_info "Removing $install_dir..."
+        finish_pending_removal
+        tool_success "Isolated SDK $VERSION was removed."
+        return 0
+    fi
+
     tool_info "Shutting down build servers for SDK $VERSION..."
-    if DOTNET_NOLOGO=true \
-       DOTNET_GENERATE_ASPNET_CERTIFICATE=false \
-       DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false \
-       "$isolated_dotnet" build-server shutdown >/dev/null; then
+
+    # Always use the selected host with neutral CLI state. An unsupported
+    # command is not the same as an available shutdown command failing.
+    local shutdown_work_dir=""
+    shutdown_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/isolated-dotnet-sdk-shutdown.XXXXXX")" ||
+        tool_fail "Unable to create temporary shutdown state for SDK $VERSION."
+    if (
+        cd "$shutdown_work_dir" || exit 92
+        export DOTNET_ROOT="$install_dir"
+        export DOTNET_MULTILEVEL_LOOKUP=0
+        export DOTNET_CLI_HOME="$shutdown_work_dir"
+        export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+        export DOTNET_CLI_TELEMETRY_OPTOUT=1
+        export DOTNET_NOLOGO=true
+        export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
+        export DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
+
+        if is_pre_unified_sdk_version "$VERSION"; then
+            # An exact SDK payload and both precise command probes are required.
+            # An arbitrary exit 1 is never proof that shutdown is unsupported.
+            sdk_payload="$install_dir/sdk/$VERSION"
+            if [[ ! -d "$sdk_payload" ]]; then
+                printf 'Unable to classify legacy shutdown for SDK %s: SDK payload missing.\n' "$VERSION" >&2
+                exit 92
+            fi
+
+            for spelling in build-server buildserver; do
+                if probe_output="$("$isolated_dotnet" "$spelling" --help 2>&1)"; then
+                    # A supported command must succeed at shutdown; the opt-in
+                    # switch never converts a real shutdown failure into success.
+                    "$isolated_dotnet" "$spelling" shutdown >/dev/null
+                    exit $?
+                else
+                    probe_status=$?
+                    if [[ "$probe_status" -ne 1 ||
+                          "$probe_output" != "No executable found matching command \"dotnet-$spelling\"" ]]; then
+                        printf 'Unable to classify legacy shutdown for SDK %s: %s probe failed unexpectedly.\n' "$VERSION" "$spelling" >&2
+                        exit 92
+                    fi
+                fi
+            done
+
+            if is_pre_unified_roslyn_sdk_version "$VERSION"; then
+                compiler="$sdk_payload/Roslyn/bincore/VBCSCompiler.dll"
+                if [[ ! -f "$compiler" ]]; then
+                    printf 'Legacy compiler shutdown unavailable for SDK %s; removal stopped.\n' "$VERSION" >&2
+                    exit 92
+                fi
+                tool_warn "Legacy SDK $VERSION lacks unified shutdown; using SDK-local Roslyn shutdown. Other build processes may remain and files in use may prevent complete removal."
+                "$isolated_dotnet" exec "$compiler" -shutdown >/dev/null
+                exit $?
+            fi
+
+            # Earlier stable SDK servicing bands must not silently acquire
+            # an unrecognized compiler server without a shutdown mechanism.
+            if server_path="$(find "$sdk_payload" -name 'VBCSCompiler*' -print)"; then
+                if [[ -n "$server_path" ]]; then
+                    printf 'Unrecognized compiler-server payload in SDK %s; removal stopped.\n' "$VERSION" >&2
+                    exit 92
+                fi
+            else
+                printf 'Unable to inspect SDK %s compiler-server payload; removal stopped.\n' "$VERSION" >&2
+                exit 92
+            fi
+            tool_warn "Legacy SDK $VERSION has no supported shutdown command. Other build processes may remain and files in use may prevent complete removal."
+            exit 0
+        fi
+
+        "$isolated_dotnet" build-server shutdown >/dev/null
+    ); then
         :
     else
         status=$?
-        tool_fail "Build-server shutdown failed for SDK $VERSION with exit code $status."
     fi
 
+    if [[ "$status" -ne 0 ]]; then
+        rm -rf "$shutdown_work_dir" || true
+        tool_fail "Build-server shutdown failed for SDK $VERSION with exit code $status."
+    fi
+    rm -rf "$shutdown_work_dir" ||
+        tool_fail "Unable to clean temporary shutdown state for SDK $VERSION; removal stopped."
+
+    # An atomic same-root rename preserves identity for retries even if the
+    # SDK host is deleted before a later locked-file failure.
+    stage_confirmed_removal
     tool_info "Removing $install_dir..."
-    rm -rf "$install_dir"
-
-    [[ ! -d "$install_dir" ]] || tool_fail "SDK directory still exists after removal."
-
+    finish_pending_removal
     tool_success "Isolated SDK $VERSION was removed."
 }
 
 run_selected_action() {
+    if [[ "$ALLOW_UNSUPPORTED_SHUTDOWN" == "true" && "$ACTION" != "remove" ]]; then
+        tool_fail "--allow-unsupported-shutdown is supported only with Remove."
+    fi
     case "$ACTION" in
         install)
             install_isolated_sdk
@@ -1665,6 +2804,8 @@ run_selected_action() {
         verify)
             if [[ "$INTERACTIVE_SESSION" == "true" && -z "$VERSION" ]]; then
                 select_verify_version || return 0
+                echo
+                clear_interactive_screen
             fi
             verify_isolated_sdk
             ;;
@@ -1686,7 +2827,7 @@ Supported platform:
 Usage:
   isolated-dotnet-sdk.sh
   isolated-dotnet-sdk.sh install [version] [--yes|-y]
-  isolated-dotnet-sdk.sh remove [version] [--yes|-y]
+  isolated-dotnet-sdk.sh remove [version] [--yes|-y] [--allow-unsupported-shutdown]
   isolated-dotnet-sdk.sh list
   isolated-dotnet-sdk.sh verify <version>
   isolated-dotnet-sdk.sh audit
@@ -1699,17 +2840,18 @@ Commands:
   install [version]  Install an isolated SDK. Without a version, show the SDK picker.
   remove [version]   Remove an isolated SDK. Without a version, choose an installed SDK.
   list               List isolated SDKs and SDKs visible through the normal dotnet host. A version is invalid with list.
-  verify <version>   Read-only health check for one exact installed isolated SDK.
+  verify <version>   Detailed SDK report and read-only exact-origin/resolution checks.
   audit              Online read-only lifecycle and servicing assessment for installed SDKs.
 
 Options:
   --yes, -y          Skip supported confirmation prompts. It does not choose a missing action or version.
+  --allow-unsupported-shutdown  Deprecated Remove-only compatibility option; historical fallback is automatic and real shutdown failures still block deletion.
   --sdk-version <v>  Select the exact .NET SDK version. Without an action, Install is selected.
   --version          Show the tool release/source identity and exit.
   --help, -h         Show this help text.
 
 Behavior:
-  No command         Start a persistent interactive session that returns to Main after normal operations.
+  No command         Start a persistent session; terminal results wait for Enter before their parent screen.
   SDK version        --sdk-version <version> and a bare positional version select the same exact SDK.
   Bare version       Treat the positional version as a one-shot install request.
   Explicit actions   Run once and exit without entering the persistent Main loop.
@@ -1756,8 +2898,16 @@ cd "$SDK_ROOT"
 ACTION=""
 VERSION=""
 YES="false"
+ALLOW_UNSUPPORTED_SHUTDOWN="false"
 INTERACTIVE_SESSION="false"
 EXIT_REQUESTED="false"
+BACK_TO_MAIN="false"
+INSTALL_RESUME_CHANNEL=""
+INSTALL_RESUME_LATEST_SDK=""
+INSTALL_RESUME_RELEASES_URL=""
+INSTALL_RESUME_CHANNEL_DATA=""
+INSTALL_RESUME_VERSIONS=""
+INSTALL_RESULT_PARENT="Main"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1779,6 +2929,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --yes|-y)
             YES="true"
+            ;;
+        --allow-unsupported-shutdown)
+            ALLOW_UNSUPPORTED_SHUTDOWN="true"
             ;;
         -h|--help)
             usage
@@ -1817,21 +2970,77 @@ if [[ -z "$ACTION" && -z "$VERSION" ]]; then
 fi
 
 if [[ "$INTERACTIVE_SESSION" == "true" ]]; then
+    clear_interactive_screen
     while true; do
         ACTION=""
         VERSION=""
         EXIT_REQUESTED="false"
+        BACK_TO_MAIN="false"
+        INSTALL_RESUME_CHANNEL=""
+        INSTALL_RESUME_LATEST_SDK=""
+        INSTALL_RESUME_RELEASES_URL=""
+        INSTALL_RESUME_CHANNEL_DATA=""
+        INSTALL_RESUME_VERSIONS=""
+        INSTALL_RESULT_PARENT="Main"
 
         if ! select_action; then
             exit 0
         fi
 
         echo
-        run_selected_action
-        if [[ "$EXIT_REQUESTED" == "true" ]]; then
-            exit 0
-        fi
-        echo
+        clear_interactive_screen
+        while true; do
+            run_selected_action
+
+            if [[ "$EXIT_REQUESTED" == "true" ]]; then
+                exit 0
+            fi
+
+            if [[ "$BACK_TO_MAIN" == "true" ]]; then
+                echo
+                clear_interactive_screen
+                break
+            fi
+
+            if [[ ( "$ACTION" == "remove" || "$ACTION" == "verify" ) && -z "$VERSION" ]]; then
+                wait_for_interactive_result_acknowledgement "Main"
+                echo
+                clear_interactive_screen
+                break
+            fi
+
+            case "$ACTION" in
+                install)
+                    destination="$INSTALL_RESULT_PARENT"
+                    ;;
+                remove)
+                    if [[ -n "$(get_remove_sdk_candidate_versions)" ||
+                          -n "$(pending_removal_versions)" ]]; then
+                        destination="Remove"
+                    else
+                        destination="Main"
+                    fi
+                    ;;
+                verify)
+                    destination="Verify"
+                    ;;
+                *)
+                    destination="Main"
+                    ;;
+            esac
+
+            wait_for_interactive_result_acknowledgement "$destination"
+            echo
+            clear_interactive_screen
+
+            if [[ "$ACTION" == "list" || "$ACTION" == "audit" ||
+                  ( "$ACTION" == "remove" && "$destination" == "Main" ) ]]; then
+                break
+            fi
+
+            VERSION=""
+            BACK_TO_MAIN="false"
+        done
     done
 fi
 

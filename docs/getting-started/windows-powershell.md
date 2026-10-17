@@ -165,6 +165,10 @@ irm https://raw.githubusercontent.com/infoconex/isolated-dotnet-sdk/main/isolate
 
 This is not a stable installation command. It consumes mutable source and does not receive the stable-release checksum guarantee. Once saved, that development copy reports `isolated-dotnet-sdk development (main)` through `-Version` and on Main.
 
+## Troubleshooting and safe recovery
+
+If a bootstrap download, SDK installation, Verify report, Audit request, or Remove operation fails, follow [Troubleshooting and safe recovery](../guides/troubleshooting.md) before deleting or replacing anything under `dotnet-sdks`. A failed Verify local check differs from temporarily unavailable Microsoft metadata, and a conflicting existing destination is deliberately preserved.
+
 ## Next steps
 
 - [Commands](../commands/README.md)
@@ -172,3 +176,4 @@ This is not a stable installation command. It consumes mutable source and does n
 - [Stable bootstrap, update, and rollback](../releases/stable-bootstrap.md)
 - [Cross-platform support](../concepts/cross-platform-support.md)
 - [Supply-chain integrity](../concepts/supply-chain-integrity.md)
+- [Troubleshooting and safe recovery](../guides/troubleshooting.md)

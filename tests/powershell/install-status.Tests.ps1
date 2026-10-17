@@ -35,6 +35,7 @@ Describe 'PowerShell install target status' {
                 -Destination $script:InstallDir `
                 -Recurse `
                 -Force
+            New-Item -ItemType Directory -Path (Join-Path $script:InstallDir 'sdk') -Force | Out-Null
         }
     }
 
@@ -88,6 +89,7 @@ Describe 'PowerShell install target status' {
         $text | Should -Match 'System SDK: Already installed'
         $text | Should -Match 'Location: C:\\system\\sdk\\99\.0\.100'
         $text | Should -Match 'Isolated SDK: Not installed'
+        $text | Should -Not -Match '\x1b\['
         $text | Should -Match 'Isolated SDK: Not installed\r?\n\r?\nSystem SDK: Already installed'
         $text | Should -Match 'Install an isolated copy in addition to the System SDK\?'
         $text | Should -Match 'Installation cancelled\.'
@@ -134,6 +136,27 @@ Describe 'PowerShell install target status' {
         $text | Should -Match ([regex]::Escape("Location: $($script:InstallDir)"))
         $text | Should -Not -Match ([regex]::Escape($script:UnrelatedVersion))
         $text | Should -Not -Match 'Loading Microsoft release metadata'
+    }
+
+    It 'colors only installed state values when ANSI is enabled' {
+        Initialize-SystemDotNetStub -IncludeTarget
+        Install-IsolatedFakeHost
+
+        $output = @(& pwsh -NoProfile -Command '
+            $PSStyle.OutputRendering = "Ansi"
+            $env:PATH = $env:ISOLATED_DOTNET_SDK_TEST_PATH
+            & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action Install -SdkVersion $env:ISOLATED_DOTNET_SDK_TEST_VERSION -Yes
+        ' 6>&1 2>&1)
+
+        $LASTEXITCODE | Should -Be 0
+        $text = $output -join [Environment]::NewLine
+        $green = "$($PSStyle.Foreground.Green)Already installed$($PSStyle.Reset)"
+        $isolatedLabel = "$($PSStyle.Foreground.Cyan)Isolated SDK:$($PSStyle.Reset)"
+        $systemLabel = "$($PSStyle.Foreground.Cyan)System SDK:$($PSStyle.Reset)"
+        $text | Should -Match ([regex]::Escape($isolatedLabel + ' ' + $green))
+        $text | Should -Match ([regex]::Escape($systemLabel + ' ' + $green))
+        $text | Should -Not -Match ([regex]::Escape("$($PSStyle.Foreground.Green)Location:"))
+        $text | Should -Not -Match ([regex]::Escape("$($PSStyle.Foreground.Green)$($script:InstallDir)"))
     }
 
     It 'reports neither ownership state before continuing to acquisition' {

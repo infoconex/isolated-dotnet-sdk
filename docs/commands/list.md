@@ -1,12 +1,12 @@
 # List
 
-List is a read-only inventory view. It reports SDKs in two ownership domains and always shows Isolated SDKs first.
+List is a read-only inventory view. It reports SDKs in two ownership domains and always shows Isolated SDKs first. Within each ownership group, SDK versions are ordered newest to oldest using the same SDK-aware version ordering used by the other version lists.
 
 For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-powershell.md#list-installed-sdks) or [Linux and macOS / Bash](../getting-started/linux-macos-bash.md#list-installed-sdks).
 
 ## Isolated SDKs
 
-Isolated SDKs are recognized SDK installations under the current user's `dotnet-sdks` root. Each entry includes the SDK version and its concrete version directory.
+Isolated SDKs are recognized SDK installations under the current user's `dotnet-sdks` root. Unlike **Remove**, which offers safe cleanup of version-named directories whose host has disappeared, **List** uses the host-based discovery rule and does not show missing-host or quarantined removal targets. Each entry includes the SDK version and its concrete version directory.
 
 An empty isolated inventory is shown as `None`.
 
@@ -26,7 +26,7 @@ The same exact SDK version can appear in both groups. The tool preserves that ov
 
 List does not accept an SDK version. Supplying a version with an explicit List action is invalid input rather than a filter request.
 
-List selected from a persistent interactive session returns to Main after completion. Explicit List is one-shot.
+List selected from a terminal-backed persistent interactive session keeps its completed result visible until `Press Enter to return to Main...` is acknowledged. Redirected or captured persistent execution skips that pause. Explicit List is one-shot and never waits for acknowledgement.
 
 ## Ownership boundary
 

@@ -4,9 +4,13 @@ These documents are for repository development, validation, dependency maintenan
 
 ## Development standards
 
+- [Development operating model](development/operating-model.md)
+- [Post-v0.3.0 project retrospective — October 2026](development/retrospective-2026-10.md)
 - [Coding and naming consistency](development/coding-consistency.md)
 - [Source formatting](development/source-formatting.md)
 - [List enrichment evaluation](development/list-enrichment-evaluation.md)
+
+The operating model is the durable authority for development principles, decision authority, the current hardening posture, context discipline, and next-release integration. The retrospective records the reasoning that led to those rules.
 
 ## Testing and validation
 

@@ -88,6 +88,14 @@ Describe 'PowerShell bootstrap filesystem behavior' {
             Should -HaveCount 0
     }
 
+    It 'propagates real saved-child Verify failures through the bootstrap boundary' {
+        $output = @(& pwsh -NoProfile -File $script:SourceCopy -Action Verify 2>&1)
+
+        $LASTEXITCODE | Should -Not -Be 0
+        ($output -join [Environment]::NewLine) | Should -Match '-SdkVersion is required with -Action Verify'
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
+    }
+
     It 'staging failure preserves the saved tool and cleans its candidate' {
         Import-ToolFunctionDefinition -FunctionName 'Install-ToolIfNeeded'
         $script:SdkRoot = Join-Path $script:TestRoot 'focused-root'

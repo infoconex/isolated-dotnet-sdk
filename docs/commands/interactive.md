@@ -34,7 +34,32 @@ The identity heading is shown on Main, not repeated throughout nested Install, R
 
 Main commands are case-insensitive. `I`, `R`, `L`, `V`, `A`, and `E` are the product commands; old numeric Main aliases are rejected rather than retained silently.
 
-After a successful Install, List, Audit, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session returns to Main. A genuine operational failure terminates nonzero rather than returning to Main where a later Exit could mask it.
+After a successful Install, List, Audit, Remove, or Verify operation, or after a normal cancellation/no-change result, the persistent session keeps that completed result visible and prompts for Enter before returning to the screen that launched that result.
+
+The prompt names that destination. For example:
+
+```text
+Press Enter to return to Main...
+Press Enter to return to Verify...
+Press Enter to return to Remove...
+Press Enter to return to SDK selection...
+```
+
+The return hierarchy is deliberate:
+
+- List and Audit return to Main.
+- Verify returns to the Verify SDK list.
+- Remove returns to the Remove SDK list while isolated SDKs remain; removing the final isolated SDK returns to Main.
+- Install from a channel's SDK picker returns to that same channel's SDK list.
+- A no-inventory result that never displayed a Verify or Remove picker returns to Main.
+
+Persistent interactive navigation clears the previous screen before the destination menu or completed operation view when the terminal supports clearing. After a completed result, clearing occurs **only after** its Enter acknowledgement and immediately before returning to the indicated parent screen. Back clears on the way to its parent without an acknowledgement. Switching between channel or SDK-picker views also clears when supported. After selecting an SDK to Install, Verify, or Remove, the picker clears before the operation's details or confirmation are displayed, so the operation runs on its own screen. The complete operation output remains visible through its Enter acknowledgement; only then does returning to the parent clear again. Invalid-selection feedback and in-progress output remain visible rather than being erased by automatic redraws. Unsupported terminal capabilities fall back to normal scrolling. On initial persistent-interactive launch, the first Main screen also clears when supported, after startup/bootstrap has succeeded. This may replace successful bootstrap notices such as `Tool installed.` on the active screen; bootstrap errors remain visible because no clear is requested before successful startup. In captured or unsupported terminals, bootstrap output remains in ordinary scrollback.
+
+When a persistent interactive screen is successfully cleared, its first heading or operation detail begins on the first visible terminal row without an extra blank line above it. A terminal without clearing support continues ordinary scrolling with the existing blank-line separators between screens and results. Spacing *within* each screen, including the separation before acknowledgements, remains unchanged.
+
+Screen clearing is strictly a persistent, terminal-backed presentation feature. Explicit one-shot commands, redirected or captured input/output, pipes, CI, and automation do not emit clearing controls.
+
+This acknowledgement is a result boundary, not another decision menu. It is enabled only when both input and output are attached to an interactive terminal. Redirected input, redirected/captured output, pipes, CI, and automation never wait for it; they still follow the same parent-screen navigation without pausing. Back and Exit navigation do not require acknowledgement. **Exception for persistent interactive Remove:** a failed attempt retains its displayed error and diagnostics, waits for Enter when terminal-capable, then returns to the Remove SDK list (or Main if no targets remain). The user may release a lock, select the same version, and retry; incomplete removals remain available for retry. Other operational failures still terminate nonzero rather than being masked by a later Exit. An explicit one-shot `-Action Remove` still reports a nonzero failure exit code and the underlying PowerShell error record. Since the persistent session can continue after a failed Remove, its eventual Exit status is not a reliable record of each attempted removal; automation must use the explicit one-shot command.
 
 ## One-shot commands
 
@@ -44,7 +69,7 @@ An explicit Install or Remove may still need an interactive picker when no versi
 
 Explicit Verify remains a one-shot exact-version command. Interactive Verify is available separately from Main and selects from the installed isolated SDK inventory.
 
-Explicit Audit is a one-shot online assessment of both installed ownership groups. Interactive Audit runs the same read-only assessment from Main with `A` and returns to Main after success.
+Explicit Audit is a one-shot online assessment of both installed ownership groups. Interactive Audit runs the same read-only assessment from Main with `A`; after success, the result remains visible until Enter acknowledges the return to Main.
 
 The direct tool-version query is also one-shot and exits before bootstrap, network access, SDK discovery, prompting, or mutation. It identifies the tool itself; it does not select a .NET SDK.
 
@@ -71,7 +96,7 @@ Main
 
 Persistent menus do not add a redundant `Q. Cancel` where Back already provides navigation. Explicit one-shot Install/Remove pickers may use `Q` to cancel that one-shot command successfully.
 
-Ordinary yes/no confirmation prompts are not navigation menus. Declining a confirmation is a normal no-change result; in persistent mode that returns to Main, while one-shot execution exits successfully.
+Ordinary yes/no confirmation prompts are not navigation menus. Declining a confirmation is a normal no-change result; in persistent mode that result waits for Enter acknowledgement before returning to the operation's immediate parent screen, while one-shot execution exits successfully.
 
 ## Channel selection
 
@@ -81,24 +106,28 @@ Channel menu numbers are derived from current metadata rather than fixed product
 
 ## SDK version selection
 
-The default Install SDK picker is intentionally compact:
+The default Install SDK picker depends on whether the selected channel is currently prerelease:
 
-- Microsoft's `latest-sdk` is shown first and marked `latest` when that metadata is present and resolves to an SDK in the selected channel;
-- the newest SDK from each other available feature band is also shown;
-- older servicing releases remain available through **Show all versions**;
-- the expanded view is deterministically newest-first;
-- Back remains available from compact and expanded views; and
-- manual exact-version entry remains available.
+- **Prerelease channels** (whose current SDK is a Preview or RC) show **all SDK versions** by default, newest first, so individual Preview/RC milestones can be selected without another step.
+- **Stable channels** start with the compact **featured** list: Microsoft's `latest-sdk` if it occurs in the channel's releases, plus the newest SDK from each other available feature band. Older servicing versions are accessible through **Show all versions**.
+- Where the two lists differ, `S` switches between **Show featured versions** and **Show all versions**, describing the view it will open. When the lists are identical, there is no `S` option.
+- Back and manual exact-version entry remain available in both views.
 
-Install choices may be marked `latest`, `isolated`, and/or `system` to describe current metadata and ownership state.
+Classification uses Microsoft's latest SDK for the channel when it is present in the discovered versions. If that field is missing or disagrees with discovered releases, the newest discovered SDK determines the default view; no missing `latest` marker is invented. A stable channel is not classified as prerelease merely because older Preview/RC versions remain in its history.
 
-The Install picker does not depend on fixed numeric positions for a particular SDK version.
+Install choices may be marked `latest`, `installed system-sdk`, and/or `installed isolated-sdk` to describe current metadata and ownership state, combining applicable markers. The picker uses SDK-aware ordering rather than fixed menu positions. The same defaults apply if an explicit, one-shot Install command needs to open a picker.
+
+## Remove selection
+
+The Remove SDK picker differs intentionally from List and Verify: it shows direct-child folders whose names have a full SDK-version shape, even when their dotnet host is missing or unusable. Such candidates are labeled `(incomplete)` rather than treated as verified installations. A previously authorized removal left in operation-owned quarantine appears as `(incomplete removal)` and can be retried after the blocking process is released.
+
+Selecting either kind of candidate uses the same ordinary default-no confirmation, without an additional recovery approval. A damaged/no-host SDK displays a warning that build-server shutdown cannot run and that files may still be in use. A target with an available host must still pass actual shutdown or the narrowly verified historical fallback. System SDKs, unrelated directories, and linked or redirected directory targets are never offered. Failed initial rename leaves the original directory intact; a later user-initiated Remove can try again.
 
 ## Verify selection
 
-Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only health check used by explicit Verify; there is no separate interactive verification implementation.
+Interactive Verify lists only recognized isolated SDKs under the isolated SDK root. System SDKs are never offered as Verify targets. Selecting an SDK runs the same read-only detailed report and local origin/resolution checks as direct Verify; there is no separate interactive verification implementation.
 
-A healthy result returns to Main. `B` returns to Main without running verification, and `E` exits the session. If no isolated SDKs are installed, the tool reports that state and returns to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
+A successfully verified result remains visible until Enter acknowledgement, then returns to the Verify SDK list. `B` from that list returns to Main immediately without running verification or requiring acknowledgement, and `E` exits the session. If no isolated SDKs are installed, no Verify picker exists, so the tool reports that state and waits for Enter before returning to Main. If the selected SDK is unhealthy or becomes invalid before verification completes, the operational failure terminates the session nonzero.
 
 ## Input failure versus cancellation
 
@@ -115,3 +144,4 @@ An explicit user cancellation or default-no confirmation remains a successful no
 - [Audit](audit.md)
 - [SDK discovery and release metadata](../concepts/sdk-discovery.md)
 - [PowerShell and Bash behavioral parity](../contracts/behavioral-parity.md)
+- [Troubleshooting and safe recovery](../guides/troubleshooting.md)

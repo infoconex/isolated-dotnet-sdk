@@ -38,13 +38,18 @@ EOF
   cat > "$fixture_root/dotnet" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${1:-}" == '--list-sdks' ]]; then
-  printf '%s\n' '99.0.100 [/fixture/sdk]'
+  printf '99.0.100 [%s]\n' "$(dirname "$0")/sdk"
+  exit 0
+fi
+if [[ "${1:-}" == '--version' ]]; then
+  printf '%s\n' '99.0.100'
   exit 0
 fi
 exit 0
 EOF
   chmod +x "$fixture_root/dotnet"
-  tar -czf "$payload" -C "$fixture_root" dotnet
+  mkdir -p "$fixture_root/sdk"
+  tar -czf "$payload" -C "$fixture_root" dotnet sdk
 
   if command -v sha512sum >/dev/null 2>&1; then
     payload_hash="$(sha512sum "$payload" | awk '{print $1}')"
@@ -158,6 +163,6 @@ EOF
   run_install
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"invalid SHA-512 hash for SDK $version and $rid"* ]]
+  [[ "$output" == *"unsupported or malformed checksum for SDK $version and $rid"* ]]
   [ ! -e "$tool_root/$version" ]
 }

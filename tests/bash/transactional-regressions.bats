@@ -21,10 +21,13 @@ teardown() { payload_test_teardown; }
   cat > "$install_dir/dotnet" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == '--list-sdks' ]]; then
-  printf '%s\n' '$version [/existing/sdk]'
+  printf '%s\n' '$version [$install_dir/sdk]'
+elif [[ "\${1:-}" == '--version' ]]; then
+  printf '%s\n' '$version'
 fi
 exit 0
 EOF
+  mkdir -p "$install_dir/sdk"
   chmod +x "$install_dir/dotnet"
 
   run_payload_install

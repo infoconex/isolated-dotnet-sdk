@@ -3,7 +3,8 @@
 The repository uses established test frameworks for behavioral coverage:
 
 - **Pester** for PowerShell tests;
-- **Bats-core** for Bash tests.
+- **Bats-core** for Bash tests;
+- **Node.js built-in `node:test`** for hermetic stable-release publisher regression tests (no npm framework dependency).
 
 Exact framework versions are repository-owned in [`.config/test-frameworks.json`](../../../.config/test-frameworks.json). Bats is additionally pinned to the upstream commit behind the selected release tag. Local and CI runs must use those exact pins so diagnostics and behavior stay reproducible.
 
@@ -64,10 +65,12 @@ The Bash suites cover, among other focused reliability cases:
 - bare-version install resolution, removal picker cancellation/no-installed behavior, and unavailable required picker input;
 - rejection of an invalid SDK version;
 - release-metadata transport/shape failures, required selection fields, no-SDK channel data, first-seen duplicate ordering, and exact-version metadata independence;
-- Audit servicing/lifecycle states, security precedence, preview and Go Live behavior, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List/Verify network independence;
+- Audit release type, exact SDK release dates, lifecycle states, internal security-servicing precedence, compact update-tail presentation, exact Preview/RC labels, optional Go-Live schedule fallback, end-of-support dates, newest-first ownership ordering, status styling, redirected ANSI-free output, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List network independence and Verify's metadata-unavailability/local-proof separation;
 - system and isolated-host native-command failures;
 - unavailable interactive input versus explicit default-no cancellation;
 - build-server shutdown failure context and deletion blocking;
+- legacy shutdown invocation from neutral temporary working state with pinned isolated `DOTNET_ROOT`, no Windows multi-level lookup, first-run suppression, and cleanup before deletion;
+- exact-version legacy `-AllowUnsupportedShutdown` / `--allow-unsupported-shutdown` opt-in boundaries, strict two-spelling missing-command classification, and successful SDK-local Roslyn shutdown for 2.1.105;
 - transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
 
 ## PowerShell behavioral tests
@@ -102,7 +105,7 @@ The PowerShell behavioral coverage includes:
 - warning/error stream preservation and prefix-free failure presentation;
 - rejection of an invalid SDK version;
 - release-metadata transport/shape behavior, required selection fields, no-SDK channel data, duplicate normalization, and exact-version metadata independence;
-- Audit servicing/lifecycle states, security precedence, preview and Go Live behavior, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List/Verify network independence;
+- Audit lifecycle/update presentation, security precedence, preview and Go Live behavior, newest-first ownership ordering, unsupported/EOL channels, ownership overlap, metadata failures, interactive navigation, and List network independence and Verify's metadata-unavailability/local-proof separation;
 - repository-owned unavailable-interactive-input context;
 - repository-owned SDK payload download context;
 - source bootstrap forwarding for `-WhatIf`;
@@ -113,11 +116,145 @@ The PowerShell behavioral coverage includes:
 - `-Confirm:$false` automation;
 - `-Yes` automation and `-WhatIf` precedence;
 - shutdown-before-delete ordering;
+- shutdown environment isolation, restoration of caller state, and operation-owned temporary-state cleanup;
 - shutdown failure blocking deletion;
 - deletion failure blocking success reporting;
 - transactional installation staging, verification, promotion, conflict preservation, cleanup, retry behavior, promotion-command failure, and post-promotion cleanup failure.
 
 The cross-shell product contract is documented in [PowerShell and Bash behavioral parity](../../contracts/behavioral-parity.md). The authoritative PowerShell-specific removal behavior specification is the [PowerShell removal contract](../../contracts/powershell-removal.md).
+
+## PowerShell behavioral-suite performance measurement
+
+The standard `tests/powershell/run-tests.ps1` entry point is also the performance
+measurement entry point. It runs the repository-pinned Pester suite with
+`-Output Detailed`, reports shared fake-host creation time, and prints the full
+behavioral-validation wall time. Pester's detailed output reports individual
+test durations; the GitHub Actions log timestamps on `Running tests from
+'...Tests.ps1'` identify file start times. Approximate each file's elapsed
+interval by subtracting that timestamp from the next file-start timestamp,
+or from `Tests completed in` for the last file. These intervals include
+Pester fixture setup and teardown, not just test-body time.
+
+To reproduce a comparable measurement:
+
+1. Use the same commit/test files, pinned Pester version, and PowerShell
+   runner/OS family for before-and-after trials. Record the exact commit SHA,
+   runner image and PowerShell version, passed/failed/skipped counts, and whether
+   the PowerShell dependency cache was warm.
+2. Run `pwsh -NoProfile -File ./tests/powershell/run-tests.ps1` as usual, or
+   use the `Run PowerShell behavioral tests` step in the repository's Validate
+   workflow. The runner's printed wall time includes fixture initialization;
+   Pester's `Tests completed in` excludes it.
+3. Inspect the timestamped Actions job log in GitHub. Optionally retrieve it
+   with `gh run view <run-id> --job <job-id> --log` if GitHub CLI is available.
+   Use the `Running tests from` transitions for file-level intervals and the
+   Pester `[+]` lines for selected test durations. Compare file counts and
+   names, not only the overall elapsed total.
+4. Prefer several runs under the same runner class to interpret variance.
+   Treat a warm/cold runner or different number of tests as a separate
+   comparison, and investigate any failure or newly flaky scenario regardless
+   of runtime.
+
+### Optional Verify child-process tracing
+
+Use the standard test entry point to capture diagnostics for the Verify suite
+without changing production code or permanently altering any tests:
+
+```powershell
+pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerifyProcesses
+```
+
+The switch is **off by default** and requires `-Suite Verify`. A focused run
+still executes every Verify test with its independent temporary HOME and the
+real child PowerShell processes. The runner prints a ZIP path under the user's
+temporary directory containing:
+
+- `test-timings.csv`: test names, timestamps, duration, user time, and Pester overhead;
+- `verify-invocations.csv`: each Verify helper's child PowerShell elapsed time,
+  exit code, requested SDK version, and unique per-case identifier;
+- `fake-host-events.tsv`: UTC start/exit markers, arguments, process IDs and
+  elapsed fake-host main-to-exit time, correlated by case and invocation ID;
+- `verify-child-events.tsv`: child command entry, product invocation, and
+  synthetic metadata start/success/failure markers, correlated by invocation ID;
+- `summary.json`: versions, commit when Git is available, counts, elapsed time.
+
+Exit codes from negative Verify scenarios are expected and are still asserted
+normally. A fake-host event timestamp starts after native process initialization,
+so fake-host elapsed time does **not** measure native startup overhead. Similarly,
+child PowerShell elapsed time includes startup, script loading, internal native
+probes, and cleanup; it is not merely PowerShell startup time. Child timeline
+events come from the test-only command wrapper, not the product. Product-return
+markers may be absent when the product intentionally exits the child process.
+Tracing creates
+additional file I/O and should not be used as the before/after performance
+benchmark. Normal CI and local runs remain uninstrumented.
+
+### Historical Windows reference
+
+The successful [Issue #161 Validate run](https://github.com/infoconex/isolated-dotnet-sdk/actions/runs/38745162881)
+used PR-head commit `bf40568410208de8d87947ef13f691e400b0ad3b`,
+`windows-2025`, PowerShell `7.6.6`, and pinned Pester `6.2.0`.
+This was the CI-tested source for the subsequent `release/0.4` squash
+merge `e4c84accb28ab900974bcaa8bc9607d2fb019893`. The merge verification
+confirmed the changed files were identical. The recorded baseline is a
+**prior PR run**, not a run executed against the later squash-merge SHA.
+
+| Measurement | Value |
+| --- | ---: |
+| Passed / failed / skipped | 243 / 0 / 0 |
+| Pester test duration | 234.23s |
+| PowerShell behavioral-validation wall time | 236.29s |
+| Shared fake-host setup | 1.46s |
+| Verify file interval | ~46s |
+| Transactional Install file interval | ~33s |
+| Interactive Lifecycle file interval | ~23s |
+| Process-level Behavior file interval | ~18s |
+| Interactive Verify file interval | ~12s |
+| Global Exit file interval | ~13s |
+| Prerelease Picker file interval | ~11s |
+
+The older Windows local observation (236 tests, ~230.68s) and this hosted
+run (243 tests, 236.29s) are **not** like-for-like measurements.
+
+### Optimization boundaries
+
+Process startup can dominate some test-file time, but repeated setup
+launches must be distinguished from scenario subprocesses. For example,
+the original Verify `BeforeEach` started a PowerShell child merely to copy
+and bootstrap the test tool before starting separate scenario processes.
+A direct byte-for-byte copy to that scenario's own temporary HOME avoids
+the unrelated setup process. Dedicated bootstrap tests must still start with
+an absent installed tool and execute the actual source entry point.
+
+The interactive lifecycle, interactive Verify, global exit, and prerelease
+picker suites likewise prepare an installed script directly while retaining
+their real child processes. The process-level Behavior suite keeps its
+dedicated source-preservation/bootstrapping and source-color tests, while ten
+other scenarios can use direct installed-tool setup. The installed-SDK
+listing suite's eight scenarios use their own controlled system-dotnet stubs;
+its earlier bootstrap-only stub and launcher were preparation overhead, not
+part of the listing contract. Across those seven suites, this removes **85
+per-case preparatory PowerShell process launches** without removing their
+scenario process executions. Per-case file copies remain inside fresh GUID
+test roots, fail immediately on copy errors, and assert the installed script
+exists.
+
+An intermediate [Issue #174 Draft PR run](https://github.com/infoconex/isolated-dotnet-sdk/actions/runs/38788626227)
+on head `a9a782657500ba41bc5dc88919838bd38156cc37` passed all
+243 Windows Pester tests, with Pester duration **196.57s**, an improvement
+of **16.1%** versus the previous 234.23s reference. Its fake-host
+initialization was **14.18s**, however, versus **1.46s** in the reference;
+the full wall times were **211.31s** versus **236.29s**. Do not mistake
+that variation in unrelated one-time host setup for a Pester regression or
+a test-harness optimization. A later head must be compared separately.
+
+Transactional Install's many `pwsh` calls mostly exercise distinct
+transaction, native-host, failure, and exit-code boundaries. Such execution
+is not redundant just because it is expensive. The shared fake host is
+built once per full suite and should not be rebuilt for each test. Do not
+share mutable HOME, SDK directories, test environment variables, or
+download/staging state across cases, and do not replace process-boundary
+assertions with mocks for the sake of speed.
 
 ## Static analysis
 
@@ -200,7 +337,19 @@ The deterministic behavioral checks do not install a real SDK or require live re
 
 Real Microsoft/.NET ecosystem coverage is intentionally separate from the deterministic behavioral suites. The repository-owned fixed SDK target, direct and persistent-interactive scenarios, isolated job-state rules, automatic post-merge trigger, and manual rerun procedure are documented in [Real end-to-end validation](e2e-testing.md).
 
-`.github/workflows/e2e.yml` runs automatically on `push` to `main` and also supports `workflow_dispatch` for ad hoc reruns. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft release metadata and SDK payload acquisition, checksum verification, extraction, and staged-host verification. It is a post-merge confidence signal, not a required PR or merge check; required merge-candidate E2E remains tracked separately in Issue #60.
+`.github/workflows/e2e.yml` runs automatically on `push` to `main` and also supports `workflow_dispatch` for ad hoc reruns. It runs the supported Windows/PowerShell, Ubuntu/Bash, and macOS/Bash product mappings against live Microsoft release metadata and SDK payload acquisition, checksum verification, extraction, and staged-host verification. It is a post-merge confidence signal, not a required PR or merge check. Automatic merge-candidate E2E gating was proposed in [#60](https://github.com/infoconex/isolated-dotnet-sdk/issues/60), **closed as not planned**; adopting that gate would require a separately approved policy change.
+
+## Stable release publication regression tests
+
+The Node test suite invokes the **real** `.github/scripts/publish-release.js` with isolated local release-source/manifest fixtures and an in-memory GitHub API implementation. It deterministically exercises commit/tag identity, checksum verification, draft/public release state, API failures and cleanup ownership without any remote API requests, GitHub write credentials, or real tag/release mutations.
+
+From the repository root, with Node.js supporting its built-in test runner:
+
+```bash
+node --test tests/node/publish-release.test.js
+```
+
+Normal `Validate` also runs this suite on Ubuntu, where the actual publication workflow executes. Node's test runner is part of the runtime (like the Bash/PowerShell runtimes), not an additional externally pinned test package. The workflow reports the runner-provided Node version alongside test results. The deterministic suite does **not** replace live publication, candidate E2E, or the read-only `Verify Release` workflow.
 
 ## CI
 
@@ -208,6 +357,7 @@ Real Microsoft/.NET ecosystem coverage is intentionally separate from the determ
 
 - Bash syntax validation and the Bats behavioral suite on `ubuntu-24.04` and `macos-26`;
 - ShellCheck once on `ubuntu-24.04`;
+- Node stable-release publisher regression tests once on `ubuntu-24.04`;
 - PowerShell parser validation, PSScriptAnalyzer, formatting checks, and the Pester behavioral suite on `windows-2025`.
 
 Validate uses exact-key caches for pinned Bats-core, ShellCheck, Pester, and PSScriptAnalyzer where practical. Cache identity derives from the repository-owned pin/configuration files plus relevant runner/runtime identity. A cache miss acquires the exact configured dependency; a cache hit still revalidates the configured commit, checksum, or module version before use. No broad restore-key fallback accepts an older toolset, and product/E2E SDK or HOME/profile state is not cached.
@@ -216,6 +366,6 @@ The dependency-update monitor uses `ubuntu-24.04` and remains separate from prod
 
 Versioned hosted-runner labels intentionally pin the OS/architecture family, not an immutable VM image build. GitHub can patch and rebuild a selected hosted image over time; the exact resolved image and build revision are visible in each job log. Repository-owned test frameworks, analyzers, checksums, and action references remain independently pinned so those dependencies do not silently follow runner-image contents.
 
-CI invokes the same repository-owned behavioral/analyzer/formatting commands documented above instead of maintaining parallel CI-only runners. Syntax/parser checks remain inline because they are small shell/runtime primitives rather than a second test harness. Framework failure output is emitted directly by Bats/Pester so CI retains test names, assertion context, and framework diagnostics.
+CI invokes the same repository-owned behavioral/analyzer/formatting commands documented above instead of maintaining parallel CI-only runners. Syntax/parser checks remain inline because they are small shell/runtime primitives rather than a second test harness. Framework failure output is emitted directly by Bats/Pester/Node so CI retains test names, assertion context, and framework diagnostics.
 
 Syntax/parser checks, static analysis/formatting, and behavioral tests remain separate validation layers because they identify different failure classes. Static analyzers intentionally run once per relevant shell; cross-platform duplication is not added without evidence that it catches a platform-specific analyzer contract.

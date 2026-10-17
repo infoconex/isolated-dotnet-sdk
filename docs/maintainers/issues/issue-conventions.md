@@ -2,12 +2,13 @@
 
 This document defines the repository conventions for structuring implementation issues, recording issue evidence, and describing pull requests.
 
-The execution lifecycle is defined in [`issue-workflow.md`](issue-workflow.md).
+The execution lifecycle is defined in [`issue-workflow.md`](issue-workflow.md). Durable development principles and decision authority are defined in the [development operating model](../development/operating-model.md).
 
 ## Terminology
 
 - A **Task** is a meaningful implementation deliverable within an issue. Tasks should be scoped so they can be implemented, validated, committed, and reported independently where practical, but routine coherent work does not require a separate issue comment for every Task.
 - A GitHub **Milestone** is a release or planning grouping. Do not use milestone as a synonym for a Task.
+- The **integration target** is the branch an issue is intended to merge into. During an active next-release cycle this is normally the release integration branch, such as `release/0.4`; otherwise it may be `main`.
 - Use **defect** rather than bug in repository discussions.
 
 ## Issue structure
@@ -26,6 +27,23 @@ Add sections such as baseline behavior, behavioral scenarios, sequencing/depende
 
 Issue #9 is a useful example of this structure.
 
+## Issue creation and owner approval
+
+Discovery and backlog creation are separate decisions.
+
+Maintainers and agents may investigate, analyze, prioritize, and recommend findings autonomously when repository contracts make that work appropriate. A discovered finding must not be turned into a new GitHub issue until the owner explicitly approves adding it to the repository backlog.
+
+Before drafting a proposed issue:
+
+1. read the current `.github/ISSUE_TEMPLATE/implementation.md` and this conventions document rather than relying on a remembered issue shape;
+2. determine whether the finding materially warrants a separate issue;
+3. draft the proposal using the current template structure, adapting or removing sections only when they genuinely do not apply; and
+4. present the proposed title, rationale, scope, non-goals, and meaningful dependency/sequencing implications to the owner.
+
+Create the issue only after explicit owner approval.
+
+The resulting issue should be independently understandable and executable from repository artifacts without requiring a tracker or historical chat context for its contract. Record genuine dependencies and sequencing relationships when they matter; issue independence does not require removing legitimate relationships between work items.
+
 ## User-facing documentation references
 
 User-facing product documentation must describe current behavior, guarantees, policies, and capabilities directly. Do not use GitHub issue numbers, pull request numbers, or implementation-history identifiers as product terminology or as context a user must understand to follow the documentation.
@@ -40,7 +58,7 @@ Task and acceptance-criteria checkboxes are live lifecycle state, not static pla
 - For routine coherent work, completed Tasks and already-established acceptance criteria may be reconciled together at the next meaningful lifecycle boundary rather than mutated after every small step. They must be synchronized no later than before Draft PR creation.
 - For long-running, risky, interrupted, independently reviewable, or multi-contributor work, update a Task checkbox and add `## Task N complete — <concise task/capability>` as soon as that checkpoint is complete when the incremental record adds value.
 - Check acceptance criteria as soon as the chosen lifecycle reconciliation establishes them. Leave a criterion unchecked only when its requirement genuinely depends on a later lifecycle event such as exact-head PR validation or merge.
-- Reconcile Task and acceptance-criteria checkbox state at the lifecycle gates defined in [`issue-workflow.md`](issue-workflow.md), including before Draft PR creation, after exact-head validation, and after merge.
+- Reconcile Task and acceptance-criteria checkbox state at the lifecycle gates defined in [`issue-workflow.md`](issue-workflow.md), including before Draft PR creation, after exact-head validation, and after merge to the integration target.
 
 A completed Task or satisfied acceptance criterion left unchecked at a lifecycle gate is stale issue state and should be corrected before proceeding.
 
@@ -58,9 +76,9 @@ Use these default patterns when the corresponding evidence is useful:
 6. `## Task N remediation complete — <finding>` when a Task required correction after new evidence.
 7. `## Manual validation — <behavior>` only when manual validation is genuinely required.
 8. `## Full review — implementation complete` for a distinct comprehensive branch/diff review record when it is not already clear in the consolidated reconciliation.
-9. `## Draft PR opened` after the implementation/targeted-validation/full-review quality threshold is met, when recording the PR link, reviewed head, and Draft status adds useful traceability.
-10. `## Final review — completion evidence` for the final exact-head PR CI/review/follow-up summary before the user decides readiness or merge.
-11. `## Post-merge verification` for final closure evidence after merge.
+9. `## Draft PR opened` after the implementation/targeted-validation/full-review quality threshold is met, when recording the PR link, reviewed head, base branch, and Draft status adds useful traceability.
+10. `## Final review — completion evidence` for the final exact-head PR CI/review/follow-up summary before the user decides Ready for Review; that approval also authorizes merge of the reviewed state.
+11. `## Post-merge verification` for final closure evidence after merge to the issue's integration target.
 
 Keep text after the em dash concise and specific. Exceptional comments may use the same grammar with a precise qualifier. The heading should identify the lifecycle event and, for Task comments, the relevant Task.
 
@@ -76,15 +94,27 @@ Use comments sparingly and intentionally. The normal concise sequence is:
 6. **Full review** — record separately when useful; otherwise it may be summarized in the consolidated implementation evidence if the comprehensive review result remains explicit.
 7. **Draft PR opening** — only after implementation, appropriate targeted pre-PR validation, full diff review, and linked-issue state reconciliation are complete with no known blocking findings.
 8. **Final completion evidence** — exact reviewed PR head, authoritative full PR Validate evidence, final review result, reconciled acceptance criteria, and intentional follow-ups.
-9. **Post-merge verification** — merge, issue closure, branch deletion, `main` validation, roadmap status, and final issue checkbox reconciliation.
+9. **Post-merge verification** — merge, explicit issue closure when required, branch deletion, integration-target validation, tracker status, and final issue checkbox reconciliation.
 
 Do not add generic comments for every tool call, commit, routine status change, or small Task when a consolidated lifecycle-boundary record carries the same evidence more clearly.
+
+## Pull request issue references
+
+GitHub closing keywords such as `Closes #123` are interpreted for pull requests that target the repository's default branch. They do not provide the intended issue-link/auto-close behavior when a pull request targets a non-default integration branch.
+
+Use:
+
+- `Closes #<issue>` when the pull request targets `main` and the issue should close automatically when that PR merges;
+- `Refs #<issue>` for a pull request targeting a non-default release integration branch, then explicitly close the issue only after merge and successful post-merge integration verification.
+
+The explicit close for an integration-branch issue is part of lifecycle reconciliation, not an exception to traceability.
 
 ## Pull request description
 
 A useful PR description normally includes:
 
-- summary and linked issue;
+- summary and linked/referenced issue;
+- intended base/integration target;
 - behavioral or technical contract being implemented;
 - test-list and RED → GREEN → REFACTOR evidence when applicable;
 - implementation summary;

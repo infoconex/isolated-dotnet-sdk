@@ -13,7 +13,7 @@ Before native `ShouldProcess` support, PowerShell removal:
 - treats cancellation as a normal user action rather than an operational failure;
 - allows `-Yes` to bypass the tool-owned confirmation;
 - requests `dotnet build-server shutdown` before deletion;
-- removes only the selected version directory;
+- moves only the verified selected version directory into same-root removal quarantine and deletes that target;
 - reports success only after verifying the directory no longer exists.
 
 The baseline does not expose native `-WhatIf` or `-Confirm`, and it does not explicitly stop deletion when the native build-server shutdown command exits nonzero.
@@ -72,15 +72,25 @@ Non-interactive execution is fail-safe:
 
 After removal is approved, operations occur in this order:
 
-1. request build-server shutdown with the selected isolated `dotnet` host;
-2. require a zero shutdown exit code;
-3. remove only the selected SDK version directory;
-4. verify the directory no longer exists;
-5. report success.
+1. Validate the **SDK-version-shaped directory name**, its direct-child relationship to the isolated root, and the absence of an unsafe path type such as a junction or directory symlink. A directory without a dotnet host remains an eligible cleanup candidate, **not** a verified SDK.
+2. When a usable isolated host is present, require successful build-server shutdown with the selected host in neutral temporary working state (`DOTNET_ROOT` scoped, Windows multilevel lookup disabled), or the strict verified historical compatibility path. Restore the caller's environment and clean up temporary shutdown state. When the host is absent or unsafe to execute, warn before deletion that shutdown cannot be performed and processes/files may remain in use.
+3. Record ordinary confirmation in operation-owned recovery state, and rename the selected version directory into a unique same-root quarantine before recursive deletion. A subsequent user-initiated Remove with fresh ordinary confirmation can finish that **same verified staged deletion**, even if the SDK host is gone.
+4. Verify the quarantined directory is absent and recovery records are cleaned up.
+5. Report success only after full cleanup.
 
-A shutdown failure prevents deletion. A deletion failure or remaining directory prevents success reporting.
+**An actually attempted supported shutdown failure**, temporary shutdown-state setup failure or temporary-state cleanup failure blocks deletion. By contrast, the absence of an SDK host is not an available shutdown that failed; normally confirmed cleanup of that damaged directory is allowed. An incomplete deletion returns nonzero, preserving recovery proof. The initial directory rename may fail when Windows processes hold incompatible handles; a successful rename does not guarantee files are unlocked.
 
 `-WhatIf` and cancellation occur before shutdown.
+
+## Automatic historical unsupported-shutdown compatibility
+
+`-AllowUnsupportedShutdown` is retained as a deprecated Remove-only option for backwards compatibility; a *verified* historical unsupported shutdown is automatically handled after ordinary removal confirmation. This flag does not grant permission to ignore a supported shutdown failure, is not required in interactive or direct Remove, and is rejected for other actions. `-WhatIf` remains authoritative.
+
+The compatibility classification is limited to stable pre-unified SDK servicing windows `1.0.0–1.0.4`, `1.1.0–1.1.14`, `2.0.0–2.0.3`, `2.1.0–2.1.4`, `2.1.100–2.1.105`, and `2.1.200–2.1.202`, following Microsoft's historical SDK catalogs and the introduction of public `buildserver shutdown` with SDK `2.1.300`. These are bounded release-era candidates, **not** evidence that every intervening version was published or personally probed. Unlisted stable versions and prereleases retain the standard fail-closed path. The exact `sdk/<version>` payload must exist and both historical command spellings are probed under SDK-local isolation. An actual supported command must succeed; only the exact missing-command result for **both** spellings authorizes a fallback, not any native exit 1 or generic startup failure. The owner's Windows evidence personally covers `1.0.4`, `1.1.5`, `1.1.14`, `2.0.3`, and `2.1.105`; additional bands are backed by Microsoft publication history and deterministic simulated-host tests.
+
+For `2.1.100–2.1.105` and `2.1.200–2.1.202`, unsupported unified shutdown requires the exact SDK-local `Roslyn/bincore/VBCSCompiler.dll -shutdown` to succeed with zero native exit; its absence is a blocking error. Older servicing windows must **not** have any unexpected `VBCSCompiler*` payload elsewhere in the SDK directory. Neither fallback guarantees that all build-related processes have stopped. An attempted available shutdown failing, an SDK-local Roslyn shutdown failing, an unexpected compiler layout, or an ambiguous/missing exact SDK payload prevents deletion, irrespective of the deprecated switch.
+
+Neither the compatibility fallback, `-AllowUnsupportedShutdown`, nor `-Yes` bypasses `-WhatIf`, an unapproved confirmation, cleanup failure, selected-SDK ownership/scope checks, or directory deletion verification. If files remain in a verified quarantine, another ordinary Remove can retry without the now-missing SDK host; replacement/untrusted recovery state cannot be removed automatically.
 
 ## Behavioral scenarios
 
@@ -90,7 +100,7 @@ Given an installed isolated SDK, when the user declines the default tool-owned c
 
 ### Default approval
 
-Given an installed isolated SDK, when the user approves the default tool-owned confirmation, shutdown occurs before deletion and success is reported only after deletion is verified.
+Given an SDK with an available host, when the user approves the default tool-owned confirmation, shutdown occurs before deletion and success is reported only after deletion is verified. For a missing-host folder, the ordinary confirmation authorizes cleanup after a warning rather than attempting shutdown.
 
 ### Preview
 
@@ -127,3 +137,7 @@ Given approved removal, when build-server shutdown exits nonzero, removal fails 
 ### Deletion failure
 
 Given approved removal and successful shutdown, when directory deletion fails or the directory remains, removal fails and success is not reported.
+
+### Damaged SDK and incomplete-removal recovery
+
+Given a directory named like a full SDK version under the isolated root but without a usable SDK host, Remove can offer it as `(incomplete)`. After the normal confirmation it warns that shutdown is unavailable, stages that exact directory and attempts deletion. A rename or deletion failure never reports success. Any previously authorized, partially deleted stage remains selectable as `(incomplete removal)` and uses journal/proof checks plus a fresh ordinary confirmation to retry; it does not execute a deleted host or delete another directory. `-WhatIf` remains non-mutating in both paths.

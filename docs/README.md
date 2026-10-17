@@ -28,6 +28,7 @@ See the [command index](commands/README.md) for the command/documentation bounda
 ## Guides
 
 - [Project and editor use](guides/project-editor-usage.md) — `global.json`, direct isolated-host use, VS Code, and project-local workflows
+- [Troubleshooting and safe recovery](guides/troubleshooting.md) — failure symptoms, safe recovery, and operational boundaries
 
 ## Concepts
 
@@ -53,12 +54,13 @@ These documents define detailed implementation-independent behavior and intentio
 
 - [Release documentation index](releases/README.md)
 - [Stable bootstrap, update, and rollback](releases/stable-bootstrap.md)
+- [v0.4.0 release history](releases/history/v0.4.0.md)
 - [v0.3.0 release history](releases/history/v0.3.0.md)
 - [v0.2.0 release history](releases/history/v0.2.0.md)
 - [v0.1.0 historical release notes](releases/history/v0.1.0.md)
 - [v0.1.0 historical release checklist](releases/history/v0.1.0-checklist.md)
 
-The current checksum-policy-compliant stable release is `v0.3.0`.
+The current published stable version is listed under [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases). A prepared release-history page does not indicate publication.
 
 ## Maintainer documentation
 

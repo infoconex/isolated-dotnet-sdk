@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 config="$repo_root/.config/e2e.json"
 sdk_version="$(jq -er '.sdkVersion | select(type == "string" and length > 0)' "$config")"
+audit_release_type="$(jq -er '.audit.releaseType | select(type == "string" and length > 0)' "$config")"
+audit_release_date="$(jq -er '.audit.releaseDate | select(type == "string" and length > 0)' "$config")"
+audit_end_of_support="$(jq -er '.audit.endOfSupport | select(type == "string" and length > 0)' "$config")"
 base_temp="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 test_root="$(mktemp -d "$base_temp/isolated-dotnet-sdk-e2e-direct.XXXXXX")"
 test_home="$test_root/home"
@@ -58,8 +61,37 @@ fi
 
 verify_output="$(bash "$saved_tool" verify "$sdk_version")"
 printf '%s\n' "$verify_output"
-if ! grep -Fq "Isolated SDK $sdk_version is healthy." <<<"$verify_output"; then
-  printf 'Verify output did not report SDK %s healthy.\n' "$sdk_version" >&2
+for check in 'Installation directory' '.NET host' 'SDK inventory' 'SDK resolution'; do
+  if ! grep -Eq "^[[:space:]]+$check[[:space:]]+OK[[:space:]]" <<<"$verify_output"; then
+    printf 'Verify did not report passing local check: %s\n' "$check" >&2
+    exit 1
+  fi
+done
+if ! grep -Fq 'Exact SDK found in isolated installation' <<<"$verify_output"; then
+  printf 'Verify did not prove exact isolated SDK inventory.\n' >&2
+  exit 1
+fi
+if ! grep -Fq "SDK release date    $audit_release_date" <<<"$verify_output"; then
+  printf 'Verify and Audit release-date classification differed.\n' >&2
+  exit 1
+fi
+if ! grep -Fq "Channel EOS date    $audit_end_of_support" <<<"$verify_output"; then
+  printf 'Verify and Audit end-of-support classification differed.\n' >&2
+  exit 1
+fi
+for detail in 'SDK information:' 'Installed components:' 'Host version' 'Architecture' 'Runtime identifier' 'Microsoft.NETCore.App' 'Verification:'; do
+  if ! grep -Fq "$detail" <<<"$verify_output"; then
+    printf 'Verify output missing detail: %s\n' "$detail" >&2
+    exit 1
+  fi
+done
+if grep -q $'\033' <<<"$verify_output"; then
+  printf 'Captured Verify output unexpectedly contained ANSI escape sequences.\n' >&2
+  exit 1
+fi
+
+if ! grep -Fq "Isolated SDK $sdk_version verified successfully." <<<"$verify_output"; then
+  printf 'Verify output did not report SDK %s verified successfully.\n' "$sdk_version" >&2
   exit 1
 fi
 
@@ -72,8 +104,24 @@ fi
 
 audit_output="$(bash "$saved_tool" audit)"
 printf '%s\n' "$audit_output"
-if ! grep -Fq '.NET SDK audit' <<<"$audit_output" || ! grep -Fq "$sdk_version" <<<"$audit_output"; then
-  printf 'Audit output did not assess installed SDK %s.\n' "$sdk_version" >&2
+if ! grep -Fq '.NET SDK audit' <<<"$audit_output"; then
+  printf 'Audit output did not contain the Audit heading.\n' >&2
+  exit 1
+fi
+if ! grep -Fq "$sdk_version  $audit_release_type" <<<"$audit_output"; then
+  printf 'Audit output did not report SDK %s as %s.\n' "$sdk_version" "$audit_release_type" >&2
+  exit 1
+fi
+if ! grep -Fq "Release: $audit_release_date" <<<"$audit_output"; then
+  printf 'Audit output did not report SDK %s release date %s.\n' "$sdk_version" "$audit_release_date" >&2
+  exit 1
+fi
+if ! grep -Fq "EOS: $audit_end_of_support" <<<"$audit_output"; then
+  printf 'Audit output did not report SDK %s end of support %s.\n' "$sdk_version" "$audit_end_of_support" >&2
+  exit 1
+fi
+if grep -q $'\033' <<<"$audit_output"; then
+  printf 'Captured Audit output unexpectedly contained ANSI escape sequences.\n' >&2
   exit 1
 fi
 

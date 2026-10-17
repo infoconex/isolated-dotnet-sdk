@@ -6,9 +6,9 @@ This document records the release-metadata discovery contract shared by the Powe
 
 Interactive SDK version selection uses Microsoft's release index to choose a .NET channel and then uses that channel's release metadata to enumerate exact SDK versions. An install that already supplies an exact SDK version bypasses that release-index/channel discovery path.
 
-Audit is the other intentional online consumer of release metadata. It uses the release index plus each known installed channel's release data to compare both Isolated and System SDKs with current servicing and lifecycle state. List and Verify do not use this online path.
+Audit and Verify are other intentional online consumers of release metadata. Audit uses the release index and installed SDKs' channel release data to compare Isolated and System SDKs with servicing and lifecycle state, release type, exact SDK release dates, and channel end-of-support dates. Verify optionally enriches its single-SDK report with the same Audit-derived classification; local verification remains independent of metadata availability. For a `go-live` channel whose JSON metadata does not publish the future GA date, Audit narrowly falls back to Microsoft's official `dotnet/core` release-notes table for that date only. List does not use this online path.
 
-Once an exact SDK version has been resolved, installation separately retrieves Microsoft's exact-version release metadata to identify the supported platform archive and its published SHA-512. Supplying an exact version therefore bypasses interactive discovery, not the metadata required for payload acquisition and integrity verification.
+Once an exact SDK version has been resolved, installation separately retrieves the correct Microsoft release channel's metadata to identify the exact SDK-version and platform archive and its published checksum (SHA-512 for all 2.x and newer SDKs; SHA-256 supported only for historical 1.x archives whose metadata publishes SHA-256). Early SDK 2.1 builds through 2.1.202 belong to the .NET Core 2.0 channel; SDK 2.1.300 starts the .NET Core 2.1 channel. Supplying an exact version therefore bypasses interactive discovery, not the metadata required for payload acquisition and integrity verification.
 
 This contract covers interactive version discovery only. It does not define retry/backoff, stable bootstrap source policy, or the later transactional SDK payload acquisition, verification, extraction, staging, and promotion behavior.
 
@@ -36,7 +36,7 @@ Duplicate SDK versions are removed while preserving first-seen order. PowerShell
 
 ## Explicit-version installs
 
-When the caller supplies an exact SDK version, release-index and selected-channel discovery are bypassed. Installation still retrieves the exact version's Microsoft release metadata to resolve the supported platform archive and SHA-512. Failure to retrieve or validate that required artifact metadata, download the payload, or verify its checksum belongs to the installation/payload-integrity boundary rather than being reported as an interactive release-metadata discovery failure.
+When the caller supplies an exact SDK version, release-index and selected-channel discovery are bypassed. Installation still retrieves the SDK's historical Microsoft release-channel metadata to resolve the exact supported platform archive and its approved published checksum. Failure to retrieve or validate that required artifact metadata, download the payload, or verify its checksum belongs to the installation/payload-integrity boundary rather than being reported as an interactive release-metadata discovery failure.
 
 ## Filesystem safety
 
@@ -52,6 +52,6 @@ PowerShell and Bash may parse and retrieve metadata differently, but their obser
 - unusable empty selections are rejected;
 - optional display metadata does not become an accidental hard requirement;
 - exact-version installation remains independent from release-index/channel discovery while still using exact-version release metadata for payload integrity;
-- Audit is the explicit online inventory-assessment boundary, while List and Verify remain independent of release metadata.
+- Audit and optional Verify report enrichment use online release metadata; List remains independent of release metadata, and Verify's local health proof is independent of online metadata success.
 
 For Microsoft's upstream release metadata and release-note structure, see [.NET release metadata](https://github.com/dotnet/core/tree/main/release-notes).

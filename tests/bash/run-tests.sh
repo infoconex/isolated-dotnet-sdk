@@ -20,17 +20,20 @@ bats \
   "$repo_root/tests/bash/tool-version.bats" \
   "$repo_root/tests/bash/help.bats" \
   "$repo_root/tests/bash/behavior.bats" \
+  "$repo_root/tests/bash/removal-presentation.bats" \
   "$repo_root/tests/bash/install-status.bats" \
   "$repo_root/tests/bash/installed-sdk-listing.bats" \
   "$repo_root/tests/bash/verify.bats" \
   "$repo_root/tests/bash/audit.bats" \
   "$repo_root/tests/bash/interactive-verify.bats" \
   "$repo_root/tests/bash/interactive-lifecycle.bats" \
+  "$repo_root/tests/bash/prerelease-picker.bats" \
   "$repo_root/tests/bash/global-exit.bats" \
   "$repo_root/tests/bash/cross-platform.bats" \
   "$repo_root/tests/bash/presentation.bats" \
   "$repo_root/tests/bash/metadata.bats" \
   "$repo_root/tests/bash/sdk-version-ordering.bats" \
+  "$repo_root/tests/bash/channel-ordering.bats" \
   "$repo_root/tests/bash/metadata-boundaries.bats" \
   "$repo_root/tests/bash/public-boundaries.bats" \
   "$repo_root/tests/bash/native-failures.bats" \
@@ -41,4 +44,5 @@ bats \
   "$repo_root/tests/bash/release-bootstrap.bats" \
   "$repo_root/tests/bash/latest-stable-bootstrap.bats" \
   "$repo_root/tests/bash/latest-stable-e2e-network.bats" \
+  "$repo_root/tests/bash/legacy-artifact-resolution.bats" \
   "$repo_root/tests/bash/sdk-payload-integrity.bats"

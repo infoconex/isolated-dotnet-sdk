@@ -4,8 +4,16 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 $config = Get-Content -LiteralPath (Join-Path $repositoryRoot '.config/e2e.json') -Raw |
     ConvertFrom-Json
 $sdkVersion = [string]$config.sdkVersion
+$auditReleaseType = [string]$config.audit.releaseType
+$auditReleaseDate = [string]$config.audit.releaseDate
+$auditEndOfSupport = [string]$config.audit.endOfSupport
 if ([string]::IsNullOrWhiteSpace($sdkVersion)) {
     throw 'sdkVersion is required in .config/e2e.json.'
+}
+if ([string]::IsNullOrWhiteSpace($auditReleaseType) -or
+    [string]::IsNullOrWhiteSpace($auditReleaseDate) -or
+    [string]::IsNullOrWhiteSpace($auditEndOfSupport)) {
+    throw 'audit releaseType, releaseDate, and endOfSupport are required in .config/e2e.json.'
 }
 
 $baseTemp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
@@ -126,8 +134,30 @@ try {
         -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Verify', '-SdkVersion', $sdkVersion)
     Assert-Success -Result $verify -Operation 'Direct verify'
     Write-Host $verify.Output
-    if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion is healthy.")) {
-        throw "Verify output did not report SDK $sdkVersion healthy."
+    foreach ($check in @('Installation directory', '.NET host', 'SDK inventory', 'SDK resolution')) {
+        $pattern = '(?m)^\s*' + [regex]::Escape($check) + '\s+OK\s'
+        if ($verify.Output -notmatch $pattern) {
+            throw "Verify did not report passing local check: $check"
+        }
+    }
+    if ($verify.Output -notmatch 'Exact SDK found in isolated installation') {
+        throw 'Verify did not prove exact isolated SDK inventory.'
+    }
+    foreach ($fragment in @("SDK release date    $auditReleaseDate", "Channel EOS date    $auditEndOfSupport")) {
+        if ($verify.Output -notmatch [regex]::Escape($fragment)) {
+            throw "Verify and Audit classification differed: $fragment"
+        }
+    }
+    foreach ($fragment in @('SDK information:', 'Installed components:', 'Host version', 'Architecture', 'Runtime identifier', 'Microsoft.NETCore.App', 'Verification:')) {
+        if ($verify.Output -notmatch [regex]::Escape($fragment)) {
+            throw "Verify output missing detail: $fragment"
+        }
+    }
+    if ($verify.Output.Contains([char]27)) {
+        throw 'Captured Verify output unexpectedly contained ANSI escape sequences.'
+    }
+    if ($verify.Output -notmatch [regex]::Escape("Isolated SDK $sdkVersion verified successfully.")) {
+        throw "Verify output did not report SDK $sdkVersion verified successfully."
     }
 
     $list = Invoke-E2EProcess `
@@ -144,9 +174,20 @@ try {
         -Arguments @('-NoProfile', '-File', $savedTool, '-Action', 'Audit')
     Assert-Success -Result $audit -Operation 'Direct audit'
     Write-Host $audit.Output
-    if ($audit.Output -notmatch [regex]::Escape('.NET SDK audit') -or
-        $audit.Output -notmatch [regex]::Escape($sdkVersion)) {
-        throw "Audit output did not assess installed SDK $sdkVersion."
+    if ($audit.Output -notmatch [regex]::Escape('.NET SDK audit')) {
+        throw 'Audit output did not contain the Audit heading.'
+    }
+    if ($audit.Output -notmatch [regex]::Escape("$sdkVersion  $auditReleaseType")) {
+        throw "Audit output did not report SDK $sdkVersion as $auditReleaseType."
+    }
+    if ($audit.Output -notmatch [regex]::Escape("Release: $auditReleaseDate")) {
+        throw "Audit output did not report SDK $sdkVersion release date $auditReleaseDate."
+    }
+    if ($audit.Output -notmatch [regex]::Escape("EOS: $auditEndOfSupport")) {
+        throw "Audit output did not report SDK $sdkVersion end of support $auditEndOfSupport."
+    }
+    if ($audit.Output.Contains([char]27)) {
+        throw 'Captured Audit output unexpectedly contained ANSI escape sequences.'
     }
 
     Write-Host "E2E direct: removing .NET SDK $sdkVersion"

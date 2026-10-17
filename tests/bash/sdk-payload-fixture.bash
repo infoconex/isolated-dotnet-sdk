@@ -44,14 +44,22 @@ if [[ "${1:-}" == '--list-sdks' ]]; then
   if [[ -n "${SDK_TEST_DOTNET_EXIT:-}" ]]; then
     exit "$SDK_TEST_DOTNET_EXIT"
   fi
-  printf '%s [/fixture/sdk]\n' "${SDK_TEST_DOTNET_VERSION:-99.0.100}"
+  printf '%s [%s]\n' "${SDK_TEST_DOTNET_VERSION:-99.0.100}" "${SDK_TEST_DOTNET_ORIGIN:-$(dirname "$0")/sdk}"
+  exit 0
+fi
+if [[ "${1:-}" == '--version' ]]; then
+  if [[ "${SDK_TEST_REQUIRE_ISOLATION:-}" == true ]]; then
+    [[ "${DOTNET_MULTILEVEL_LOOKUP:-}" == 0 && "${DOTNET_ROOT:-}" == "$(dirname "$0")" && "$PWD" != "$HOME/dotnet-sdks" ]] || exit 75
+  fi
+  printf '%s\n' "${SDK_TEST_RESOLVED_VERSION:-${SDK_TEST_DOTNET_VERSION:-99.0.100}}"
   exit 0
 fi
 exit 0
 EOF
   chmod +x "$fake_bin/uname" "$fake_bin/dotnet" "$fixture_root/dotnet"
 
-  /usr/bin/tar -czf "$payload" -C "$fixture_root" dotnet
+  mkdir -p "$fixture_root/sdk"
+  /usr/bin/tar -czf "$payload" -C "$fixture_root" dotnet sdk
   if command -v sha512sum >/dev/null 2>&1; then
     payload_hash="$(sha512sum "$payload" | awk '{print $1}')"
   else
@@ -167,6 +175,9 @@ run_payload_install() {
     SDK_TEST_TAR_EXIT="${SDK_TEST_TAR_EXIT:-}" \
     SDK_TEST_DOTNET_EXIT="${SDK_TEST_DOTNET_EXIT:-}" \
     SDK_TEST_DOTNET_VERSION="${SDK_TEST_DOTNET_VERSION:-}" \
+    SDK_TEST_DOTNET_ORIGIN="${SDK_TEST_DOTNET_ORIGIN:-}" \
+    SDK_TEST_RESOLVED_VERSION="${SDK_TEST_RESOLVED_VERSION:-}" \
+    SDK_TEST_REQUIRE_ISOLATION="${SDK_TEST_REQUIRE_ISOLATION:-}" \
     SDK_TEST_CREATE_DEST_ON_VERIFY="${SDK_TEST_CREATE_DEST_ON_VERIFY:-}" \
     SDK_TEST_MV_EXIT="${SDK_TEST_MV_EXIT:-}" \
     SDK_TEST_RM_FAIL_PATTERN="${SDK_TEST_RM_FAIL_PATTERN:-}" \

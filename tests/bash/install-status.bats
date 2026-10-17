@@ -63,8 +63,13 @@ if [[ "\${1:-}" == "--list-sdks" ]]; then
   printf '%s\n' '$version [$install_dir/sdk]'
   exit 0
 fi
+if [[ "\${1:-}" == "--version" ]]; then
+  printf '%s\n' '$version'
+  exit 0
+fi
 exit 92
 EOF
+  mkdir -p "$install_dir/sdk"
   chmod +x "$install_dir/dotnet"
 }
 
@@ -147,4 +152,14 @@ EOF
   [[ "$output" == *$'Isolated SDK: Not installed\n\nSystem SDK: Not installed'* ]]
   [[ "$output" == *"Isolated SDK: Not installed"* ]]
   [[ "$output" != *"$unrelated_version"* ]]
+}
+
+@test "captured Install ownership and paths remain ANSI-free" {
+  make_system_dotnet true
+  make_isolated_dotnet
+  run env HOME="$test_home" PATH="$system_bin:$PATH" "$tool_path" install "$version" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Isolated SDK: Already installed"* ]]
+  [[ "$output" == *"System SDK: Already installed"* ]]
+  [[ "$output" != *$'\033['* ]]
 }

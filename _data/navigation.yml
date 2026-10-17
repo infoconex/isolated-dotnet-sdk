@@ -32,11 +32,15 @@
       path: docs/commands/remove.md
     - title: Interactive Mode
       path: docs/commands/interactive.md
+    - title: Tool Version
+      path: docs/commands/tool-version.md
 
 - title: Guides
   items:
     - title: Project & Editor Usage
       path: docs/guides/project-editor-usage.md
+    - title: Troubleshooting & Recovery
+      path: docs/guides/troubleshooting.md
 
 - title: Concepts
   items:
@@ -70,6 +74,8 @@
       path: docs/releases/README.md
     - title: Stable Bootstrap & Rollback
       path: docs/releases/stable-bootstrap.md
+    - title: v0.4.0 History
+      path: docs/releases/history/v0.4.0.md
     - title: v0.3.0 History
       path: docs/releases/history/v0.3.0.md
     - title: v0.2.0 History
@@ -83,6 +89,10 @@
   items:
     - title: Maintainer Overview
       path: docs/maintainers/README.md
+    - title: Development Operating Model
+      path: docs/maintainers/development/operating-model.md
+    - title: October 2026 Retrospective
+      path: docs/maintainers/development/retrospective-2026-10.md
     - title: Testing Overview
       path: docs/maintainers/testing/README.md
     - title: Testing & Validation

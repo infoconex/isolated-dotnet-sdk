@@ -9,7 +9,7 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Behavior | Shared contract |
 | --- | --- |
 | Bare exact version | Treat it as an Install request. |
-| Explicit Install with a version | Bypass Microsoft release-index/channel discovery and install that exact version. The exact-version artifact metadata required for payload acquisition and SHA-512 verification is still retrieved. |
+| Explicit Install with a version | Bypass Microsoft release-index/channel discovery and install that exact version. Exact-version Microsoft artifact metadata and a supported published checksum remain required: SHA-512 for 2.x+ and modern SDKs, or SHA-256 only for eligible historical .NET 1.x archives. |
 | Install without a version | Use the interactive release/channel/version picker. Explicit picker cancellation is a successful no-change result. |
 | Existing matching isolated SDK | Report it as already installed and return success without downloading or reinstalling. |
 | Pre-existing non-valid destination | Fail closed and preserve the destination. |
@@ -18,19 +18,19 @@ The supported operating-system/runtime matrix and intentional platform mechanics
 | Required interactive input unavailable | Fail nonzero with repository-owned `Interactive input is unavailable.` context rather than looping or treating EOF as cancellation. |
 | Persistent Main menu | Use case-insensitive `I` / `R` / `L` / `V` / `A` / `E` for Install / Remove / List / Verify / Audit / Exit. Old numeric Main aliases are rejected rather than retained as hidden aliases. |
 | Explicit interactive no/blank/q cancellation | Return success with no state change where that response is part of the prompt's normal cancellation contract. |
-| List | Report two ordered ownership groups: recognized isolated SDKs under the isolated root first, then read-only SDKs returned by the normally resolved `dotnet --list-sdks` host. Include each SDK's concrete version directory, preserve same-version overlap across groups, and report `None` for each empty group. |
-| Existing SDK detection | Distinguish SDKs already available from the system `dotnet` host from SDKs already present under the isolated root. An unavailable normal host is an empty system inventory; a resolved host whose `--list-sdks` command fails is an operational failure. |
+| List | Report two ordered ownership groups: recognized isolated SDKs under the isolated root first, then read-only SDKs returned by the normally resolved `dotnet --list-sdks` host. Sort each ownership group by SDK version newest to oldest, include each SDK's concrete version directory, preserve same-version overlap across groups, and report `None` for each empty group. |
+| Existing SDK detection | Distinguish SDKs reported by the system `dotnet` host from SDKs proven to originate under the isolated root by the shared Verify local proof (exact version, exact origin, and exact controlled SDK resolution). Do not classify a wrong-origin existing target as already installed or overwrite it. An unavailable normal host is an empty system inventory; a resolved host whose `--list-sdks` command fails is an operational failure. |
 | Explicit List plus Version | Reject the version instead of silently ignoring it. |
-| Audit | Perform an online, read-only assessment of both ownership groups against current Microsoft release metadata. Preserve duplicate versions across Isolated and System groups; report servicing and lifecycle without mutating either inventory or labeling an installed SDK `Vulnerable`. |
-| Audit metadata failure | Fail nonzero when required release-index or known-channel metadata is unavailable or structurally unusable rather than emitting fabricated results. Unknown installed channels remain explicit per-SDK results. |
+| Audit | Perform an online, read-only assessment of both ownership groups against current Microsoft release metadata. Sort each group newest to oldest and preserve duplicate versions across Isolated and System groups; report LTS/STS, lifecycle status, exact installed-SDK release date when published, authoritative future Go-Live date when available, end-of-support date, and an optional compact `Update -> <version>` tail without mutating either inventory or labeling an installed SDK `Vulnerable`. |
+| Audit metadata failure | Fail nonzero when required release-index or known-channel metadata is unavailable or structurally unusable rather than emitting fabricated results. The official `dotnet/core` release-notes table is an optional fallback only for a missing future Go-Live date; fallback failure omits that date without fabricating one. Unknown installed channels remain explicit per-SDK results. |
 | Explicit Audit plus Version | Reject the version instead of silently ignoring it. |
-| Explicit Verify with an exact version | Run a one-shot, read-only health check against that version directory under the isolated SDK root. Require the platform host to be present/runnable, require `--list-sdks` to succeed, and require the host to report the requested exact SDK version. |
+| Explicit Verify with an exact version | Run a one-shot detailed report for a tool-owned isolated SDK. Reuse Audit's structured lifecycle/servicing classification when optional online metadata is available, but make the local proof authoritative: modern hosts require a runnable host, exact version and isolated origin in `--list-sdks`, and exact `--version` resolution from controlled state; original 1.x and early 2.x hosts instead require pinned `--version` and `--info` SDK Base Path origin because `--list-sdks` is unsupported. Older Windows multilevel lookup is disabled. Local success exits zero even if optional metadata is unavailable. |
 | Interactive Verify | From Main, list only recognized isolated SDKs, select one exact version, and run the same read-only health check as explicit Verify. System SDKs are not targets. Back or an empty isolated inventory is a normal no-change outcome that returns to Main. |
-| Unhealthy Verify result | Return nonzero with repository-owned context for not-installed, missing/non-runnable host, native host failure, or exact-version mismatch. Verification never repairs or mutates the installation. In a persistent session, the failure terminates the process rather than returning to Main. |
+| Failed Verify result | Report per-check `OK`/`FAIL` and return nonzero with operation-specific context for missing/non-runnable host, native host failure, wrong/missing inventory origin, or mismatched/failed exact-version resolution. Verification never repairs or mutates the isolated installation. An optional metadata lookup failure cannot change local verification exit status. In a persistent session, local failure terminates the process instead of returning to Main. |
 | Remove without a version | Present the installed isolated SDK picker. Explicit cancellation or an empty installed set is a normal no-change result. |
 | Remove with a version | Target only that version's directory under the isolated SDK root. |
 | Removal confirmation | Default to no unless approval is explicitly supplied through the shell's supported mechanism. |
-| Build-server shutdown | Must succeed before deletion. Failure identifies the selected SDK and native exit code where available, blocks deletion, and suppresses removal success. |
+| Build-server shutdown | Run the selected isolated host from a neutral temporary working directory with its isolated root set in `DOTNET_ROOT`, multi-level lookup disabled, and first-run state scoped to temporary CLI home. Restore caller state; require a zero native exit and successful temporary-state cleanup before deletion. Only an explicitly requested legacy bypass for exact verified SDKs 1.0.4, 1.1.5, 1.1.14, 2.0.3, or 2.1.105 may skip an *unavailable* command after strict two-spelling capability classification; 2.1.105 instead requires successful SDK-local Roslyn `-shutdown`. Unexpected or supported-command failures still block deletion. |
 | Release-metadata / payload / extraction / verification / promotion failure | Return nonzero and do not report install success. |
 | Operational failure | Return a nonzero status. Exact numeric status need not be identical across runtimes unless a narrower contract specifies it. |
 | Diagnostics | Identify the failed product operation. Runtime-specific command/exception detail may be appended when useful. |
@@ -41,8 +41,8 @@ The transactional installation contract defines the installation ownership and r
 
 - each new install uses operation-owned Microsoft release metadata and SDK payload archive state;
 - installation occurs in an operation-owned staging directory rather than directly in the final version directory;
-- the downloaded SDK archive must match its Microsoft-published SHA-512 before extraction;
-- the staged host must exist, execute successfully, and report the requested exact SDK before promotion;
+- the downloaded SDK archive must match its supported Microsoft-published digest before extraction (SHA-512 for 2.x+ and modern SDKs; SHA-256 only for eligible historical .NET 1.x payloads);
+- the staged host must pass the shared Verify exact-version, isolated-origin, and controlled-resolution proof for the staging directory before promotion, including the legacy 1.x/early-2.x `--info` Base Path alternative;
 - a pre-existing final destination is never replaced or adopted accidentally;
 - a final destination that appears before promotion blocks promotion and is preserved;
 - clean-start failures do not leave a new final destination;
@@ -56,7 +56,7 @@ Release metadata, downloaded payload archives, and staging directories are trans
 
 Invocation mode is determined from the caller's arguments, not from later menu choices.
 
-When no action or exact version is supplied, the tool enters a persistent interactive session. The session shows Main, performs one selected operation, and returns to Main after a normal completion or a normal cancellation/no-change outcome. `E`/`e` is the global Exit command from Main and persistent selection menus. The session remains active until the user selects Exit or an operational failure terminates the process.
+When no action or exact version is supplied, the tool enters a persistent interactive session. The session shows Main and performs selected operations within a menu hierarchy. When both input and output are attached to an interactive terminal, a normal completed or cancellation/no-change result remains visible at a contextual `Press Enter to return to <parent>...` prompt and returns to its immediate parent only after Enter acknowledgement. List and Audit return to Main; Verify and Remove return to their SDK lists; Install returns to the selected channel's SDK list. Redirected input, redirected/captured output, pipes, CI, and automation skip the pause but follow the same parent navigation. `E`/`e` is the global Exit command from Main and persistent selection menus. Back and Exit navigation do not gain a completed-result acknowledgement step. The session remains active until the user selects Exit or a non-recoverable operational failure terminates the process. For **persistent Windows PowerShell Remove**, a failed attempt is displayed and returns to the Remove picker (or Main if no candidates remain), with a terminal Enter acknowledgement when supported, so a locked or incomplete SDK can be retried after the cause is resolved. This is a session-navigation exception, **not** an indication that the failed removal succeeded: direct one-shot Remove still reports the native failure and a nonzero exit status. Persistent-session eventual Exit status does not summarize previous failed removal attempts.
 
 When the caller supplies an explicit action, or supplies an exact version through the supported bare-version convenience form, the tool remains one-shot. It performs that requested operation once and exits after success, cancellation/no-change, or failure. Explicit invocation never enters the persistent Main loop after the operation.
 
@@ -71,9 +71,9 @@ Interactive navigation is deliberately limited:
 - persistent selection menus do not expose redundant `Q. Cancel` actions when Back already provides the relevant workflow navigation;
 - explicit one-shot interactive selection may retain `Q. Cancel` as a successful no-change outcome.
 
-Back is a selection-menu concept only. Ordinary yes/no install and removal confirmations retain their existing default-no cancellation behavior and do not become navigation menus. In a persistent interactive session, declining such a confirmation is a successful no-change result and returns to Main.
+Back is a selection-menu concept only. Ordinary yes/no install and removal confirmations retain their existing default-no cancellation behavior and do not become navigation menus. In a persistent interactive session, declining such a confirmation is a successful no-change result that waits for Enter acknowledgement before returning to the operation's immediate parent screen.
 
-Operational failures are never converted into navigation results. Metadata, filesystem, payload acquisition/checksum/extraction, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
+Operational failures are not silently converted into success results. A narrowly scoped exception allows failed persistent Windows PowerShell **Remove attempts** to display the error and return to the Remove picker for retry, without reporting removal success; use explicit one-shot Remove for a reliable nonzero failure exit code. Outside this narrowly scoped persistent Remove exception, metadata, filesystem, payload acquisition/checksum/extraction, native-command, cleanup, verification, and other correctness-significant failures terminate nonzero immediately; a failed operation must not return to Main where a later successful Exit could mask the failure.
 
 Automation should provide both the action and exact version when a version is required. Explicit `Verify <exact-version>` / `verify <exact-version>` remains one-shot and never enters the persistent Main loop. `-Yes` and `--yes` are confirmation controls, not selection controls.
 
@@ -83,16 +83,15 @@ An explicit user decision to cancel is different from input failure. A blank/no 
 
 ### SDK version picker
 
-For a selected channel, the default SDK picker prioritizes likely choices without removing exact-version access:
+For a selected channel, the Install picker has two version views:
 
-- when Microsoft release-index metadata supplies a `latest-sdk` value that is present in the selected channel data, that SDK is displayed first and marked `latest`;
-- the default list also contains the newest SDK from every other available feature band;
-- older servicing releases are hidden behind `Show all versions`;
-- the expanded list contains every discovered SDK version in deterministic newest-first order;
-- Back remains available from both compact and expanded version views;
-- manual exact-version entry remains available and explicit exact-version command invocation continues to bypass release-index/channel discovery while retaining the exact-version artifact metadata lookup required for installation.
+- **Currently prerelease channels** initially show **all** discovered SDK versions in deterministic SDK-aware newest-first order, including distinct Preview and RC milestones within the same feature band.
+- **Stable channels** initially show the featured view: Microsoft's `latest-sdk` (when it identifies an SDK in that channel's releases), then the newest SDK from each other available feature band. Older servicing releases remain accessible.
+- The picker offers `S. Show featured versions` from the complete view or `S. Show all versions` from the featured view **only if the two lists differ**. A channel with one SDK does not show `S`.
 
-Feature-band grouping is derived from SDK version data rather than menu positions. Preview and release-candidate labels are part of deterministic version ordering; fixed numeric menu positions are not a product contract. `latest-sdk` remains optional display metadata: its absence does not invalidate an otherwise usable channel and does not cause the tool to invent an authoritative `latest` marker.
+Classify the **selected channel's current SDK**, not its historical release list: prefer the release-index `latest-sdk` when it is present in the discovered channel SDK versions; otherwise use the SDK-aware newest discovered version as the deterministic fallback. A `-preview.N` or `-rc.N` suffix identifies a currently prerelease SDK. Do not use a hard-coded channel number, or classify a stable channel as prerelease because it contains older previews or an inconsistent support-phase label. An absent or nonmatching `latest-sdk` does not create a fabricated `latest` marker.
+
+Both views preserve the literal `latest`, `installed system-sdk`, and `installed isolated-sdk` markers; Back, Exit, and manual exact-version entry; and numbered selection of any displayed version. The complete view reuses SDK-aware newest-first ordering. Feature-band grouping and Preview/RC ordering are shared across shells.
 
 ## Intentional runtime and platform differences
 

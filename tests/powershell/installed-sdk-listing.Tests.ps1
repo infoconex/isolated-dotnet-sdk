@@ -4,18 +4,6 @@ Describe 'PowerShell installed SDK listing' {
         $script:ToolScript = Join-Path $script:RepositoryRoot 'isolated-dotnet-sdk.ps1'
         $script:HomeVariableName = if ($IsWindows) { 'USERPROFILE' } else { 'HOME' }
 
-        function Install-TestTool {
-            Copy-Item $script:ToolScript $script:SourceCopy -Force
-            $bootstrapBin = Join-Path $script:TestRoot 'bootstrap-bin'
-            New-Item -ItemType Directory -Path $bootstrapBin -Force | Out-Null
-            Set-Content -LiteralPath (Join-Path $bootstrapBin 'dotnet.cmd') -Value "@echo off`r`nexit /b 0`r`n"
-            $env:ISOLATED_DOTNET_SDK_SOURCE_COPY = $script:SourceCopy
-            $env:ISOLATED_DOTNET_SDK_BOOTSTRAP_BIN = $bootstrapBin
-
-            & pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_BOOTSTRAP_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_SOURCE_COPY -Action List *> $null'
-            $LASTEXITCODE | Should -Be 0
-        }
-
         function Write-SystemDotNetStub {
             param(
                 [string]$Directory,
@@ -39,24 +27,24 @@ Describe 'PowerShell installed SDK listing' {
         $script:TestHome = Join-Path $script:TestRoot 'home'
         $script:ToolRoot = Join-Path $script:TestHome 'dotnet-sdks'
         $script:ToolPath = Join-Path $script:ToolRoot 'isolated-dotnet-sdk.ps1'
-        $script:SourceCopy = Join-Path $script:TestRoot 'isolated-dotnet-sdk-source.ps1'
         $script:OriginalHomeValue = [Environment]::GetEnvironmentVariable($script:HomeVariableName, 'Process')
 
-        New-Item -ItemType Directory -Path $script:TestHome -Force | Out-Null
+        # Every List scenario starts its own child with controlled system-dotnet
+        # output. Directly prepare only its independent installed-tool fixture.
+        New-Item -ItemType Directory -Path $script:ToolRoot -Force -ErrorAction Stop | Out-Null
+        Copy-Item -LiteralPath $script:ToolScript -Destination $script:ToolPath -Force -ErrorAction Stop
+        Test-Path -LiteralPath $script:ToolPath -PathType Leaf | Should -BeTrue
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:TestHome, 'Process')
     }
 
     AfterEach {
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
-        Remove-Item Env:ISOLATED_DOTNET_SDK_SOURCE_COPY -ErrorAction SilentlyContinue
-        Remove-Item Env:ISOLATED_DOTNET_SDK_BOOTSTRAP_BIN -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_TOOL_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_SYSTEM_BIN -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     It 'shows an isolated-only inventory with an empty System SDKs group' {
-        Install-TestTool
         $installDir = Join-Path $script:ToolRoot '10.0.401'
         New-Item -ItemType Directory -Path $installDir -Force | Out-Null
         New-Item -ItemType File -Path (Join-Path $installDir 'dotnet.exe') -Force | Out-Null
@@ -75,7 +63,6 @@ Describe 'PowerShell installed SDK listing' {
     }
 
     It 'shows a system-only inventory with an empty Isolated SDKs group' {
-        Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'system-only-bin'
         Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @('10.0.401 [C:\Program Files\dotnet\sdk]')
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
@@ -90,7 +77,6 @@ Describe 'PowerShell installed SDK listing' {
     }
 
     It 'shows isolated SDKs before system SDKs and preserves same-version overlap' {
-        Install-TestTool
         foreach ($version in @('11.0.100-rc.1.26425.128', '10.0.401')) {
             $installDir = Join-Path $script:ToolRoot $version
             New-Item -ItemType Directory -Path $installDir -Force | Out-Null
@@ -121,8 +107,38 @@ Describe 'PowerShell installed SDK listing' {
         $text.IndexOf('Isolated SDKs:') | Should -BeLessThan $text.IndexOf('System SDKs:')
     }
 
+    It 'sorts each ownership group newest to oldest' {
+        foreach ($version in @('8.0.425', '11.0.100-rc.1.26425.128', '10.0.401')) {
+            $installDir = Join-Path $script:ToolRoot $version
+            New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $installDir 'dotnet.exe') -Force | Out-Null
+        }
+
+        $fakeBin = Join-Path $script:TestRoot 'ordered-system-bin'
+        Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @(
+            '8.0.425 [C:\dotnet\sdk]',
+            '10.0.401 [C:\dotnet\sdk]',
+            '9.0.318 [C:\dotnet\sdk]'
+        )
+        $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
+        $env:ISOLATED_DOTNET_SDK_SYSTEM_BIN = $fakeBin
+
+        $listOutput = @(& pwsh -NoProfile -Command '$env:PATH = "$env:ISOLATED_DOTNET_SDK_SYSTEM_BIN;$env:PATH"; & $env:ISOLATED_DOTNET_SDK_TOOL_PATH -Action List 2>&1')
+        $text = $listOutput -join [Environment]::NewLine
+
+        $LASTEXITCODE | Should -Be 0
+        $isolatedStart = $text.IndexOf('Isolated SDKs:')
+        $systemStart = $text.IndexOf('System SDKs:')
+        $isolatedSection = $text.Substring($isolatedStart, $systemStart - $isolatedStart)
+        $systemSection = $text.Substring($systemStart)
+
+        $isolatedSection.IndexOf('11.0.100-rc.1.26425.128') | Should -BeLessThan $isolatedSection.IndexOf('10.0.401')
+        $isolatedSection.IndexOf('10.0.401') | Should -BeLessThan $isolatedSection.IndexOf('8.0.425')
+        $systemSection.IndexOf('10.0.401') | Should -BeLessThan $systemSection.IndexOf('9.0.318')
+        $systemSection.IndexOf('9.0.318') | Should -BeLessThan $systemSection.IndexOf('8.0.425')
+    }
+
     It 'shows None for both empty ownership groups' {
-        Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'empty-system-bin'
         Write-SystemDotNetStub -Directory $fakeBin
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
@@ -138,7 +154,6 @@ Describe 'PowerShell installed SDK listing' {
     }
 
     It 'treats an unavailable system dotnet host as an empty System SDKs group' {
-        Install-TestTool
         $emptyBin = Join-Path $script:TestRoot 'no-dotnet-bin'
         New-Item -ItemType Directory -Path $emptyBin -Force | Out-Null
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
@@ -152,7 +167,6 @@ Describe 'PowerShell installed SDK listing' {
     }
 
     It 'fails when the resolved system dotnet inventory exits nonzero' {
-        Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'failing-system-bin'
         Write-SystemDotNetStub -Directory $fakeBin -ExitCode 71
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
@@ -167,7 +181,6 @@ Describe 'PowerShell installed SDK listing' {
     }
 
     It 'does not make a system-only SDK removable' {
-        Install-TestTool
         $fakeBin = Join-Path $script:TestRoot 'system-only-bin'
         Write-SystemDotNetStub -Directory $fakeBin -InventoryLines @('10.0.401 [C:\Program Files\dotnet\sdk]')
         $env:ISOLATED_DOTNET_SDK_TOOL_PATH = $script:ToolPath
