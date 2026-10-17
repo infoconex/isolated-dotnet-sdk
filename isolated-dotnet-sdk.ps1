@@ -111,6 +111,7 @@ function Write-Issue181ToolTrace {
     }
     catch {
         # Diagnostic logging must never alter SDK behavior or mask failures.
+        [void]$_.Exception
     }
 }
 
@@ -123,6 +124,7 @@ if (-not [string]::IsNullOrWhiteSpace($script:Issue181ToolTracePath)) {
     }
     catch {
         # No functional dependency on OS process timing availability.
+        [void]$_.Exception
     }
 }
 
