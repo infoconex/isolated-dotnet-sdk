@@ -200,3 +200,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+
+      # Branch-only Issue #181 pilot, never included in stable release workflow.
+      - name: Benchmark sequential vs 2/4 isolated Pester workers
+        if: github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
+        shell: pwsh
+        timeout-minutes: 30
+        run: |
+          & pwsh -NoProfile -File ./tests/powershell/Invoke-Issue181ParallelPilot.ps1 -OutputRoot (Join-Path $env:RUNNER_TEMP 'issue181-parallel-pilot')
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Upload Issue 181 parallel pilot results
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'diagnostics/181-verify-step-profile'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: issue181-parallel-benchmark
+          path: ${{ runner.temp }}/issue181-parallel-pilot/
+          if-no-files-found: warn
+          retention-days: 5

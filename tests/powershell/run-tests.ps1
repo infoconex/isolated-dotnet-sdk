@@ -10,7 +10,12 @@ param(
 
     [switch]$TraceVerifyPrewarmHost,
 
-    [switch]$TraceAll
+    [switch]$TraceAll,
+
+    # Issue #181 experimental file-level parallel test partitions only.
+    [string]$Issue181TestFilesCsv,
+
+    [string]$Issue181ResultFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -157,6 +162,29 @@ try {
         Join-Path $PSScriptRoot '*.Tests.ps1'
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($Issue181TestFilesCsv)) {
+        if ($Suite -ne 'All' -or $traceEnabled) {
+            throw '-Issue181TestFilesCsv requires untraced -Suite All.'
+        }
+        $selectedPaths = [Collections.Generic.List[string]]::new()
+        $seenNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($name in $Issue181TestFilesCsv.Split(',')) {
+            if ($name -notmatch '^[A-Za-z0-9-]+[.]Tests[.]ps1$' -or
+                -not $seenNames.Add($name)) {
+                throw "Invalid or duplicate Issue181 Pester filename: $name"
+            }
+            $candidate = Join-Path $PSScriptRoot $name
+            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+                throw "Unknown Issue181 Pester test file: $name"
+            }
+            $selectedPaths.Add($candidate)
+        }
+        if ($selectedPaths.Count -eq 0) {
+            throw 'Issue181 worker requires at least one selected Pester file.'
+        }
+        $testPath = @($selectedPaths.ToArray())
+    }
+
     if ($TraceAll) {
         . $fullSuiteProfileSource
         $candidateFiles = if ($Suite -eq 'Verify') {
@@ -197,6 +225,18 @@ try {
     $result = Invoke-Pester @pesterArguments
 
     $suiteTimer.Stop()
+
+    if (-not [string]::IsNullOrWhiteSpace($Issue181ResultFile)) {
+        [pscustomobject]@{
+            Result = [string]$result.Result
+            TotalCount = [int]$result.TotalCount
+            PassedCount = [int]$result.PassedCount
+            FailedCount = [int]$result.FailedCount
+            SkippedCount = [int]$result.SkippedCount
+            WallMs = [math]::Round($suiteTimer.Elapsed.TotalMilliseconds, 2)
+            SelectedFiles = if ($Issue181TestFilesCsv) { $Issue181TestFilesCsv } else { 'All' }
+        } | ConvertTo-Json | Set-Content -LiteralPath $Issue181ResultFile -Encoding utf8
+    }
     Write-Output ("PowerShell behavioral validation wall time: {0:N2}s" -f $suiteTimer.Elapsed.TotalSeconds)
 
     if ($traceEnabled) {
