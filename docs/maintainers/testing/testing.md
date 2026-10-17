@@ -250,23 +250,28 @@ pwsh -NoProfile -File ./tests/powershell/run-tests.ps1 -Suite Verify -TraceVerif
 
 This experimental flag implies `-TraceVerifySteps`, `-TraceVerifyProcesses`, and the
 test-only native-host phase markers. Do not combine these switches. It
-runs the same one tagged Pester case, plus **four additional fresh child
-PowerShell processes**. Each of the latter runs the fake `dotnet.exe --list-sdks`
-three times, alternating PowerShell's native-command pipeline and direct
-`System.Diagnostics.Process` calls, and comparing reuse of the original already
-executed fake host with a **newly copied executable for every iteration**.
-Eight short-lived PowerShell children balance the two launch methods and the
-two executable-copy conditions. Copy duration is measured separately, outside
-the native launch timer. Each child also launches Windows
-`cmd.exe /d /c exit 0` as a reference process without the fake host's managed
-runtime. Only this flag enables the extra
-processes; regular validation is unchanged.
+runs the same one tagged Pester case, plus **twelve fresh child
+PowerShell processes**. Each control child launches `dotnet.exe --list-sdks`
+three times, using either PowerShell's native-command pipeline or direct
+`System.Diagnostics.Process` calls. Three executable conditions are compared:
+reuse of a previously executed fake host; a newly copied executable alone;
+and a newly copied **complete isolated SDK fixture** using the same recursive
+`Copy-Item`, `DOTNET_ROOT`, `DOTNET_MULTILEVEL_LOOKUP`, and independent
+working directory as Verify. The last condition tests whether the fixture
+layout and isolated launch environment account for the remaining delay.
+Copy and environment setup are timed separately from the native command.
+Each child also launches Windows `cmd.exe /d /c exit 0` as a process
+reference without the fake host's managed runtime. Only this flag enables
+these extra processes; regular validation is unchanged.
 
 The resulting archive additionally includes:
 
 - `stack-launch-probes.csv` — buffered command timings in each
   control child process, with unique invocation IDs, UTC timestamps, mode,
   exit code, and diagnostics.
+- `stack-launch-phase-comparison.csv` — per-launch timing from the PowerShell
+  or direct-process start marker to OS process creation, plus subsequent
+  managed startup. Group by launch mode and executable-copy condition.
 - `stack-probe-processes.csv` — total lifecycle wall time for each
   control child PowerShell process.
 - `stack-host-startup.tsv` — native fake-host managed `Main`
