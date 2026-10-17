@@ -19,9 +19,28 @@ function Write-Issue181TraceEvent {
     $line = '{0}{1}{2}{1}{3}{1}{4}{1}{5}{1}{6}{1}{7}' -f (
         [DateTime]::UtcNow.ToString('o')), [char]9, $PID, $Kind,
         $File, $safeName, $elapsedMs.ToString([Globalization.CultureInfo]::InvariantCulture), $safeResult
-    [IO.File]::AppendAllText($path, $line + [Environment]::NewLine)
+    $queue = [AppDomain]::CurrentDomain.GetData('IsolatedDotNetSdkIssue181Trace')
+    if ($null -ne $queue) {
+        $queue.Enqueue($line)
+    }
+    else {
+        [IO.File]::AppendAllText($path, $line + [Environment]::NewLine)
+    }
 }
 
+function Save-Issue181TraceEvents {
+    $queue = [AppDomain]::CurrentDomain.GetData('IsolatedDotNetSdkIssue181Trace')
+    $path = $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS
+    if ($null -eq $queue -or [string]::IsNullOrWhiteSpace($path)) { return }
+    $lines = [Collections.Generic.List[string]]::new()
+    $item = ''
+    while ($queue.TryDequeue([ref]$item)) {
+        $lines.Add($item)
+    }
+    if ($lines.Count -gt 0) {
+        [IO.File]::AppendAllLines($path, $lines)
+    }
+}
 function ConvertTo-Issue181InstrumentedPesterFile {
     param(
         [Parameter(Mandatory)][string]$OriginalFile,
@@ -123,6 +142,8 @@ function ConvertTo-Issue181InstrumentedPesterFile {
 }
 
 function Enable-Issue181NativeProcessTrace {
+    [AppDomain]::CurrentDomain.SetData('IsolatedDotNetSdkIssue181Trace',
+        [Collections.Concurrent.ConcurrentQueue[string]]::new())
     $real = @(Get-Command pwsh -CommandType Application -ErrorAction Stop |
             Select-Object -First 1)
     if ($real.Count -ne 1) { throw 'Cannot locate the real pwsh executable.' }
@@ -145,6 +166,8 @@ function Enable-Issue181NativeProcessTrace {
 }
 
 function Disable-Issue181NativeProcessTrace {
+    Save-Issue181TraceEvents
+    [AppDomain]::CurrentDomain.SetData('IsolatedDotNetSdkIssue181Trace', $null)
     Remove-Item Function:\pwsh -ErrorAction SilentlyContinue
     Remove-Item Env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH -ErrorAction SilentlyContinue
 }
