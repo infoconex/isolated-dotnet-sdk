@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $processes = [Collections.Generic.List[object]]::new()
 $results = [Collections.Generic.List[object]]::new()
 
-function Start-Issue181Worker {
+function Invoke-Issue181Worker {
     param([string]$Label, [string[]]$Names)
     $summaryFile = Join-Path $OutputRoot "$Label.json"
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
@@ -93,7 +93,7 @@ function Complete-Issue181Worker {
     }
 }
 
-function New-Issue181WorkGroups {
+function Get-Issue181WorkGroup {
     param([int]$Workers)
     $groups = @(
         for ($i = 0; $i -lt $Workers; $i++) {
@@ -133,7 +133,7 @@ function New-Issue181WorkGroups {
 try {
     Write-Output "Issue 181 parallel pilot: $($files.Count) test files, separate PowerShell processes/fixtures."
     Write-Output "Diagnostic logs: $OutputRoot"
-    $baseline = Complete-Issue181Worker (Start-Issue181Worker -Label 'sequential' -Names @())
+    $baseline = Complete-Issue181Worker (Invoke-Issue181Worker -Label 'sequential' -Names @())
     $results.Add([pscustomobject]@{
             Workers = 1; WallMs = $baseline.WallMs
             Total = $baseline.Total; Passed = $baseline.Passed
@@ -143,11 +143,11 @@ try {
         ($baseline.WallMs / 1000), $baseline.Passed, $baseline.Total)
 
     foreach ($count in $WorkerCounts) {
-        $groups = @(New-Issue181WorkGroups -Workers $count)
+        $groups = @(Get-Issue181WorkGroup -Workers $count)
         $clock = [System.Diagnostics.Stopwatch]::StartNew()
         $jobs = [Collections.Generic.List[object]]::new()
         foreach ($group in $groups) {
-            $jobs.Add((Start-Issue181Worker -Label "workers-$count-part-$($group.Id)" -Names @($group.Names.ToArray())))
+            $jobs.Add((Invoke-Issue181Worker -Label "workers-$count-part-$($group.Id)" -Names @($group.Names.ToArray())))
         }
         $workers = @(
             foreach ($job in $jobs) {
