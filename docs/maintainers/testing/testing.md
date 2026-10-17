@@ -253,7 +253,11 @@ test-only native-host phase markers. Do not combine these switches. It
 runs the same one tagged Pester case, plus **four additional fresh child
 PowerShell processes**. Each of the latter runs the fake `dotnet.exe --list-sdks`
 three times, alternating PowerShell's native-command pipeline and direct
-`System.Diagnostics.Process` calls. Each child also launches Windows
+`System.Diagnostics.Process` calls, and comparing reuse of the original already
+executed fake host with a **newly copied executable for every iteration**.
+Eight short-lived PowerShell children balance the two launch methods and the
+two executable-copy conditions. Copy duration is measured separately, outside
+the native launch timer. Each child also launches Windows
 `cmd.exe /d /c exit 0` as a reference process without the fake host's managed
 runtime. Only this flag enables the extra
 processes; regular validation is unchanged.
