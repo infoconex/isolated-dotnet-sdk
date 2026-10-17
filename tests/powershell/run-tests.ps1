@@ -477,6 +477,14 @@ finally {
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_CHILD_TRACE_PATH', $previousChildTrace, 'Process')
         [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION', $previousInvocation, 'Process')
     }
+    if ($TraceAll) {
+        Disable-Issue181NativeProcessTrace
+        foreach ($path in $instrumentedFiles) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        }
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_TEST_PROFILE_EVENTS', $previousWholeSuiteTrace, 'Process')
+        [Environment]::SetEnvironmentVariable('ISOLATED_DOTNET_SDK_FAKE_HOST_TRACE_PATH', $previousFakeHostTrace, 'Process')
+    }
     Remove-Item Env:ISOLATED_DOTNET_SDK_SHARED_FAKE_HOST_ROOT -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
