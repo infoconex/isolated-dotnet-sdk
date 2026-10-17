@@ -94,6 +94,10 @@ Describe 'PowerShell isolated SDK verification' {
                 @{ Mode = 'DirectProcess'; CopyMode = 'Fresh' }
                 @{ Mode = 'DirectProcess'; CopyMode = 'Existing' }
                 @{ Mode = 'PowerShellNative'; CopyMode = 'Fresh' }
+                @{ Mode = 'PowerShellNative'; CopyMode = 'SdkLayout' }
+                @{ Mode = 'DirectProcess'; CopyMode = 'SdkLayout' }
+                @{ Mode = 'DirectProcess'; CopyMode = 'SdkLayout' }
+                @{ Mode = 'PowerShellNative'; CopyMode = 'SdkLayout' }
             )
             foreach ($control in $controls) {
                 $mode = $control.Mode
