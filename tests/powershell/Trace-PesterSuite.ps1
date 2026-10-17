@@ -122,6 +122,26 @@ function ConvertTo-Issue181InstrumentedPesterFile {
         }
 '@
         $suffix = $suffix.Replace('__KIND__', $textKind).Replace('__FILE__', $fileB64).Replace('__NAME__', $nameB64)
+        if ($kind -eq 'It') {
+            # Tag both ordinary pwsh children and native fake hosts with the
+            # currently running Pester case. Restore even when an assertion throws.
+            $caseB64 = [Convert]::ToBase64String(
+                [Text.Encoding]::UTF8.GetBytes("$fileLabel :: $label"))
+            $casePrefix = @'
+        $__issue181PreviousCase = [Environment]::GetEnvironmentVariable(
+            'ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE', 'Process')
+        $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE = (
+            [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__CASE__')))
+
+'@
+            $prefix = $casePrefix.Replace('__CASE__', $caseB64) + $prefix
+            $suffix = $suffix.Replace(
+                '-StartTicks $__issue181Start',
+                '-StartTicks $__issue181Start' + [Environment]::NewLine +
+                '            [Environment]::SetEnvironmentVariable(' +
+                "'ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE', " +
+                '$__issue181PreviousCase, ' + "'Process')" )
+        }
         $edits.Add([pscustomobject]@{ Offset = $begin; Text = $prefix })
         $edits.Add([pscustomobject]@{ Offset = $end; Text = $suffix })
         if ($kind -eq 'It') { $counts.It++ }
@@ -158,7 +178,7 @@ function Enable-Issue181NativeProcessTrace {
         }
         finally {
             $childExit = $LASTEXITCODE
-            Write-Issue181TraceEvent -Kind 'ChildPwsh' -File 'pwsh' -Name (
+            Write-Issue181TraceEvent -Kind 'ChildPwsh' -File $env:ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE -Name (
                 ($args | Select-Object -First 5) -join ' ') -StartTicks $start -Result ([string]$childExit)
             $global:LASTEXITCODE = $childExit
         }
