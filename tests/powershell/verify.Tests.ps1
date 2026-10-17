@@ -74,6 +74,57 @@ Describe 'PowerShell isolated SDK verification' {
                 else { '' }
                 $content = $content.Replace($needle, $prefix + $needle + $suffix)
             }
+            if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
+                # Only the temporary installed copy is modified. Alternate
+                # healthy children exercise initial native launch from within
+                # the exact same PowerShell process and Verify function.
+                $nativeNeedle = '            $Inventory = @(& $DotNetPath --list-sdks)'
+                if ([regex]::Matches($content, [regex]::Escape($nativeNeedle)).Count -ne 1) {
+                    throw 'Cannot locate Verify inventory boundary for native preflight.'
+                }
+                $nativePreflight = @'
+            if ($env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE) {
+                Mark-VerifyChildStep 'internal-preflight-start'
+                $preflightMode = $env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE
+                $preflightCode = 0
+                try {
+                    if ($preflightMode -eq 'DirectProcess') {
+                        $preflightInfo = [Diagnostics.ProcessStartInfo]::new()
+                        $preflightInfo.FileName = $DotNetPath
+                        $preflightInfo.Arguments = '--list-sdks'
+                        $preflightInfo.UseShellExecute = $false
+                        $preflightInfo.RedirectStandardOutput = $true
+                        $preflightInfo.RedirectStandardError = $true
+                        $preflightProcess = $null
+                        try {
+                            $preflightProcess = [Diagnostics.Process]::Start($preflightInfo)
+                            $null = $preflightProcess.StandardOutput.ReadToEnd()
+                            $null = $preflightProcess.StandardError.ReadToEnd()
+                            $preflightProcess.WaitForExit()
+                            $preflightCode = $preflightProcess.ExitCode
+                        }
+                        finally {
+                            if ($null -ne $preflightProcess) { $preflightProcess.Dispose() }
+                        }
+                    }
+                    elseif ($preflightMode -eq 'PowerShellNative') {
+                        $null = @(& $DotNetPath --list-sdks)
+                        $preflightCode = $LASTEXITCODE
+                    }
+                    else {
+                        throw "Unexpected preflight mode: $preflightMode"
+                    }
+                }
+                finally {
+                    Mark-VerifyChildStep 'internal-preflight-complete'
+                }
+                if ($preflightCode -ne 0) {
+                    throw "Internal preflight exited $preflightCode"
+                }
+            }
+'@
+                $content = $content.Replace($nativeNeedle, $nativePreflight + [char]10 + $nativeNeedle)
+            }
             [System.IO.File]::WriteAllText(
                 $script:ToolPath, $content, [System.Text.UTF8Encoding]::new($false))
         }
@@ -329,6 +380,7 @@ Mark-VerifyChildStep 'child-command-start'
         [Environment]::SetEnvironmentVariable($script:HomeVariableName, $script:OriginalHomeValue, 'Process')
         Remove-Item Env:FAKE_DOTNET_EXIT_CODE -ErrorAction SilentlyContinue
         Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO -ErrorAction SilentlyContinue
+        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE -ErrorAction SilentlyContinue
         foreach ($name in @('FAKE_DOTNET_LEGACY_HOST', 'FAKE_DOTNET_REQUIRE_PINNED_VERSION', 'FAKE_DOTNET_LEGACY_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_BASE_PATH', 'FAKE_DOTNET_LEGACY_INFO_EXIT_CODE', 'FAKE_DOTNET_LEGACY_MISSING_BASE_PATH', 'FAKE_DOTNET_LEGACY_EXTRA_VERSION', 'FAKE_DOTNET_LEGACY_SUPPRESS_VERSION', 'FAKE_DOTNET_LEGACY_RID', 'FAKE_DOTNET_SDK_VERSION', 'FAKE_DOTNET_SDK_ORIGIN', 'FAKE_DOTNET_RESOLVED_VERSION', 'FAKE_DOTNET_EXPECT_MULTILEVEL_LOOKUP', 'FAKE_DOTNET_FORBIDDEN_WORK_DIR', 'VERIFY_METADATA_ROOT', 'VERIFY_TOOL_PATH', 'VERIFY_TARGET_VERSION', 'FAKE_DOTNET_EXTRA_RUNTIME_ROOT', 'FAKE_DOTNET_LEGACY_INFO', 'FAKE_DOTNET_RUNTIME_EXIT_CODE', 'FAKE_DOTNET_RUNTIME_PROBE_MARKER')) {
             Remove-Item "Env:$name" -ErrorAction SilentlyContinue
         }
@@ -469,6 +521,32 @@ Mark-VerifyChildStep 'child-command-start'
             $newCalls[1].ExitCode | Should -Be '0'
             (Get-Content -LiteralPath $childTracePath -Raw) | Should -Match 'product-return'
             Add-VerifyTestStep 'trace-assertions-complete'
+            if (-not [string]::IsNullOrWhiteSpace($env:ISOLATED_DOTNET_SDK_VERIFY_STACK_TRACE_PATH)) {
+                # Fresh installation and child PowerShell for each condition.
+                # The original two-child assertions above are unchanged.
+                $alternateModes = @(
+                    @{ Version = '99.0.101'; Mode = 'DirectProcess' }
+                    @{ Version = '99.0.102'; Mode = 'PowerShellNative' }
+                )
+                foreach ($alternate in $alternateModes) {
+                    $script:VerifyStepScenario = "internal-preflight-$($alternate.Mode)"
+                    $env:ISOLATED_DOTNET_SDK_VERIFY_STEP_SCENARIO = $script:VerifyStepScenario
+                    Add-VerifyTestStep 'internal-preflight-fixture-start'
+                    Install-FakeIsolatedHost -Version $alternate.Version -ReportedVersion $alternate.Version | Out-Null
+                    Add-VerifyTestStep 'internal-preflight-fixture-complete'
+                    try {
+                        $env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE = $alternate.Mode
+                        $controlOutput = @(Invoke-VerifyTool -Version $alternate.Version)
+                        Add-VerifyTestStep 'internal-preflight-child-complete'
+                    }
+                    finally {
+                        Remove-Item Env:ISOLATED_DOTNET_SDK_VERIFY_PREFLIGHT_MODE -ErrorAction SilentlyContinue
+                    }
+                    $script:VerifyExitCode | Should -Be 0
+                    ($controlOutput -join [Environment]::NewLine) | Should -Match 'verified successfully'
+                    Add-VerifyTestStep 'internal-preflight-assertions-complete'
+                }
+            }
         }
         finally {
             [Environment]::SetEnvironmentVariable(
