@@ -64,10 +64,21 @@ function ConvertTo-Issue181InstrumentedPesterFile {
                 if ($node -isnot [Management.Automation.Language.CommandAst]) {
                     return $false
                 }
-                return $node.GetCommandName() -in @('It', 'BeforeAll', 'BeforeEach', 'AfterEach', 'AfterAll')
+                return $node.GetCommandName() -in @('It', 'BeforeAll', 'BeforeEach', 'AfterEach', 'AfterAll', 'pwsh')
             }, $true))
-    $counts = [ordered]@{ It = 0; Hook = 0; Function = 0; Skipped = 0 }
+    $counts = [ordered]@{ It = 0; Hook = 0; Function = 0; ChildPwsh = 0; Skipped = 0 }
     foreach ($node in $nodes) {
+        if ($node -is [Management.Automation.Language.CommandAst] -and
+            $node.GetCommandName() -eq 'pwsh') {
+            $commandWord = $node.CommandElements[0].Extent
+            $edits.Add([pscustomobject]@{
+                    Offset = $commandWord.StartOffset
+                    Length = $commandWord.EndOffset - $commandWord.StartOffset
+                    Text = 'Invoke-Issue181ChildPwsh'
+                })
+            $counts.ChildPwsh++
+            continue
+        }
         $kind = ''
         $label = ''
         $body = $null
@@ -142,14 +153,14 @@ function ConvertTo-Issue181InstrumentedPesterFile {
                 "'ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE', " +
                 '$__issue181PreviousCase, ' + "'Process')" )
         }
-        $edits.Add([pscustomobject]@{ Offset = $begin; Text = $prefix })
-        $edits.Add([pscustomobject]@{ Offset = $end; Text = $suffix })
+        $edits.Add([pscustomobject]@{ Offset = $begin; Length = 0; Text = $prefix })
+        $edits.Add([pscustomobject]@{ Offset = $end; Length = 0; Text = $suffix })
         if ($kind -eq 'It') { $counts.It++ }
         elseif ($kind -eq 'Function') { $counts.Function++ }
         else { $counts.Hook++ }
     }
     foreach ($edit in @($edits | Sort-Object Offset -Descending)) {
-        $source = $source.Insert($edit.Offset, $edit.Text)
+        $source = $source.Remove($edit.Offset, $edit.Length).Insert($edit.Offset, $edit.Text)
     }
     [IO.File]::WriteAllText($OutputFile, $source, [Text.UTF8Encoding]::new($false))
     return [pscustomobject]@{
@@ -157,6 +168,7 @@ function ConvertTo-Issue181InstrumentedPesterFile {
         ItBlocks = $counts.It
         Hooks = $counts.Hook
         Functions = $counts.Function
+        ChildPwsh = $counts.ChildPwsh
         Skipped = $counts.Skipped
     }
 }
@@ -168,10 +180,11 @@ function Enable-Issue181NativeProcessTrace {
             Select-Object -First 1)
     if ($real.Count -ne 1) { throw 'Cannot locate the real pwsh executable.' }
     $env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH = $real[0].Source
-    # Proxy ordinary child pwsh invocations while keeping output streaming,
-    # stderr, and exit code intact. The deeper ProcessStartInfo test callers
-    # remain visible in the instrumented containing helper-function records.
-    function global:pwsh {
+    # Instrument only AST-confirmed native pwsh calls in temporary test copies.
+    # Do NOT shadow the real 'pwsh' command: behavioral tests use
+    # Get-Command pwsh to locate the executable and must still get its Source.
+    # ProcessStartInfo callers remain visible through enclosing helpers.
+    function global:Invoke-Issue181ChildPwsh {
         $start = [Diagnostics.Stopwatch]::GetTimestamp()
         try {
             & $env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH @args
@@ -188,6 +201,6 @@ function Enable-Issue181NativeProcessTrace {
 function Disable-Issue181NativeProcessTrace {
     Save-Issue181TraceEventBatch
     [AppDomain]::CurrentDomain.SetData('IsolatedDotNetSdkIssue181Trace', $null)
-    Remove-Item Function:\pwsh -ErrorAction SilentlyContinue
+    Remove-Item Function:\Invoke-Issue181ChildPwsh -ErrorAction SilentlyContinue
     Remove-Item Env:ISOLATED_DOTNET_SDK_TEST_REAL_PWSH -ErrorAction SilentlyContinue
 }
