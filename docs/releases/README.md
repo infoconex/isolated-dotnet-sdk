@@ -19,9 +19,10 @@ Use [Stable bootstrap, update, and rollback](stable-bootstrap.md) for the trust 
 
 ## Release history
 
-Release-history pages summarize each published stable release for users. For the chronological categorized change log, see the project [CHANGELOG](../../CHANGELOG.md).
+Release-history pages summarize prepared and published stable releases for users. A history page may be committed before its public release; [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases) is authoritative for publication status. For the chronological categorized change log, see the project [CHANGELOG](../../CHANGELOG.md).
 
-- [v0.3.0 release history](history/v0.3.0.md) — latest-stable bootstrap, explicit tool identity, SDK Audit, interactive Verify, and stronger release verification.
+- [v0.4.0 release history](history/v0.4.0.md) — historical SDK compatibility, safer removal, richer verification, and interactive UX hardening.
+- [v0.3.0 release history](history/v0.3.0.md) — verified latest-stable bootstrap, explicit tool identity, SDK Audit, interactive Verify, and stronger release verification.
 - [v0.2.0 release history](history/v0.2.0.md) — first stable release under the checksum-verifying release policy.
 - [v0.1.0 release history](history/v0.1.0.md) — initial release and legacy pre-checksum-policy behavior.
 

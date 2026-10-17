@@ -45,7 +45,7 @@ The checksum and tagged product script are both distributed through the project'
 
 ## Pinned stable bootstrap
 
-Use a pinned release when the exact product version must be explicit rather than resolved through latest stable. The current checksum-policy-compliant stable release is `v0.3.0`.
+Use a pinned release when the exact product version must be explicit rather than resolved through latest stable. The examples below intentionally pin the already-published `v0.3.0` release so they remain runnable while newer releases are prepared. For a different version, replace the example tag with a tag already available on [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases); a prepared release-history page is not proof of publication.
 
 ### Windows / PowerShell 7
 

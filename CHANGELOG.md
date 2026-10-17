@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - Unreleased
+
+This entry describes the v0.4.0 candidate. The date will be finalized when the stable release is published; [GitHub Releases](https://github.com/infoconex/isolated-dotnet-sdk/releases) is authoritative for publication status.
+
+### Added
+
+- Detailed read-only Verify reports for one exact isolated SDK, combining local host/version/origin proof with optional release/lifecycle metadata and installed-component information. Original 1.x and early 2.x hosts use their exact SDK Base Path when modern inventory commands are unsupported.
+- Historical SDK installation compatibility, including legacy archive naming, exact SDK-to-release-channel mappings, and published SHA-256 verification for qualifying .NET 1.x artifacts; modern SDK artifacts still require SHA-512.
+- All published prerelease SDK choices displayed by default for Preview/RC channels; stable channels retain their compact SDK picker and expanded Show All option.
+- Confirmed removal candidates for incomplete or partially removed isolated SDK version directories, permitting another approved attempt after locks are cleared.
+
+### Changed
+
+- Audit now displays aligned, newest-first Isolated/System SDK inventories with release type, lifecycle/status, optional release/EOS dates, and concise `Update -> <version>` servicing information.
+- Interactive Install distinguishes already-installed isolated versus system SDKs, omits successful temporary staging details, and reuses loaded channel metadata when returning to the same picker.
+- Terminal-capable interactive sessions clear previous menus at navigation and operation boundaries, start cleared views on the first visible row, and retain results until Enter acknowledgement. Redirected/noninteractive execution continues without clearing or pausing.
+- Remove automatically handles narrowly verified historical build-server shutdown incompatibility after normal confirmation, with explicit SDK-local Roslyn shutdown where required. Real supported shutdown failures remain blocking.
+- Documentation more precisely describes Install, List, Audit, Verify and Remove boundaries, historical SDK compatibility, troubleshooting, stable-release trust and PowerShell/Bash parity.
+
+### Fixed
+
+- Exact isolated SDK origin proof now also protects Install; an unrelated system SDK or mismatched origin does not count as an existing healthy isolated installation.
+- Safer removal staging/rename and recovery: incomplete or locked removals are reported rather than counted as success; remaining confirmed removal state can be retried.
+- Consistent .NET channel and SDK version ordering, clearer Verify result spacing, and correct terminal-clearing behavior.
+- Hardened release publication failure/cleanup regression tests to preserve fail-closed publication checks.
+
+### Reliability and validation
+
+- Reduced redundant PowerShell behavioral-test setup by 85 child PowerShell launches without dropping required subprocess scenarios; isolated file-bootstrap testing no longer depends on the runner's live SDK inventory.
+- Cancel superseded Validate pull-request runs only for the same PR without interrupting unrelated PRs or release/main push validation.
+- Expanded Windows/PowerShell and Linux/macOS/Bash coverage of historical SDKs, removals, release publication failures, integrity and end-to-end behavior.
+- Experimental timing instrumentation and an unproven parallel test runner remain deferred under issue #181 and are **not** included in v0.4.0.
+
 ## [0.3.0] - 2026-10-05
 
 ### Added
