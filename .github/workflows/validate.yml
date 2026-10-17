@@ -12,6 +12,8 @@ permissions:
   contents: read
 
 concurrency:
+  # Only supersede PR validation for the same pull request.
+  # Protect main/release push validation and unrelated PRs.
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
