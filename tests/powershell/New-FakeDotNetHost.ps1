@@ -25,7 +25,7 @@ public static class Program
         var stackRows = string.IsNullOrWhiteSpace(stackPath) ? null : new System.Collections.Generic.List<string>();
         var mainClock = stackRows == null ? null : System.Diagnostics.Stopwatch.StartNew();
         var stackInvocation = stackRows == null ? "" : (Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "");
-        var stackCase = stackRows == null ? "" : (Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "");
+        var stackCase = stackRows == null ? "" : (Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE") ?? Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "");
         var stackArgument = stackRows == null ? "" : string.Join(" ", args);
         var stackPid = stackRows == null ? 0 : System.Diagnostics.Process.GetCurrentProcess().Id;
         Action<string> markStack = delegate(string phase)
@@ -68,7 +68,7 @@ public static class Program
         if (!string.IsNullOrWhiteSpace(tracePath))
         {
             var processId = System.Diagnostics.Process.GetCurrentProcess().Id;
-            var caseId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "";
+            var caseId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_TEST_PROFILE_CASE") ?? Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_CASE") ?? "";
             var invocationId = Environment.GetEnvironmentVariable("ISOLATED_DOTNET_SDK_VERIFY_TRACE_INVOCATION") ?? "";
             var arguments = string.Join(" ", args);
             var clock = System.Diagnostics.Stopwatch.StartNew();
