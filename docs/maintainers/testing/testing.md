@@ -555,3 +555,28 @@ are inclusive and **must not be added together** to infer wall time.
 
 This opt-in tool is intended for controlled evaluation and is not part of
 the production SDK functionality or the normal release validation contract.
+
+#### Correlated application and native-host startup timing (Issue #181)
+
+With `-TraceAll`, the experimental PowerShell application itself records
+`tool-child-events.tsv` when invoked by a child test process. The trace
+contains the originating Pester case, PID, action, and per-process markers:
+
+- `process-start-to-script-entry`: approximate OS process start -> first
+  executed tool statement, including PowerShell engine initialization and
+  script parse/load. It does **not** measure delay before the OS creates
+  the child process, and can include work that starts before the script.
+- `ToolFunction:*`: inclusive time inside selected tool functions, including
+  bootstrap, SDK action dispatch, installation, audit, inventory, isolated
+  host validation, and optional component inspection. Nested durations
+  overlap and must never be summed as if independent.
+- The fake host emits `startup` (OS process start -> managed `Main`) alongside
+  existing `start` and `exit` markers in `all-suite-host-events.tsv`,
+  distinguishing managed startup from the tiny fake-host command body.
+
+These are opt-in diagnostic-only product-code hooks on PR #189, not a proposed
+permanent product feature. The normal application output, exit behavior and
+test assertions must continue to match the uninstrumented suite. Compare
+untraced and traced full runs and examine outliers before suggesting mocks
+or fewer subprocesses. The workload also includes `ProcessStartInfo` sessions
+whose native launches are not individually intercepted by the Pester wrapper.
