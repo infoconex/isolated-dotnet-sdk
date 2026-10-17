@@ -4,7 +4,7 @@ This document defines the durable development and decision-making rules for the 
 
 ## Product phase
 
-The project is currently in a v0.4.0 evaluation and hardening phase.
+The v0.4.0 evaluation and hardening phase established these durable defaults for product development; they remain relevant after that stable release is published.
 
 Default to strengthening the product that already exists:
 
