@@ -183,7 +183,7 @@ The normal delivery path deliberately separates validation stages by purpose:
 
 1. **Development / pre-PR validation:** run targeted deterministic checks that give useful feedback for the files or behavior changed. Full remote branch validation is not required merely because work exists on a branch.
 2. **Explicit/manual full branch validation:** the Validate workflow's `workflow_dispatch` path remains available when full cross-platform branch evidence serves a distinct purpose, such as diagnosing platform-specific risk before opening a PR or validating unusually risky infrastructure work.
-3. **Authoritative pre-merge validation:** opening/updating the pull request runs the complete Validate matrix on the exact PR head. This is the normal authoritative full pre-merge signal and must be green before merge.
+3. **Authoritative pre-merge validation:** opening/updating the PR runs Validate's change classifier, all required documentation/behavioral jobs, and a final Validation gate on the exact PR head. Strict documentation-only PRs do not require behavioral tests; code, tests, CI, configuration, mixed, or unknown changes require the complete supported-platform matrix. The final gate must be green before merge.
 4. **Post-merge integration validation:** after the issue merges, validate the landed state of the issue's integration target according to repository workflow coverage. During an active release cycle this may be the release integration branch rather than `main`.
 5. **Stable-line validation:** final next-release promotion to `main` and stable publication have their own release-level validation defined by the release process. Issue-level post-merge validation does not substitute for release-candidate validation.
 
@@ -234,7 +234,7 @@ Open the pull request as **Draft** only after all of the following are true:
 - the PR base is the intended integration target;
 - no known blocking findings remain.
 
-Opening/updating the PR is what normally obtains the authoritative complete pre-merge Validate matrix on the exact reviewed head. The Draft PR is therefore the formal review and exact-head CI artifact, not a second copy of an equivalent full branch-validation stage.
+Opening/updating the PR normally provides authoritative applicable validation and the final gate on the exact reviewed head, including the complete behavioral matrix whenever required. The Draft PR is therefore the formal review and exact-head CI artifact, not a second copy of an equivalent full branch-validation stage.
 
 Reference the issue according to [`issue-conventions.md`](issue-conventions.md): use `Closes #<issue>` when the PR targets `main` and should auto-close the issue, but use `Refs #<issue>` for a PR targeting a non-default release integration branch. An integration-branch issue remains open until post-merge verification succeeds, then it is closed explicitly.
 
@@ -250,7 +250,7 @@ Before the PR is considered complete, record concise durable evidence, including
 - test-list and RED -> GREEN -> REFACTOR evidence for behavioral changes;
 - implementation summary;
 - targeted pre-PR validation and any justified manual full branch validation;
-- final complete Validate evidence on the exact reviewed PR head;
+- exact-head Validate final-gate evidence and all applicable validation jobs, including the full matrix when required;
 - manual validation evidence;
 - final review and adjacent-impact result;
 - intentionally deferred follow-up issues.

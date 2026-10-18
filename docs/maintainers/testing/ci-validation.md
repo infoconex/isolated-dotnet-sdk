@@ -1,18 +1,29 @@
 # CI validation architecture
 
-`Validate` is the deterministic pre-merge and post-merge confidence layer. It intentionally keeps GitHub Actions focused on runner/matrix selection, checkout, GitHub-hosted cache restore/save, and invoking repository-owned validation commands.
+`Validate` is the deterministic pre-merge and post-merge confidence layer; only strict documentation-only PRs bypass the expensive behavioral jobs. It intentionally keeps GitHub Actions focused on runner/matrix selection, checkout, GitHub-hosted cache restore/save, and invoking repository-owned validation commands.
 
 ## Trigger model
 
-The complete Validate matrix runs for:
+The Validate workflow continues to run for every pull request without workflow-level path filtering. The lightweight Classify required validation job uses a paginated GitHub changed-file listing plus the reported count. Only root README.md and docs/**/*.md, including renames wholly within this allowlist, qualify for documentation-only validation. All other paths (product, tests, workflows, test configuration, release material, and unknown files) require the complete Ubuntu/macOS/Windows behavioral suite. Mixed changes run both documentation and behavioral checks.
 
-- pull requests, where the exact reviewed PR head is the authoritative pre-merge signal;
-- pushes to `main`, which verify the landed released-production source line; and
-- non-creation pushes to `release/**`, which verify landed next-release integration state.
+Documentation-site inputs include layouts, CSS/JS assets, release notes, installer wrappers, Pages/Validate workflow files, and relevant configuration. They are NOT automatically exempted from behavioral validation. Old and new rename paths are classified. Missing or inconsistent API results, malformed paths, and listing limits fail closed and prevent approval.
 
-Creating a new `release/**` branch from an already-validated base can still create a lightweight workflow event, but the validation jobs are skipped when the push payload identifies branch creation. This preserves the no-change branch-creation optimization while restoring post-merge validation for the active release integration branch.
+A non-creation push to main or release/** and a manually dispatched Validate run always execute the full behavioral matrix AND documentation validation. No-change release-branch creation still skips runner execution. Working-branch pushes do not duplicate PR-head validation.
 
-Normal issue branches do not receive a full Validate run merely because they are pushed. Use targeted deterministic development checks before the PR and rely on PR exact-head Validate as the normal authoritative pre-merge matrix.
+Every non-creation run includes the stable Validation gate job, which explicitly requires successful classification and each selected job, and expects intentionally unnecessary jobs to be skipped. GitHub's green skipped-job conclusion alone is insufficient evidence. The gate fails when required work is missing, failed, cancelled, or unexpectedly skipped. Deterministic regression tests cover this decision policy.
+
+Active main/release GitHub rulesets currently require a pull request and squash merge but do not require CI. After verifying the live check name, configure BOTH rulesets to require the stable Validation gate check. This requires repository administration permission, which the connected GitHub App may not have; until an administrator applies it, passing CI remains advisory rather than branch-enforced. Do not add workflow-level path filtering to Validate, which can leave required checks pending.
+
+## Documentation and Pages validation
+
+Relevant PRs run the Documentation site job inside Validate. It checks repository-relative Markdown file paths, stages the documentation site, builds it using the pinned Pages Jekyll action, and validates generated pages, navigation, search assets, bootstrap files, and release-history consistency. Fragment headings and external HTTP links are not verified by the local link checker.
+
+Both workflows use shared prepare-pages-source.sh and validate-pages-output.sh scripts in .github/scripts. Pages no longer builds a second copy for PRs; it retains its relevant main-push deployment and manual dispatch. Validate independently checks documentation on every main/release push for stronger post-merge confidence. Keeping the deployment workflow separate is intentional.
+
+Baseline from documentation-only PR #207 on October 18, 2026: Validate run 39156528601 used 48 seconds Ubuntu, 62 seconds macOS, and 201 seconds Windows (311 combined runner-seconds, about 206 wall seconds). Pages PR build run 39156528592 used 26 seconds. Compare new doc-only job counts and hosted times with these measurements, accounting for queue and runner variability.
+
+Local policy tests: node --test tests/node/ci-validation.test.js tests/node/documentation-links.test.js
+Local documentation links: node .github/scripts/check-documentation-links.js
 
 ## Responsibility split
 
