@@ -47,7 +47,7 @@ jobs:
             if (typeof publish !== 'function' || typeof validateReleaseChangelog !== 'function') {
               throw new Error('Publisher CommonJS module loading failed under github-script v9.');
             }
-            validateReleaseChangelog('## [9.9.9] - 2099-01-01\\n\\n- Sample release details.\\n', 'v9.9.9', '2099-01-01');
+            validateReleaseChangelog('## [9.9.9] - 2099-01-01\n\n- Sample release details.\n', 'v9.9.9', '2099-01-01');
             const repository = await github.rest.repos.get(context.repo);
             if (repository.data.full_name !== context.repo.owner + '/' + context.repo.repo) {
               throw new Error('Injected github/context API binding failed under github-script v9.');
