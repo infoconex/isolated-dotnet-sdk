@@ -44,7 +44,21 @@ function validateReleaseChangelog(changelog, tag, expectedDate) {
   return { tag, date: expectedDate };
 }
 
-module.exports = { validateReleaseChangelog };
+// The tagged-source changelog gate was introduced after v0.4.0 was published.
+// Keep historical release verification compatible, but enforce for all later
+// stable versions, including v0.4.1 hotfixes.
+function requiresTaggedChangelogValidation(tag) {
+  if (typeof tag !== 'string' || !/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(tag)) {
+    throw new Error('Stable release tag must use vMAJOR.MINOR.PATCH.');
+  }
+  const [major, minor, patch] = tag.slice(1).split('.').map(Number);
+  if (![major, minor, patch].every(Number.isSafeInteger)) {
+    throw new Error('Stable release version components must be safe integers.');
+  }
+  return major > 0 || minor > 4 || (minor === 4 && patch > 0);
+}
+
+module.exports = { validateReleaseChangelog, requiresTaggedChangelogValidation };
 
 if (require.main === module) {
   try {
