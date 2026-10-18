@@ -204,7 +204,7 @@ async function exercise(options = {}) {
       BASH_SHA256: options.wrongBashHash ? '0'.repeat(64) : hash(sh)
     });
     try {
-      await publish({ github, context: { repo: identity }, core });
+      await publish({ github, context: { repo: identity }, core, now: () => new Date((options.currentUtcDay || DATE) + 'T12:00:00Z') });
     } catch (caught) {
       error = caught;
     }
@@ -271,6 +271,15 @@ for (const scenario of [
     assert.ok(!result.calls.includes('createCommit'), 'invalid changelog must not derive a release commit');
   });
 }
+
+test('UTC midnight crossover aborts before public release and cleans only owned draft state', async () => {
+  const result = await exercise({ currentUtcDay: '2026-10-16' });
+  failed(result, /UTC publication date changed before publication/);
+  assert.ok(!result.calls.includes('updateRelease'), 'release must remain unpublished');
+  assert.equal(result.state.release, null, 'owned draft release safely removed');
+  assert.equal(result.state.tag, false, 'owned tag safely removed');
+  assert.deepEqual(result.state.deleted, [42, 'tag']);
+});
 
 test('published_at must match the finalized UTC changelog date, preserving public state if not', async () => {
   const result = await exercise({ publishedAt: '2026-10-16T00:01:00Z' });
