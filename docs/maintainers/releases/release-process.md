@@ -143,7 +143,7 @@ After publication, `Publish Release` invokes the read-only [`Verify Release`](..
 
 A historical release with no embedded identity assignment remains verifiable under its original published contract. If a release does contain an identity assignment, however, verification fails if that identity does not match the tag.
 
-For stable tags **after v0.4.0**, the read-only verification job also fetches `CHANGELOG.md` from the actual tagged commit (not mutable `main`), requires exactly one non-provisional entry for that tag, and confirms the entry's date matches the public GitHub Release's `published_at` **UTC** day. The verification code is checked out from the workflow's trusted dispatch commit; it never executes code from the target tag. Historical tags v0.1.0–v0.4.0 are exempt from this newer changelog contract, preserving their original published verification behavior. The check is independently rerunnable without tag mutation.
+For stable tags **other than the explicitly grandfathered v0.1.0–v0.4.0 publications**, the read-only verification job also fetches `CHANGELOG.md` from the actual tagged commit (not mutable `main`), requires exactly one non-provisional entry for that tag, and confirms the entry's date matches the public GitHub Release's `published_at` **UTC** day. The verification code is checked out from the workflow's trusted dispatch commit; it never executes code from the target tag. Historical tags v0.1.0–v0.4.0 are exempt from this newer changelog contract, preserving their original published verification behavior. The check is independently rerunnable without tag mutation.
 
 This verification is independently rerunnable without asking a maintainer to duplicate the tag-to-commit mapping manually.
 
