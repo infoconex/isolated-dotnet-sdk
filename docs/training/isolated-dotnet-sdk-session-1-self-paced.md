@@ -6,13 +6,17 @@
 **Status:** Curriculum pilot draft v0.1 — October 18, 2026.  
 **Companion:** [Session 1 AI Instructor Guide](isolated-dotnet-sdk-session-1-ai-instructor.md).
 
-> **Safety and scope:** All required commands in this lesson are read-only. Do not install/remove SDKs, edit `PATH`, replace `global.json`, or alter your current environment merely to complete Session 1. Any paths and versions in scenarios are illustrative, not claims about what is installed on your machine.
+> **Safety and scope:** The exercises inspect command resolution and SDK information; they do not ask you to install/remove SDKs, build a project, edit `PATH`, replace `global.json`, or change your project. Running the .NET CLI can still create ordinary per-user first-run state or produce telemetry under Microsoft's settings; “inspection” does **not** mean zero side effects. You may skip all live commands and use the hypothetical examples instead. Paths and SDK versions are illustrative, not claims about your machine. See [Microsoft's CLI telemetry documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
 
 ## Why start here?
 
 You might install a newer .NET SDK to evaluate it, only to discover that an unrelated command now uses a different SDK than before. Or you might install an SDK in a separate folder and find that typing `dotnet` doesn't use it. Both outcomes make sense once you separate **which executable runs** from **which SDK that executable selects**.
 
 Our project, [Isolated .NET SDK](https://github.com/infoconex/isolated-dotnet-sdk), helps you install specific SDK versions outside the usual system-wide .NET installation and invoke them intentionally. To understand its value, first understand Microsoft's normal behavior.
+
+### How to study this lesson
+
+Read one section, answer its checkpoint questions **before** looking at the matching A-numbered answers, and explain *why* you chose each answer. If uncertain, follow the section hint, try again, and then compare with the answer key. You can mark each checkpoint **independent**, **after hint**, or **after reading the explanation**. The goal is an accurate explanation, not a perfect first guess. You do not need a local .NET installation to complete the lesson.
 
 ### Learning outcomes
 
@@ -26,6 +30,18 @@ By the end, you should be able to:
 6. Describe the benefit and limits of our tool's isolation model.
 
 ## 1. First, three different decisions
+
+Before we discuss *resolution*, here are the terms we'll use:
+
+| Term | Plain-language meaning |
+| --- | --- |
+| **`dotnet` executable / host** | The actual program (`dotnet.exe` on Windows, `dotnet` on Linux/macOS) that starts when you run a .NET CLI command. A *host* is not the same as an SDK version. |
+| **SDK** | Software Development Kit: the .NET tools needed to build, test, and publish software. Different SDK versions may coexist. |
+| **Runtime** | The components needed to execute a .NET application. An app's runtime selection is different from selecting an SDK to build it. |
+| **Resolution** | The process of deciding which executable, SDK, or runtime to use. The answer depends on *which one* is being resolved. |
+| **`PATH`** | A list of directories consulted when locating commands by name. Shell aliases/functions and explicit paths can take precedence. |
+| **`global.json`** | An optional file that tells .NET which SDK version or range of SDK versions to accept. It does not rename or redirect the shell's `dotnet` command. |
+| **Roll-forward** | The rules controlling whether a different installed version is an acceptable substitute for a requested version. |
 
 When you enter `dotnet --version`, it is tempting to think there's a single step called “find .NET.” There isn't.
 
@@ -55,7 +71,7 @@ When you type `dotnet`, **the shell** first decides what that name means. That i
 - An **explicit executable path** removes ambiguity about which file you are asking the shell to launch.
 - Your IDE, build task, terminal, and CI runner can each have a different environment or specify an executable path directly. Resolving `dotnet` in your interactive terminal does not prove what another process launches.
 
-### Read-only inspection exercise
+### Optional shell inspection exercise
 
 Use the command for your terminal. If `dotnet` is not installed or not on `PATH`, that is a valid observation; the exercise still illustrates how discovery works.
 
@@ -66,7 +82,7 @@ Get-Command dotnet -All | Format-Table CommandType, Name, Source, Definition -Au
 where.exe dotnet
 ```
 
-`Get-Command` shows PowerShell's command candidates, potentially including functions or aliases. `where.exe` searches executable paths; it is a supplementary view, not a substitute for PowerShell's actual command-precedence rules. Neither command changes an installation.
+`Get-Command` shows PowerShell's command candidates, potentially including functions or aliases. `where.exe` searches executable paths; it is a supplementary view, not a substitute for PowerShell's actual command-precedence rules. Neither command installs or removes an SDK.
 
 **Linux or macOS — Bash**
 
@@ -124,9 +140,9 @@ Here is an **example**, not a file you need to create:
 }
 ```
 
-### Read-only inspection exercise
+### Optional inspection exercise
 
-Where `dotnet` is available, run:
+Where `dotnet` is available, you may run these diagnostics (subject to the first-run/telemetry note at the top):
 
 ```text
 dotnet --version
@@ -161,7 +177,7 @@ These factors are worth recognizing when behavior seems unexpected:
 | .NET 10+ `global.json` `sdk.paths` | Explicitly changes where SDK resolution searches; it **does not** redirect the shell's executable lookup | Awareness |
 | `DOTNET_ROOT` / runtime host environment | Can matter for .NET hosting and controlled operations; it is **not** a PowerShell/Bash command alias or automatic `PATH` change | Awareness; defer detailed behavior |
 
-For .NET 10+ hosts, `global.json` can include an ordered `sdk.paths` list of SDK search locations. This is another reason to avoid teaching the oversimplification that **an explicit host path always guarantees the exact SDK version**. An explicit path guarantees which *host file* you invoke; SDK selection still has its own rules. Our product's Verify operation does more than merely run a host: it checks version and origin in a controlled context.
+For .NET 10+ hosts, `global.json` can include an ordered `sdk.paths` list of SDK search locations; the first location with a compatible SDK is used under the documented matching rules. This is another reason to avoid teaching the oversimplification that **an explicit host path always guarantees the exact SDK version**. An explicit path guarantees which *host file* you invoke; SDK selection still has its own rules. Our product's Verify operation does more than merely run a host: it checks version and origin in a controlled context.
 
 ### Checkpoint 4
 
@@ -197,7 +213,7 @@ For example, if you **already installed** isolated `10.0.401`, you could inspect
 "$HOME/dotnet-sdks/10.0.401/dotnet" --info
 ```
 
-Substitute your *actually installed* version; if none is installed, treat the examples as reading material. These commands do not install anything. Their observed SDK selection can still be influenced by SDK-selection policy, including an applicable `global.json`.
+Substitute your *actually installed* version; if none is installed, treat the examples as reading material. These commands do not install an SDK, although normal .NET CLI first-run state and telemetry rules can still apply. Their observed SDK selection can be influenced by SDK-selection policy, including an applicable `global.json`.
 
 **What isolation does not mean:** It is **not** a security sandbox, a guarantee that an application can't write user data, a promise that all editors automatically use the SDK, or proof that a project compiles correctly. The tool separates installation locations and provides controlled installation/verification workflows.
 
@@ -270,7 +286,7 @@ You understand Session 1 if you can, without referring to the answer key:
 
 - State what selects the **executable** and what selects the **SDK**.
 - Explain how the **same executable** can produce two different `dotnet --version` results.
-- Identify at least two read-only commands for diagnosing resolution on your platform.
+- Identify at least two non-installing inspection commands for diagnosing resolution on your platform, and recognize that invoking the CLI can have ordinary first-run effects.
 - Explain what the isolated tool changes and what it intentionally leaves unchanged.
 - Avoid claiming that explicit host selection alone guarantees a particular SDK, or that “isolation” means sandboxing.
 
@@ -281,6 +297,7 @@ If any item is uncertain, return to the linked section and Microsoft/product ref
 **Microsoft (platform behavior)**
 
 - [The `dotnet` command](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet) — particularly `--version`, `--list-sdks`, and `--info`.
+- [.NET CLI telemetry](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry) — first-run and telemetry behavior of CLI invocation.
 - [`global.json` overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json) — search starting points, versions, roll-forward, prerelease settings, and .NET 10+ `sdk.paths`.
 - [Check installed .NET versions](https://learn.microsoft.com/en-us/dotnet/core/install/how-to-detect-installed-versions) — visibility and inspection commands.
 - [Test prerelease SDKs locally using `sdk.paths`](https://learn.microsoft.com/en-us/dotnet/core/tools/test-prerelease-sdk-locally) — optional advanced reading.
