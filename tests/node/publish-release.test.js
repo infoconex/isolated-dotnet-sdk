@@ -7,8 +7,13 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const publish = require('../../.github/scripts/publish-release.js');
+const { validateReleaseChangelog, requiresTaggedChangelogValidation } = require('../../.github/scripts/validate-release-changelog.js');
 
 const TAG = 'v0.4.0';
+const DATE = '2026-10-15';
+const VALID_CHANGELOG = '## [0.4.0] - ' + DATE +
+  '\n\n### Added\n\n- Verified stable bootstrap.\n\n' +
+  '## [0.3.0] - Unreleased\n\n- Historical release candidate notes.\n';
 const BASE = 'a'.repeat(40);
 const COMMIT = 'b'.repeat(40);
 const TREE = 'c'.repeat(40);
@@ -26,6 +31,7 @@ async function exercise(options = {}) {
   const manifest = hash(ps) + '  isolated-dotnet-sdk.ps1\n' +
     hash(sh) + '  isolated-dotnet-sdk.sh\n';
   const notes = 'Release notes from the checked-out commit.\n';
+  const changelog = options.changelog === undefined ? VALID_CHANGELOG : options.changelog;
   const calls = [];
   const warnings = [];
   const outputs = {};
@@ -134,14 +140,14 @@ async function exercise(options = {}) {
       if (options.publicOnError) {
         // GitHub may complete the mutation but lose the response.
         state.release.draft = false;
-        state.release.published_at = '2026-10-15T00:00:00Z';
+        state.release.published_at = (options.publishedAt || '2026-10-15T00:00:00Z');
       }
       const response = respond('updateRelease', { data: {
         ...state.release, draft: options.badPublishResponse ? true : false,
-        published_at: '2026-10-15T00:00:00Z'
+        published_at: (options.publishedAt || '2026-10-15T00:00:00Z')
       } });
       state.release.draft = false;
-      state.release.published_at = '2026-10-15T00:00:00Z';
+      state.release.published_at = (options.publishedAt || '2026-10-15T00:00:00Z');
       return response;
     },
     async getReleaseByTag() {
@@ -183,11 +189,13 @@ async function exercise(options = {}) {
   fs.writeFileSync(path.join(directory, 'isolated-dotnet-sdk.sh'), sh);
   fs.writeFileSync(path.join(directory, 'SHA256SUMS'), options.badManifest ? 'incorrect manifest\n' : manifest);
   fs.writeFileSync(path.join(directory, 'notes.md'), notes);
+  fs.writeFileSync(path.join(directory, 'CHANGELOG.md'), changelog);
   let error;
   try {
     process.chdir(directory);
     Object.assign(process.env, {
       RELEASE_TAG: TAG,
+      RELEASE_DATE: options.releaseDate || DATE,
       EXPECTED_SHA: BASE,
       RELEASE_NOTES_PATH: 'notes.md',
       CHECKSUM_PATH: 'SHA256SUMS',
@@ -196,7 +204,7 @@ async function exercise(options = {}) {
       BASH_SHA256: options.wrongBashHash ? '0'.repeat(64) : hash(sh)
     });
     try {
-      await publish({ github, context: { repo: identity }, core });
+      await publish({ github, context: { repo: identity }, core, now: () => new Date((options.currentUtcDay || DATE) + 'T12:00:00Z') });
     } catch (caught) {
       error = caught;
     }
@@ -218,6 +226,68 @@ function failed(result, reason, { summaryWriteAttempted = false } = {}) {
     assert.ok(!result.calls.includes('summary.write'), 'no publication success summary');
   }
 }
+
+test('independent tagged changelog verification preserves historical releases only', () => {
+  for (const historical of ['v0.1.0', 'v0.2.0', 'v0.3.0', 'v0.4.0']) {
+    assert.equal(requiresTaggedChangelogValidation(historical), false, historical);
+  }
+  for (const future of ['v0.0.1', 'v0.3.1', 'v0.4.1', 'v0.5.0', 'v1.0.0', 'v2.11.0']) {
+    assert.equal(requiresTaggedChangelogValidation(future), true, future);
+  }
+  assert.throws(() => requiresTaggedChangelogValidation('v0.5.0-rc.1'), /vMAJOR.MINOR.PATCH/);
+  assert.throws(() => requiresTaggedChangelogValidation('0.5.0'), /vMAJOR.MINOR.PATCH/);
+  assert.throws(() => requiresTaggedChangelogValidation('v999999999999999999999.0.0'), /safe integers/);
+});
+
+test('future release tagged verification rejects undated or candidate entries', () => {
+  const futureTag = 'v0.5.0';
+  const date = '2026-12-01';
+  const good = '## [0.5.0] - ' + date + '\n\n- Published changes.\n';
+  assert.equal(requiresTaggedChangelogValidation(futureTag), true);
+  assert.deepEqual(validateReleaseChangelog(good, futureTag, date), { tag: futureTag, date });
+  assert.throws(() => validateReleaseChangelog(good.replace(date, 'Unreleased'), futureTag, date), /exact UTC publication date/);
+  assert.throws(() => validateReleaseChangelog(good.replace('Published changes.', 'Release candidate changes.'), futureTag, date), /provisional or candidate/);
+});
+
+test('changelog gate validates the exact release entry, not older versions', () => {
+  assert.deepEqual(validateReleaseChangelog(VALID_CHANGELOG, TAG, DATE), { tag: TAG, date: DATE });
+});
+
+for (const scenario of [
+  { name: 'Unreleased heading', changelog: VALID_CHANGELOG.replace('## [0.4.0] - ' + DATE, '## [0.4.0] - Unreleased'), error: /exact UTC publication date/ },
+  { name: 'wrong publication day', changelog: VALID_CHANGELOG.replace(DATE, '2026-10-14'), error: /exact UTC publication date/ },
+  { name: 'candidate language', changelog: VALID_CHANGELOG.replace('Verified stable bootstrap.', 'v0.4.0 candidate is ready.'), error: /provisional or candidate/ },
+  { name: 'still awaiting publication', changelog: VALID_CHANGELOG.replace('Verified stable bootstrap.', 'Not yet published.'), error: /provisional or candidate/ },
+  { name: 'missing entry', changelog: VALID_CHANGELOG.replace('## [0.4.0]', '## [9.9.9]'), error: /exactly one release entry/ },
+  { name: 'duplicate entry', changelog: VALID_CHANGELOG + '## [0.4.0] - ' + DATE + '\n\n- Duplicate.\n', error: /exactly one release entry/ },
+  { name: 'empty entry', changelog: '## [0.4.0] - ' + DATE + '\n## [0.3.0] - 2026-10-01\n- Old.\n', error: /no release details/ },
+  { name: 'missing release date', changelog: VALID_CHANGELOG, date: '2026-10-16', error: /exact UTC publication date/ },
+  { name: 'invalid calendar date', changelog: VALID_CHANGELOG, date: '2026-02-30', error: /not a real calendar date/ }
+]) {
+  test('fail before tag creation: ' + scenario.name, async () => {
+    const result = await exercise({ changelog: scenario.changelog, releaseDate: scenario.date || DATE });
+    failed(result, scenario.error);
+    assert.ok(!result.calls.includes('createRef'), 'invalid changelog must not create a tag');
+    assert.ok(!result.calls.includes('createCommit'), 'invalid changelog must not derive a release commit');
+  });
+}
+
+test('UTC midnight crossover aborts before public release and cleans only owned draft state', async () => {
+  const result = await exercise({ currentUtcDay: '2026-10-16' });
+  failed(result, /UTC publication date changed before publication/);
+  assert.ok(!result.calls.includes('updateRelease'), 'release must remain unpublished');
+  assert.equal(result.state.release, null, 'owned draft release safely removed');
+  assert.equal(result.state.tag, false, 'owned tag safely removed');
+  assert.deepEqual(result.state.deleted, [42, 'tag']);
+});
+
+test('published_at must match the finalized UTC changelog date, preserving public state if not', async () => {
+  const result = await exercise({ publishedAt: '2026-10-16T00:01:00Z' });
+  failed(result, /UTC date must match/);
+  assert.equal(result.state.tag, true);
+  assert.equal(result.state.release.draft, false);
+  assert.deepEqual(result.state.deleted, [], 'published release must never be auto-removed');
+});
 
 test('valid transaction verifies the derived identity and checksum asset before publishing', async () => {
   const result = await exercise();

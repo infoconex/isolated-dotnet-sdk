@@ -45,6 +45,12 @@ jobs:
       expected_sha: ${{ steps.release.outputs.expected_sha }}
 
     steps:
+      - name: Check out trusted verification code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
       - name: Verify tag and release binding
         id: release
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
@@ -88,6 +94,32 @@ jobs:
             if (assets.length !== 1 || assets[0].name !== 'SHA256SUMS' || assets[0].state !== 'uploaded') {
               core.setFailed(`Release ${tag} must contain exactly one uploaded SHA256SUMS asset.`);
               return;
+            }
+
+            // The public tag must carry the finalized changelog entry. Historical
+            // published as v0.1.0, v0.2.0, v0.3.0 or v0.4.0 remain supported.
+            const { validateReleaseChangelog, requiresTaggedChangelogValidation } =
+              require('./.github/scripts/validate-release-changelog.js');
+            if (requiresTaggedChangelogValidation(tag)) {
+              const publishedAt = new Date(release.data.published_at);
+              if (Number.isNaN(publishedAt.getTime())) {
+                throw new Error('Published release timestamp is invalid for ' + tag + '.');
+              }
+              const changelogFile = await github.rest.repos.getContent({
+                owner, repo, path: 'CHANGELOG.md', ref: expectedSha
+              });
+              if (Array.isArray(changelogFile.data) ||
+                  changelogFile.data.type !== 'file' ||
+                  changelogFile.data.encoding !== 'base64' ||
+                  typeof changelogFile.data.content !== 'string') {
+                throw new Error('Tagged CHANGELOG.md is missing or is not an encoded file for ' + tag + '.');
+              }
+              const changelog = Buffer.from(changelogFile.data.content, 'base64').toString('utf8');
+              const publicationDay = publishedAt.toISOString().slice(0, 10);
+              validateReleaseChangelog(changelog, tag, publicationDay);
+              core.info(`Verified tagged changelog ${tag} has published UTC date ${publicationDay}.`);
+            } else {
+              core.info(`Historical ${tag} predates tagged changelog validation; preserving its published contract.`);
             }
 
             core.setOutput('tag', tag);
