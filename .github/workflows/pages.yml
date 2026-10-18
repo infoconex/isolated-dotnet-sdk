@@ -17,193 +17,120 @@ on:
       - 'install.sh'
       - 'search-index.json'
       - '.github/workflows/pages.yml'
+      - '.github/scripts/prepare-pages-source.sh'
+      - '.github/scripts/validate-pages-output.sh'
+      - '.github/scripts/check-documentation-links.js'
+      - '.github/scripts/check-pages-gate.js'
+      - '.github/scripts/classify-ci-changes.js'
+      - 'tests/node/ci-validation.test.js'
+      - 'tests/node/documentation-links.test.js'
   pull_request:
-    paths:
-      - '**/*.md'
-      - 'LICENSE'
-      - '.config/test-frameworks.json'
-      - '.config/static-analysis.json'
-      - '_config.yml'
-      - '_data/**'
-      - '_layouts/**'
-      - 'assets/**'
-      - 'install.ps1'
-      - 'install.sh'
-      - 'search-index.json'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'deploy' }}
+  group: pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
-    name: Build Pages site
+  classify:
+    name: Classify Pages validation
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      pages: read
-
+      pull-requests: read
+    outputs:
+      documentation: ${{ steps.files.outputs.documentation }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Test Pages classification and gate policy
+        shell: bash
+        run: node --test tests/node/ci-validation.test.js tests/node/documentation-links.test.js
+      - name: Classify Pages input changes
+        id: files
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { classify } = require('./.github/scripts/classify-ci-changes.js');
+            let files = [];
+            let expectedCount;
+            if (context.eventName === 'pull_request') {
+              files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo,
+                pull_number: context.issue.number,
+                per_page: 100
+              });
+              expectedCount = context.payload.pull_request.changed_files;
+            }
+            const choice = classify(context.eventName, files, expectedCount);
+            core.info(choice.reason);
+            core.setOutput('documentation', String(choice.documentation));
 
+  build:
+    name: Build Pages site
+    needs: classify
+    if: ${{ needs.classify.outputs.documentation == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check Markdown local links
+        shell: bash
+        run: node .github/scripts/check-documentation-links.js
       - name: Stage documentation site source
         shell: bash
-        run: |
-          set -euo pipefail
-
-          rm -rf .pages-source _site
-          mkdir -p .pages-source/docs .pages-source/.config
-
-          stage_markdown() {
-            source="$1"
-            destination=".pages-source/$source"
-            mkdir -p "$(dirname "$destination")"
-
-            if head -n 1 "$source" | grep -qx -- '---'; then
-              cp "$source" "$destination"
-            else
-              {
-                printf '%s\n' '---' 'layout: default' '---' ''
-                cat "$source"
-              } > "$destination"
-            fi
-          }
-
-          stage_markdown README.md
-          stage_markdown CHANGELOG.md
-          cp LICENSE .pages-source/
-          cp .config/test-frameworks.json .config/static-analysis.json .pages-source/.config/
-          cp _config.yml search-index.json .pages-source/
-          cp install.ps1 install.sh .pages-source/
-          cp -R _data _layouts assets .pages-source/
-
-          while IFS= read -r -d '' file; do
-            stage_markdown "$file"
-          done < <(find docs -type f -name '*.md' -print0)
-
-          node --check .pages-source/assets/js/site.js
-
-          test -f .pages-source/install.ps1
-          test -f .pages-source/install.sh
-          test ! -e .pages-source/tests
-          test ! -e .pages-source/scripts
-          test ! -e .pages-source/dotnet-install.sh
-          test ! -e .pages-source/dotnet-install.ps1
-          test ! -e .pages-source/isolated-dotnet-sdk.sh
-          test ! -e .pages-source/isolated-dotnet-sdk.ps1
-
+        run: bash .github/scripts/prepare-pages-source.sh
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
         with:
           source: ./.pages-source
           destination: ./_site
-
       - name: Validate generated site
         shell: bash
-        run: |
-          set -euo pipefail
-
-          test -f _site/index.html
-          test -f _site/docs/index.html
-          test -f _site/docs/commands/install.html
-          test -f _site/docs/getting-started/windows-powershell.html
-          test -f _site/docs/getting-started/linux-macos-bash.html
-          test -f _site/assets/search-index.json
-          test -f _site/assets/css/site.css
-          test -f _site/assets/js/site.js
-          test -f _site/install.ps1
-          test -f _site/install.sh
-
-          cmp install.ps1 _site/install.ps1
-          cmp install.sh _site/install.sh
-          python -m json.tool _site/assets/search-index.json >/dev/null
-
-          grep -q 'class="docs-nav"' _site/index.html
-          grep -q 'Search documentation' _site/index.html
-          grep -q 'Getting Started' _site/index.html
-          grep -q 'docs/commands/install.html' _site/index.html
-          grep -q 'aria-current="page"' _site/docs/commands/install.html
-          grep -q '"title": "Install"' _site/assets/search-index.json
-
-          shopt -s nullglob
-          release_note_files=(.github/release-notes/v*.md)
-          for release_notes in "${release_note_files[@]}"; do
-            tag="$(basename "$release_notes" .md)"
-            history_source="docs/releases/history/$tag.md"
-            history_link="history/$tag.md"
-            history_page="_site/docs/releases/history/$tag.html"
-
-            if [[ ! -f "$history_source" ]]; then
-              printf 'Release history missing for %s: %s\n' "$tag" "$history_source" >&2
-              exit 1
-            fi
-            if ! grep -Fq "$history_link" docs/releases/README.md; then
-              printf 'Releases overview does not link %s\n' "$history_source" >&2
-              exit 1
-            fi
-            if ! grep -Fq "path: $history_source" _data/navigation.yml; then
-              printf 'Pages navigation does not include %s\n' "$history_source" >&2
-              exit 1
-            fi
-            if [[ ! -f "$history_page" ]]; then
-              printf 'Release history page did not generate: %s\n' "$history_page" >&2
-              exit 1
-            fi
-            if ! grep -Fq "docs/releases/history/$tag.html" _site/assets/search-index.json; then
-              printf 'Release history is missing from the Pages search index: %s\n' "$tag" >&2
-              exit 1
-            fi
-          done
-
-          while IFS= read -r path; do
-            case "$path" in
-              README.md)
-                generated="_site/index.html"
-                ;;
-              */README.md)
-                generated="_site/${path%README.md}index.html"
-                ;;
-              *.md)
-                generated="_site/${path%.md}.html"
-                ;;
-              *)
-                generated="_site/$path"
-                ;;
-            esac
-
-            if [[ ! -f "$generated" ]]; then
-              printf 'Navigation target did not generate: %s -> %s\n' "$path" "$generated" >&2
-              exit 1
-            fi
-          done < <(awk '/^[[:space:]]+path:/ { print $2 }' _data/navigation.yml)
-
-          test ! -e _site/tests
-          test ! -e _site/scripts
-          test ! -e _site/isolated-dotnet-sdk.sh
-          test ! -e _site/isolated-dotnet-sdk.ps1
-
+        run: bash .github/scripts/validate-pages-output.sh
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ./_site
           include-hidden-files: true
 
+  pages-gate:
+    name: Pages gate
+    needs: [classify, build]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require applicable Pages validation to succeed
+        shell: bash
+        env:
+          CLASSIFICATION_RESULT: ${{ needs.classify.result }}
+          DOCUMENTATION_REQUIRED: ${{ needs.classify.outputs.documentation }}
+          PAGES_BUILD_RESULT: ${{ needs.build.result }}
+        run: node .github/scripts/check-pages-gate.js
+
   deploy:
     name: Deploy Pages site
-    if: github.event_name != 'pull_request'
-    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, pages-gate]
     runs-on: ubuntu-24.04
     permissions:
       pages: write
@@ -211,7 +138,6 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

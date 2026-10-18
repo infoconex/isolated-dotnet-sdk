@@ -18,8 +18,46 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  bash:
+  classify:
+    name: Classify required validation
     if: ${{ github.event_name != 'push' || github.event.created == false }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      behavioral: ${{ steps.files.outputs.behavioral }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test classification and validation-gate policy
+        shell: bash
+        run: node --test tests/node/ci-validation.test.js
+      - name: Classify changed files
+        id: files
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { classify } = require('./.github/scripts/classify-ci-changes.js');
+            let files = [];
+            let expectedCount;
+            if (context.eventName === 'pull_request') {
+              files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo,
+                pull_number: context.issue.number,
+                per_page: 100
+              });
+              expectedCount = context.payload.pull_request.changed_files;
+            }
+            const choice = classify(context.eventName, files, expectedCount);
+            core.info(choice.reason);
+            core.setOutput('behavioral', String(choice.behavioral));
+
+  bash:
+    needs: classify
+    if: ${{ needs.classify.outputs.behavioral == 'true' }}
     name: Bash (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -76,7 +114,8 @@ jobs:
           node --test tests/node/publish-release.test.js
 
   powershell:
-    if: ${{ github.event_name != 'push' || github.event.created == false }}
+    needs: classify
+    if: ${{ needs.classify.outputs.behavioral == 'true' }}
     name: PowerShell (windows-2025)
     runs-on: windows-2025
 
@@ -129,3 +168,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+
+
+  validation-gate:
+    name: Validation gate
+    needs: [classify, bash, powershell]
+    if: ${{ always() && (github.event_name != 'push' || github.event.created == false) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require all applicable validation jobs to succeed
+        shell: bash
+        env:
+          CLASSIFICATION_RESULT: ${{ needs.classify.result }}
+          BEHAVIORAL_REQUIRED: ${{ needs.classify.outputs.behavioral }}
+          BASH_RESULT: ${{ needs.bash.result }}
+          POWERSHELL_RESULT: ${{ needs.powershell.result }}
+        run: node .github/scripts/check-validation-gate.js
