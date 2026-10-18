@@ -30,7 +30,30 @@ jobs:
     name: Validate release workflow definition
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
+      - name: Check out PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Smoke-test github-script v9 and publisher module (read-only)
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const publish = require('./.github/scripts/publish-release.js');
+            const { validateReleaseChangelog } = require('./.github/scripts/validate-release-changelog.js');
+            if (typeof publish !== 'function' || typeof validateReleaseChangelog !== 'function') {
+              throw new Error('Publisher CommonJS module loading failed under github-script v9.');
+            }
+            validateReleaseChangelog('## [9.9.9] - 2099-01-01\n\n- Sample release details.\n', 'v9.9.9', '2099-01-01');
+            const repository = await github.rest.repos.get(context.repo);
+            if (repository.data.full_name !== context.repo.owner + '/' + context.repo.repo) {
+              throw new Error('Injected github/context API binding failed under github-script v9.');
+            }
+            core.info('github-script v9 executed the read-only publisher smoke check.');
+
       - name: Confirm publication path is inactive
         shell: bash
         run: |
@@ -110,7 +133,7 @@ jobs:
           printf 'expected_sha=%s\n' "$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Verify landed release state
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const tag = process.env.RELEASE_TAG;
@@ -256,7 +279,7 @@ jobs:
 
       - name: Create, verify, and publish release
         id: release
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           CHECKSUM_PATH: ${{ runner.temp }}/SHA256SUMS
           MANIFEST_SHA256: ${{ steps.checksums.outputs.manifest_sha256 }}
