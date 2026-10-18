@@ -2,7 +2,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { validateReleaseChangelog } = require('./validate-release-changelog.js');
 
-module.exports = async ({ github, context, core }) => {
+module.exports = async ({ github, context, core, now = () => new Date() }) => {
   const required = [
     'RELEASE_TAG',
     'RELEASE_DATE',
@@ -344,6 +344,16 @@ module.exports = async ({ github, context, core }) => {
     await verifyReleaseCommit();
     await verifyTag();
     await verifyRelease(true);
+
+    // A workflow spanning midnight UTC must stop while the release is still
+    // draft, so it cannot publish a tag with a stale changelog date.
+    const publicationUtcDate = now().toISOString().slice(0, 10);
+    if (publicationUtcDate !== releaseDate) {
+      throw new Error(
+        `UTC publication date changed before publication (${releaseDate} -> ${publicationUtcDate}); ` +
+        'refresh the reviewed changelog date and rerun validation before redispatch.'
+      );
+    }
 
     // GitHub may complete publication even if the API response is lost.
     // After attempting this transition, automatic deletion is unsafe.
