@@ -27,7 +27,6 @@ jobs:
       pull-requests: read
     outputs:
       behavioral: ${{ steps.files.outputs.behavioral }}
-      documentation: ${{ steps.files.outputs.documentation }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,7 +34,7 @@ jobs:
           persist-credentials: false
       - name: Test classification and validation-gate policy
         shell: bash
-        run: node --test tests/node/ci-validation.test.js tests/node/documentation-links.test.js
+        run: node --test tests/node/ci-validation.test.js
       - name: Classify changed files
         id: files
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -55,37 +54,6 @@ jobs:
             const choice = classify(context.eventName, files, expectedCount);
             core.info(choice.reason);
             core.setOutput('behavioral', String(choice.behavioral));
-            core.setOutput('documentation', String(choice.documentation));
-
-  documentation:
-    name: Documentation site
-    needs: classify
-    if: ${{ needs.classify.outputs.documentation == 'true' }}
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pages: read
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Check Markdown local links
-        shell: bash
-        run: node .github/scripts/check-documentation-links.js
-      - name: Stage documentation site source
-        shell: bash
-        run: bash .github/scripts/prepare-pages-source.sh
-      - name: Configure Pages
-        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
-        with:
-          source: ./.pages-source
-          destination: ./_site
-      - name: Validate generated site
-        shell: bash
-        run: bash .github/scripts/validate-pages-output.sh
 
   bash:
     needs: classify
@@ -204,7 +172,7 @@ jobs:
 
   validation-gate:
     name: Validation gate
-    needs: [classify, documentation, bash, powershell]
+    needs: [classify, bash, powershell]
     if: ${{ always() && (github.event_name != 'push' || github.event.created == false) }}
     runs-on: ubuntu-24.04
     permissions:
@@ -219,8 +187,6 @@ jobs:
         env:
           CLASSIFICATION_RESULT: ${{ needs.classify.result }}
           BEHAVIORAL_REQUIRED: ${{ needs.classify.outputs.behavioral }}
-          DOCUMENTATION_REQUIRED: ${{ needs.classify.outputs.documentation }}
-          DOCS_JOB_RESULT: ${{ needs.documentation.result }}
           BASH_RESULT: ${{ needs.bash.result }}
           POWERSHELL_RESULT: ${{ needs.powershell.result }}
         run: node .github/scripts/check-validation-gate.js

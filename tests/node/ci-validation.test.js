@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { classify, isDocumentationOnly, affectsPages } =
   require('../../.github/scripts/classify-ci-changes.js');
 const { checkGate } = require('../../.github/scripts/check-validation-gate.js');
+const { checkPagesGate } = require('../../.github/scripts/check-pages-gate.js');
 
 function file(filename, status = 'modified', previous_filename) {
   return { filename, status, ...(previous_filename ? { previous_filename } : {}) };
@@ -14,8 +15,6 @@ function gate(overrides = {}) {
   return {
     classification: 'success',
     behavioral: 'true',
-    documentation: 'false',
-    docsJob: 'skipped',
     bash: 'success',
     powershell: 'success',
     ...overrides
@@ -74,23 +73,36 @@ test('incomplete, malformed or excessive changed-file data fails closed', () => 
 
 test('final gate succeeds only when requested jobs truly succeed', () => {
   // The docs job result gets its own field, never confused with the decision flag.
-  assert.equal(checkGate(gate()), 'Required validation paths completed successfully');
-  assert.equal(checkGate(gate({ behavioral: 'false', documentation: 'true',
-    bash: 'skipped', powershell: 'skipped', docsJob: 'success' })),
-    'Required validation paths completed successfully');
-  assert.equal(checkGate(gate({ behavioral: 'true', documentation: 'true',
-    docsJob: 'success' })), 'Required validation paths completed successfully');
+  assert.equal(checkGate(gate()), 'Required product validation paths completed successfully');
+  assert.equal(checkGate(gate({ behavioral: 'false',
+    bash: 'skipped', powershell: 'skipped' })),
+    'Required product validation paths completed successfully');
   for (const state of [
     { classification: 'failure' },
     { classification: 'skipped' },
     { behavioral: '' },
-    { behavioral: 'false', documentation: 'false' },
     { bash: 'skipped' },
     { powershell: 'cancelled' },
-    { docsJob: 'failure', documentation: 'true' },
-    { docsJob: 'skipped', documentation: 'true' },
-    { docsJob: 'success', documentation: 'false' }
+    { behavioral: 'unknown' }
   ]) {
     assert.throws(() => checkGate(gate(state)), /./, JSON.stringify(state));
   }
+});
+
+test('Pages gate verifies required builds and legitimate skipped builds', () => {
+  const base = { classification: 'success', documentation: 'true', build: 'success' };
+  assert.equal(checkPagesGate(base), 'Required Pages checks completed successfully');
+  assert.equal(checkPagesGate({ ...base, documentation: 'false', build: 'skipped' }),
+    'Required Pages checks completed successfully');
+  for (const override of [
+    { classification: 'failure' },
+    { classification: 'skipped' },
+    { documentation: '' },
+    { documentation: 'unknown' },
+    { build: 'skipped' },
+    { build: 'failure' },
+    { build: 'cancelled' },
+    { documentation: 'false', build: 'success' },
+    { documentation: 'false', build: '' }
+  ]) assert.throws(() => checkPagesGate({ ...base, ...override }), /./);
 });

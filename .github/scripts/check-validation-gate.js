@@ -4,24 +4,16 @@ function checkGate(state) {
   if (state.classification !== 'success') {
     throw new Error('Change classification did not succeed: ' + state.classification);
   }
-  if (!['true', 'false'].includes(state.behavioral) ||
-      !['true', 'false'].includes(state.documentation) ||
-      (state.behavioral === 'false' && state.documentation === 'false')) {
-    throw new Error('Missing or invalid required-validation decision');
+  if (!['true', 'false'].includes(state.behavioral)) {
+    throw new Error('Missing or invalid behavioral-validation decision');
   }
-  const expectations = {
-    docsJob: state.documentation === 'true',
-    bash: state.behavioral === 'true',
-    powershell: state.behavioral === 'true'
-  };
-  for (const [job, required] of Object.entries(expectations)) {
-    const actual = state[job];
-    const expected = required ? 'success' : 'skipped';
-    if (actual !== expected) {
-      throw new Error(job + ' expected ' + expected + ' but was ' + (actual || '(missing)'));
+  const expected = state.behavioral === 'true' ? 'success' : 'skipped';
+  for (const job of ['bash', 'powershell']) {
+    if (state[job] !== expected) {
+      throw new Error(job + ' expected ' + expected + ' but was ' + (state[job] || '(missing)'));
     }
   }
-  return 'Required validation paths completed successfully';
+  return 'Required product validation paths completed successfully';
 }
 
 if (require.main === module) {
@@ -29,10 +21,8 @@ if (require.main === module) {
     console.log(checkGate({
       classification: process.env.CLASSIFICATION_RESULT,
       behavioral: process.env.BEHAVIORAL_REQUIRED,
-      documentation: process.env.DOCUMENTATION_REQUIRED,
       bash: process.env.BASH_RESULT,
-      powershell: process.env.POWERSHELL_RESULT,
-      docsJob: process.env.DOCS_JOB_RESULT,
+      powershell: process.env.POWERSHELL_RESULT
     }));
   } catch (error) {
     console.error('Validation gate failed: ' + error.message);

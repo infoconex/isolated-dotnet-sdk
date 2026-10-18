@@ -21,6 +21,10 @@ function affectsPages(path) {
     path === '.github/scripts/prepare-pages-source.sh' ||
     path === '.github/scripts/validate-pages-output.sh' ||
     path === '.github/scripts/check-documentation-links.js' ||
+    path === '.github/scripts/check-pages-gate.js' ||
+    path === '.github/scripts/classify-ci-changes.js' ||
+    path === 'tests/node/ci-validation.test.js' ||
+    path === 'tests/node/documentation-links.test.js' ||
     path.startsWith('_data/') ||
     path.startsWith('_layouts/') ||
     path.startsWith('assets/') ||
