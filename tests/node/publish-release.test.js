@@ -242,7 +242,7 @@ test('independent tagged changelog verification preserves historical releases on
 test('future release tagged verification rejects undated or candidate entries', () => {
   const futureTag = 'v0.5.0';
   const date = '2026-12-01';
-  const good = '## [0.5.0] - ' + date + '\\n\\n- Published changes.\\n';
+  const good = '## [0.5.0] - ' + date + '\n\n- Published changes.\n';
   assert.equal(requiresTaggedChangelogValidation(futureTag), true);
   assert.deepEqual(validateReleaseChangelog(good, futureTag, date), { tag: futureTag, date });
   assert.throws(() => validateReleaseChangelog(good.replace(date, 'Unreleased'), futureTag, date), /exact UTC publication date/);
