@@ -44,18 +44,19 @@ function validateReleaseChangelog(changelog, tag, expectedDate) {
   return { tag, date: expectedDate };
 }
 
-// The tagged-source changelog gate was introduced after v0.4.0 was published.
-// Keep historical release verification compatible, but enforce for all later
-// stable versions, including v0.4.1 hotfixes.
+// Only the four stable releases actually published before this verification
+// contract are exempt. A future maintenance release on an older version line
+// (for example v0.3.1) must still satisfy the new tagged-changelog contract.
+const historicalStableTags = new Set(['v0.1.0', 'v0.2.0', 'v0.3.0', 'v0.4.0']);
 function requiresTaggedChangelogValidation(tag) {
   if (typeof tag !== 'string' || !/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(tag)) {
     throw new Error('Stable release tag must use vMAJOR.MINOR.PATCH.');
   }
-  const [major, minor, patch] = tag.slice(1).split('.').map(Number);
-  if (![major, minor, patch].every(Number.isSafeInteger)) {
+  const version = tag.slice(1).split('.').map(Number);
+  if (!version.every(Number.isSafeInteger)) {
     throw new Error('Stable release version components must be safe integers.');
   }
-  return major > 0 || minor > 4 || (minor === 4 && patch > 0);
+  return !historicalStableTags.has(tag);
 }
 
 module.exports = { validateReleaseChangelog, requiresTaggedChangelogValidation };
