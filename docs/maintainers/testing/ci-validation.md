@@ -1,18 +1,42 @@
 # CI validation architecture
 
-`Validate` is the deterministic pre-merge and post-merge confidence layer. It intentionally keeps GitHub Actions focused on runner/matrix selection, checkout, GitHub-hosted cache restore/save, and invoking repository-owned validation commands.
+`Validate` is the deterministic pre-merge and post-merge confidence layer; only strict documentation-only PRs bypass the expensive behavioral jobs. It intentionally keeps GitHub Actions focused on runner/matrix selection, checkout, GitHub-hosted cache restore/save, and invoking repository-owned validation commands.
 
 ## Trigger model
 
-The complete Validate matrix runs for:
+Both workflows retain independent and stable pull-request checks, with separate responsibilities:
 
-- pull requests, where the exact reviewed PR head is the authoritative pre-merge signal;
-- pushes to `main`, which verify the landed released-production source line; and
-- non-creation pushes to `release/**`, which verify landed next-release integration state.
+- **Validate** is always triggered for PRs. It classifies GitHub's paginated changed-file list (including original and new rename paths), conservatively requires the Windows, Ubuntu and macOS behavioral matrix for everything except root README.md and docs/**/*.md, and reports the **Validation gate**. Classification failure and missing/failed/incorrectly skipped required jobs fail the gate.
+- **Pages** is also always triggered for PRs. Its own classifier identifies relevant documentation and website inputs, runs the site build and link/output checks only when required, and reports the independent **Pages gate**. Classification failure, a missing/failed applicable build, or an unexpectedly skipped required build fails that gate. When a PR has no site-relevant change, the build is intentionally skipped and Pages gate still reports success.
+- On non-creation pushes to release/** and main, Validate runs the full cross-platform behavioral suite but **never builds documentation**. For release integration branches there is intentionally no automatic Pages publication.
+- On relevant pushes to main, Pages builds, checks, uploads and deploys the published site. It is the sole owner of site publication and of documentation-site validation. Pages manual runs may build/check a branch but never deploy; publication requires a push to main.
+- Manually dispatched Validate always runs the complete Windows/Ubuntu/macOS behavioral matrix. Manual Pages provides a separate on-demand documentation build.
+- Creating a new release/** branch does not start product validation jobs, preserving the no-change branch-creation optimization.
 
-Creating a new `release/**` branch from an already-validated base can still create a lightweight workflow event, but the validation jobs are skipped when the push payload identifies branch creation. This preserves the no-change branch-creation optimization while restoring post-merge validation for the active release integration branch.
+Use a narrow documentation-only **behavioral exclusion**: only root README.md and docs/**/*.md skip cross-platform tests. Every other path triggers the full supported-platform matrix, including source scripts, CI workflows, dependency pins, tests, release material, and unknown paths. For Pages relevance, layouts, assets, scripts that stage/check the site, publication configuration, and release docs also count. Missing/inconsistent GitHub listing data, renames without original paths, or the listing limit fail closed. Mixed PRs run all applicable paths in their respective workflows.
 
-Normal issue branches do not receive a full Validate run merely because they are pushed. Use targeted deterministic development checks before the PR and rely on PR exact-head Validate as the normal authoritative pre-merge matrix.
+## Required checks and enforcement
+
+The two stable PR job identities are **Validation gate** and **Pages gate**, both with source github-actions. Configure **both** as required checks in the active main and release/** rulesets. Never require individually conditional jobs, since GitHub can consider a skipped job successful. Do not put workflow-level path filters on either PR workflow, since a required check for an untriggered workflow may remain pending. Both gates report an explicit terminal status for every PR.
+
+The repository rulesets previously required PRs/squash merges but no CI checks. Ruleset edits require repository administration and must be verified after applying them; until then the successful checks are advisory, not branch enforced.
+
+## Pages validation and deployment
+
+The Pages build job performs local Markdown file-link checks through .github/scripts/check-documentation-links.js, stages the site through .github/scripts/prepare-pages-source.sh, runs the pinned Jekyll build, and checks generated navigation, release-history linkage, search assets, and bootstrap presence through .github/scripts/validate-pages-output.sh. The local link checker does not validate external HTTP availability or heading anchors.
+
+A relevant Pages PR gets build and gate results without publication or artifact upload. A main push receives the full Pages build and publication pipeline. The distinct E2E and release workflows are not changed by this optimization.
+
+Reproduce routing and link checks locally with:
+
+```bash
+node --test tests/node/ci-validation.test.js tests/node/documentation-links.test.js
+node .github/scripts/check-documentation-links.js
+```
+
+## Measured baseline
+
+On October 18, 2026, documentation-only PR #207 consumed 48 runner-seconds Ubuntu, 62 macOS, and 201 Windows in Validate (311 combined; 206 elapsed), and 26 runner-seconds in Pages. Earlier smoke-test PR #210 confirmed that the conditional behavioral jobs can skip successfully. This two-workflow design eliminates three behavioral runners for docs-only changes, does not launch documentation builds from Validate, and retains a dedicated required-check identity for each workflow. Compare GitHub job results and timestamps on actual PR heads instead of treating timing as a hard fail threshold.
 
 ## Responsibility split
 
