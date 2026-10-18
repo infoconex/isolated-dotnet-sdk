@@ -115,7 +115,7 @@ Dispatch `Publish Release` from `main` with the explicit stable tag. The workflo
 12. the draft tag target, release metadata, asset set, uploaded checksum bytes, and derived release commit all match the reviewed state; and
 13. only after those draft checks pass, the workflow publishes the release and reads the public release, tag, checksum asset, and derived commit back again to verify they are unchanged.
 
-The draft stage is a transactional safety gate inside the workflow, not a separate manual publication approval. The workflow checks changelog readiness **before any tag or draft creation**, and the publisher repeats that check before deriving the commit. Following publication, public `published_at` is checked against that same UTC date. A midnight UTC crossover cannot silently publish a mismatched changelog; it requires manual investigation rather than rewriting an already-public release.
+The draft stage is a transactional safety gate inside the workflow, not a separate manual publication approval. The workflow checks changelog readiness **before any tag or draft creation**, and the publisher repeats that check before deriving the commit. Immediately before moving the verified draft to public, the publisher checks the current UTC date again; a midnight UTC crossover aborts safely while the release is still draft, allowing owned draft/tag cleanup and a new reviewed-date attempt. Following publication, public `published_at` is also checked against that same UTC date to detect an unlikely boundary race or GitHub timestamp discrepancy. Once a release is public, any discrepancy requires manual investigation rather than rewriting the tag.
 
 ## Failure and cleanup
 
