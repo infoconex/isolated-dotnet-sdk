@@ -4,26 +4,39 @@
 
 ## Trigger model
 
-The Validate workflow continues to run for every pull request without workflow-level path filtering. The lightweight Classify required validation job uses a paginated GitHub changed-file listing plus the reported count. Only root README.md and docs/**/*.md, including renames wholly within this allowlist, qualify for documentation-only validation. All other paths (product, tests, workflows, test configuration, release material, and unknown files) require the complete Ubuntu/macOS/Windows behavioral suite. Mixed changes run both documentation and behavioral checks.
+Both workflows retain independent and stable pull-request checks, with separate responsibilities:
 
-Documentation-site inputs include layouts, CSS/JS assets, release notes, installer wrappers, Pages/Validate workflow files, and relevant configuration. They are NOT automatically exempted from behavioral validation. Old and new rename paths are classified. Missing or inconsistent API results, malformed paths, and listing limits fail closed and prevent approval.
+- **Validate** is always triggered for PRs. It classifies GitHub's paginated changed-file list (including original and new rename paths), conservatively requires the Windows, Ubuntu and macOS behavioral matrix for everything except root README.md and docs/**/*.md, and reports the **Validation gate**. Classification failure and missing/failed/incorrectly skipped required jobs fail the gate.
+- **Pages** is also always triggered for PRs. Its own classifier identifies relevant documentation and website inputs, runs the site build and link/output checks only when required, and reports the independent **Pages gate**. Classification failure, a missing/failed applicable build, or an unexpectedly skipped required build fails that gate. When a PR has no site-relevant change, the build is intentionally skipped and Pages gate still reports success.
+- On non-creation pushes to release/** and main, Validate runs the full cross-platform behavioral suite but **never builds documentation**. For release integration branches there is intentionally no automatic Pages publication.
+- On relevant pushes to main, Pages builds, checks, uploads and deploys the published site. It is the sole owner of site publication and of documentation-site validation. Pages manual runs may build/check a branch but never deploy; publication requires a push to main.
+- Manually dispatched Validate always runs the complete Windows/Ubuntu/macOS behavioral matrix. Manual Pages provides a separate on-demand documentation build.
+- Creating a new release/** branch does not start product validation jobs, preserving the no-change branch-creation optimization.
 
-A non-creation push to main or release/** and a manually dispatched Validate run always execute the full behavioral matrix AND documentation validation. No-change release-branch creation still skips runner execution. Working-branch pushes do not duplicate PR-head validation.
+Use a narrow documentation-only **behavioral exclusion**: only root README.md and docs/**/*.md skip cross-platform tests. Every other path triggers the full supported-platform matrix, including source scripts, CI workflows, dependency pins, tests, release material, and unknown paths. For Pages relevance, layouts, assets, scripts that stage/check the site, publication configuration, and release docs also count. Missing/inconsistent GitHub listing data, renames without original paths, or the listing limit fail closed. Mixed PRs run all applicable paths in their respective workflows.
 
-Every non-creation run includes the stable Validation gate job, which explicitly requires successful classification and each selected job, and expects intentionally unnecessary jobs to be skipped. GitHub's green skipped-job conclusion alone is insufficient evidence. The gate fails when required work is missing, failed, cancelled, or unexpectedly skipped. Deterministic regression tests cover this decision policy.
+## Required checks and enforcement
 
-Active main/release GitHub rulesets currently require a pull request and squash merge but do not require CI. After verifying the live check name, configure BOTH rulesets to require the stable Validation gate check. This requires repository administration permission, which the connected GitHub App may not have; until an administrator applies it, passing CI remains advisory rather than branch-enforced. Do not add workflow-level path filtering to Validate, which can leave required checks pending.
+The two stable PR job identities are **Validation gate** and **Pages gate**, both with source github-actions. Configure **both** as required checks in the active main and release/** rulesets. Never require individually conditional jobs, since GitHub can consider a skipped job successful. Do not put workflow-level path filters on either PR workflow, since a required check for an untriggered workflow may remain pending. Both gates report an explicit terminal status for every PR.
 
-## Documentation and Pages validation
+The repository rulesets previously required PRs/squash merges but no CI checks. Ruleset edits require repository administration and must be verified after applying them; until then the successful checks are advisory, not branch enforced.
 
-Relevant PRs run the Documentation site job inside Validate. It checks repository-relative Markdown file paths, stages the documentation site, builds it using the pinned Pages Jekyll action, and validates generated pages, navigation, search assets, bootstrap files, and release-history consistency. Fragment headings and external HTTP links are not verified by the local link checker.
+## Pages validation and deployment
 
-Both workflows use shared prepare-pages-source.sh and validate-pages-output.sh scripts in .github/scripts. Pages no longer builds a second copy for PRs; it retains its relevant main-push deployment and manual dispatch. Validate independently checks documentation on every main/release push for stronger post-merge confidence. Keeping the deployment workflow separate is intentional.
+The Pages build job performs local Markdown file-link checks through .github/scripts/check-documentation-links.js, stages the site through .github/scripts/prepare-pages-source.sh, runs the pinned Jekyll build, and checks generated navigation, release-history linkage, search assets, and bootstrap presence through .github/scripts/validate-pages-output.sh. The local link checker does not validate external HTTP availability or heading anchors.
 
-Baseline from documentation-only PR #207 on October 18, 2026: Validate run 39156528601 used 48 seconds Ubuntu, 62 seconds macOS, and 201 seconds Windows (311 combined runner-seconds, about 206 wall seconds). Pages PR build run 39156528592 used 26 seconds. Compare new doc-only job counts and hosted times with these measurements, accounting for queue and runner variability.
+A relevant Pages PR gets build and gate results without publication or artifact upload. A main push receives the full Pages build and publication pipeline. The distinct E2E and release workflows are not changed by this optimization.
 
-Local policy tests: node --test tests/node/ci-validation.test.js tests/node/documentation-links.test.js
-Local documentation links: node .github/scripts/check-documentation-links.js
+Reproduce routing and link checks locally with:
+
+```bash
+node --test tests/node/ci-validation.test.js tests/node/documentation-links.test.js
+node .github/scripts/check-documentation-links.js
+```
+
+## Measured baseline
+
+On October 18, 2026, documentation-only PR #207 consumed 48 runner-seconds Ubuntu, 62 macOS, and 201 Windows in Validate (311 combined; 206 elapsed), and 26 runner-seconds in Pages. Earlier smoke-test PR #210 confirmed that the conditional behavioral jobs can skip successfully. This two-workflow design eliminates three behavioral runners for docs-only changes, does not launch documentation builds from Validate, and retains a dedicated required-check identity for each workflow. Compare GitHub job results and timestamps on actual PR heads instead of treating timing as a hard fail threshold.
 
 ## Responsibility split
 
