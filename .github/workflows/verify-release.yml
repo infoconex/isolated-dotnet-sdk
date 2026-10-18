@@ -97,7 +97,7 @@ jobs:
             }
 
             // The public tag must carry the finalized changelog entry. Historical
-            // tags through v0.4.0 predate this verifier and remain supported.
+            // published as v0.1.0, v0.2.0, v0.3.0 or v0.4.0 remain supported.
             const { validateReleaseChangelog, requiresTaggedChangelogValidation } =
               require('./.github/scripts/validate-release-changelog.js');
             if (requiresTaggedChangelogValidation(tag)) {
