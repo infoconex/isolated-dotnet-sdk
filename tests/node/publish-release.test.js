@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const publish = require('../../.github/scripts/publish-release.js');
-const { validateReleaseChangelog } = require('../../.github/scripts/validate-release-changelog.js');
+const { validateReleaseChangelog, requiresTaggedChangelogValidation } = require('../../.github/scripts/validate-release-changelog.js');
 
 const TAG = 'v0.4.0';
 const DATE = '2026-10-15';
@@ -226,6 +226,28 @@ function failed(result, reason, { summaryWriteAttempted = false } = {}) {
     assert.ok(!result.calls.includes('summary.write'), 'no publication success summary');
   }
 }
+
+test('independent tagged changelog verification preserves historical releases only', () => {
+  for (const historical of ['v0.1.0', 'v0.2.0', 'v0.3.0', 'v0.4.0']) {
+    assert.equal(requiresTaggedChangelogValidation(historical), false, historical);
+  }
+  for (const future of ['v0.4.1', 'v0.5.0', 'v1.0.0', 'v2.11.0']) {
+    assert.equal(requiresTaggedChangelogValidation(future), true, future);
+  }
+  assert.throws(() => requiresTaggedChangelogValidation('v0.5.0-rc.1'), /vMAJOR.MINOR.PATCH/);
+  assert.throws(() => requiresTaggedChangelogValidation('0.5.0'), /vMAJOR.MINOR.PATCH/);
+  assert.throws(() => requiresTaggedChangelogValidation('v999999999999999999999.0.0'), /safe integers/);
+});
+
+test('future release tagged verification rejects undated or candidate entries', () => {
+  const futureTag = 'v0.5.0';
+  const date = '2026-12-01';
+  const good = '## [0.5.0] - ' + date + '\\n\\n- Published changes.\\n';
+  assert.equal(requiresTaggedChangelogValidation(futureTag), true);
+  assert.deepEqual(validateReleaseChangelog(good, futureTag, date), { tag: futureTag, date });
+  assert.throws(() => validateReleaseChangelog(good.replace(date, 'Unreleased'), futureTag, date), /exact UTC publication date/);
+  assert.throws(() => validateReleaseChangelog(good.replace('Published changes.', 'Release candidate changes.'), futureTag, date), /provisional or candidate/);
+});
 
 test('changelog gate validates the exact release entry, not older versions', () => {
   assert.deepEqual(validateReleaseChangelog(VALID_CHANGELOG, TAG, DATE), { tag: TAG, date: DATE });
