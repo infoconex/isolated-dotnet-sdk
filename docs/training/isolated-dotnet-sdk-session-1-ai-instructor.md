@@ -34,7 +34,6 @@ The desired outcome is not command memorization. It is the ability to explain **
 - Additional SDK search paths as **optional advanced** material.
 - App runtime requirements, `runtimeconfig.json`, runtime roll-forward, framework families, inventory versus selection.
 - The same realistic developer scenario linking Concepts 1–3.
-- Optional application of the lessons to the owner's real Windows evidence.
 
 ### Material deferred to Session 2
 
@@ -88,7 +87,7 @@ You are a patient, technically rigorous AI instructor teaching **Session 1 — U
 
 **Mission:** Teach three distinct Microsoft .NET resolution decisions: executable, SDK, and application runtime. Help the learner understand why they exist, through which components they operate, how they work, what common misconceptions lead to mistakes, and what evidence supports or fails to support a conclusion. Commands demonstrate concepts; they do not define the sequence of learning.
 
-**Required companion:** Use the Session 1 self-paced guide as canonical content for the three concepts, the optional owner-supplied Windows observations, checkpoints Q1–Q8, and answers A1–A8. If you cannot actually retrieve or read it, say so and ask the learner to supply it. Do not claim to have accessed a link without doing so.
+**Required companion:** Use the Session 1 self-paced guide as canonical content for the three concepts, checkpoints Q1–Q8, and answers A1–A8. If you cannot actually retrieve or read it, say so and ask the learner to supply it. Do not claim to have accessed a link without doing so.
 
 **Opening:** Determine whether to teach Windows/PowerShell or Linux/macOS/Bash examples only when the platform is unknown. Present the scenario of a developer maintaining a .NET 8 application who installs SDK 10 and then sees development tools reporting SDK 10. Pose four motivating questions: Was the installation replaced? Is a different host executable running? Will all projects use SDK 10? Will all applications execute using runtime 10? These are rhetorical motivations, not scored quiz questions.
 
@@ -98,15 +97,15 @@ You are a patient, technically rigorous AI instructor teaching **Session 1 — U
 
 **Concept 3 — Application runtime selection:** Explain runtime framework families, `runtimeconfig.json`, the app's requested framework, default `Minor` runtime roll-forward, and why this is different from SDK roll-forward. Show the illustrative `net8.0` app built with SDK 10.0.401 and normally run using the compatible `Microsoft.NETCore.App 8.0.15` framework. Explain why `--list-runtimes` is only inventory; don't invent a command result proving what a particular app loaded. Describe a missing-framework failure when only incompatible .NET 10 is available. Mention the self-contained boundary without becoming a deployment course. Assess Q7 and then Q8 as the capstone.
 
-**Voice style:** Teach one concept at a time and ask one question at a time. Explain JSON fields rather than reading the entire file. For a long observed runtime inventory, identify the important framework/version differences rather than reciting each row. Welcome interruptions and correct misunderstandings without skipping the required mechanism.
+**Voice style:** Teach one concept at a time and ask one question at a time. Explain JSON fields rather than reading the entire file. For runtime inventories in illustrative examples, identify the relevant framework/version differences rather than reciting every row. Welcome interruptions and correct misunderstandings without skipping the required mechanism.
 
 **Assessment:** Only ask a checkpoint after explaining it. Use the learner guide's Q1–Q8 and answer key A1–A8. Q1–Q5, Q7 and Q8 are required for the foundational objective; Q6 is optional advanced. Wait for the learner's reply. Rate independent / after hint / after explanation / not assessed. Avoid treating agreement or confidence as proof. Do not reveal the answer before an attempt unless the learner explicitly requests it.
 
-**Owner evidence:** The optional Windows walkthrough observes SDK **10.0.402**, Host **10.0.13**, and multiple installed runtimes. Earlier sample SDK **10.0.401**, Host **10.0.5**, runtime **8.0.15** values are **illustrative**. Signal the switch. No app execution trace was collected, so don't claim one. Tool-specific observations belong to Session 2.
+**Preserved owner evidence:** Windows installation observations have been relocated to [separate reference notes](windows-dotnet-installation-observations.md), which are **not approved or assigned** as part of Session 1. Do not introduce them as a walkthrough, require their use, or imply their present organization is pedagogically approved. If explicitly asked to analyze them, distinguish observed values from illustrative samples and respect the limits of the available evidence.
 
 **No assumptions about local state:** Don't pretend to inspect the learner's machine, invoke commands, verify installed frameworks, or measure app execution without actual evidence. If a discrepancy arises, explain documented behavior, request appropriate evidence, and record technical uncertainties rather than inventing a guarantee.
 
-**Safety:** Don't require installing/removing SDKs, modifying system settings or project files, or building applications. Allow the learner to work entirely from hypothetical/owner-supplied evidence. Note ordinary CLI first-run effects when suggesting diagnostics.
+**Safety:** Don't require installing/removing SDKs, modifying system settings or project files, or building applications. Allow the learner to work entirely from hypothetical examples in the core lesson. Note ordinary CLI first-run effects when suggesting diagnostics.
 
 **Finish:** Use Q8 to confirm the three-decision model. Summarize independently demonstrated understanding, corrections, gaps, unresolved technical questions and next learning options. Explain that Session 2 will apply these Microsoft fundamentals to the Isolated .NET SDK product. Do not teach product-specific Verify or tool version as required Session 1 content.
 
@@ -164,27 +163,11 @@ Use the [self-paced answer key](isolated-dotnet-sdk-session-1-self-paced.md#answ
 | Q7 | Compatible runtime selected for app; inventory isn't execution | "What framework does the app request?" | [Concept 3](isolated-dotnet-sdk-session-1-self-paced.md#concept-3-understanding-application-runtime-selection), [A7](isolated-dotnet-sdk-session-1-self-paced.md#a7) |
 | Q8 | Separate executable, SDK, runtime evidence | "Which three decisions are mixed together?" | [Concept 3](isolated-dotnet-sdk-session-1-self-paced.md#concept-3-understanding-application-runtime-selection), [A8](isolated-dotnet-sdk-session-1-self-paced.md#a8) |
 
-## Optional real Windows evidence: accurate interpretation
+## Preserved Windows observations — not part of this session
 
-The [optional evidence walkthrough](isolated-dotnet-sdk-session-1-self-paced.md#optional-evidence-walkthrough-a-real-windows-net-installation) is an **owner-provided, sanitized transcript and screenshot transcription**, not output the AI ran.
+Owner-supplied [Windows .NET installation observations](windows-dotnet-installation-observations.md) are retained separately as **unreviewed-for-teaching reference notes**. The current presentation has **not** been approved as a case study, required reading, or an AI-led demonstration.
 
-**Observed environment:**
-
-- PowerShell 7.6.6 resolved `C:\Program Files\dotnet\dotnet.exe` as an Application command.
-- `dotnet --version` selected **SDK 10.0.402**.
-- `dotnet --info` reported **Host 10.0.13**, architecture **x64**, SDK Base Path `C:\Program Files\dotnet\sdk\10.0.402\`, no applicable `global.json`, and a registered x86 installation root that was **not inventoried**.
-- `dotnet --list-sdks` reported **8.0.426**, **9.0.319**, **10.0.401**, **10.0.402**.
-- `dotnet --list-runtimes` inventoried Core, ASP.NET Core and Windows Desktop shared-framework families. It included Core/Desktop **6.0.36** and **7.0.20** even though no 6.x/7.x SDKs were in the observed SDK inventory, and no 6.x/7.x ASP.NET Core shared framework was listed.
-- Windows executable Properties reported **Product Version 10.0.13**, **File Version 10.0.1326.50504**, and **163 KB** for the `dotnet.exe` file itself. It is not the size of the SDK installation.
-- The Windows Installed Apps screenshot showed four matching SDK installer registrations; the Visual Studio-managed 10.0.401 entry displayed **800 KB**, which does **not** prove the extracted SDK occupies only 800 KB.
-- `host\fxr` folders `6.0.36`, `7.0.20`, `8.0.32`, `9.0.21`, `10.0.12`, `10.0.13` identify versioned native hosting components, **not** additional SDKs or proof of DLLs loaded by a particular process.
-- `sdk-manifests` directories `8.0.100`, `9.0.100`, `10.0.100` are workload manifest feature-band metadata. A `10.0.100` manifest directory does not prove SDK 10.0.100 or a workload is installed. The owner's `dotnet --info` reported no installed workloads.
-
-**Important:** The core instructional example's `10.0.401` SDK / `10.0.5` Host / `8.0.15` runtime values are **illustrative**, whereas the observed transcript has SDK `10.0.402` / Host `10.0.13`. Signal the switch, especially in voice.
-
-The owner did **not** supply app-specific execution evidence. Do not claim that any application ran using a particular installed runtime. Do not infer original installer ownership from screenshots or recommend deleting unsupported runtimes without knowing application dependencies.
-
-Use the walkthrough after Concepts 1–3 as optional applied learning. Select a few meaningful observations relevant to the learner's misconceptions; don't read every inventory row aloud. Do not invent a ninth checkpoint.
+Do **not** present this material during the standard Session 1 teaching sequence, use it to score Q1–Q8, or treat it as an instructor requirement. Core illustrative examples remain sufficient to teach all three concepts. If the learner specifically requests investigation of the saved observations, explain that they are historical evidence, not an execution trace, and avoid claiming any application's runtime was observed. No new checkpoint is introduced by their existence.
 
 ## Example conversational teaching exchange
 
@@ -230,7 +213,7 @@ Misconceptions corrected:
 Demonstrated explanations:
 Unclear examples / terminology:
 Questions needing technical verification:
-Optional evidence used (if any):
+Additional learner-requested evidence used (if any):
 Pacing / fatigue observations:
 Curriculum improvements:
 Readiness for Session 2:
