@@ -4,7 +4,7 @@ This curriculum builds understanding of Microsoft's normal .NET behavior **befor
 
 ## Session 1 — How `dotnet` is resolved, and why isolation matters
 
-**Status:** Pilot draft (example-first revision); ready for learner review, not yet pedagogically validated. **Estimated learner time:** 45–60 minutes for the self-paced lesson.
+**Status:** Pilot draft (example-first revision); ready for learner review, not yet pedagogically validated. **Estimated learner time:** Approximately 60–90 minutes for the expanded self-paced lesson, which can be divided into shorter sessions.
 
 - **[Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md):** A deeper explanation of the **host, SDK, and runtime** (including why their versions differ), Windows PowerShell and Bash examples with **illustrative output explained line by line**, a .NET 10 SDK building an app that runs on .NET 8, unexpected-result troubleshooting, and Q1–Q8 reinforcement questions with an answer key. No AI required.
 - **[Session 1 AI instructor guide](isolated-dotnet-sdk-session-1-ai-instructor.md):** Copy-ready teaching prompt, one-question-at-a-time sequence, matching Q1–Q8 hint/evaluation guidance, and a session-summary template.
