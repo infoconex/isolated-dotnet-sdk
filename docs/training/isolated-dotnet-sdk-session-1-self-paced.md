@@ -383,7 +383,7 @@ Suppose `global.json` instead demands `9.0.100` with `"rollForward": "disable"`,
 
 This is **correct behavior**, not evidence that .NET is broken. The project asked for an exact SDK the running host cannot find. Diagnose in this order: confirm the executable, inspect `dotnet --list-sdks`, read the applicable `global.json` and its roll-forward settings, then consider any custom SDK search paths or architecture differences.
 
-**Important:** The example is about the CLI SDK muxer. Microsoft documents a separate starting directory for the MSBuild project SDK resolver during builds. See the [Microsoft `global.json` reference](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json).
+**Important:** This example concerns SDK resolution by the CLI's `dotnet` host (also called the *muxer*). Microsoft documents a separate starting directory for the MSBuild project SDK resolver during builds. See the [Microsoft `global.json` reference](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json).
 
 ### Checkpoint: SDK selection
 
@@ -410,7 +410,7 @@ These factors are worth recognizing when behavior seems unexpected:
 | .NET 10+ `global.json` `sdk.paths` | Explicitly changes where SDK resolution searches; it **does not** redirect the shell's executable lookup | Awareness |
 | `DOTNET_ROOT` / runtime host environment | Can matter for .NET hosting and controlled operations; it is **not** a PowerShell/Bash command alias or automatic `PATH` change | Awareness; defer detailed behavior |
 
-For .NET 10+ hosts, `global.json` can include an ordered `sdk.paths` list of SDK search locations; the first location with a compatible SDK is used under the documented matching rules. This is another reason to avoid teaching the oversimplification that **an explicit host path always guarantees the exact SDK version**. An explicit path guarantees which *host file* you invoke; SDK selection still has its own rules. An explicit host path determines the host file, but SDK selection and origin remain separate questions.
+For .NET 10+ hosts, `global.json` can include an ordered `sdk.paths` list of SDK search locations; the first location with a compatible SDK is used under the documented matching rules. This is another reason to avoid teaching the oversimplification that **an explicit host path always guarantees the exact SDK version**. An explicit path guarantees which *host file* you invoke; SDK selection still has its own rules.
 
 ### Worked example: what changes when SDK search locations are customized?
 
@@ -422,7 +422,7 @@ A .NET 10 or newer host can read `sdk.paths` in `global.json`. That setting affe
     "version": "10.0.401",
     "rollForward": "disable",
     "paths": [
-      "C:\\Users\\example\\dotnet-sdks\\10.0.401",
+      "C:\\Tools\\dotnet-preview",
       "$host$"
     ]
   }
@@ -434,7 +434,7 @@ A .NET 10 or newer host can read `sdk.paths` in `global.json`. That setting affe
 - `version` asks for SDK `10.0.401`; `rollForward: disable` insists on an exact match.
 - The first `paths` entry points to an additional SDK *installation root*. It is **not** a path to `dotnet.exe`.
 - `$host$` means the SDK location associated with the already-running `dotnet` host. It is a special SDK search entry, not a shell variable to expand.
-- The supported resolver searches the listed roots in order for a compatible SDK. The host *might* have been started from `C:\Program Files\dotnet\dotnet.exe` while the selected SDK comes from the separate user-owned root.
+- The supported resolver searches the listed roots in order for a compatible SDK. The host *might* have been started from `C:\Program Files\dotnet\dotnet.exe` while the selected SDK comes from the separate SDK installation root.
 
 **If a .NET 10+ host finds the version only through the first entry, it can use that SDK without modifying system `PATH`.** If neither location has a compatible SDK, resolution fails. Older hosts ignore `sdk.paths`, so this example must not be treated as universal across all versions.
 
@@ -446,6 +446,7 @@ Other influences do not need a full lesson yet: preview SDKs may be considered d
 
 Need a hint? Revisit [additional SDK influences](#additional-influences-to-recognize-not-memorize-yet), then [A6](#a6) after your optional attempt.
 
+**Transition:** We've seen how .NET selects the SDK used to build an application. **How does it select the runtime that executes that application?**
 
 ## Concept 3: Understanding Application Runtime Selection
 
