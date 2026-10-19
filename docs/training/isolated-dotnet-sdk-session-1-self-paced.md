@@ -43,7 +43,6 @@ Before we discuss *resolution*, here are the terms we'll use:
 | **Resolution** | The process of deciding which executable, SDK, or runtime to use. The answer depends on *which one* is being resolved. |
 | **`PATH`** | A list of directories consulted when locating commands by name. Shell aliases/functions and explicit paths can take precedence. |
 | **`global.json`** | An optional file that tells .NET which SDK version or range of SDK versions to accept. It does not rename or redirect the shell's `dotnet` command. |
-| **Roll-forward** | The rules controlling whether a different installed version is an acceptable substitute for a requested version. |
 
 ## 1. First, three different decisions
 
