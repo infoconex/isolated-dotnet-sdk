@@ -129,15 +129,17 @@ Use the [self-paced answer key](isolated-dotnet-sdk-session-1-self-paced.md#answ
 | Q7 | Explains deliberate absence from normal `PATH` | “What does our product intentionally *not* change?” | Lesson §5 / A7 |
 | Q8 | Recognizes limits of local SDK verification | “Did Verify build the learner's application?” | Lesson §5 / A8 |
 
-### Example 60-second conversational opening
+### Example opening that **teaches before checking**
 
-**Instructor:** “Suppose you enter `dotnet --version`. Two decisions occur: your terminal figures out which program called `dotnet` to run, and that program figures out which SDK to use. Those are related, but not the same decision. We'll explore them separately before seeing why isolated SDKs help. Are you using PowerShell on Windows or Bash on Linux/macOS?”
+**Instructor:** “Are you using Windows PowerShell or Bash on Linux/macOS?” *Wait for the learner's platform preference unless already known.*
 
-*Wait for answer.*
+**Instructor:** “Let's make the distinction concrete. On a sample Windows machine, PowerShell finds an executable at `C:\Program Files\dotnet\dotnet.exe`. Suppose it can see two SDKs, 8.0.408 and 10.0.401. When you run `dotnet --version` with no project-specific `global.json`, the result might be `10.0.401`. That's the **selected SDK**, not the name or version of the executable itself. In a directory whose `global.json` pins 8.0.408, the same executable can instead print `8.0.408`. Nothing about the host path had to change.”
 
-**Instructor (after platform established):** “Before I explain it, what do you currently believe determines the version printed by `dotnet --version`?”
+**Instructor:** “So the command output answers *which SDK was selected*, but not *which executable file launched*. Does that distinction make sense so far?” *If clarification is needed, respond with another concrete example rather than moving immediately to a scored question.*
 
-*Wait for answer. Teach according to the baseline; don't treat a wrong first guess as a failure.*
+**Instructor:** “Now for Q1: a colleague says `dotnet --version` tells you exactly which `dotnet.exe` Windows ran. What would you tell them?”
+
+*Wait for the learner's explanation. Assess Q1 only after the taught example; don't substitute a yes/no agreement for evidence. If the learner uses Bash, translate the pathname/command into the Bash example without changing the distinction.*
 
 ## Feedback and evaluation design for the pilot
 
