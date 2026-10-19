@@ -31,7 +31,7 @@ By the end, you should be able to:
 
 ## Understanding .NET Components and Folders
 
-We will distinguish **a program you execute**, **the developer tools it may select**, **the components that run apps**, and **metadata used by optional development workloads**. Understanding what each one *is* will make the later resolution rules much easier to follow.
+A few definitions will help as we learn how .NET finds its executable, selects an SDK, and runs applications.
 
 Before we discuss *resolution*, here are the terms we'll use:
 
@@ -44,132 +44,6 @@ Before we discuss *resolution*, here are the terms we'll use:
 | **`PATH`** | A list of directories consulted when locating commands by name. Shell aliases/functions and explicit paths can take precedence. |
 | **`global.json`** | An optional file that tells .NET which SDK version or range of SDK versions to accept. It does not rename or redirect the shell's `dotnet` command. |
 | **Roll-forward** | The rules controlling whether a different installed version is an acceptable substitute for a requested version. |
-
-Three extra terms help us interpret actual .NET installation folders:
-
-| Additional term | Plain-language meaning |
-| --- | --- |
-| **`hostfxr` (host framework resolver)** | A native .NET hosting component stored under `host/fxr`. It helps resolve SDKs and shared runtimes after a `dotnet` host starts. It is **not** an SDK, not an app runtime, and not another `dotnet.exe` for every folder. |
-| **SDK feature band** | A grouping of related SDK releases, reflected in versions such as `10.0.400` (the feature band for SDK `10.0.402`). Feature-band names can appear in workload-related metadata; they are **not** a list of installed SDK patch versions. |
-| **Workload / workload manifest** | An optional development capability (such as platform-specific tooling), and metadata describing the assets needed for those workloads. A manifest folder alone **does not** mean a workload is installed. |
-
-### A real Windows installation: three folders that look similar but mean different things
-
-The project owner supplied **three File Explorer screenshots** of the x64 system .NET installation under `C:\Program Files\dotnet`. The folder names below are **transcribed from those screenshots**, not inferred from SDK version strings. They show one observed machine; Linux/macOS layouts and other Windows installations may differ.
-
-```text
-C:\Program Files\dotnet\
-  dotnet.exe            <-- CLI host executable (shown separately in its Properties screenshot)
-  host\
-    fxr\
-      6.0.36
-      7.0.20
-      8.0.32
-      9.0.21
-      10.0.12
-      10.0.13
-  sdk\
-    8.0.426
-    9.0.319
-    10.0.401
-    10.0.402
-  sdk-manifests\
-    8.0.100
-    9.0.100
-    10.0.100
-  shared\                <-- runtime frameworks (studied in Section 7)
-```
-
-**First, look at `host\fxr`.** Each numbered folder contains a version of the **host framework resolver** (`hostfxr`), which participates in choosing compatible .NET components. The folders **6.0.36**, **7.0.20**, **8.0.32**, **9.0.21**, **10.0.12**, and **10.0.13** do **not** mean six different SDKs are installed or that every application loads all six hostfxr versions. Microsoft's host typically selects an appropriate hosting component during startup. The screenshot itself **does not prove which hostfxr DLL was loaded by a particular process**.
-
-**Next, look at `sdk`.** These four directories are the actual installed **SDK versions**: **8.0.426**, **9.0.319**, **10.0.401**, and **10.0.402**. Compare them with the owner's later `dotnet --list-sdks` result in [Section 7](#7-real-windows-powershell-walkthrough): all four appear there. An SDK directory is a collection of build/development tooling, not another hostfxr version or a shared application runtime.
-
-**Finally, look at `sdk-manifests`.** Its folders **8.0.100**, **9.0.100**, and **10.0.100** belong to **workload manifest feature-band metadata**, not the installed-SDK inventory. **SDK 10.0.100 does not appear in `sdk` or `dotnet --list-sdks`**, even though `sdk-manifests\10.0.100` exists. Conversely, SDK **10.0.402** is installed even though the screenshot does not show a folder named `sdk-manifests\10.0.402`. **The two directory trees do not have a one-to-one relationship.**
-
-The owner's actual `dotnet --info` output also reports:
-
-```text
-.NET SDK:
- Version:           10.0.402
- Workload version:  10.0.400-manifests.378ba522
-
-.NET workloads installed:
-There are no installed workloads to display.
-```
-
-**Interpretation:** `10.0.402` is the selected SDK; `10.0.400-manifests.378ba522` is workload-manifest-related version information associated with the SDK's feature band; and **no installed workloads were reported**. A directory's existence under `sdk-manifests` is not a substitute for an installed-workload check. This also explains why a `10.0.100` manifest directory should never be treated as proof of an installed `10.0.100` SDK.
-
-### Shared system host versus one host per isolated SDK
-
-**Question to spark curiosity (no answer required):** “If SDK 10 is already installed, and I install SDK 9 afterward, does Windows replace the system `dotnet.exe` with a .NET 9 executable?” **Normally, no.** The SDKs go into **separate versioned directories** under the same system installation root. The shared host is a *separately serviced component*, not the executable of the SDK installed most recently.
-
-For a typical x64 Windows system, a simplified layout is:
-
-```text
-C:\Program Files\dotnet\
-  dotnet.exe                <- one shared executable in THIS installation root
-  host\fxr\                 <- multiple versions of framework-resolution logic
-  sdk\
-    9.0.319\               <- SDK 9 tooling
-    10.0.402\              <- SDK 10 tooling
-```
-
-**The distinction:** When you type bare `dotnet --version` in a PowerShell session resolving that system host, .NET usually selects the **latest compatible SDK visible to it**, in the absence of an applicable `global.json` or other SDK selection overrides. It doesn't simply report the last SDK you installed. With both 9.0.319 and 10.0.402 installed, installing the 9 SDK *later* does not ordinarily make 9 the default.
-
-**Is the system `dotnet.exe` “always the latest”?** Avoid that phrase. Microsoft's Windows installers manage the **shared host** and other shared components independently of SDK directories. Installing or servicing a runtime, SDK, or Visual Studio can update host components; the shared executable is not guaranteed to have the version number of the newest SDK or to remain forever unchanged. In the owner's real example, **`dotnet.exe` Product Version is 10.0.13** while **`dotnet --version` reports selected SDK 10.0.402**. Microsoft also documents that the host uses the latest **hostfxr installed in that root**, which is distinct from saying “always use the latest SDK” or “the executable is rewritten whenever an SDK is installed.”
-
-**Does Windows have exactly one `dotnet.exe` across the whole computer? No.** The statement “one shared host” is **per installation root**, not per machine. Windows may also have `C:\Program Files (x86)\dotnet\dotnet.exe` for x86, distinct architecture roots, an application-private runtime/host, or custom installations. `Get-Command dotnet -All` reports candidates PowerShell can resolve; it does **not** scan every directory on disk.
-
-**Our Isolated .NET SDK tool intentionally changes the layout.** For each installed exact version, it creates a distinct root containing that SDK's **own host**, SDK files, and relevant runtime/host components:
-
-```text
-$HOME\dotnet-sdks\
-  isolated-dotnet-sdk.ps1    <- our management script, not Microsoft's host
-  9.0.319\
-    dotnet.exe              <- host in isolated root for SDK 9.0.319
-    host\fxr\
-    sdk\9.0.319\
-    shared\
-  10.0.402\
-    dotnet.exe              <- different host in isolated root for SDK 10.0.402
-    host\fxr\
-    sdk\10.0.402\
-    shared\
-```
-
-*The isolated tree is an **illustration of our product's version-root layout**, not an observation that either version was actually installed on the owner's machine.*
-
-To choose the host **intentionally**:
-
-```powershell
-# Normal Windows command lookup: uses the host resolved by the shell
-dotnet --version
-
-# Explicit host from one isolated SDK installation root
-& "$HOME\dotnet-sdks\9.0.319\dotnet.exe" --version
-```
-
-**What the full path guarantees:** PowerShell launches **that specific `dotnet.exe` file**, rather than selecting the shared system host via `PATH`. Under the ordinary isolated installation arrangement, it discovers its SDK in that version-owned root. However, the **selected SDK** is still a separate resolution decision: an applicable `global.json` (including the .NET 10+ `sdk.paths` feature) may affect which SDK the host uses. That is why the product's Verify operation checks version **and installation origin**, not just the number printed by `--version`.
-
-On Linux/macOS the same intentional-host pattern uses `"$HOME/dotnet-sdks/9.0.319/dotnet"`.
-
-**One-sentence takeaway:** *Standard system install = one shared `dotnet` host per root with many SDK versions; our isolated install = one separate `dotnet` host/root per exact SDK version, invoked by full path.* Neither means the selected SDK, host version, and application runtime version are identical.
-
-Sources: [Microsoft .NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging), [SDK selection](https://learn.microsoft.com/en-us/dotnet/core/versions/selection), [Windows installation roots](https://learn.microsoft.com/en-us/dotnet/core/install/windows), and our [Windows getting-started guide](../getting-started/windows-powershell.md#use-an-isolated-sdk).
-
-**Optional, non-installing Windows PowerShell inspection** of these folder names (not executed by us; no PowerShell output is claimed):
-
-```powershell
-Get-ChildItem 'C:\Program Files\dotnet\host\fxr' -Directory | Select-Object -ExpandProperty Name
-Get-ChildItem 'C:\Program Files\dotnet\sdk' -Directory | Select-Object -ExpandProperty Name
-Get-ChildItem 'C:\Program Files\dotnet\sdk-manifests' -Directory | Select-Object -ExpandProperty Name
-```
-
-**What if your results differ?** An SDK might be installed somewhere else, your shell may launch another `dotnet` host, an x86/Arm64 installation may have a different inventory, or SDK/tooling components may have been updated independently. Folder modified dates alone don't prove which installer added or last used each component. Do not delete folders to try to make these lists match.
-
-Microsoft documents the directory roles in [.NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging) and explains the difference between installed workloads and manifest metadata in [`dotnet workload list`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-workload-list). The product will **not** ask you to install workloads during Session 1.
-
----
 
 ## 1. First, three different decisions
 
@@ -689,6 +563,64 @@ Substitute your *actually installed* version; if none is installed, treat the ex
 
 **What isolation does not mean:** It is **not** a security sandbox, a guarantee that an application can't write user data, a promise that all editors automatically use the SDK, or proof that a project compiles correctly. The tool separates installation locations and provides controlled installation/verification workflows.
 
+### Shared system host versus one host per isolated SDK
+
+**Question to spark curiosity (no answer required):** “If SDK 10 is already installed, and I install SDK 9 afterward, does Windows replace the system `dotnet.exe` with a .NET 9 executable?” **Normally, no.** The SDKs go into **separate versioned directories** under the same system installation root. The shared host is a *separately serviced component*, not the executable of the SDK installed most recently.
+
+For a typical x64 Windows system, a simplified layout is:
+
+```text
+C:\Program Files\dotnet\
+  dotnet.exe                <- one shared executable in THIS installation root
+  host\fxr\                 <- multiple versions of framework-resolution logic
+  sdk\
+    9.0.319\               <- SDK 9 tooling
+    10.0.402\              <- SDK 10 tooling
+```
+
+**The distinction:** When you type bare `dotnet --version` in a PowerShell session resolving that system host, .NET usually selects the **latest compatible SDK visible to it**, in the absence of an applicable `global.json` or other SDK selection overrides. It doesn't simply report the last SDK you installed. With both 9.0.319 and 10.0.402 installed, installing the 9 SDK *later* does not ordinarily make 9 the default.
+
+**Is the system `dotnet.exe` “always the latest”?** Avoid that phrase. Microsoft's Windows installers manage the **shared host** and other shared components independently of SDK directories. Installing or servicing a runtime, SDK, or Visual Studio can update host components; the shared executable is not guaranteed to have the version number of the newest SDK or to remain forever unchanged. In the owner's real example, **`dotnet.exe` Product Version is 10.0.13** while **`dotnet --version` reports selected SDK 10.0.402**. Microsoft also documents that the host uses the latest **hostfxr installed in that root**, which is distinct from saying “always use the latest SDK” or “the executable is rewritten whenever an SDK is installed.”
+
+**Does Windows have exactly one `dotnet.exe` across the whole computer? No.** The statement “one shared host” is **per installation root**, not per machine. Windows may also have `C:\Program Files (x86)\dotnet\dotnet.exe` for x86, distinct architecture roots, an application-private runtime/host, or custom installations. `Get-Command dotnet -All` reports candidates PowerShell can resolve; it does **not** scan every directory on disk.
+
+**Our Isolated .NET SDK tool intentionally changes the layout.** For each installed exact version, it creates a distinct root containing that SDK's **own host**, SDK files, and relevant runtime/host components:
+
+```text
+$HOME\dotnet-sdks\
+  isolated-dotnet-sdk.ps1    <- our management script, not Microsoft's host
+  9.0.319\
+    dotnet.exe              <- host in isolated root for SDK 9.0.319
+    host\fxr\
+    sdk\9.0.319\
+    shared\
+  10.0.402\
+    dotnet.exe              <- different host in isolated root for SDK 10.0.402
+    host\fxr\
+    sdk\10.0.402\
+    shared\
+```
+
+*The isolated tree is an **illustration of our product's version-root layout**, not an observation that either version was actually installed on the owner's machine.*
+
+To choose the host **intentionally**:
+
+```powershell
+# Normal Windows command lookup: uses the host resolved by the shell
+dotnet --version
+
+# Explicit host from one isolated SDK installation root
+& "$HOME\dotnet-sdks\9.0.319\dotnet.exe" --version
+```
+
+**What the full path guarantees:** PowerShell launches **that specific `dotnet.exe` file**, rather than selecting the shared system host via `PATH`. Under the ordinary isolated installation arrangement, it discovers its SDK in that version-owned root. However, the **selected SDK** is still a separate resolution decision: an applicable `global.json` (including the .NET 10+ `sdk.paths` feature) may affect which SDK the host uses. That is why the product's Verify operation checks version **and installation origin**, not just the number printed by `--version`.
+
+On Linux/macOS the same intentional-host pattern uses `"$HOME/dotnet-sdks/9.0.319/dotnet"`.
+
+**One-sentence takeaway:** *Standard system install = one shared `dotnet` host per root with many SDK versions; our isolated install = one separate `dotnet` host/root per exact SDK version, invoked by full path.* Neither means the selected SDK, host version, and application runtime version are identical.
+
+Sources: [Microsoft .NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging), [SDK selection](https://learn.microsoft.com/en-us/dotnet/core/versions/selection), [Windows installation roots](https://learn.microsoft.com/en-us/dotnet/core/install/windows), and our [Windows getting-started guide](../getting-started/windows-powershell.md#use-an-isolated-sdk).
+
 ### Worked example: system command versus intentional isolated invocation
 
 Assume you normally type `dotnet` on Windows, and your system host sees SDKs `8.0.408` and `10.0.401`. You then install **a separate copy** of `10.0.401` using our tool in the user-owned location `C:\Users\example\dotnet-sdks\10.0.401`. We will not install anything during this lesson.
@@ -1067,6 +999,74 @@ The owner supplied an additional **Windows File Explorer → `C:\Program Files\d
 The command above is provided **for learners to try**, and its output has **not** been supplied or observed. The *actual evidence* is the owner's File Explorer Properties screenshot. Don't label a future PowerShell result as observed until it has been run.
 
 **If the versions don't match:** First confirm that the binary whose properties you opened is the one PowerShell resolves (`Get-Command dotnet -All`). It is possible to examine the properties of one host file while executing another because of `PATH`, aliases, explicit paths, or architecture differences. Also keep the product's executable metadata distinct from its selected SDK: a newer SDK does not mean `dotnet.exe` must have that SDK's exact version number. Finally, don't interpret this small native executable's **163 KB** size as the space occupied by the associated runtimes, SDK, or user-owned isolated installations.
+
+### Additional filesystem evidence: hostfxr, SDKs, and workload manifests
+
+Three extra terms help us interpret actual .NET installation folders:
+
+| Additional term | Plain-language meaning |
+| --- | --- |
+| **`hostfxr` (host framework resolver)** | A native .NET hosting component stored under `host/fxr`. It helps resolve SDKs and shared runtimes after a `dotnet` host starts. It is **not** an SDK, not an app runtime, and not another `dotnet.exe` for every folder. |
+| **SDK feature band** | A grouping of related SDK releases, reflected in versions such as `10.0.400` (the feature band for SDK `10.0.402`). Feature-band names can appear in workload-related metadata; they are **not** a list of installed SDK patch versions. |
+| **Workload / workload manifest** | An optional development capability (such as platform-specific tooling), and metadata describing the assets needed for those workloads. A manifest folder alone **does not** mean a workload is installed. |
+
+### A real Windows installation: three folders that look similar but mean different things
+
+The project owner supplied **three File Explorer screenshots** of the x64 system .NET installation under `C:\Program Files\dotnet`. The folder names below are **transcribed from those screenshots**, not inferred from SDK version strings. They show one observed machine; Linux/macOS layouts and other Windows installations may differ.
+
+```text
+C:\Program Files\dotnet\
+  dotnet.exe            <-- CLI host executable (shown separately in its Properties screenshot)
+  host\
+    fxr\
+      6.0.36
+      7.0.20
+      8.0.32
+      9.0.21
+      10.0.12
+      10.0.13
+  sdk\
+    8.0.426
+    9.0.319
+    10.0.401
+    10.0.402
+  sdk-manifests\
+    8.0.100
+    9.0.100
+    10.0.100
+  shared\                <-- runtime frameworks (studied in Section 7)
+```
+
+**First, look at `host\fxr`.** Each numbered folder contains a version of the **host framework resolver** (`hostfxr`), which participates in choosing compatible .NET components. The folders **6.0.36**, **7.0.20**, **8.0.32**, **9.0.21**, **10.0.12**, and **10.0.13** do **not** mean six different SDKs are installed or that every application loads all six hostfxr versions. Microsoft's host typically selects an appropriate hosting component during startup. The screenshot itself **does not prove which hostfxr DLL was loaded by a particular process**.
+
+**Next, look at `sdk`.** These four directories are the actual installed **SDK versions**: **8.0.426**, **9.0.319**, **10.0.401**, and **10.0.402**. Compare them with [Observation 4's `dotnet --list-sdks` result](#observation-4--which-sdks-does-this-host-see): all four appear there. An SDK directory is a collection of build/development tooling, not another hostfxr version or a shared application runtime.
+
+**Finally, look at `sdk-manifests`.** Its folders **8.0.100**, **9.0.100**, and **10.0.100** belong to **workload manifest feature-band metadata**, not the installed-SDK inventory. **SDK 10.0.100 does not appear in `sdk` or `dotnet --list-sdks`**, even though `sdk-manifests\10.0.100` exists. Conversely, SDK **10.0.402** is installed even though the screenshot does not show a folder named `sdk-manifests\10.0.402`. **The two directory trees do not have a one-to-one relationship.**
+
+The owner's actual `dotnet --info` output also reports:
+
+```text
+.NET SDK:
+ Version:           10.0.402
+ Workload version:  10.0.400-manifests.378ba522
+
+.NET workloads installed:
+There are no installed workloads to display.
+```
+
+**Interpretation:** `10.0.402` is the selected SDK; `10.0.400-manifests.378ba522` is workload-manifest-related version information associated with the SDK's feature band; and **no installed workloads were reported**. A directory's existence under `sdk-manifests` is not a substitute for an installed-workload check. This also explains why a `10.0.100` manifest directory should never be treated as proof of an installed `10.0.100` SDK.
+
+**Optional, non-installing Windows PowerShell inspection** of these folder names (not executed by us; no PowerShell output is claimed):
+
+```powershell
+Get-ChildItem 'C:\Program Files\dotnet\host\fxr' -Directory | Select-Object -ExpandProperty Name
+Get-ChildItem 'C:\Program Files\dotnet\sdk' -Directory | Select-Object -ExpandProperty Name
+Get-ChildItem 'C:\Program Files\dotnet\sdk-manifests' -Directory | Select-Object -ExpandProperty Name
+```
+
+**What if your results differ?** An SDK might be installed somewhere else, your shell may launch another `dotnet` host, an x86/Arm64 installation may have a different inventory, or SDK/tooling components may have been updated independently. Folder modified dates alone don't prove which installer added or last used each component. Do not delete folders to try to make these lists match.
+
+Microsoft documents the directory roles in [.NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging) and explains the difference between installed workloads and manifest metadata in [`dotnet workload list`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-workload-list). The product will **not** ask you to install workloads during Session 1.
 
 ### Put all eight observations together
 
