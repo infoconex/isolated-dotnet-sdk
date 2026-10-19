@@ -862,21 +862,56 @@ isolated-dotnet-sdk development (main)
 
 **Explanation:** This identifies the **development-source build of the Isolated .NET SDK management script**. It does **not** identify a Microsoft SDK release or guarantee that the script is a published stable version. Our PowerShell script's `-Version` is different from Microsoft's `dotnet --version`, even though both commands use the word “version.” This output also **does not** prove which isolated SDK versions are installed; for that, use the product's dedicated **List** command in a separate read-only inspection.
 
-### Observation 7 — What does Windows *Installed Apps* add?
+### Observation 7 — What does Windows *Installed Apps* show?
 
-The owner also provided a screenshot of **Windows Settings → Apps → Installed Apps**, filtered for `.net`. This is a *different form of evidence* from the six CLI commands: a Windows-managed list of **registered installed applications/packages** that match the displayed search filter. The screenshot is not reproduced here, and we do not use it to manufacture item-by-item CLI matches or assert precise package entries that were not transcribed.
+The owner supplied a **fuller screenshot** of **Windows Settings → Apps → Installed apps** with the search box containing **`.net`**. The interface reported **`4 apps found`**. This is observed Windows **installer registration** information, *not* another `dotnet` CLI query. The image itself is not embedded in this document; the table below is a transcription of its four visible results, including the smaller installer-version labels and displayed sizes.
 
-**Why the two views can differ:**
+| App name shown in Windows | Secondary displayed version | Reported size |
+| --- | --- | --- |
+| Microsoft .NET SDK 10.0.401 (x64) from Visual Studio | `40.11.21517` | **800 KB** |
+| Microsoft .NET SDK 10.0.402 (x64) | `10.4.226.50611` | **1.17 GB** |
+| Microsoft .NET SDK 8.0.426 (x64) | `8.4.2626.50502` | **938 MB** |
+| Microsoft .NET SDK 9.0.319 (x64) | `9.3.1926.50507` | **953 MB** |
 
-1. A registered **SDK installer entry** is an installation/maintenance record, whereas `dotnet --list-sdks` shows SDK versions **discoverable by the running host**.
-2. Windows may show separate installer records for **.NET SDK**, **.NET Runtime**, **ASP.NET Core Runtime**, **Windows Desktop Runtime**, and other components. `dotnet --list-runtimes` instead groups discovered **shared-framework names and versions**; the number of Windows entries isn't required to equal the number of runtime rows.
-3. **Microsoft .NET Framework** (the older Windows-only product family) is distinct from modern **Microsoft.NETCore.App** runtime inventory and may have its own installation and Windows-component behavior.
-4. An SDK installed by extracting files into a custom/isolated folder can exist **without a normal Installed Apps registration**. Conversely, a Windows registration alone does not prove that the current `dotnet` host can see or select the related SDK.
-5. The screenshot is filtered by product name and shows **Windows package registration**, not a directory-by-directory scan; it is not authoritative evidence of *all* SDKs, all runtimes, or the runtime actually chosen by an application.
+All four entries name Microsoft Corporation as publisher. The first entry shows an install date of September 15, 2026; the other three show October 13, 2026. **Those details are from the screenshot**, not observations made by `dotnet.exe`. No username, machine address, or personal location is included in this transcription.
 
-**How to reason about apparent mismatches:** If Windows Installed Apps shows an entry whose version doesn't appear in `dotnet --list-sdks`, ask: “Is it an **SDK**, a **runtime/framework**, an **x86 or x64** component, or an installer-managed component the current host doesn't discover?” Compare the full item name, architecture and version before making any claim. In this capture, the CLI's **x64** results and the separate registered **x86** location are a concrete reason not to assume one CLI invocation covers every architecture.
+**What does this establish?** The *display names* match the same four SDK version numbers seen in Observation 4. The **secondary version labels** (for example `10.4.226.50611`) are Windows application/installer metadata — not additional SDKs selected by `dotnet --version`. The striking **800 KB** reported for `10.0.401 from Visual Studio` is a Windows-apps *reported entry size*, **not proof that the SDK's extracted files occupy only 800 KB**. For this Visual Studio-managed SDK, installation and removal should be handled using the [Visual Studio Installer](https://learn.microsoft.com/en-us/dotnet/core/install/remove-runtime-sdk-versions?pivots=os-windows), not by deleting the SDK folder.
 
-Do **not** uninstall anything to investigate this lesson. Microsoft's documentation explains Windows Installed Apps as an uninstall surface and recommends separate `--list-sdks` / `--list-runtimes` commands for inspection: [Remove .NET runtime and SDK versions](https://learn.microsoft.com/en-us/dotnet/core/install/remove-runtime-sdk-versions?pivots=os-windows) and [Check installed .NET versions](https://learn.microsoft.com/en-us/dotnet/core/install/how-to-detect-installed-versions).
+### Why .NET 6 and 7 appear for some components but not others
+
+Compare the actual system-host inventories from Observations 4 and 5. **For the .NET 6 and .NET 7 families specifically:**
+
+| Component | .NET 6 evidence | .NET 7 evidence | What it means |
+| --- | --- | --- | --- |
+| SDK (`--list-sdks`) | Not listed | Not listed | No SDK 6.x or 7.x visible to the current x64 host |
+| Core runtime (`Microsoft.NETCore.App`) | **6.0.36** | **7.0.20** | The core .NET runtime frameworks remain installed |
+| Windows Desktop runtime (`Microsoft.WindowsDesktop.App`) | **6.0.36** | **7.0.20** | Windows Forms/WPF runtime frameworks remain installed |
+| ASP.NET Core runtime (`Microsoft.AspNetCore.App`) | Not listed | Not listed | The current host does not see the ASP.NET Core 6.x/7.x shared frameworks |
+
+This pattern makes sense once we understand what Microsoft distributes on Windows:
+
+- The **.NET Desktop Runtime** includes the **core .NET runtime** and the **Windows Desktop runtime**, but does **not** include the ASP.NET Core runtime.
+- A **.NET SDK installer** typically includes the core runtime, Windows Desktop runtime and ASP.NET Core runtime. Unlike individual runtimes, it adds tools for development.
+- Components can remain after other SDKs or installers change. The screenshot and `--list-runtimes` output **cannot establish which installer originally created or retained** the 6.x and 7.x runtime directories. A separately installed desktop runtime, Visual Studio, or another application installer is a possibility, **not an observed historical fact**.
+
+Microsoft's [Windows .NET installation guide](https://learn.microsoft.com/en-us/dotnet/core/install/windows) provides the installer-to-runtime inclusion table. The important lesson is that **one SDK version isn't automatically one runtime of every kind**, and a framework-dependent app must find the particular compatible runtime/framework it needs.
+
+**Example of a possible consequence:** A framework-dependent **.NET 6 Windows Forms application** could potentially run using the available 6.0.36 core and desktop frameworks, subject to its runtime configuration and hosting environment. A framework-dependent **ASP.NET Core 6 application** that needs `Microsoft.AspNetCore.App 6.x` cannot assume that dependency is met just because `Microsoft.NETCore.App 6.0.36` is installed. The CLI inventory alone does **not** demonstrate that either hypothetical application was launched or succeeded.
+
+**Security and maintenance context:** .NET **7** reached end of support on **May 14, 2024**, and .NET **6** on **November 12, 2024**, according to Microsoft's [.NET support policy](https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core). Out-of-support runtime components are worth auditing, but **do not remove them just because they appear in this list**: determine application dependencies and the responsible installer first. This exercise does not require uninstalling anything.
+
+### Why the Windows list and CLI inventory are not interchangeable
+
+1. **Windows Settings** shows matching *registered application entries* for the `.net` filter. It is not an exhaustive directory scan or an app-specific runtime-selection report. That search returned **four SDK registrations** on this machine; the UI did **not** list every runtime that the host reports.
+2. **`dotnet --list-sdks`** shows SDKs discoverable by this running `dotnet` host, not necessarily every SDK stored under a different host/root or architecture. Here its four displayed versions agree with the four Windows SDK display names.
+3. **`dotnet --list-runtimes`** shows installed shared-framework versions visible to this host — **16 lines across three framework families**, including older runtimes with no corresponding SDK on the system-host SDK list.
+4. The `dotnet --info` report also noted a registered **x86** install root at `C:\Program Files (x86)\dotnet`. Its existence does **not** tell us which SDKs/runtimes that separate architecture can see. Nothing in the four x64 SDK entries enumerates the x86 inventory.
+5. An SDK extracted into an *isolated* folder can exist without a normal Windows Installed Apps registration; likewise, a Windows registration alone doesn't prove a particular running host sees the registered SDK.
+6. **Microsoft .NET Framework** (the older Windows-specific product family) is different from modern `Microsoft.NETCore.App` shared framework versions; don't combine their inventories.
+
+**Next step only if diagnosis is needed:** To determine which installer owns a component or which specific application uses an older runtime, collect targeted installer/application evidence. Don't infer dependency or usage from the two version lists alone, and **don't remove anything during training**.
+
+For comparison, Microsoft's [installed-versions instructions](https://learn.microsoft.com/en-us/dotnet/core/install/how-to-detect-installed-versions) use `--list-sdks` and `--list-runtimes`, while its [Windows removal guidance](https://learn.microsoft.com/en-us/dotnet/core/install/remove-runtime-sdk-versions?pivots=os-windows) explains the Installed Apps and Visual Studio Installer surfaces.
 
 ### Put all seven observations together
 
@@ -889,7 +924,7 @@ Do **not** uninstall anything to investigate this lesson. Microsoft's documentat
 | Which system-host SDK versions are visible? | `dotnet --list-sdks` | **8.0.426, 9.0.319, 10.0.401, 10.0.402** |
 | Which runtime frameworks are visible? | `dotnet --list-runtimes` | Several .NET Core, ASP.NET Core, and Windows Desktop runtime versions; includes **6.0/7.0 runtimes without corresponding visible SDKs** |
 | Which management-tool version is reported? | Script `-Version` | **`isolated-dotnet-sdk development (main)`** |
-| What does the Windows Settings screenshot establish? | Installed Apps filtered for `.net` | Windows package registration view, **not** the running host's SDK/runtime inventory |
+| What does the Windows Settings screenshot establish? | Installed Apps filter `.net` → **4 apps found** | Four x64 SDK registrations, including one Visual Studio-managed entry; **not** a complete runtime inventory |
 | Which runtime did *a particular application* use? | Would require application-specific evidence | **Not determined** by these six commands or the Installed Apps screenshot |
 
 **Takeaway:** “What version of .NET do I have?” is incomplete. First ask **which program is running**, **which SDK it selects**, **which host components are reported**, **which runtimes can be discovered**, **which runtime a specific app uses**, and **which installation-management interface is being viewed**. These are different questions with different evidence.
