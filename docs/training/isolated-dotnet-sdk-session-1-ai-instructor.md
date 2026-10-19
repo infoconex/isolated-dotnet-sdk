@@ -16,7 +16,7 @@
 
 ## Real Windows observation-based teaching example
 
-The learner guide now includes the [owner-supplied Windows PowerShell walkthrough](isolated-dotnet-sdk-session-1-self-paced.md#7-real-windows-powershell-walkthrough--observed-output). The owner provided the six actual CLI results (from PowerShell 7.6.6) and a screenshot of Windows Settings **Installed Apps** filtered for `.net`. The CLI output is sanitized, with identifying terminal prompts omitted. It is **observed owner-provided evidence**, not commands run by the AI or a reproducible test on every machine.
+The learner guide now includes the [owner-supplied Windows PowerShell walkthrough](isolated-dotnet-sdk-session-1-self-paced.md#7-real-windows-powershell-walkthrough). The owner provided the six actual CLI results (from PowerShell 7.6.6) and a screenshot of Windows Settings **Installed Apps** filtered for `.net`. The CLI output is sanitized, with identifying terminal prompts omitted. It is **observed owner-provided evidence**, not commands run by the AI or a reproducible test on every machine.
 
 **Teach from the actual observations:** PowerShell resolves system `C:\Program Files\dotnet\dotnet.exe`; `dotnet --version` selects **SDK 10.0.402**; `dotnet --info` reports **Host 10.0.13** and x64 architecture; `--list-sdks` sees 8.0.426, 9.0.319, 10.0.401, and 10.0.402 under the system SDK root; `--list-runtimes` includes **6.0.36 and 7.0.20 .NET runtimes even though no corresponding 6.x or 7.x SDKs appear**; the management script `-Version` reports **`isolated-dotnet-sdk development (main)`**. Explain which component and inventory each line describes.
 
