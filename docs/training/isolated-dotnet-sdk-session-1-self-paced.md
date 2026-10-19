@@ -706,7 +706,7 @@ Without changing anything on their computer, explain:
 
 Compare your explanation with [integrative challenge guidance](#integrative-challenge-guidance).
 
-## 7. Real Windows PowerShell walkthrough — observed output
+## 7. Real Windows PowerShell walkthrough
 
 **Status: owner-supplied, sanitized observations.** The project owner provided these command results from **PowerShell 7.6.6** and also supplied a screenshot of Windows **Installed Apps** filtered to `.net`. The CLI output here is sourced from that provided terminal transcript: we did **not** independently execute the commands or capture the screenshot. Unlike earlier hypothetical examples, these version numbers are *observed* from the provided transcript.
 
