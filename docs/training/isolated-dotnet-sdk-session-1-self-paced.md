@@ -29,7 +29,7 @@ By the end, you should be able to:
 5. Explain why isolated installations don't automatically become the default and what direct executable invocation *does* and *does not* guarantee.
 6. Describe the benefit and limits of our tool's isolation model.
 
-## Understanding .NET Components and Folders
+## Key .NET Terms
 
 A few definitions will help as we learn how .NET finds its executable, selects an SDK, and runs applications.
 
