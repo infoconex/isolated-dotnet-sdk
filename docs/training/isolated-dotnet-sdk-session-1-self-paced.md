@@ -3,10 +3,10 @@
 **Audience:** Developers, technical leads, and maintainers who have used .NET but may not know how a specific SDK is chosen.  
 **Format:** Self-paced; an AI instructor is not required.  
 **Estimated time:** 60–90 minutes for the expanded lesson (longer when exploring your own machine); sections can be studied separately.  
-**Status:** Curriculum pilot draft v0.4 — October 18, 2026; expanded host/SDK/runtime teaching with worked scenarios.  
+**Status:** Curriculum pilot draft v0.5 — October 18, 2026; glossary and observed .NET installation structure now precede Section 1.  
 **Companion:** [Session 1 AI Instructor Guide](isolated-dotnet-sdk-session-1-ai-instructor.md).
 
-> **Safety and scope:** The exercises inspect command resolution and SDK information; they do not ask you to install/remove SDKs, build a project, edit `PATH`, replace `global.json`, or change your project. Running the .NET CLI can still create ordinary per-user first-run state or produce telemetry under Microsoft's settings; “inspection” does **not** mean zero side effects. You may skip all live commands and use the hypothetical examples instead. Paths and SDK versions are illustrative, not claims about your machine. See [Microsoft's CLI telemetry documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
+> **Safety and scope:** The exercises inspect command resolution and SDK information; they do not ask you to install/remove SDKs, build a project, edit `PATH`, replace `global.json`, or change your project. Running the .NET CLI can still create ordinary per-user first-run state or produce telemetry under Microsoft's settings; “inspection” does **not** mean zero side effects. You may skip all live commands and use the hypothetical examples instead. Early worked scenarios are illustrative. A separately labeled owner-supplied Windows walkthrough and the opening folder-layout examples contain observed data from provided screenshots and terminal output; they are not claims about your machine. See [Microsoft's CLI telemetry documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
 
 ## Why start here?
 
@@ -29,7 +29,9 @@ By the end, you should be able to:
 5. Explain why isolated installations don't automatically become the default and what direct executable invocation *does* and *does not* guarantee.
 6. Describe the benefit and limits of our tool's isolation model.
 
-## 1. First, three different decisions
+## Before Section 1 — Meet the parts of .NET
+
+We will distinguish **a program you execute**, **the developer tools it may select**, **the components that run apps**, and **metadata used by optional development workloads**. Understanding what each one *is* will make the later resolution rules much easier to follow.
 
 Before we discuss *resolution*, here are the terms we'll use:
 
@@ -42,6 +44,76 @@ Before we discuss *resolution*, here are the terms we'll use:
 | **`PATH`** | A list of directories consulted when locating commands by name. Shell aliases/functions and explicit paths can take precedence. |
 | **`global.json`** | An optional file that tells .NET which SDK version or range of SDK versions to accept. It does not rename or redirect the shell's `dotnet` command. |
 | **Roll-forward** | The rules controlling whether a different installed version is an acceptable substitute for a requested version. |
+
+Three extra terms help us interpret actual .NET installation folders:
+
+| Additional term | Plain-language meaning |
+| --- | --- |
+| **`hostfxr` (host framework resolver)** | A native .NET hosting component stored under `host/fxr`. It helps resolve SDKs and shared runtimes after a `dotnet` host starts. It is **not** an SDK, not an app runtime, and not another `dotnet.exe` for every folder. |
+| **SDK feature band** | A grouping of related SDK releases, reflected in versions such as `10.0.400` (the feature band for SDK `10.0.402`). Feature-band names can appear in workload-related metadata; they are **not** a list of installed SDK patch versions. |
+| **Workload / workload manifest** | An optional development capability (such as platform-specific tooling), and metadata describing the assets needed for those workloads. A manifest folder alone **does not** mean a workload is installed. |
+
+### A real Windows installation: three folders that look similar but mean different things
+
+The project owner supplied **three File Explorer screenshots** of the x64 system .NET installation under `C:\Program Files\dotnet`. The folder names below are **transcribed from those screenshots**, not inferred from SDK version strings. They show one observed machine; Linux/macOS layouts and other Windows installations may differ.
+
+```text
+C:\Program Files\dotnet\
+  dotnet.exe            <-- CLI host executable (shown separately in its Properties screenshot)
+  host\
+    fxr\
+      6.0.36
+      7.0.20
+      8.0.32
+      9.0.21
+      10.0.12
+      10.0.13
+  sdk\
+    8.0.426
+    9.0.319
+    10.0.401
+    10.0.402
+  sdk-manifests\
+    8.0.100
+    9.0.100
+    10.0.100
+  shared\                <-- runtime frameworks (studied in Section 7)
+```
+
+**First, look at `host\fxr`.** Each numbered folder contains a version of the **host framework resolver** (`hostfxr`), which participates in choosing compatible .NET components. The folders **6.0.36**, **7.0.20**, **8.0.32**, **9.0.21**, **10.0.12**, and **10.0.13** do **not** mean six different SDKs are installed or that every application loads all six hostfxr versions. Microsoft's host typically selects an appropriate hosting component during startup. The screenshot itself **does not prove which hostfxr DLL was loaded by a particular process**.
+
+**Next, look at `sdk`.** These four directories are the actual installed **SDK versions**: **8.0.426**, **9.0.319**, **10.0.401**, and **10.0.402**. Compare them with the owner's later `dotnet --list-sdks` result in [Section 7](#7-real-windows-powershell-walkthrough): all four appear there. An SDK directory is a collection of build/development tooling, not another hostfxr version or a shared application runtime.
+
+**Finally, look at `sdk-manifests`.** Its folders **8.0.100**, **9.0.100**, and **10.0.100** belong to **workload manifest feature-band metadata**, not the installed-SDK inventory. **SDK 10.0.100 does not appear in `sdk` or `dotnet --list-sdks`**, even though `sdk-manifests\10.0.100` exists. Conversely, SDK **10.0.402** is installed even though the screenshot does not show a folder named `sdk-manifests\10.0.402`. **The two directory trees do not have a one-to-one relationship.**
+
+The owner's actual `dotnet --info` output also reports:
+
+```text
+.NET SDK:
+ Version:           10.0.402
+ Workload version:  10.0.400-manifests.378ba522
+
+.NET workloads installed:
+There are no installed workloads to display.
+```
+
+**Interpretation:** `10.0.402` is the selected SDK; `10.0.400-manifests.378ba522` is workload-manifest-related version information associated with the SDK's feature band; and **no installed workloads were reported**. A directory's existence under `sdk-manifests` is not a substitute for an installed-workload check. This also explains why a `10.0.100` manifest directory should never be treated as proof of an installed `10.0.100` SDK.
+
+**Optional, non-installing Windows PowerShell inspection** of these folder names (not executed by us; no PowerShell output is claimed):
+
+```powershell
+Get-ChildItem 'C:\Program Files\dotnet\host\fxr' -Directory | Select-Object -ExpandProperty Name
+Get-ChildItem 'C:\Program Files\dotnet\sdk' -Directory | Select-Object -ExpandProperty Name
+Get-ChildItem 'C:\Program Files\dotnet\sdk-manifests' -Directory | Select-Object -ExpandProperty Name
+```
+
+**What if your results differ?** An SDK might be installed somewhere else, your shell may launch another `dotnet` host, an x86/Arm64 installation may have a different inventory, or SDK/tooling components may have been updated independently. Folder modified dates alone don't prove which installer added or last used each component. Do not delete folders to try to make these lists match.
+
+Microsoft documents the directory roles in [.NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging) and explains the difference between installed workloads and manifest metadata in [`dotnet workload list`](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-workload-list). The product will **not** ask you to install workloads during Session 1.
+
+---
+
+## 1. First, three different decisions
 
 **Think about this:** When you enter `dotnet --version`, what do you expect the number to describe — the executable, the runtime, or the SDK? You don't have to answer yet. The command and output below will explain it.
 
@@ -80,7 +152,7 @@ When the command is `dotnet my-app.dll` instead, the runtime hosting rules matte
 
 **Why this matters:** The same word, “dotnet,” names a host program that can launch different kinds of operations. Before troubleshooting, ask: *am I trying to identify the executable, the SDK selected for build commands, or the runtime used to run an app?*
 
-Every terminal transcript in this lesson is an **illustrative example, not output gathered from your computer**. Real paths and versions vary by machine. Only commands you run yourself can establish facts about your environment.
+**This first worked example is illustrative.** The earlier folder layout is transcribed from the owner's screenshots; the separate [Windows walkthrough](#7-real-windows-powershell-walkthrough) contains sanitized owner-provided CLI observations. Actual paths and versions differ across computers.
 
 ### A closer look: what are the host, SDK, and runtime actually responsible for?
 
