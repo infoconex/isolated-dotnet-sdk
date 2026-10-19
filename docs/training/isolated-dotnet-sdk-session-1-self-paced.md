@@ -3,7 +3,7 @@
 **Audience:** Developers, technical leads, and maintainers who have used .NET but may not know how a specific SDK is chosen.  
 **Format:** Self-paced; an AI instructor is not required.  
 **Estimated time:** 45–60 minutes (longer when inspecting your own machine).  
-**Status:** Curriculum pilot draft v0.2 — October 18, 2026; revised to teach with explained command/output examples before asking reinforcement questions.  
+**Status:** Curriculum pilot draft v0.3 — October 18, 2026; curiosity prompts lead directly into explained examples, followed by reinforcement questions.  
 **Companion:** [Session 1 AI Instructor Guide](isolated-dotnet-sdk-session-1-ai-instructor.md).
 
 > **Safety and scope:** The exercises inspect command resolution and SDK information; they do not ask you to install/remove SDKs, build a project, edit `PATH`, replace `global.json`, or change your project. Running the .NET CLI can still create ordinary per-user first-run state or produce telemetry under Microsoft's settings; “inspection” does **not** mean zero side effects. You may skip all live commands and use the hypothetical examples instead. Paths and SDK versions are illustrative, not claims about your machine. See [Microsoft's CLI telemetry documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
@@ -16,7 +16,7 @@ Our project, [Isolated .NET SDK](https://github.com/infoconex/isolated-dotnet-sd
 
 ### How to study this lesson
 
-For each section, **read the explanation, work through the sample command and its output, and study the unexpected-result example first**. Then answer its checkpoint questions before looking at the matching A-numbered answers. Explain *why* you chose each answer. If uncertain, follow the section hint, try again, and then compare with the answer key. You can mark each checkpoint **independent**, **after hint**, or **after reading the explanation**. The goal is an accurate explanation, not a perfect first guess. You do not need a local .NET installation to complete the lesson.
+For each section, start with the **curiosity question** as something to think about; it is **not a quiz and does not require an answer**. Read the explanation, work through the example command and output, and study what unexpected results mean. **Only after that** answer the numbered checkpoint questions before looking at the matching A-numbered answers. Explain *why* you chose each answer. If uncertain, follow the section hint, try again, and then compare with the answer key. You can mark each checkpoint **independent**, **after hint**, or **after reading the explanation**. The goal is an accurate explanation, not a perfect first guess. You do not need a local .NET installation to complete the lesson.
 
 ### Learning outcomes
 
@@ -43,6 +43,8 @@ Before we discuss *resolution*, here are the terms we'll use:
 | **`global.json`** | An optional file that tells .NET which SDK version or range of SDK versions to accept. It does not rename or redirect the shell's `dotnet` command. |
 | **Roll-forward** | The rules controlling whether a different installed version is an acceptable substitute for a requested version. |
 
+**Think about this:** When you enter `dotnet --version`, what do you expect the number to describe — the executable, the runtime, or the SDK? You don't have to answer yet. The command and output below will explain it.
+
 When you enter `dotnet --version`, it is tempting to think there's a single step called “find .NET.” There isn't.
 
 | Decision | Question being answered | Influenced by (examples) | Inspect with |
@@ -51,13 +53,11 @@ When you enter `dotnet --version`, it is tempting to think there's a single step
 | **SDK resolution** | Which SDK does that host use for SDK commands? | SDKs visible to that host, nearest applicable `global.json`, roll-forward/prerelease rules, working directory, architecture, .NET 10+ `sdk.paths` | `dotnet --version`, `dotnet --list-sdks`, `dotnet --info` |
 | **Runtime resolution** | Which .NET runtime runs a particular app? | Application deployment and runtime configuration, available runtimes, architecture, runtime roll-forward behavior | `dotnet --list-runtimes`; app-specific diagnostics |
 
-**Remember:** `dotnet --version` shows the **selected SDK version**, not the pathname of the executable and not necessarily the runtime that a particular application uses.
-
-Runtime resolution is deliberately a preview only. We'll explore it in another session rather than loading three mechanisms into the first lesson.
+Runtime resolution is deliberately a preview only. We'll explore it in another session rather than loading three mechanisms into the first lesson. The worked example below shows which number `dotnet --version` actually prints.
 
 ### Worked example: what actually happens when you type a command?
 
-Imagine a Windows PowerShell terminal. The machine has Microsoft .NET SDKs `8.0.408` and `10.0.401` installed under its usual shared .NET installation.
+Imagine a Windows PowerShell terminal. The machine has Microsoft .NET SDKs `8.0.408` and `10.0.401` installed under its usual shared .NET installation. **You might expect the command to report the executable or runtime version; watch what actually appears.**
 
 You type:
 
@@ -74,7 +74,7 @@ The system makes **two decisions in sequence**:
 10.0.401
 ```
 
-That output **is the SDK version**. It does not say `C:\Program Files\dotnet\dotnet.exe` because the command was not designed to tell you the executable's path.
+**Answer to the opening question:** `10.0.401` is the **selected SDK version**. It is neither the executable's pathname nor the .NET runtime version. The host (`dotnet.exe`) is the program PowerShell launches; the SDK is the toolkit that host selects. The command does not print `C:\Program Files\dotnet\dotnet.exe` because `--version` answers the SDK-selection question, not which executable file PowerShell found.
 
 When the command is `dotnet my-app.dll` instead, the runtime hosting rules matter. That operation may not select an SDK at all. We will examine runtime selection separately.
 
@@ -89,6 +89,8 @@ Every terminal transcript in this lesson is an **illustrative example, not outpu
 Not sure? Revisit the table above, especially the difference between the first and second rows. Compare your answer with [A1](#a1).
 
 ## 2. Executable resolution: which program launches?
+
+**Think about this:** If there are two `dotnet.exe` files on your machine, how does PowerShell decide which one to run? No need to guess; we'll use command output to show you.
 
 When you type `dotnet`, **the shell** first decides what that name means. That is not yet an SDK selection decision.
 
@@ -191,6 +193,8 @@ The two `type -a` lines list ways the name can be found; `command -v` reports th
 Need a hint? Revisit [Section 2](#2-executable-resolution-which-program-launches), then [A2](#a2) and [A3](#a3).
 
 ## 3. SDK resolution: which installed SDK is selected?
+
+**Think about this:** Could the same `dotnet.exe` print `10.0.401` in one directory and `8.0.408` in another? The examples in this section explain how that happens.
 
 Once a `dotnet` executable is running and you invoke an SDK-related command, .NET's SDK resolver selects an SDK it can find and that satisfies the active policy.
 
@@ -337,6 +341,8 @@ Need a hint? Revisit [Section 3](#3-sdk-resolution-which-installed-sdk-is-select
 
 ## 4. Additional influences to recognize, not memorize yet
 
+**Think about this:** What if an SDK is installed in another folder, but the running `dotnet` host does not normally look there? We will explain SDK search roots and why they are distinct from shell `PATH`.
+
 These factors are worth recognizing when behavior seems unexpected:
 
 | Factor | Why it matters | Depth in this session |
@@ -387,6 +393,8 @@ Other influences do not need a full lesson yet: preview SDKs may be considered d
 Need a hint? Read [Section 4](#4-additional-influences-to-recognize-not-memorize-yet) and [A6](#a6).
 
 ## 5. So why have an isolated SDK?
+
+**Think about this:** If two installations show the same SDK version number, are you sure you're using the isolated one? Let's inspect the evidence before drawing that conclusion.
 
 When you install a newer SDK into a conventional shared .NET installation, commands that aren't pinned can begin selecting it. That can change builds or tooling unexpectedly even if you never intended to switch a specific project.
 
