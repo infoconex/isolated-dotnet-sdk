@@ -43,7 +43,7 @@ Before we discuss *resolution*, here are the terms we'll use:
 | **`PATH`** | A list of directories consulted when locating commands by name. Shell aliases/functions and explicit paths can take precedence. |
 | **`global.json`** | An optional file that tells .NET which SDK version or range of SDK versions to accept. It does not rename or redirect the shell's `dotnet` command. |
 
-## Concept 1 — Understanding the .NET Host
+## Concept 1: Understanding the .NET Host
 
 ### Why understand `dotnet.exe`?
 
@@ -219,21 +219,12 @@ The two `type -a` lines list ways the name can be found; `command -v` reports th
 
 ### If the result is surprising
 
-- **Command not found:** No usable command named `dotnet` was resolved by that shell. It does **not** prove there is no SDK anywhere on disk; an isolated host might exist outside `PATH`.
+- **Command not found:** No usable command named `dotnet` was resolved by that shell. It does **not** prove there is no SDK anywhere on disk; another host might exist outside `PATH`.
 - **Multiple paths:** Multiple possible *executables* exist. This is not the same as multiple *SDKs*. You need `dotnet --list-sdks` for the SDKs visible to a particular host.
 - **An alias/function appears:** Inspect its definition before inferring the actual executable. An editor or CI job may resolve something else because it has a different environment.
 - **An executable path looks unfamiliar:** Check which process or shell you are in, whether `PATH` was modified, and whether you are using x86/x64/Arm64 tooling. Do not change your system just to make the exercise match the example.
 
 **One certainty you can introduce deliberately:** To choose a particular installed host file, use its full path, such as `& "C:\Program Files\dotnet\dotnet.exe" --version` in PowerShell or `/usr/share/dotnet/dotnet --version` in Bash. The host file is then explicit; the version the SDK resolver reports is still a separate matter.
-
-### Checkpoint: executable resolution
-
-**Q2.** A computer has two `dotnet.exe` files in different directories. Does the newer SDK installation automatically guarantee that its executable is the one launched by `dotnet`? Explain.
-
-**Q3.** Why is an explicit path such as `& "C:\Program Files\dotnet\dotnet.exe" --version` more predictable than typing `dotnet --version`? What does it *not* guarantee by itself?
-
-Need a hint? Revisit [which executable the shell starts](#which-dotnetexe-does-the-shell-start), and consult [A2](#a2) and [A3](#a3) only after attempting the questions.
-
 
 ### What does `dotnet --version` actually establish?
 
@@ -272,9 +263,18 @@ This number identifies **the SDK selected for the invocation**, not the host exe
 
 **Q1.** A developer says their `dotnet.exe` must be version 10.0.401 because `dotnet --version` prints 10.0.401. Explain what is wrong. Need a hint? Revisit [what the command establishes](#what-does-dotnet---version-actually-establish), then consult [A1](#a1) after your attempt.
 
+### Checkpoint: executable resolution
+
+**Q2.** A computer has two `dotnet.exe` files in different directories. Does the newer SDK installation automatically guarantee that its executable is the one launched by `dotnet`? Explain.
+
+**Q3.** Why is an explicit path such as `& "C:\Program Files\dotnet\dotnet.exe" --version` more predictable than typing `dotnet --version`? What does it *not* guarantee by itself?
+
+Need a hint? Revisit [which executable the shell starts](#which-dotnetexe-does-the-shell-start), and consult [A2](#a2) and [A3](#a3) only after attempting the questions.
+
+
 **Transition:** The shell has started the host. **How does .NET now decide which SDK to use?**
 
-## Concept 2 — Understanding How .NET Selects an SDK
+## Concept 2: Understanding How .NET Selects an SDK
 
 **Think about this:** Could the same `dotnet.exe` print `10.0.401` in one directory and `8.0.408` in another? The examples in this section explain how that happens.
 
@@ -488,7 +488,7 @@ Other influences do not need a full lesson yet: preview SDKs may be considered d
 Need a hint? Revisit [additional SDK influences](#additional-influences-to-recognize-not-memorize-yet), then [A6](#a6) after your optional attempt.
 
 
-## Concept 3 — Understanding Application Runtime Selection
+## Concept 3: Understanding Application Runtime Selection
 
 ### Why does runtime selection matter?
 
@@ -630,13 +630,13 @@ Installing SDK 10 didn't necessarily change the host PowerShell launched. It may
 
 Need a hint? Revisit [the runtime scenario](#worked-example-sdk-10-builds-a-net-8-application) and [inventory versus selection](#why-runtime-inventory-isnt-runtime-selection), then consult [A7](#a7) and [A8](#a8).
 
-## Optional evidence walkthrough — a real Windows .NET installation
+## Optional evidence walkthrough: a real Windows .NET installation
 
 **Status: owner-supplied, sanitized observations.** The project owner provided these command results from **PowerShell 7.6.6** and also supplied a screenshot of Windows **Installed Apps** filtered to `.net`. The CLI output here is sourced from that provided terminal transcript: we did **not** independently execute the commands or capture the screenshot. Unlike earlier hypothetical examples, these version numbers are *observed* from the provided transcript.
 
 **Sanitization and limits:** The owner's Windows username and terminal prompt have been omitted; standard Microsoft installation paths, SDK/runtime versions, and reported metadata remain unchanged. `dotnet --info` is excerpted to avoid duplicating the full SDK and runtime lists preserved separately below. This is a snapshot from **one system, one PowerShell environment, and one working-directory context**, not a universal claim about other machines.
 
-### Observation 1 — Which executable does PowerShell find?
+### Observation 1: Which executable does PowerShell find?
 
 ```powershell
 Get-Command dotnet -All | Format-Table CommandType, Name, Source -AutoSize
@@ -654,7 +654,7 @@ Application dotnet.exe C:\Program Files\dotnet\dotnet.exe
 
 **If you see more rows:** PowerShell might see another executable, function, or alias. Inspect command precedence and paths first; do not confuse multiple executable candidates with multiple installed SDKs.
 
-### Observation 2 — Which SDK does that host select?
+### Observation 2: Which SDK does that host select?
 
 ```powershell
 dotnet --version
@@ -670,7 +670,7 @@ Observed output:
 
 **If the result changes in another directory:** A different applicable `global.json` or SDK search policy may be involved, even if PowerShell still launches the same executable.
 
-### Observation 3 — What else does `dotnet --info` reveal?
+### Observation 3: What else does `dotnet --info` reveal?
 
 ```powershell
 dotnet --info
@@ -718,7 +718,7 @@ global.json file:
 
 **Interesting distinction:** `Host Version 10.0.13` also happens to be listed as an available `Microsoft.NETCore.App` runtime below. That does not mean every app on this machine necessarily runs on `10.0.13`. Runtime selection is specific to an app, its runtime configuration and the applicable roll-forward policy.
 
-### Observation 4 — Which SDKs does this host see?
+### Observation 4: Which SDKs does this host see?
 
 ```powershell
 dotnet --list-sdks
@@ -735,7 +735,7 @@ Observed output:
 
 **Explanation:** Four SDKs are visible to the **normally resolved system host**. Each row combines a complete SDK version with the SDK root directory in brackets. `dotnet --version` selected `10.0.402`, but the other three remain installed and could be selected under different compatible SDK policies. Another SDK root could exist elsewhere without appearing in this host's inventory.
 
-### Observation 5 — Which runtimes does this host see?
+### Observation 5: Which runtimes does this host see?
 
 ```powershell
 dotnet --list-runtimes
@@ -772,7 +772,7 @@ Microsoft.WindowsDesktop.App 10.0.13 [C:\Program Files\dotnet\shared\Microsoft.W
 
 There was **no application-specific runtime execution test** in the supplied transcript. The earlier example of building with one SDK and running with a compatible different-numbered runtime remains **illustrative**, not something proven for a particular application by this inventory.
 
-### Observation 6 — What does Windows *Installed Apps* show?
+### Observation 6: What does Windows *Installed Apps* show?
 
 The owner supplied a **fuller screenshot** of **Windows Settings → Apps → Installed apps** with the search box containing **`.net`**. The interface reported **`4 apps found`**. This is observed Windows **installer registration** information, *not* another `dotnet` CLI query. The image itself is not embedded in this document; the table below is a transcription of its four visible results, including the smaller installer-version labels and displayed sizes.
 
@@ -823,7 +823,7 @@ Microsoft's [Windows .NET installation guide](https://learn.microsoft.com/en-us/
 
 For comparison, Microsoft's [installed-versions instructions](https://learn.microsoft.com/en-us/dotnet/core/install/how-to-detect-installed-versions) use `--list-sdks` and `--list-runtimes`, while its [Windows removal guidance](https://learn.microsoft.com/en-us/dotnet/core/install/remove-runtime-sdk-versions?pivots=os-windows) explains the Installed Apps and Visual Studio Installer surfaces.
 
-### Observation 7 — What version is the actual `dotnet.exe` file?
+### Observation 7: What version is the actual `dotnet.exe` file?
 
 The owner supplied an additional **Windows File Explorer → `C:\Program Files\dotnet\dotnet.exe` → Properties → Details** screenshot. Earlier, PowerShell resolved that very same executable path in Observation 1. The screenshot displays this file's Windows version information:
 
@@ -846,7 +846,7 @@ The owner supplied an additional **Windows File Explorer → `C:\Program Files\d
 
 The command above is provided **for learners to try**, and its output has **not** been supplied or observed. The *actual evidence* is the owner's File Explorer Properties screenshot. Don't label a future PowerShell result as observed until it has been run.
 
-**If the versions don't match:** First confirm that the binary whose properties you opened is the one PowerShell resolves (`Get-Command dotnet -All`). It is possible to examine the properties of one host file while executing another because of `PATH`, aliases, explicit paths, or architecture differences. Also keep the product's executable metadata distinct from its selected SDK: a newer SDK does not mean `dotnet.exe` must have that SDK's exact version number. Finally, don't interpret this small native executable's **163 KB** size as the space occupied by the associated runtimes, SDK, or user-owned isolated installations.
+**If the versions don't match:** First confirm that the binary whose properties you opened is the one PowerShell resolves (`Get-Command dotnet -All`). It is possible to examine the properties of one host file while executing another because of `PATH`, aliases, explicit paths, or architecture differences. Keep the executable's Windows metadata distinct from its selected SDK: a newer SDK does not mean `dotnet.exe` must have that SDK's exact version number. Finally, don't interpret this small native executable's **163 KB** size as the space occupied by the associated runtimes, SDK, or user-owned isolated installations.
 
 ### Additional filesystem evidence: hostfxr, SDKs, and workload manifests
 
@@ -858,7 +858,7 @@ Three extra terms help us interpret actual .NET installation folders:
 | **SDK feature band** | A grouping of related SDK releases, reflected in versions such as `10.0.400` (the feature band for SDK `10.0.402`). Feature-band names can appear in workload-related metadata; they are **not** a list of installed SDK patch versions. |
 | **Workload / workload manifest** | An optional development capability (such as platform-specific tooling), and metadata describing the assets needed for those workloads. A manifest folder alone **does not** mean a workload is installed. |
 
-#### Observation 8 — A real Windows installation: three folders that look similar but mean different things
+#### Observation 8: A real Windows installation: three folders that look similar but mean different things
 
 The project owner supplied **three File Explorer screenshots** of the x64 system .NET installation under `C:\Program Files\dotnet`. The folder names below are **transcribed from those screenshots**, not inferred from SDK version strings. They show one observed machine; Linux/macOS layouts and other Windows installations may differ.
 
@@ -961,7 +961,7 @@ Yes. The same host can select different SDKs because working directory, applicab
 
 No. With `"rollForward": "disable"`, exact SDK availability is required. The CLI fails rather than silently choose an unrelated SDK.
 
-### A6 (optional)
+### A6
 
 `sdk.paths` influences SDK discovery on supporting .NET 10+ hosts, not shell command lookup or application runtime selection.
 
