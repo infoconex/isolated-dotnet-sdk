@@ -1,7 +1,7 @@
 # Isolated .NET SDK — Session 1 AI Instructor Guide
 
 **Companion learner material:** [Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md)  
-**Status:** Instructor pilot draft v0.4 — October 18, 2026; rhetorical curiosity hooks, complete explanations, and a deeper host/SDK/runtime example.  
+**Status:** Instructor pilot draft v0.5 — October 18, 2026; glossary and real folder-layout orientation come before Section 1.  
 **Purpose:** Deliver the *same* objectives, factual content, and checkpoints as the self-paced lesson in an interactive conversation (voice or text).
 
 ## How to use this guide
@@ -29,6 +29,22 @@ The learner guide now includes the [owner-supplied Windows PowerShell walkthroug
 **Use the observed `dotnet.exe` Properties evidence:** A new screenshot shows **`C:\Program Files\dotnet\dotnet.exe` → Properties → Details**. The binary's **File description** is `.NET Host`; **Product version** is `10.0.13` with commit metadata; **File version** is `10.0.1326.50504`; the executable itself is reported as **163 KB**. This host path matches the earlier observed `Get-Command dotnet -All` result. Explain **why Product version 10.0.13 matches `dotnet --info` Host Version 10.0.13**, whereas `dotnet --version` prints the **selected SDK 10.0.402**. The File version is Windows binary metadata and is not an SDK version. A 163 KB executable is not the size of a whole runtime or SDK installation. The lesson includes an optional `(Get-Item ...).VersionInfo` command as an inspection exercise, **but that command's output is not observed**. Teach from the screenshot, not from an invented terminal transcript.
 
 **Keep evidence boundaries explicit:** The owner supplied a transcript, the Installed Apps screenshot, and the executable Properties screenshot, but no application execution trace. Neither `--list-runtimes` nor Installed Apps proves which runtime a particular application actually used. Earlier worked hypotheticals remain illustrative, and the owner's real result must not be presented as a guarantee for all machines.
+
+## Before Section 1 — vocabulary and observed installation folders
+
+The self-paced guide opens with [the pre-Section-1 glossary and observed folder layout](isolated-dotnet-sdk-session-1-self-paced.md#before-section-1--meet-the-parts-of-net). **Teach this orientation before the first resolution scenario or Q1.** Define *host*, *hostfxr*, *SDK*, *runtime*, *SDK feature band*, *workload manifest*, *PATH*, *global.json* and *roll-forward*. Introduce a few terms at a time in voice; don't read an entire table in one uninterrupted turn. This is teaching, **not assessment**.
+
+Three owner-supplied File Explorer screenshots show separate directories in the Windows x64 installation:
+
+| Folder | Observed directory names | Interpretation |
+| --- | --- | --- |
+| `C:\Program Files\dotnet\host\fxr` | `6.0.36`, `7.0.20`, `8.0.32`, `9.0.21`, `10.0.12`, `10.0.13` | Native **hostfxr framework-resolution components**, not six SDK installations and not proof a particular app loaded them. |
+| `C:\Program Files\dotnet\sdk` | `8.0.426`, `9.0.319`, `10.0.401`, `10.0.402` | Four installed **SDKs**, matching the owner's later system-host `dotnet --list-sdks` output. |
+| `C:\Program Files\dotnet\sdk-manifests` | `8.0.100`, `9.0.100`, `10.0.100` | **Workload manifest SDK-feature-band** directories, not another SDK inventory or proof that optional workloads are installed. |
+
+The owner's `dotnet --info` reports SDK `10.0.402`, workload version `10.0.400-manifests.378ba522`, and **no installed workloads**. Explain why `sdk-manifests\10.0.100` does **not** prove SDK `10.0.100` is present. SDK `10.0.402` is present despite no identically named `sdk-manifests\10.0.402` folder being shown. No fault is implied. Microsoft documents these locations in [.NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging).
+
+**Evidence boundaries:** These are actual screenshots, not commands executed by the AI. Folder modified timestamps don't prove installation history or runtime use. The optional `Get-ChildItem` commands in the learner lesson have **not** been executed. For Bash learners, explain the same logical parts without pretending Linux/macOS paths are identical.
 
 ## Core teaching method: curiosity hook, demonstration, then reinforcement
 
@@ -75,7 +91,7 @@ Keep the deeper application example concise in voice, but do not skip the causal
 
 | Topic, then checkpoint | Curiosity hook (rhetorical; **do not wait**) | Example to show **before the checkpoint** | Interpret and troubleshoot |
 | --- | --- | --- | --- |
-| Three decisions → Q1 | “What do you think `dotnet --version` returns?” | Lesson sections 1 and 7: annotated `--version`, `--info`, `--list-runtimes`, management-tool version comparison, and observed `dotnet.exe` file Product/File properties | Explain management-tool version, selected SDK, host product/file versions, and runtime as distinct identities; don't conflate binary version metadata with SDK selection. |
+| Three decisions → Q1 (after orientation) | “What do you think `dotnet --version` returns?” | Lesson sections 1 and 7: annotated `--version`, `--info`, `--list-runtimes`, management-tool version comparison, and observed `dotnet.exe` file Product/File properties | Explain management-tool version, selected SDK, host product/file versions, and runtime as distinct identities; don't conflate binary version metadata with SDK selection. |
 | Shell executable → Q2, Q3 | “What if there are two different `dotnet.exe` files?” | Lesson section 2: `Get-Command dotnet -All`, `where.exe dotnet`, or Bash `type -a dotnet` with two paths | Explain command precedence, aliases/functions, and why a full path fixes the host but not every SDK-selection decision. |
 | SDK selection → Q4, Q5 | “Could the same executable report two different SDKs?” | Lesson section 3: `dotnet --list-sdks` shows `8.0.408` + `10.0.401`; different working directories produce different `--version` results | Walk through `global.json`, exact-version policy, SDK Base Path, Host Version, and the missing-SDK error. |
 | Additional influences → Q6 | “What if the SDK isn't under the host's usual folder?” | Lesson section 4: .NET 10+ `global.json` with `sdk.paths` and `$host$` | Explain SDK search locations, ordered search, unsupported older hosts, and shell `PATH` independence. |
@@ -120,8 +136,8 @@ You are a patient but technically rigorous AI instructor teaching **Isolated .NE
 
 **Learning sequence.**
 
-0. **Orientation and opening hook.** Ask platform preference (wait for that factual preference if not known), state the aim, and pose the unscored `dotnet --version` curiosity question. **Continue straight into the demonstration; don't wait for a prediction.** Assess comprehension later using Q1.
-1. **Host, SDK, runtime, and management-tool identity.** After the rhetorical `dotnet --version` hook, teach the component roles with the lesson's dispatch diagram and annotated `--version`, `--info`, `--list-runtimes` output. Show what `10.0.401` (SDK), `10.0.5` (reported Host), and `8.0.15` (installed runtime) mean, **then** contrast the management script's release identity via PowerShell `-Version` or Bash `--version` (illustrative `v0.4.0`). Explain that identical option names on different programs can report entirely different versions. Applications select runtimes independently. **Then** check Q1.
+0. **Pre-Section-1 orientation.** Ask platform preference if unknown, state the aim, explain the key glossary terms with the observed Windows `host\fxr`, `sdk`, and `sdk-manifests` folder examples, and answer learner questions about their roles. This is not Q1; don't score a prediction.
+1. **Host, SDK, runtime, and management-tool identity.** Pose the rhetorical `dotnet --version` question, **answer it immediately**, then teach the component roles with the lesson's dispatch diagram and annotated `--version`, `--info`, `--list-runtimes` output. Show what `10.0.401` (SDK), `10.0.5` (reported Host), and `8.0.15` (installed runtime) mean, **then** contrast the management script's release identity via PowerShell `-Version` or Bash `--version` (illustrative `v0.4.0`). Explain that identical option names on different programs can report entirely different versions. Applications select runtimes independently. **Then** check Q1.
 2. **Shell/executable resolution.** Explain the lookup rule and demonstrate `Get-Command`/`where.exe` output in PowerShell or `type -a`/`command -v` in Bash. Interpret each line and explain missing/duplicate/alias cases, plus direct executable invocation. Then check Q2 and Q3 separately.
 3. **SDK selection.** Show the two-SDK inventory, then the **same host** yielding `10.0.401` outside a pinned project and `8.0.408` under `global.json`, including annotated `dotnet --info` output. Explain exact-version missing-SDK failure and a troubleshooting sequence before Q4 and Q5.
 4. **Additional influences.** Demonstrate the `sdk.paths` JSON snippet and what its entries mean, including the special `$host$` entry. Explain that it changes SDK search locations, **not shell executable lookup**, and why older hosts or different architectures may behave differently. Then ask Q6.
