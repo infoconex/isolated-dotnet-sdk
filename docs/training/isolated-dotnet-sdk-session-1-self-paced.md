@@ -178,7 +178,7 @@ Illustrative, abbreviated output (these are separate invocations):
 
 ```text
 > isolated-dotnet-sdk.ps1 -Version
-Isolated .NET SDK v0.4.0
+isolated-dotnet-sdk v0.4.0
 
 > dotnet --version
 10.0.401
@@ -193,7 +193,7 @@ Host:
 
 **What each line tells you:**
 
-- **`Isolated .NET SDK v0.4.0`** is the release of **our management script**. PowerShell uses its `-Version` parameter to ask the script for its own identity. It does **not** identify an installed Microsoft SDK.
+- **`isolated-dotnet-sdk v0.4.0`** is the release of **our management script**. PowerShell uses its `-Version` parameter to ask the script for its own identity. It does **not** identify an installed Microsoft SDK.
 - **`10.0.401`** is the **Microsoft SDK selected by the `dotnet` CLI**. That is what Microsoft's `dotnet --version` means.
 - **`Host: Version: 10.0.5`** is the reported .NET hosting component version, not the management script version or the selected SDK version.
 - An **application's runtime** has yet another resolution decision; inspect installed runtimes with `dotnet --list-runtimes` and its runtime configuration when investigating a specific application.
@@ -208,7 +208,7 @@ dotnet --version
 Illustrative output for the same assumed tool/SDK versions:
 
 ```text
-Isolated .NET SDK v0.4.0
+isolated-dotnet-sdk v0.4.0
 10.0.401
 ```
 
