@@ -32,7 +32,7 @@ The learner guide now includes the [owner-supplied Windows PowerShell walkthroug
 
 ## Before Section 1 — vocabulary and observed installation folders
 
-The self-paced guide opens with [the pre-Section-1 glossary and observed folder layout](isolated-dotnet-sdk-session-1-self-paced.md#before-section-1--meet-the-parts-of-net). **Teach this orientation before the first resolution scenario or Q1.** Define *host*, *hostfxr*, *SDK*, *runtime*, *SDK feature band*, *workload manifest*, *PATH*, *global.json* and *roll-forward*. Introduce a few terms at a time in voice; don't read an entire table in one uninterrupted turn. This is teaching, **not assessment**.
+The self-paced guide opens with [the pre-Section-1 glossary and observed folder layout](isolated-dotnet-sdk-session-1-self-paced.md#before-section-1-components-and-folders). **Teach this orientation before the first resolution scenario or Q1.** Define *host*, *hostfxr*, *SDK*, *runtime*, *SDK feature band*, *workload manifest*, *PATH*, *global.json* and *roll-forward*. Introduce a few terms at a time in voice; don't read an entire table in one uninterrupted turn. This is teaching, **not assessment**.
 
 Three owner-supplied File Explorer screenshots show separate directories in the Windows x64 installation:
 
