@@ -16,7 +16,7 @@
 
 ## Planned real Windows output example — not yet captured
 
-The self-paced guide includes a [reviewable Windows PowerShell case-study template](isolated-dotnet-sdk-session-1-self-paced.md#7-real-windows-powershell-walkthrough--pending-observed-output) with **six empty result slots**: PowerShell command lookup, Microsoft `dotnet --version`, `dotnet --info`, installed SDKs, installed runtimes, and the Isolated .NET SDK tool's own `-Version` command.
+The self-paced guide includes a [reviewable Windows PowerShell case-study template](isolated-dotnet-sdk-session-1-self-paced.md#7-windows-powershell-output-review-template) with **six empty result slots**: PowerShell command lookup, Microsoft `dotnet --version`, `dotnet --info`, installed SDKs, installed runtimes, and the Isolated .NET SDK tool's own `-Version` command.
 
 **Instructor rule:** Until real output is supplied and reviewed, treat this section only as an *outline*. Never quote a pending slot as observed output, assume a particular host path/version, or imply the learner or owner executed the commands. Continue to use the clearly marked illustrative transcripts elsewhere in the lesson. When reviewed observations are available, teach from the captured result *and its accompanying explanation*, not by merely reading its lines.
 
