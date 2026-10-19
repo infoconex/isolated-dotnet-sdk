@@ -89,47 +89,6 @@ The two paths serve different purposes. The left path is about **developing** an
 
 
 
-## Concept 1 — Understanding the .NET Host
-
-### Why understand the host?
-
-The native `dotnet` host activates SDK tooling for development operations or helps launch framework-dependent applications. It is not itself an SDK or managed-code runtime. SDK version changes don't automatically establish host binary changes. Other hosting components such as `hostfxr` are introduced in the [optional filesystem evidence](#additional-filesystem-evidence-hostfxr-sdks-and-workload-manifests).
-
-### A closer look: what are the host, SDK, and runtime actually responsible for?
-
-These aren't merely three names for “.NET.” They are **different parts of the system doing different jobs**.
-
-**1. The host — the program that gets things started.** On Windows this is typically an executable named `dotnet.exe`; on Linux/macOS it is `dotnet`. For a command such as `dotnet build`, the host launches the selected SDK tooling. For a command such as `dotnet MyApp.dll`, it starts a .NET application through the appropriate runtime-hosting machinery. It is useful to picture the host as the **entry point and dispatcher**, rather than as your application's execution engine or the set of build tools.
-
-The name **host** is sometimes used for related .NET startup components, such as `hostfxr`, which helps resolve and start the required .NET components. This lesson will call the executable you invoke the **`dotnet` host** and treat the `Host` section of `dotnet --info` as information about its hosting components. It is **not** a command that prints the executable's full path or a promise that every app will run on that Host-version number.
-
-**2. The SDK — tools for developing software.** SDK stands for *Software Development Kit*. It contains developer-oriented tools: the CLI, build integration, compilers, publishing/packaging support, and related assets. When you run `dotnet build`, `dotnet test`, or `dotnet publish`, an SDK is involved. SDK versions have their own numbering: `10.0.401` is an SDK version, not a runtime version.
-
-**3. The runtime — components that execute an already-built application.** The .NET runtime includes execution infrastructure such as the Common Language Runtime (CoreCLR), garbage collection, and framework libraries. A framework-dependent `net8.0` application typically needs a compatible .NET 8 runtime to **run**, even if it was **built with** the .NET 10 SDK. Web apps may also require the ASP.NET Core shared framework. A runtime can be installed **without** an SDK; a machine that only runs .NET apps may have no development tools at all.
-
-Think of the overall relationship like this:
-
-```text
-You enter a command in PowerShell or Bash
-                  |
-            shell finds a host
-       (e.g. dotnet.exe file on PATH)
-                  |
-         +--------+---------+
-         |                  |
-   dotnet build          dotnet MyApp.dll
-         |                  |
-   SDK resolution        app/runtime resolution
-         |                  |
-   SDK build tools       compatible runtime
-         |                  |
-   creates/updates       executes the app
-   build artifacts
-```
-
-The two paths serve different purposes. The left path is about **developing** an application; the right is about **running** an application. An SDK often includes a runtime too, but that doesn't merge their jobs or version numbers.
-
-
 ### Which `dotnet.exe` does the shell start?
 
 **Think about this:** If there are two `dotnet.exe` files on your machine, how does PowerShell decide which one to run? No need to guess; we'll use command output to show you.
