@@ -3,7 +3,7 @@
 **Audience:** Developers, technical leads, and maintainers who have used .NET but may not know how a specific SDK is chosen.  
 **Format:** Self-paced; an AI instructor is not required.  
 **Estimated time:** 45–60 minutes (longer when inspecting your own machine).  
-**Status:** Curriculum pilot draft v0.3 — October 18, 2026; curiosity prompts lead directly into explained examples, followed by reinforcement questions.  
+**Status:** Curriculum pilot draft v0.4 — October 18, 2026; expanded host/SDK/runtime teaching with worked scenarios.  
 **Companion:** [Session 1 AI Instructor Guide](isolated-dotnet-sdk-session-1-ai-instructor.md).
 
 > **Safety and scope:** The exercises inspect command resolution and SDK information; they do not ask you to install/remove SDKs, build a project, edit `PATH`, replace `global.json`, or change your project. Running the .NET CLI can still create ordinary per-user first-run state or produce telemetry under Microsoft's settings; “inspection” does **not** mean zero side effects. You may skip all live commands and use the hypothetical examples instead. Paths and SDK versions are illustrative, not claims about your machine. See [Microsoft's CLI telemetry documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
@@ -22,7 +22,7 @@ For each section, start with the **curiosity question** as something to think ab
 
 By the end, you should be able to:
 
-1. Explain the difference between executable, SDK, and runtime resolution without using those terms interchangeably.
+1. Explain **what the host, SDK, and runtime do**, when each is involved, why their version numbers differ, and how their separate resolution decisions work.
 2. Determine which `dotnet` command your shell would invoke and recognize that shell-specific resolution can override `PATH` assumptions.
 3. Explain why `dotnet --version` can change even when the executable path does not.
 4. Describe how `global.json`, roll-forward policy, installed SDKs, current directory, architecture, and (for .NET 10+) `sdk.paths` can affect SDK selection.
@@ -82,9 +82,86 @@ When the command is `dotnet my-app.dll` instead, the runtime hosting rules matte
 
 Every terminal transcript in this lesson is an **illustrative example, not output gathered from your computer**. Real paths and versions vary by machine. Only commands you run yourself can establish facts about your environment.
 
+### A closer look: what are the host, SDK, and runtime actually responsible for?
+
+These aren't merely three names for “.NET.” They are **different parts of the system doing different jobs**.
+
+**1. The host — the program that gets things started.** On Windows this is typically an executable named `dotnet.exe`; on Linux/macOS it is `dotnet`. For a command such as `dotnet build`, the host launches the selected SDK tooling. For a command such as `dotnet MyApp.dll`, it starts a .NET application through the appropriate runtime-hosting machinery. It is useful to picture the host as the **entry point and dispatcher**, rather than as your application's execution engine or the set of build tools.
+
+The name **host** is sometimes used for related .NET startup components, such as `hostfxr`, which helps resolve and start the required .NET components. This lesson will call the executable you invoke the **`dotnet` host** and treat the `Host` section of `dotnet --info` as information about its hosting components. It is **not** a command that prints the executable's full path or a promise that every app will run on that Host-version number.
+
+**2. The SDK — tools for developing software.** SDK stands for *Software Development Kit*. It contains developer-oriented tools: the CLI, build integration, compilers, publishing/packaging support, and related assets. When you run `dotnet build`, `dotnet test`, or `dotnet publish`, an SDK is involved. SDK versions have their own numbering: `10.0.401` is an SDK version, not a runtime version.
+
+**3. The runtime — components that execute an already-built application.** The .NET runtime includes execution infrastructure such as the Common Language Runtime (CoreCLR), garbage collection, and framework libraries. A framework-dependent `net8.0` application typically needs a compatible .NET 8 runtime to **run**, even if it was **built with** the .NET 10 SDK. Web apps may also require the ASP.NET Core shared framework. A runtime can be installed **without** an SDK; a machine that only runs .NET apps may have no development tools at all.
+
+Think of the overall relationship like this:
+
+```text
+You enter a command in PowerShell or Bash
+                  |
+            shell finds a host
+       (e.g. dotnet.exe file on PATH)
+                  |
+         +--------+---------+
+         |                  |
+   dotnet build          dotnet MyApp.dll
+         |                  |
+   SDK resolution        app/runtime resolution
+         |                  |
+   SDK build tools       compatible runtime
+         |                  |
+   creates/updates       executes the app
+   build artifacts
+```
+
+The two paths serve different purposes. The left path is about **developing** an application; the right is about **running** an application. An SDK often includes a runtime too, but that doesn't merge their jobs or version numbers.
+
+### One machine can report three different versions
+
+Now compare these three commands on a *hypothetical* Windows installation. No files need to be created.
+
+```powershell
+dotnet --version
+dotnet --info
+dotnet --list-runtimes
+```
+
+Illustrative, **abbreviated** output:
+
+```text
+> dotnet --version
+10.0.401
+
+> dotnet --info
+.NET SDK:
+ Version:           10.0.401
+ Base Path:         C:\Program Files\dotnet\sdk\10.0.401\
+
+Host:
+ Version:           10.0.5
+ Architecture:      x64
+
+> dotnet --list-runtimes
+Microsoft.NETCore.App 8.0.15 [C:\Program Files\dotnet\shared\Microsoft.NETCore.App]
+Microsoft.NETCore.App 10.0.5 [C:\Program Files\dotnet\shared\Microsoft.NETCore.App]
+```
+
+**Interpretation, line by line:**
+
+- `--version` prints `10.0.401` because that is the **SDK selected for this invocation**. It does not mean a 10.0.401 runtime exists.
+- `.NET SDK: Version` repeats the selected SDK. `Base Path` tells us where that particular SDK's files are installed.
+- `Host: Version` is `10.0.5`. This is a **host-component version** reported by .NET, different from the selected SDK version and not the executable pathname.
+- `--list-runtimes` reports **two installed .NET runtime versions** at their locations. It is an inventory, not a decision about which runtime an arbitrary application will use.
+
+**Why aren't the numbers the same?** SDK version numbers identify development-tool releases; host/runtime version numbers identify their own component releases. There is no rule that says `10.0.401` must equal `10.0.5` or `8.0.15`. The output is useful precisely because it separates these concepts.
+
+**If the output differs:** There may be more than one architecture or install root, and the version selected may be constrained by `global.json`. `dotnet --info` is not the same as an inventory of every host binary on disk. If `dotnet --version` cannot find an SDK on a runtime-only machine, that does *not* automatically mean the machine is unable to run a compatible already-built .NET app.
+
+We'll revisit SDK selection in Section 3 and how an application chooses a runtime in Section 5. Microsoft's guidance explicitly treats [SDK selection](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json) and [runtime/version selection](https://learn.microsoft.com/en-us/dotnet/core/versions/selection) as separate concerns.
+
 ### Checkpoint 1 — Explain it in your own words
 
-**Q1.** A colleague says, “`dotnet --version` tells us exactly which `dotnet.exe` Windows ran.” Is that correct? What does that command actually reveal?
+**Q1.** A colleague says, “`dotnet --version` tells us exactly which `dotnet.exe` Windows ran, or which runtime all apps will use.” After seeing the worked outputs, how would you correct that statement? Include what the host, SDK, and runtime each do.
 
 Not sure? Revisit the table above, especially the difference between the first and second rows. Compare your answer with [A1](#a1).
 
@@ -493,6 +570,63 @@ Microsoft.NETCore.App 10.0.5 [C:\Program Files\dotnet\shared\Microsoft.NETCore.A
 
 This lists runtimes the current host can see. **It does not tell you which runtime every application will use.** That depends on a particular application's runtime configuration and applicable runtime-selection rules. A machine may select SDK `10.0.401` for a build yet run an application using a .NET 8 runtime. SDK selection and runtime selection answer different questions.
 
+### Worked example: building with one SDK and running on another .NET runtime
+
+Imagine a developer built a framework-dependent application called `MyApp` that targets **.NET 8**, but their current command-line tooling selects **SDK 10.0.401**. These are compatible concepts: the *build tool* version is not required to have the same number as the application's target/runtime version.
+
+The project could declare this target framework:
+
+```xml
+<PropertyGroup>
+  <TargetFramework>net8.0</TargetFramework>
+</PropertyGroup>
+```
+
+If the host selects SDK 10.0.401, then an illustrative build command is:
+
+```powershell
+dotnet build MyApp.csproj
+```
+
+Here, the **SDK** performs the build. It doesn't change the fact that `MyApp` targets .NET 8. When the project is built as a framework-dependent app, it has a generated runtime configuration file (for example, `MyApp.runtimeconfig.json`). A simplified form might be:
+
+```json
+{
+  "runtimeOptions": {
+    "tfm": "net8.0",
+    "framework": {
+      "name": "Microsoft.NETCore.App",
+      "version": "8.0.0"
+    }
+  }
+}
+```
+
+**Read each field:** `tfm` describes the target framework. `Microsoft.NETCore.App` is the required shared framework. `8.0.0` expresses the runtime-framework request from which normal roll-forward rules decide the compatible installed version. It is **not** a request for SDK 8.0.0 and doesn't require `dotnet --version` to report 8.x.
+
+Now suppose the host can see runtime versions **8.0.15** and **10.0.5**, as in the earlier sample. Running this framework-dependent app with the host:
+
+```powershell
+dotnet MyApp.dll
+```
+
+would normally select the compatible **8.0.15 runtime** (patch roll-forward within .NET 8) rather than automatically run the app on the latest 10.0.5 runtime. This is a *runtime selection* decision based on the app's configuration, available frameworks, and runtime roll-forward policy — **not** a request to select the newest SDK.
+
+That means the same machine can truthfully show all of these:
+
+| Observation | Example result | What the result means |
+| --- | --- | --- |
+| `dotnet --version` | `10.0.401` | SDK selected for development commands |
+| `dotnet --info` → `Host: Version` | `10.0.5` | Version of the reported hosting component |
+| `dotnet --list-runtimes` | `8.0.15` and `10.0.5` | Available framework/runtime inventory |
+| `dotnet MyApp.dll` | Runs using compatible `8.0.15` | The app's **specific** runtime resolution |
+
+**If MyApp fails to start:** For example, if only .NET 10 were installed and the app required .NET 8 under the ordinary default policy, the runtime host may report a missing-compatible-framework error. Installing a newer SDK or changing `global.json` is **not** the same as satisfying the application's runtime requirement. Examine the app's `runtimeconfig.json`, the installed runtimes, any runtime roll-forward settings, and the executable/architecture actually used.
+
+This example describes **framework-dependent deployment**. A **self-contained** published app includes its own runtime, so selecting from shared installed runtimes isn't the same process. That's an important boundary, even though the rest of runtime deployment deserves a later session.
+
+Learn more: [Microsoft: select which .NET version to use](https://learn.microsoft.com/en-us/dotnet/core/versions/selection) and [Microsoft: runtime configuration](https://learn.microsoft.com/en-us/dotnet/core/runtime-config/).
+
 ### Checkpoint 5
 
 **Q7.** Why doesn't installing a version into `~/dotnet-sdks/<version>` normally make that version the default when you type `dotnet`?
@@ -522,7 +656,7 @@ Compare your explanation with [integrative challenge guidance](#integrative-chal
 
 ### A1
 
-No. `dotnet --version` shows the selected **SDK version** for that invocation. To learn which executable the shell would launch, inspect command resolution in the shell (for example, `Get-Command dotnet -All` or `type -a dotnet`). Also remember that an external editor/task might launch a different file directly.
+No. `dotnet --version` shows the selected **SDK version** for that invocation. **Host:** the entry-point program (for example `dotnet.exe`) found by the shell; it launches SDK tooling for development commands or helps start an app via the runtime host. **SDK:** the development tools selected for commands such as `build` and `test`; this is what `--version` reports. **Runtime:** the components that execute a built application; selection depends on that application's framework/runtime configuration. To learn which host executable the shell would launch, inspect `Get-Command dotnet -All` or `type -a dotnet`. `dotnet --info` reports both SDK and Host information, but none of these facts alone proves the runtime used by *every* application.
 
 ### A2
 
