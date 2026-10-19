@@ -159,6 +159,62 @@ Microsoft.NETCore.App 10.0.5 [C:\Program Files\dotnet\shared\Microsoft.NETCore.A
 
 We'll revisit SDK selection in Section 3 and how an application chooses a runtime in Section 5. Microsoft's guidance explicitly treats [SDK selection](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json) and [runtime/version selection](https://learn.microsoft.com/en-us/dotnet/core/versions/selection) as separate concerns.
 
+### A version question needs a subject: tool, SDK, host, or runtime
+
+Now apply the distinction to **our own Isolated .NET SDK management tool**. Our tool has its **own release version**. That number is separate from the version of any Microsoft .NET SDK it installs or verifies.
+
+**Windows / PowerShell 7** — suppose the saved management tool is release `v0.4.0` and SDK `10.0.401` is selected by the normal system host:
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version
+dotnet --version
+dotnet --info
+```
+
+Illustrative, abbreviated output (these are separate invocations):
+
+```text
+> isolated-dotnet-sdk.ps1 -Version
+Isolated .NET SDK v0.4.0
+
+> dotnet --version
+10.0.401
+
+> dotnet --info
+.NET SDK:
+ Version:           10.0.401
+
+Host:
+ Version:           10.0.5
+```
+
+**What each line tells you:**
+
+- **`Isolated .NET SDK v0.4.0`** is the release of **our management script**. PowerShell uses its `-Version` parameter to ask the script for its own identity. It does **not** identify an installed Microsoft SDK.
+- **`10.0.401`** is the **Microsoft SDK selected by the `dotnet` CLI**. That is what Microsoft's `dotnet --version` means.
+- **`Host: Version: 10.0.5`** is the reported .NET hosting component version, not the management script version or the selected SDK version.
+- An **application's runtime** has yet another resolution decision; inspect installed runtimes with `dotnet --list-runtimes` and its runtime configuration when investigating a specific application.
+
+**Linux/macOS / Bash:** The management tool's own version switch is `--version` (rather than PowerShell's `-Version`):
+
+```bash
+"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version
+dotnet --version
+```
+
+Illustrative output for the same assumed tool/SDK versions:
+
+```text
+Isolated .NET SDK v0.4.0
+10.0.401
+```
+
+**Notice:** Both Bash commands contain `--version`, but they call **different programs**. One reports the *tool release*, while the other reports the *SDK selected by the Microsoft CLI*. The flag's spelling does not determine what the number represents; **the program receiving the flag does**.
+
+**If the numbers differ from these examples:** That is normal. Our script may be a newer release than the example; a different SDK may be selected because of `global.json`; and another installation may report a different Host version. Investigate **which program was called**, **which SDK is selected**, and **which runtime a particular app needs** before comparing version numbers.
+
+The exact product command syntax is also documented in the [Windows](../getting-started/windows-powershell.md#identify-the-tool-version) and [Bash](../getting-started/linux-macos-bash.md#identify-the-tool-version) getting-started guides. All outputs in this section are illustrative and do not imply you have those versions installed.
+
 ### Checkpoint 1 — Explain it in your own words
 
 **Q1.** A colleague says, “`dotnet --version` tells us exactly which `dotnet.exe` Windows ran, or which runtime all apps will use.” After seeing the worked outputs, how would you correct that statement? Include what the host, SDK, and runtime each do.
