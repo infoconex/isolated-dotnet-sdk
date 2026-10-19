@@ -32,7 +32,7 @@ See the [command index](commands/README.md) for the command/documentation bounda
 
 ## Training curriculum
 
-- [Training curriculum](training/README.md) — a self-paced learning path and companion AI instructor guide, starting with the Session 1 resolution-and-isolation pilot.
+- [Training curriculum](training/README.md) — self-paced and AI-led learning, starting with Microsoft .NET executable, SDK, and runtime resolution in Session 1; product-specific isolation and verification are planned for Session 2.
 
 ## Concepts
 
