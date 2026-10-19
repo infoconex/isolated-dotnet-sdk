@@ -28,6 +28,8 @@ The learner guide now includes the [owner-supplied Windows PowerShell walkthroug
 
 **Use the observed `dotnet.exe` Properties evidence:** A new screenshot shows **`C:\Program Files\dotnet\dotnet.exe` → Properties → Details**. The binary's **File description** is `.NET Host`; **Product version** is `10.0.13` with commit metadata; **File version** is `10.0.1326.50504`; the executable itself is reported as **163 KB**. This host path matches the earlier observed `Get-Command dotnet -All` result. Explain **why Product version 10.0.13 matches `dotnet --info` Host Version 10.0.13**, whereas `dotnet --version` prints the **selected SDK 10.0.402**. The File version is Windows binary metadata and is not an SDK version. A 163 KB executable is not the size of a whole runtime or SDK installation. The lesson includes an optional `(Get-Item ...).VersionInfo` command as an inspection exercise, **but that command's output is not observed**. Teach from the screenshot, not from an invented terminal transcript.
 
+**Avoid mixing version sets in voice:** Section 1's `10.0.401` SDK / `10.0.5` Host values are **illustrative**; Section 7's `10.0.402` SDK / `10.0.13` Host values are **observed from the owner's Windows transcript**. Explicitly signal which example you are teaching when switching between them. Never present the illustrative values as readings from the owner's machine.
+
 **Keep evidence boundaries explicit:** The owner supplied a transcript, the Installed Apps screenshot, and the executable Properties screenshot, but no application execution trace. Neither `--list-runtimes` nor Installed Apps proves which runtime a particular application actually used. Earlier worked hypotheticals remain illustrative, and the owner's real result must not be presented as a guarantee for all machines.
 
 ## Introduce concepts when the lesson needs them
@@ -75,7 +77,7 @@ Use the learner lesson's **three-command annotated transcript** (`--version` / `
 
 **A fourth version number belongs to our tool, not Microsoft .NET.** The learner guide now contrasts:
 
-- PowerShell: `& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version` → illustrative management-tool release `Isolated .NET SDK v0.4.0`.
+- PowerShell: `& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version` → illustrative management-tool release `isolated-dotnet-sdk v0.4.0`.
 - Bash: `"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version` → the same *management-tool* identity on Bash.
 - Microsoft CLI: `dotnet --version` → illustrative selected **Microsoft SDK** `10.0.401`.
 - Microsoft CLI: `dotnet --info` → a separate, illustrative **Host: Version** `10.0.5`.
