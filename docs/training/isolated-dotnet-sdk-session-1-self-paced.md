@@ -706,6 +706,146 @@ Without changing anything on their computer, explain:
 
 Compare your explanation with [integrative challenge guidance](#integrative-challenge-guidance).
 
+## 7. Real Windows PowerShell walkthrough — pending observed output
+
+**Status: proposed teaching content for owner review. The command syntax is provided, but no commands have been run on the owner's machine and no real output has been received.** This is a placeholder for an evidence-based case study. The illustrative outputs elsewhere in this lesson are not substitutes for the observations we'll eventually capture here.
+
+The goal is not simply to collect six screenshots or command results. We want learners to see **exactly what each command answers**, compare the results with the concepts just taught, and learn what to investigate when an output is unexpected.
+
+### Before collecting the evidence
+
+The commands below are independent observations. Run them in the **same PowerShell 7 session and working directory** when ready, because the chosen executable and `global.json` context can change across terminals and directories. Do not modify `PATH`, create a `global.json`, install/remove SDKs, or build a project for this exercise. Running `dotnet` inspection commands can create ordinary first-run user state or telemetry. The management tool's `-Version` command does not install or update SDKs.
+
+Before copying output into a public document, redact user names, machine-specific details, private working directories, and environment values while **preserving the relationships among paths**. For example, replace an actual home directory consistently with `C:\Users\example` rather than removing all path information. Annotate any redactions; never represent edited output as byte-for-byte raw capture.
+
+### Observation 1 — Which `dotnet` executable would PowerShell launch?
+
+**Command to capture:**
+
+```powershell
+Get-Command dotnet -All | Format-Table CommandType, Name, Source -AutoSize
+```
+
+**Output placeholder — not yet collected:**
+
+```text
+[PENDING: paste sanitized output from Get-Command here]
+```
+
+**What we'll explain:** A row of type `Application` identifies an executable candidate; its `Source` identifies the file. A `Function` or `Alias` can take precedence over a native executable. The first result is about how **PowerShell resolves the command name**, not which SDK or runtime version is selected.
+
+**If the result surprises us:** More than one candidate means there are multiple possible commands, not necessarily multiple SDKs. An empty or missing-command result would not rule out isolated `dotnet.exe` files outside `PATH`. We will describe the actual ordering and any aliases instead of assuming the system host was used.
+
+### Observation 2 — Which SDK is selected here?
+
+**Command to capture:**
+
+```powershell
+dotnet --version
+```
+
+**Output placeholder — not yet collected:**
+
+```text
+[PENDING: selected SDK version or exact error message]
+```
+
+**What we'll explain:** A version such as `10.0.401` identifies the **selected SDK** for that invocation. It is not the executable path, the reported Host version, or the runtime used by every application.
+
+**If the result surprises us:** Compare the current working directory, any applicable `global.json`, and the SDK inventory below. A failure can mean that no suitable SDK is visible; it does not by itself prove the computer cannot run an existing framework-dependent app.
+
+### Observation 3 — What does the host report about itself and the selected SDK?
+
+**Command to capture:**
+
+```powershell
+dotnet --info
+```
+
+**Output placeholder — not yet collected:**
+
+```text
+[PENDING: sanitized dotnet --info output, preserving these sections if present]
+[.NET SDK: Version / Base Path]
+[Host: Version / Architecture]
+[.NET SDKs installed]
+[.NET runtimes installed]
+[Environment variables and global.json details, if present and safe to share]
+```
+
+**What we'll explain:** `.NET SDK: Version` describes the selected SDK; `Base Path` identifies its installation directory. `Host: Version` describes the reported hosting component. Installed SDK and runtime sections are inventories; the latter is **not** proof of which runtime a specific app will choose. Real output may contain other fields or omit some fields depending on the host and SDK version.
+
+**If the result surprises us:** A Host version that differs from the SDK version is expected. We will distinguish the host and SDK *version numbers* from the *paths* of the executable and SDK. We will not assume an application's runtime version from Host Version.
+
+### Observation 4 — Which SDKs can this host see?
+
+**Command to capture:**
+
+```powershell
+dotnet --list-sdks
+```
+
+**Output placeholder — not yet collected:**
+
+```text
+[PENDING: sanitized SDK inventory, including bracketed installation paths]
+```
+
+**What we'll explain:** Each row pairs an **SDK version** with an SDK installation root in brackets. Several rows can appear even though `dotnet --version` selects only one. A folder containing an isolated SDK is not automatically included in this inventory just because it exists on disk.
+
+**If the result surprises us:** Compare the bracketed directories with the executable path from Observation 1 and any `sdk.paths` settings. We won't treat the inventory as proof of *all* SDK installations on the machine.
+
+### Observation 5 — Which runtimes can this host see?
+
+**Command to capture:**
+
+```powershell
+dotnet --list-runtimes
+```
+
+**Output placeholder — not yet collected:**
+
+```text
+[PENDING: sanitized runtime inventory, including framework names, versions, and paths]
+```
+
+**What we'll explain:** Each row identifies a shared framework (for example, `Microsoft.NETCore.App`), a **runtime version**, and its location. An installed runtime inventory is different from the SDK inventory. The runtime a particular framework-dependent application selects also depends on that application's runtime configuration and roll-forward rules.
+
+**If the result surprises us:** A machine can have multiple runtime versions, or runtimes without a usable SDK. We will not conclude that the highest runtime version will necessarily run every app.
+
+### Observation 6 — What version of **our tool** is installed?
+
+**Command to capture:**
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version
+```
+
+**Output placeholder — not yet collected:**
+
+```text
+[PENDING: management-tool release/development identity or the actual command error]
+```
+
+**What we'll explain:** This command invokes **our PowerShell management script**, not Microsoft's `dotnet.exe`. Its `-Version` option reports the **tool's own version or source identity**. That is independent of any installed SDK, .NET host, or runtime version. Bash uses the script's `--version` option; the same flag spelling used by Microsoft's `dotnet --version` does not imply the same meaning.
+
+**If the result surprises us:** The tool may report a release tag, a development-source identity, or an error if the script isn't present. None of those results automatically establishes which Microsoft SDK the host selected.
+
+### Consolidated explanation — fill this in only after reviewing actual output
+
+| Question we'll answer | Evidence source | Real observation |
+| --- | --- | --- |
+| Which `dotnet.exe` does PowerShell resolve? | Observation 1 — command type and source | **Pending** |
+| Which Microsoft SDK is selected? | Observation 2 — `--version` | **Pending** |
+| Which SDK files and Host component does `--info` describe? | Observation 3 — SDK Version/Base Path and Host Version | **Pending** |
+| Which SDKs are visible to the running host? | Observation 4 — `--list-sdks` | **Pending** |
+| Which runtime frameworks/versions are visible? | Observation 5 — `--list-runtimes` | **Pending** |
+| Which version of the **Isolated .NET SDK tool** is installed? | Observation 6 — script `-Version` | **Pending** |
+
+**Before treating this as a finished example:** Replace each pending entry with redacted but interpretable observed output, explain what every important line establishes, state any limitations or anomalies, and review the explanation against the current Microsoft and product documentation. An actual application-runtime selection would require separate app-specific evidence; **`dotnet --list-runtimes` alone is not that evidence**. Do not change Q1–Q8 into questions about the owner's particular machine: they remain reusable, conceptual reinforcement.
+
+---
+
 ## Answer key and self-check
 
 **Use this after attempting each question.** A useful answer explains *why*, not just yes/no. Exact wording is not required.
