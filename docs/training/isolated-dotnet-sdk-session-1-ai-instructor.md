@@ -154,9 +154,9 @@ Use the [self-paced answer key](isolated-dotnet-sdk-session-1-self-paced.md#answ
 
 | Question | What understanding requires | First hint if needed | Reference |
 | --- | --- | --- | --- |
-| Q1 | Host file version is not selected SDK version | "What exactly does `--version` report?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A1](isolated-dotnet-sdk-session-1-self-paced.md#a1) |
-| Q2 | Shell command precedence decides host lookup | "What resolves a command name before .NET starts?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A2](isolated-dotnet-sdk-session-1-self-paced.md#a2) |
-| Q3 | Explicit path pins host, not full SDK selection | "Is the SDK resolver involved afterward?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A3](isolated-dotnet-sdk-session-1-self-paced.md#a3) |
+| Q1 | Shell command precedence decides host lookup | "What resolves a command name before .NET starts?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A1](isolated-dotnet-sdk-session-1-self-paced.md#a1) |
+| Q2 | Explicit path pins host, not full SDK selection | "Is the SDK resolver involved afterward?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A2](isolated-dotnet-sdk-session-1-self-paced.md#a2) |
+| Q3 | Host file version is not selected SDK version | "What exactly does `--version` report?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A3](isolated-dotnet-sdk-session-1-self-paced.md#a3) |
 | Q4 | Same host, different directory/configuration, different SDK | "Where might `global.json` be found?" | [Concept 2](isolated-dotnet-sdk-session-1-self-paced.md#concept-2-understanding-how-net-selects-an-sdk), [A4](isolated-dotnet-sdk-session-1-self-paced.md#a4) |
 | Q5 | Exact SDK required under disable | "What does `disable` mean for roll-forward?" | [Concept 2](isolated-dotnet-sdk-session-1-self-paced.md#concept-2-understanding-how-net-selects-an-sdk), [A5](isolated-dotnet-sdk-session-1-self-paced.md#a5) |
 | Q6 (optional) | SDK discovery is distinct from shell lookup | "Who reads `sdk.paths`?" | [Concept 2](isolated-dotnet-sdk-session-1-self-paced.md#concept-2-understanding-how-net-selects-an-sdk), [A6](isolated-dotnet-sdk-session-1-self-paced.md#a6) |
