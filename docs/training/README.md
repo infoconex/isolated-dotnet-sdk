@@ -6,10 +6,10 @@ This curriculum builds understanding of Microsoft's normal .NET behavior **befor
 
 **Status:** Pilot draft (example-first revision); ready for learner review, not yet pedagogically validated. **Estimated learner time:** 45–60 minutes for the self-paced lesson.
 
-- **[Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md):** Plain-language teaching, Windows PowerShell and Bash command examples with **illustrative output explained line by line**, unexpected-result troubleshooting, and Q1–Q8 reinforcement questions with an answer key. No AI required.
+- **[Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md):** A deeper explanation of the **host, SDK, and runtime** (including why their versions differ), Windows PowerShell and Bash examples with **illustrative output explained line by line**, a .NET 10 SDK building an app that runs on .NET 8, unexpected-result troubleshooting, and Q1–Q8 reinforcement questions with an answer key. No AI required.
 - **[Session 1 AI instructor guide](isolated-dotnet-sdk-session-1-ai-instructor.md):** Copy-ready teaching prompt, one-question-at-a-time sequence, matching Q1–Q8 hint/evaluation guidance, and a session-summary template.
 
-**Teaching order:** Explain the concept, demonstrate commands and output, interpret expected and unexpected results, **then** ask a question to reinforce the lesson. The questions are not a substitute for instruction.
+**Teaching order:** Open with an optional rhetorical *“What do you think?”* hook (no answer required), **show and explain the correct behavior immediately**, demonstrate commands and representative output, interpret expected/unexpected results, **then** ask a separate question to reinforce understanding. The questions are not a substitute for instruction.
 
 The self-paced lesson owns the technical explanations and canonical answer key. The instructor guide owns the teaching procedure. If there is a factual conflict, current Microsoft documentation and this repository's command/concept contracts take precedence; log the discrepancy rather than inventing a new guarantee.
 
