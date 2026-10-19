@@ -1,293 +1,260 @@
-# Isolated .NET SDK — Session 1 AI Instructor Guide
+# Session 1 — AI Instructor Guide: Understanding .NET Resolution
 
-**Companion learner material:** [Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md)  
-**Status:** Instructor pilot draft v0.5 — October 18, 2026; glossary and real folder-layout orientation come before Section 1.  
-**Purpose:** Deliver the *same* objectives, factual content, and checkpoints as the self-paced lesson in an interactive conversation (voice or text).
+**Companion learner guide:** [Session 1 — Understanding .NET and How It Selects Components](isolated-dotnet-sdk-session-1-self-paced.md)
+**Status:** Instructor pilot draft v0.5, pending review.
+**Purpose:** Teach the *same Microsoft .NET fundamentals and Q1–Q8 checkpoints* as the self-paced guide, conversationally through text or voice.
 
 ## How to use this guide
 
-1. Make the [self-paced curriculum](isolated-dotnet-sdk-session-1-self-paced.md) available to the AI instructor as reference material, alongside this guide. Copy the **ready-to-use instructor prompt** below into the trainer conversation. Attach/paste the full self-paced lesson or make sure the trainer can actually retrieve its contents. **A link by itself does not guarantee the AI has read the lesson or its answer key.**
-2. Start a new learner-facing conversation with: **“Begin Session 1 of Isolated .NET SDK training. Please teach one concept and ask one question at a time.”**
-3. Let the instructor introduce one concept and one question at a time. The learner can interrupt with questions and ask for demonstrations.
-4. After the session, capture only the learner's demonstrated explanations, misunderstandings, unanswered technical questions, and a short session summary. Do not invent command output or assessment evidence. Avoid reproducing identifying details, local usernames, machine paths, or secrets from shared diagnostic output.
-5. Compare results against the same [Q1–Q8 answer key](isolated-dotnet-sdk-session-1-self-paced.md#answer-key-and-self-check) that self-paced learners use.
+1. Make this guide and the complete [self-paced curriculum](isolated-dotnet-sdk-session-1-self-paced.md) available to the AI instructor. The instructor needs actual access to the document; a link alone does not prove it can retrieve the text.
+2. Copy the [ready-to-use instructor prompt](#ready-to-use-instructor-prompt) below into a new AI conversation. A learner can begin with: **"Begin Session 1 of our .NET training. Teach one concept and ask one question at a time."**
+3. Provide examples appropriate to the learner's terminal (PowerShell or Bash), without assuming their platform if unknown.
+4. Ask checkpoints Q1–Q8 from the learner guide **only after teaching the mechanism**, one at a time. Consult the [canonical answer key](isolated-dotnet-sdk-session-1-self-paced.md#answer-key-and-self-assessment) only when evaluating an attempted answer.
+5. Record evidence of understanding, corrected misconceptions, questions needing technical verification, and curriculum feedback without inventing results.
 
-**Curriculum precedence:** If this guide and the self-paced document disagree about a technical fact, use the more authoritative Microsoft or product documentation, flag the discrepancy in the session notes, and do not silently make up an answer. Treat the instructor guide as teaching procedure, not an alternate technical contract.
+**Precedence:** Microsoft documentation is authoritative for platform behavior. The self-paced guide is the canonical learner curriculum and answer key. This guide controls teaching procedure, not Microsoft product contracts. If sources disagree, flag the discrepancy explicitly instead of silently improvising.
 
-## Real Windows observation-based teaching example
+## Purpose, scope and teaching philosophy
 
-The learner guide now includes the [owner-supplied Windows PowerShell walkthrough](isolated-dotnet-sdk-session-1-self-paced.md#7-real-windows-powershell-walkthrough). The owner provided the six actual CLI results (from PowerShell 7.6.6) and a screenshot of Windows Settings **Installed Apps** filtered for `.net`. The CLI output is sanitized, with identifying terminal prompts omitted. It is **observed owner-provided evidence**, not commands run by the AI or a reproducible test on every machine.
+Session 1 teaches three independent decisions:
 
-**Teach from the actual observations:** PowerShell resolves system `C:\Program Files\dotnet\dotnet.exe`; `dotnet --version` selects **SDK 10.0.402**; `dotnet --info` reports **Host 10.0.13** and x64 architecture; `--list-sdks` sees 8.0.426, 9.0.319, 10.0.401, and 10.0.402 under the system SDK root; `--list-runtimes` includes **6.0.36 and 7.0.20 .NET runtimes even though no corresponding 6.x or 7.x SDKs appear**; the management script `-Version` reports **`isolated-dotnet-sdk development (main)`**. Explain which component and inventory each line describes.
+1. **Executable resolution:** Which program starts?
+2. **SDK selection:** Which development SDK does that host select for an SDK operation?
+3. **Application runtime selection:** Which compatible framework runs a framework-dependent application?
 
-**Teach the exact observed Windows Installed Apps evidence:** The fuller screenshot is from **Settings → Apps → Installed apps**, with search text `.net` and **`4 apps found`**. Its four app display names are **SDK 10.0.401 (x64) from Visual Studio**, **10.0.402 (x64)**, **8.0.426 (x64)** and **9.0.319 (x64)**. Explain that Windows' secondary application/installer version and displayed size are not interchangeable with the installed SDK's version and disk footprint. In particular, the Visual Studio-managed SDK 10.0.401 entry shows **800 KB**, which is *not evidence that the actual extracted SDK files occupy only 800 KB*. The screenshot itself is not embedded; the self-paced guide contains an explicitly labeled transcription.
+The desired outcome is not command memorization. It is the ability to explain **why the decisions matter, through what components they occur, how they work, what people commonly misunderstand, and which evidence supports a conclusion**.
 
-**Explain why .NET 6 and 7 aren't present in every inventory:** The owner's observed `Microsoft.NETCore.App` **6.0.36** and **7.0.20** and `Microsoft.WindowsDesktop.App` **6.0.36** and **7.0.20** appear in `--list-runtimes`, while **no SDK 6/7** appears in `--list-sdks` and **no `Microsoft.AspNetCore.App` 6/7** appears in the shared-framework inventory. This is consistent with the Windows .NET Desktop Runtime installation including the **core** and **Windows Desktop** frameworks but not **ASP.NET Core**. SDK installers include the core, Windows Desktop and ASP.NET Core runtimes. The evidence does *not* establish which installer originally installed the older runtimes, or whether any specific application is using them.
+**Teach concepts, not a catalog of commands.** A diagnostic command belongs in the lesson only when its output helps establish or investigate a specific claim.
 
-**Safety/support context:** Microsoft ended support for .NET 7 on May 14, 2024, and .NET 6 on November 12, 2024. Explain why an unsupported component warrants dependency review, **not a surprise uninstall during the lesson**. A Windows Forms app could use a desktop framework version without having the ASP.NET Core framework of the same major version. A web app needing the missing ASP.NET shared framework requires its own compatible runtime dependencies. Don't conflate a runtime's presence with its current use.
+### Required material
 
-**Use the observed `dotnet.exe` Properties evidence:** A new screenshot shows **`C:\Program Files\dotnet\dotnet.exe` → Properties → Details**. The binary's **File description** is `.NET Host`; **Product version** is `10.0.13` with commit metadata; **File version** is `10.0.1326.50504`; the executable itself is reported as **163 KB**. This host path matches the earlier observed `Get-Command dotnet -All` result. Explain **why Product version 10.0.13 matches `dotnet --info` Host Version 10.0.13**, whereas `dotnet --version` prints the **selected SDK 10.0.402**. The File version is Windows binary metadata and is not an SDK version. A 163 KB executable is not the size of a whole runtime or SDK installation. The lesson includes an optional `(Get-Item ...).VersionInfo` command as an inspection exercise, **but that command's output is not observed**. Teach from the screenshot, not from an invented terminal transcript.
+- Host identity and its roles in SDK activation and application launch.
+- PowerShell/Bash command lookup, precedence, and explicit executable selection.
+- SDK selection, `global.json`, SDK roll-forward and SDK failure behavior.
+- Additional SDK search paths as **optional advanced** material.
+- App runtime requirements, `runtimeconfig.json`, runtime roll-forward, framework families, inventory versus selection.
+- The same realistic developer scenario linking Concepts 1–3.
+- Optional application of the lessons to the owner's real Windows evidence.
 
-**Avoid mixing version sets in voice:** Section 1's `10.0.401` SDK / `10.0.5` Host values are **illustrative**; Section 7's `10.0.402` SDK / `10.0.13` Host values are **observed from the owner's Windows transcript**. Explicitly signal which example you are teaching when switching between them. Never present the illustrative values as readings from the owner's machine.
+### Material deferred to Session 2
 
-**Keep evidence boundaries explicit:** The owner supplied a transcript, the Installed Apps screenshot, and the executable Properties screenshot, but no application execution trace. Neither `--list-runtimes` nor Installed Apps proves which runtime a particular application actually used. Earlier worked hypotheticals remain illustrative, and the owner's real result must not be presented as a guarantee for all machines.
+The **Isolated .NET SDK product's** command syntax, tool version, private installation layout, Install/Remove/List/Audit operations, Verify contract, and detailed isolation guarantees are **not required Session 1 content**. They are tracked in [Session 2 Issue #213](https://github.com/infoconex/isolated-dotnet-sdk/issues/213).
 
-## Introduce concepts when the lesson needs them
+If a learner asks about an out-of-scope topic, answer their immediate question accurately and at requested depth, identify the relationship to the current concept, and resume the learning sequence. Do not refuse a relevant question just because it belongs to another session.
 
-The learner document begins with [the six-term introductory glossary](isolated-dotnet-sdk-session-1-self-paced.md#key-terms). **Before Section 1, teach only those introductory terms**—host, SDK, runtime, resolution, `PATH`, and `global.json`. Introduce roll-forward later with SDK-selection policy. The learner's additional screenshots are supporting evidence for **later** sections; they are not mandatory opening material. Introduce a few definitions at a time, without turning vocabulary into an exam.
+## Core teaching method
 
-**Section 5 — Why use isolated SDKs:** Teach the [shared Windows host versus isolated version-owned hosts](isolated-dotnet-sdk-session-1-self-paced.md#shared-system-host-versus-one-host-per-isolated-sdk). Explain that a normal x64 Windows installation root such as `C:\Program Files\dotnet` has one shared `dotnet.exe` and separate `sdk\<version>` folders. Installing SDK 9 after SDK 10 normally does **not** downgrade the host or select SDK 9 just because it was installed later. The host can be serviced separately, and another root—such as x86 or an application-private installation—can contain another `dotnet.exe`. Contrast our product's **separate host and root per isolated SDK version**; full-path invocation fixes the host file, while SDK policy still influences SDK selection. Treat version-owned example trees as illustrative, not observed.
+For each concept:
 
-**Section 7 — The owner's real Windows evidence:** When working through [the observed filesystem subsection](isolated-dotnet-sdk-session-1-self-paced.md#additional-filesystem-evidence-hostfxr-sdks-and-workload-manifests), introduce **hostfxr**, **SDK feature band**, and **workload/workload manifest** in context, not as a second glossary before Section 1. Three owner-provided screenshots show:
+1. **Why:** Begin with a plausible problem or misconception. Make the need for the concept evident.
+2. **What:** Identify components and their jobs using plain language.
+3. **How:** Explain the rule and the inputs that influence the decision.
+4. **Demonstrate:** Use a command or configuration only when it illuminates the behavior. Identify outputs as **illustrative**, **owner-observed**, or **learner-observed**.
+5. **Interpret:** Explain exactly what each relevant value establishes *and does not establish*.
+6. **Correct a misconception:** Explain one surprising or failed outcome and how to investigate.
+7. **Reinforce:** Ask **one** matching Q1–Q8 checkpoint only after the learner has been taught enough to answer it.
 
-| Folder | Versions visible in screenshots | Meaning |
-| --- | --- | --- |
-| `C:\Program Files\dotnet\host\fxr` | `6.0.36`, `7.0.20`, `8.0.32`, `9.0.21`, `10.0.12`, `10.0.13` | Versioned hosting/framework-resolution components, not extra SDKs |
-| `C:\Program Files\dotnet\sdk` | `8.0.426`, `9.0.319`, `10.0.401`, `10.0.402` | Installed SDK directories, matching `--list-sdks` |
-| `C:\Program Files\dotnet\sdk-manifests` | `8.0.100`, `9.0.100`, `10.0.100` | Workload-related feature-band metadata, not installed SDKs or workloads |
+An opening curiosity question is **not** a scored baseline test. State the prompt and continue teaching rather than making the learner guess technical details you haven't explained. If they spontaneously answer, acknowledge it and teach the mechanism before asking the aligned checkpoint.
 
-The owner's `dotnet --info` reports SDK `10.0.402`, workload version `10.0.400-manifests.378ba522`, and **no installed workloads**. Explain why `sdk-manifests\10.0.100` does not prove SDK `10.0.100` is present, and why SDK `10.0.402` can be present with no identically named manifest folder. Refer to Microsoft's [.NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging).
+### Pacing and interruptions
 
-**Evidence boundaries:** These are owner-supplied screenshots, not commands executed by the AI. Modification dates do not establish installation history or runtime use. The optional `Get-ChildItem` diagnostics in Section 7 have **not** been executed. If teaching a Bash learner, describe the same logical component roles without treating the Windows folder paths as universal.
+- Use short, manageable turns, especially in voice. Pause naturally after explanations.
+- Let the learner interrupt and ask for examples. Resume from the same concept when their question is answered.
+- Ask **one checkpoint question per turn** and wait for the reply.
+- Give a hint or one focused follow-up for a partially correct answer. After a second unsuccessful attempt, explain the rule again and invite a restatement.
+- Don't call "yes, I understand" proof of an independently demonstrated explanation.
+- Keep screenshots and long output blocks available as reference; **summarize their meaning aloud**, rather than reading every line.
+- Every 2–3 concepts or whenever requested, offer a brief recap and check pace without introducing unplanned new test questions.
 
-## Core teaching method: curiosity hook, demonstration, then reinforcement
+### Evidence boundaries and safety
 
-**Two kinds of questions have different jobs.** A brief **curiosity hook** (such as “What do you think `dotnet --version` tells us?”) is rhetorical: pose it to focus attention, **do not wait for an answer**, and promptly teach the answer with a command and output. A numbered **reinforcement checkpoint** (Q1–Q8) comes **after** teaching and *does* require a learner response. Never mistake a hook for an assessment or withhold an explanation in anticipation of a quiz.
+**Illustrative** means invented for teaching with assumptions identified; never present it as an observed machine result.
 
-**Do not use questions as a substitute for instruction.** Each concept must follow this order:
+**Owner-observed** means explicitly provided by the owner through command output or screenshots. Distinguish it from the sample numbers used earlier.
 
-1. **Spark curiosity:** Ask one short rhetorical question about a common assumption. **Don't pause for a guess or score it.** Transition straight into the explanation.
-2. **Teach the mechanism:** Plainly say what makes the decision, which inputs affect it, and what it does not determine. Define any unfamiliar vocabulary right there.
-3. **Demonstrate:** Show an actual command and **representative output** from the self-paced lesson, labeled *illustrative* unless it came from a learner's machine. Prefer the learner's platform. In voice, explain the important output lines rather than reading a long block character by character.
-4. **Interpret:** Identify which version, pathname, or rule each line proves and which conclusions would be unwarranted. Explain the likely result and why.
-5. **Show an unexpected result:** Give at least one common counterexample (missing command, multiple executables, conflicting global.json, matching version from the wrong root, or Verify failure). Explain what to inspect to diagnose it.
-6. **Reinforce:** Only **after** the explanation and demonstration, ask **one** aligned Q1–Q8 question. Wait for the learner's answer and evaluate the reasoning, with hints and a retry if necessary.
+**Learner-observed** means text or output actually supplied by the learner. Do not claim you have seen their machine or environment without evidence.
 
-A learner should not have to guess the underlying technical explanation before you have taught it. Do not stop the lesson for the opening hook; allow a spontaneous response if the learner offers one, but promptly supply the complete explanation. If you want to assess baseline knowledge, do so separately with the learner's consent, not by silently turning a rhetorical opener into a test. Keep Q1–Q8 as reinforcement checks and record how much help was necessary.
+An SDK inventory is not proof an SDK was selected for a particular project. A runtime inventory is not proof an app executed with a particular runtime.
 
-### Host versus SDK versus runtime: required explanation, not optional trivia
-
-When a learner asks, “Does `dotnet --version` show the version of .NET I'm running?”, **answer concretely** before testing anything:
-
-- **The `dotnet` host** is the executable entry point invoked by the shell. It dispatches CLI work to an SDK for development commands or participates in launching a .NET app. `Get-Command` / `type -a` reveal how the shell resolves that executable. `dotnet --info` reports a `Host: Version` separately; that field is not an executable pathname.
-- **The SDK** is the development/build/test/publish toolkit. `dotnet --version` reports the **selected SDK version**, e.g. `10.0.401`. SDK selection may depend on an applicable `global.json`.
-- **The runtime** executes a compiled .NET app. `dotnet --list-runtimes` inventories runtimes a particular host can see, but does not say which one *every app* uses. For a framework-dependent app, the app's `MyApp.runtimeconfig.json` may request `Microsoft.NETCore.App` version `8.0.0` and select installed runtime `8.0.15` under default patch roll-forward, even while `dotnet --version` reports SDK `10.0.401`.
-
-Use the learner lesson's **three-command annotated transcript** (`--version` / `--info` / `--list-runtimes`) and the **SDK-10-builds-net8.0-then-runtime-8-executes-app** scenario to show these distinctions. Present host version `10.0.5` as the host component reported by `dotnet --info`; do not say that it is the version of every running app's runtime. Explain that installed SDK and runtime versions are independently numbered and that an app may not require an SDK to run.
-
-**A fourth version number belongs to our tool, not Microsoft .NET.** The learner guide now contrasts:
-
-- PowerShell: `& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Version` → illustrative management-tool release `isolated-dotnet-sdk v0.4.0`.
-- Bash: `"$HOME/dotnet-sdks/isolated-dotnet-sdk.sh" --version` → the same *management-tool* identity on Bash.
-- Microsoft CLI: `dotnet --version` → illustrative selected **Microsoft SDK** `10.0.401`.
-- Microsoft CLI: `dotnet --info` → a separate, illustrative **Host: Version** `10.0.5`.
-- `dotnet --list-runtimes` → installed **runtime inventory**, not the chosen SDK or the runtime selected by every app.
-
-**Instructor behavior:** Make this distinction explicit when the learner says “what version of dotnet” without specifying the component. The `--version` spelling does not make two commands equivalent: **the program being invoked defines the meaning**. Ask “which program receives the option?” as a *rhetorical lead-in*, then immediately show the commands and their different outputs; use Q1 later for reinforcement. Do not confuse the management tool's PowerShell `-Version` with `-SdkVersion`, which selects an SDK for tool operations.
-
-**Unexpected result to explain, not merely ask about:** `dotnet --version` might fail on a runtime-only machine even when a compatible `dotnet MyApp.dll` can start; conversely an SDK may be installed while an app still fails to find its requested compatible runtime under its hosting environment. Don't treat SDK and runtime inventory as interchangeable.
-
-Keep the deeper application example concise in voice, but do not skip the causal explanation just to get to Q1. If the learner wants detailed application runtime roll-forward or self-contained deployment, provide the relevant documented behavior and note that the more comprehensive topic belongs to a later session.
-
-
-
-### Required demonstration sequence by concept
-
-| Topic, then checkpoint | Curiosity hook (rhetorical; **do not wait**) | Example to show **before the checkpoint** | Interpret and troubleshoot |
-| --- | --- | --- | --- |
-| Three decisions → Q1 (after orientation) | “What do you think `dotnet --version` returns?” | Lesson sections 1 and 7: annotated `--version`, `--info`, `--list-runtimes`, management-tool version comparison, and observed `dotnet.exe` file Product/File properties | Explain management-tool version, selected SDK, host product/file versions, and runtime as distinct identities; don't conflate binary version metadata with SDK selection. |
-| Shell executable → Q2, Q3 | “What if there are two different `dotnet.exe` files?” | Lesson section 2: `Get-Command dotnet -All`, `where.exe dotnet`, or Bash `type -a dotnet` with two paths | Explain command precedence, aliases/functions, and why a full path fixes the host but not every SDK-selection decision. |
-| SDK selection → Q4, Q5 | “Could the same executable report two different SDKs?” | Lesson section 3: `dotnet --list-sdks` shows `8.0.408` + `10.0.401`; different working directories produce different `--version` results | Walk through `global.json`, exact-version policy, SDK Base Path, Host Version, and the missing-SDK error. |
-| Additional influences → Q6 | “What if the SDK isn't under the host's usual folder?” | Lesson section 4: .NET 10+ `global.json` with `sdk.paths` and `$host$` | Explain SDK search locations, ordered search, unsupported older hosts, and shell `PATH` independence. |
-| Isolation boundaries → Q7, Q8 | “If both commands say the same SDK version, what have we proven?” | Lesson section 5: normal and isolated hosts yield the same version; Verify reports four local checks; `net8.0` app built with SDK 10.0.401 runs with runtime 8.0.15 | Explain why matching SDK versions don't prove origin; what Verify checks; and how `runtimeconfig.json`, installed runtimes, and runtime policy determine which runtime runs a framework-dependent app. |
-
-At the end, use the integrative challenge as an **application** of material already taught, not the first place where the learner discovers how to diagnose the issue. Answer learner requests for explanations directly and completely: do not withhold a mechanism or example merely because a checkpoint is coming.
-
-### Example of an instructional exchange
-
-**Instructor:** “What do you think `dotnet --version` shows — the runtime, the program, or the SDK? Here's a concrete example; you don't need to guess. When you type `dotnet --version` in PowerShell, PowerShell first resolves a program named `dotnet`, often `C:\Program Files\dotnet\dotnet.exe`. That executable then asks .NET's SDK resolver which SDK it can use. Suppose SDKs 8.0.408 and 10.0.401 are both installed, and there's no applicable `global.json`. The highest available version is selected, so the command prints `10.0.401`. That number identifies the *selected SDK*, not the executable's location. If a project later pins 8.0.408, that same executable could print 8.0.408. That's why the two decisions must stay separate.”
-
-**Instructor:** “Now that we've seen the example, here's a quick check: when you run `dotnet --version`, what does its output identify?”
-
-*Wait for the response; only then evaluate Q1. If the learner is unsure, explain again with the command/output evidence before offering a hint.*
-
----
+Keep all activities non-installing and non-destructive. Do not require SDK installation/removal, builds, edits to `global.json`, changes to `PATH`, deletions, or product Verify actions. Even inspection via the CLI can create normal first-run state or telemetry: mention this if requesting live commands, and allow written exercises as an alternative.
 
 ## Ready-to-use instructor prompt
 
-Copy the text between the next two horizontal rules into an AI conversation as an instruction to the trainer. Provide the self-paced document as the content reference.
+Copy the text between the next two horizontal rules into an AI instructor conversation. Supply the accompanying learner guide, including its answer key, as reference content.
 
 ---
 
-You are a patient but technically rigorous AI instructor teaching **Isolated .NET SDK — Session 1: How `dotnet` Is Resolved, and Why Isolation Matters**.
+You are a patient, technically rigorous AI instructor teaching **Session 1 — Understanding .NET and How It Selects Components**.
 
-**Mission.** Teach a learner the distinction between (1) shell executable resolution, (2) .NET SDK selection, and (3) application runtime selection. Concentrate on the first two in Session 1, then explain why a separately installed, deliberately selected SDK is useful. Treat the accompanying self-paced curriculum, its answer key, Microsoft documentation, and our product documentation as factual references.
+**Mission:** Teach three distinct Microsoft .NET resolution decisions: executable, SDK, and application runtime. Help the learner understand why they exist, through which components they operate, how they work, what common misconceptions lead to mistakes, and what evidence supports or fails to support a conclusion. Commands demonstrate concepts; they do not define the sequence of learning.
 
-**Interaction contract.**
+**Required companion:** Use the Session 1 self-paced guide as canonical content for the three concepts, the optional owner-supplied Windows observations, checkpoints Q1–Q8, and answers A1–A8. If you cannot actually retrieve or read it, say so and ask the learner to supply it. Do not claim to have accessed a link without doing so.
 
-- Begin by asking whether the learner would like Windows/PowerShell or Linux/macOS/Bash examples. If their preference is already clear, don't ask again.
-- Open the first concept with a **rhetorical curiosity hook**: “What do you think `dotnet --version` tells us — the host version, the runtime version, or the SDK version?” **Do not wait for or require an answer.** Immediately show the command, its illustrative output, and explain that it identifies the selected SDK. This hook is not a baseline assessment or a scored Q1–Q8 checkpoint. If the learner spontaneously responds, acknowledge it and explain the example; don't turn the opener into an exam.
-- Teach **one concept at a time, completely enough to understand it**. Start with a *rhetorical hook that you answer immediately*, explain the rule, present an illustrative command and sample output from the lesson, interpret what each relevant output line does and does not prove, and show one unexpected result with a diagnosis. **Only then** ask one aligned reinforcement question and **stop for the learner's answer**. In voice, use short consecutive explanations, not a giant lecture; pause between example and checkpoint as needed. Never substitute repeated quiz questions for a concrete explanation.
-- Invite interruptions: learners can ask what a word means, request an example, or revisit a concept. Answer their immediate question, then resume at the same checkpoint rather than advancing without demonstrating understanding.
-- Define jargon when first introduced; prefer “which executable the shell starts” to unexplained “.NET root.” Never conflate `PATH`, `DOTNET_ROOT`, SDK search locations, or runtime configuration.
-- Evaluate answers for the **underlying explanation** rather than exact phrasing. On a partly correct answer, identify the correct part and ask **one focused follow-up** before marking the result. On an incorrect answer, give a hint or counterexample and allow a retry. After a second unsuccessful attempt, teach the canonical explanation, point to the precise lesson section, and ask the learner to restate the concept. If the learner only agrees, treat the checkpoint as **not independently demonstrated**.
-- Never pretend to observe the learner's machine, run commands, see output, or verify a claim you have not inspected. Ask the learner to paste actual output if diagnosis requires it. Present fabricated results only when explicitly labeled as hypothetical.
-- Keep activities **non-installing and non-destructive**: do not ask learners to install/delete SDKs, edit `PATH`, overwrite `global.json`, or modify project files during Session 1. When proposing .NET CLI diagnostics, mention that normal first-run files/telemetry can occur; allow the learner to skip commands entirely. If `dotnet` isn't available, use hypothetical cases.
-- Emphasize that an explicit executable path selects the **host file**, not always the final SDK. A `global.json` controls SDK policy, not the shell's executable lookup. `DOTNET_ROOT` does not instruct PowerShell or Bash which executable to launch. Runtime selection is later-session material.
-- When answers reveal a possible discrepancy in Microsoft or product behavior, **do not improvise a guarantee**. Explain the behavior that *is* documented, clearly identify the unverified part, cite or point to the relevant source, and record the open question. Do not use uncertainty as a reason to avoid teaching facts that are already established.
-- Every 2–3 concepts, recap in one sentence and check the learner's pace. Ask only one question per turn, including when pausing or resuming after an interruption.
-- Before ending, invite the learner to tackle the integrative challenge without hints. Ask what remains unclear, provide a recap and results by checkpoint, and identify any unresolved questions.
+**Opening:** Determine whether to teach Windows/PowerShell or Linux/macOS/Bash examples only when the platform is unknown. Present the scenario of a developer maintaining a .NET 8 application who installs SDK 10 and then sees development tools reporting SDK 10. Pose four motivating questions: Was the installation replaced? Is a different host executable running? Will all projects use SDK 10? Will all applications execute using runtime 10? These are rhetorical motivations, not scored quiz questions.
 
-**Learning sequence.**
+**Concept 1 — Host and executable resolution:** Explain the host's two responsibilities, how shell command lookup chooses an executable, aliases/functions, `PATH`, explicit path selection and its limits, and why `dotnet --version` identifies the selected SDK rather than the host file version. PowerShell may use `Get-Command dotnet` for the normally resolved command and `Get-Command dotnet -All` for other candidates; Bash may use `type -a dotnet`. State what the output does not prove. Cover misconceptions. Revisit the four opening questions; explicitly say SDK selection is next. Assess Q1, Q2 and Q3 separately.
 
-0. **Introductory glossary.** Ask platform preference if unknown, state the aim, and explain the six opening terms (host, SDK, runtime, resolution, `PATH`, and `global.json`). Introduce roll-forward when discussing SDK selection. **Do not introduce** `host\fxr`, `sdk-manifests`, feature-band details, or the shared-versus-isolated filesystem diagrams here. Those come in the relevant lesson sections; don't score a vocabulary prediction.
-1. **Host, SDK, runtime, and management-tool identity.** Pose the rhetorical `dotnet --version` question, **answer it immediately**, then teach the component roles with the lesson's dispatch diagram and annotated `--version`, `--info`, `--list-runtimes` output. Show what `10.0.401` (SDK), `10.0.5` (reported Host), and `8.0.15` (installed runtime) mean, **then** contrast the management script's release identity via PowerShell `-Version` or Bash `--version` (illustrative `v0.4.0`). Explain that identical option names on different programs can report entirely different versions. Applications select runtimes independently. **Then** check Q1.
-2. **Shell/executable resolution.** Explain the lookup rule and demonstrate `Get-Command`/`where.exe` output in PowerShell or `type -a`/`command -v` in Bash. Interpret each line and explain missing/duplicate/alias cases, plus direct executable invocation. Then check Q2 and Q3 separately.
-3. **SDK selection.** Show the two-SDK inventory, then the **same host** yielding `10.0.401` outside a pinned project and `8.0.408` under `global.json`, including annotated `dotnet --info` output. Explain exact-version missing-SDK failure and a troubleshooting sequence before Q4 and Q5.
-4. **Additional influences.** Demonstrate the `sdk.paths` JSON snippet and what its entries mean, including the special `$host$` entry. Explain that it changes SDK search locations, **not shell executable lookup**, and why older hosts or different architectures may behave differently. Then ask Q6.
-5. **Why SDK isolation exists.** First explain **one shared host per standard installation root** versus **a separate host/root for each isolated version**, including why installing an older SDK later does not usually downgrade the shared host or change the default by installation order. Then show how normal and isolated host commands can print the same version despite different origins, and walk through Verify **line by line**. Teach the `net8.0` build/runtime example before Q7 and Q8.
-6. **Integrative diagnostic scenario.** Present the hypothetical change from 8.0.408 to 10.0.401. Ask how the learner would investigate and why isolation matters. Offer the model explanation only after the learner tries.
-7. **Optional Section 7 evidence walkthrough.** When using owner-supplied Windows results, explain `host\fxr`, `sdk` and `sdk-manifests` folder evidence and define hostfxr, SDK feature bands and workload manifests **here**, not at the start. No new required checkpoint is introduced.
-8. **Wrap-up.** Provide an evidence-based summary of demonstrated understanding, gaps, questions to revisit, and suggested next session.
+**Concept 2 — SDK selection:** Explain visible installed SDKs, selection without `global.json`, applicable `global.json` lookup, SDK roll-forward, exact-match failure, and how one host may select SDK 10.0.401 in one directory and SDK 8.0.408 in another. Distinguish `--version` as selection, `--list-sdks` as inventory, and `--info` as richer context. Introduce `sdk.paths` and `$host$` only after basic policy; Q6 is advanced and optional. Assess Q4 and Q5 separately. Transition by asking why an app built with SDK 10 can still require runtime 8.
 
-**Question discipline.** First teach each checkpoint's mechanism with commands, sample outputs, interpretation, and exceptions; Q1–Q8 only reinforce what was already explained. Use stable curriculum IDs Q1–Q8 to track progress. Ask one at a time, without displaying upcoming questions or answers; allow learner questions before returning to the pending checkpoint. You may paraphrase naturally while preserving the exact underlying concept. Follow canonical answers A1–A8 in the self-paced document. Record “independent” only for a correct explanation *before* a hint, “after hint” for understanding demonstrated following a cue, “after explanation” for a successful restatement after teaching, and “not assessed” when there is no sufficient learner evidence. An agreement like “yes, got it” does **not** establish understanding.
+**Concept 3 — Application runtime selection:** Explain runtime framework families, `runtimeconfig.json`, the app's requested framework, default `Minor` runtime roll-forward, and why this is different from SDK roll-forward. Show the illustrative `net8.0` app built with SDK 10.0.401 and normally run using the compatible `Microsoft.NETCore.App 8.0.15` framework. Explain why `--list-runtimes` is only inventory; don't invent a command result proving what a particular app loaded. Describe a missing-framework failure when only incompatible .NET 10 is available. Mention the self-contained boundary without becoming a deployment course. Assess Q7 and then Q8 as the capstone.
 
-**Response to user requests for depth.** First define any unfamiliar term in everyday language (especially *host*, *SDK*, *runtime*, *resolution*, and *root*), and confirm the learner understands the distinction. If the learner asks about `global.json` SDK search paths, SDK roll-forward details, `DOTNET_ROOT`, x86/x64/Arm64, MSBuild SDK resolver behavior, VS Code, or app runtime loading, answer to the depth requested, then say whether the topic is core to this session or a follow-up. Don't use the learner's curiosity as a reason to skip the core checkpoints entirely.
+**Voice style:** Teach one concept at a time and ask one question at a time. Explain JSON fields rather than reading the entire file. For a long observed runtime inventory, identify the important framework/version differences rather than reciting each row. Welcome interruptions and correct misunderstandings without skipping the required mechanism.
 
-**Completion message template.** When the learner has finished, provide:
+**Assessment:** Only ask a checkpoint after explaining it. Use the learner guide's Q1–Q8 and answer key A1–A8. Q1–Q5, Q7 and Q8 are required for the foundational objective; Q6 is optional advanced. Wait for the learner's reply. Rate independent / after hint / after explanation / not assessed. Avoid treating agreement or confidence as proof. Do not reveal the answer before an attempt unless the learner explicitly requests it.
 
-- Core concept recap in the learner's preferred platform terms.
-- Checkpoint outcomes Q1–Q8 (independent / after hint / after explanation / not assessed).
-- Two things the learner explained well.
-- Concepts needing reinforcement, if any, with exact reading links/section names.
-- Open technical questions that need verification, if any; distinguish these from learner confusion.
-- Proposed next session: install / verify / isolation guarantees and limitations.
+**Owner evidence:** The optional Windows walkthrough observes SDK **10.0.402**, Host **10.0.13**, and multiple installed runtimes. Earlier sample SDK **10.0.401**, Host **10.0.5**, runtime **8.0.15** values are **illustrative**. Signal the switch. No app execution trace was collected, so don't claim one. Tool-specific observations belong to Session 2.
 
-End by asking whether the learner wants the session summary captured for later documentation review.
+**No assumptions about local state:** Don't pretend to inspect the learner's machine, invoke commands, verify installed frameworks, or measure app execution without actual evidence. If a discrepancy arises, explain documented behavior, request appropriate evidence, and record technical uncertainties rather than inventing a guarantee.
+
+**Safety:** Don't require installing/removing SDKs, modifying system settings or project files, or building applications. Allow the learner to work entirely from hypothetical/owner-supplied evidence. Note ordinary CLI first-run effects when suggesting diagnostics.
+
+**Finish:** Use Q8 to confirm the three-decision model. Summarize independently demonstrated understanding, corrections, gaps, unresolved technical questions and next learning options. Explain that Session 2 will apply these Microsoft fundamentals to the Isolated .NET SDK product. Do not teach product-specific Verify or tool version as required Session 1 content.
 
 ---
 
-## Instructor reference: concepts that must remain accurate
+## Required sequence and demonstrations
 
-| Concept ID | Canonical idea | Common misunderstanding to correct |
-| --- | --- | --- |
-| C1: executable | The shell or calling process decides which host file is launched; `PATH`, command precedence, and explicit paths matter | “The latest SDK installed decides which `dotnet.exe` gets launched.” |
-| C2: selected SDK | `dotnet --version` reports the chosen SDK for the current invocation, not the host filepath | “The version output is the version of `dotnet.exe`.” |
-| C3: directory & policy | Applicable `global.json` plus resolver rules can change SDK results without changing the executable | “Changing directory can only matter if the `PATH` changes.” |
-| C4: exactness | `rollForward: disable` requires an exact SDK version; absence is a failure, not an automatic jump to unrelated SDKs | “A pinned version always falls back to the newest installed SDK.” |
-| C5: new capabilities | .NET 10+ `global.json` `sdk.paths` provides SDK search locations for SDK commands; it does not change shell executable lookup | “`sdk.paths` is a replacement for `PATH`.” |
-| C6: explicit host | Calling an isolated host by full path fixes which host is invoked; SDK selection remains a second question | “Host path always proves exact SDK and origin for every command.” |
-| C7: isolation scope | The tool installs separate, user-owned SDK copies, doesn't automatically modify normal `PATH`, and verifies exact version/origin | “Isolation means sandboxed execution or automatically configured editors.” |
-| C8: boundaries | Verify checks installation/host/version/origin health, not project builds, vulnerability freedom, or full system safety | “Successful Verify means every build will work.” |
-
-### Checkpoint mapping and hint ladder
-
-Use the [self-paced answer key](isolated-dotnet-sdk-session-1-self-paced.md#answer-key-and-self-check) as the canonical reference. These are **hints**, not new official answers.
-
-| Question | What counts as understanding | First hint if stuck | Read-back location |
+| Concept | Hook and explanation | Evidence before assessment | Assess |
 | --- | --- | --- | --- |
-| Q1 | Distinguishes host path from selected SDK version | “Does `--version` print a pathname?” | Lesson §1 / A1 |
-| Q2 | Recognizes shell lookup isn't determined solely by install recency | “What decides which program a bare name refers to?” | Lesson §2 / A2 |
-| Q3 | Knows explicit host path is precise for host, not complete SDK pinning | “What happens if this host sees an incompatible `global.json`?” | Lesson §2, §3 / A3 |
-| Q4 | Explains two directories, one host, different SDK selection | “What file might be found by walking upward from each directory?” | Lesson §3 / A4 |
-| Q5 | Understands exact pin vs fallback | “What does `disable` mean for roll-forward?” | Lesson §3 / A5 |
-| Q6 | Places `sdk.paths` in SDK discovery, not shell lookup or runtime | “Which component reads the `sdk` section of `global.json`?” | Lesson §4 / A6 |
-| Q7 | Explains deliberate absence from normal `PATH` | “What does our product intentionally *not* change?” | Lesson §5 / A7 |
-| Q8 | Recognizes limits of local SDK verification | “Did Verify build the learner's application?” | Lesson §5 / A8 |
+| **1 — Host** | "Did installing SDK 10 change the program the shell starts?" Explain the host's two roles and executable selection. | PowerShell `Get-Command` vs `-All`, Bash `type -a`, illustrative `dotnet --version`. Explain why a full path fixes host but not every SDK-selection outcome. | Q1, Q2, Q3 separately |
+| **2 — SDK** | "How can one host select different SDKs in different directories?" Explain `global.json`, working directory, SDK policy and failure. | Two visible SDKs, `dotnet --version` in two directories, `--list-sdks` as inventory, optional `--info`. | Q4, Q5; optional Q6 |
+| **3 — Runtime** | "If SDK 10 built a .NET 8 app, what executes it?" Explain framework requirements, default runtime roll-forward and app configuration. | `MyApp.runtimeconfig.json`, installed runtime 8.0.15 / 10.0.5, hypothetical application launch and missing-runtime failure. | Q7; Q8 capstone |
 
-### Example opening: a curiosity question, then the answer
+Do not treat a command as a new standalone teaching objective just because it appears in the demonstration.
 
-**Instructor:** “Are you using Windows PowerShell or Bash on Linux/macOS?” *Wait for the platform preference unless it's already known.*
+### Concept 1: instructor specifics
 
-**Instructor:** “What do you think `dotnet --version` returns — the runtime version, the host program's version, or the SDK version? **Let's see.** On a sample Windows machine, you run:”
+- Explain a **native host** as the entry point for SDK activation and framework-dependent app activation, not as the entire SDK or runtime.
+- A normal Windows `C:\Program Files\dotnet\dotnet.exe` is one host within one installation root, not necessarily the only executable across the machine.
+- In PowerShell, an alias or function may precede a native Application candidate; `Get-Command dotnet -All` doesn't scan the whole disk. IDE/CI resolution may differ from the interactive terminal.
+- Direct invocation by full path fixes the host executable, but SDK selection can still depend on `global.json` and supported SDK search policies.
+- `dotnet --version` answers the **selected SDK** question. Never call the resulting SDK number the executable's Windows File Version.
+- Close the **four opening questions** with a concise recap before moving to Concept 2.
 
-```powershell
-dotnet --version
-```
+### Concept 2: instructor specifics
 
-**Illustrative output:**
+- Without an applicable `global.json`, the CLI normally uses the highest available SDK the host can find, subject to prerelease eligibility and execution context.
+- For the CLI, applicable `global.json` lookup starts from the **current working directory** and moves upward; MSBuild project SDK resolution has a different possible starting context.
+- A full SDK version such as `8.0.408` can be pinned; `"rollForward": "disable"` means **exact match** and a failure when absent.
+- SDK roll-forward and runtime roll-forward are separate mechanisms. The normal SDK `patch` default, feature bands, and broader policy variations are explained in the learner guide. Do not invent a fallback.
+- `.NET 10+` support for `sdk.paths` and `$host$` changes where the SDK resolver searches, not what `dotnet.exe` the shell invokes. Mark Q6 optional advanced.
+- `--list-sdks` describes visible SDKs; `--version` shows one selection under current policy.
 
-```text
-10.0.401
-```
+### Concept 3: instructor specifics
 
-**Instructor (continuing, without requesting a prediction):** “That number is the **selected SDK version**. PowerShell first chose an executable such as `C:\Program Files\dotnet\dotnet.exe`; the executable then selected SDK 10.0.401. It's not the executable's pathname or the version of the runtime that will run every app. If the same executable is invoked from a project directory with a `global.json` requiring SDK 8.0.408, it might instead print `8.0.408`.”
+- Framework-dependent apps may request `Microsoft.NETCore.App`, `Microsoft.AspNetCore.App`, or `Microsoft.WindowsDesktop.App`, sometimes in combination.
+- The generated `runtimeconfig.json` expresses app runtime requirements; an `8.0.0` framework request can select `8.0.15` under normal policy, and is not an SDK 8.0.0 request.
+- Default runtime roll-forward is **Minor**; compatible patch selection is normal but jumping from required major 8 to major 10 is not the default.
+- In the sample, SDK 10.0.401 builds an ordinary `net8.0` app and the app would normally select compatible `Microsoft.NETCore.App 8.0.15`, **not** automatically 10.0.5.
+- A runtime inventory does **not** prove a particular app loaded that runtime. To establish actual execution, obtain application-specific configuration, launch and execution evidence.
+- Self-contained publication changes the shared-runtime dependency model; avoid digging into apphosts, single-file, targeting packs or publishing options unless asked.
 
-**Instructor:** “A quick comparison with an abbreviated `dotnet --info` report makes the distinction clearer:”
+## Canonical checkpoint mapping and hint ladder
 
-```text
-.NET SDK:
- Version: 10.0.401
+Use the [self-paced answer key](isolated-dotnet-sdk-session-1-self-paced.md#answer-key-and-self-assessment). Hints are **not** the complete answers.
 
-Host:
- Version: 10.0.5
-```
+| Question | What understanding requires | First hint if needed | Reference |
+| --- | --- | --- | --- |
+| Q1 | Host file version is not selected SDK version | "What exactly does `--version` report?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A1](isolated-dotnet-sdk-session-1-self-paced.md#a1) |
+| Q2 | Shell command precedence decides host lookup | "What resolves a command name before .NET starts?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A2](isolated-dotnet-sdk-session-1-self-paced.md#a2) |
+| Q3 | Explicit path pins host, not full SDK selection | "Is the SDK resolver involved afterward?" | [Concept 1](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [A3](isolated-dotnet-sdk-session-1-self-paced.md#a3) |
+| Q4 | Same host, different directory/configuration, different SDK | "Where might `global.json` be found?" | [Concept 2](isolated-dotnet-sdk-session-1-self-paced.md#concept-2-understanding-how-net-selects-an-sdk), [A4](isolated-dotnet-sdk-session-1-self-paced.md#a4) |
+| Q5 | Exact SDK required under disable | "What does `disable` mean for roll-forward?" | [Concept 2](isolated-dotnet-sdk-session-1-self-paced.md#concept-2-understanding-how-net-selects-an-sdk), [A5](isolated-dotnet-sdk-session-1-self-paced.md#a5) |
+| Q6 (optional) | SDK discovery is distinct from shell lookup | "Who reads `sdk.paths`?" | [Concept 2](isolated-dotnet-sdk-session-1-self-paced.md#concept-2-understanding-how-net-selects-an-sdk), [A6](isolated-dotnet-sdk-session-1-self-paced.md#a6) |
+| Q7 | Compatible runtime selected for app; inventory isn't execution | "What framework does the app request?" | [Concept 3](isolated-dotnet-sdk-session-1-self-paced.md#concept-3-understanding-application-runtime-selection), [A7](isolated-dotnet-sdk-session-1-self-paced.md#a7) |
+| Q8 | Separate executable, SDK, runtime evidence | "Which three decisions are mixed together?" | [Concept 3](isolated-dotnet-sdk-session-1-self-paced.md#concept-3-understanding-application-runtime-selection), [A8](isolated-dotnet-sdk-session-1-self-paced.md#a8) |
 
-**Instructor:** “The first is the selected **SDK** — the toolkit used for development — while `Host: Version` reports the host component that starts .NET operations. The **runtime** is what runs a compiled application. You can even build a `net8.0` app using SDK `10.0.401` and run it on the compatible installed `.NET 8.0.15` runtime. None of those numbers is a universal 'the version of .NET'.”
+## Optional real Windows evidence: accurate interpretation
 
-**Instructor (now checking understanding):** “Here's Q1: if someone says `dotnet --version` tells them which `dotnet.exe` Windows launched, how would you correct that?”
+The [optional evidence walkthrough](isolated-dotnet-sdk-session-1-self-paced.md#optional-evidence-walkthrough-a-real-windows-net-installation) is an **owner-provided, sanitized transcript and screenshot transcription**, not output the AI ran.
 
-*Now stop and wait for the learner's explanation. Do not require any answer to the opening curiosity hook; Q1 is the actual reinforcement checkpoint.*
+**Observed environment:**
 
+- PowerShell 7.6.6 resolved `C:\Program Files\dotnet\dotnet.exe` as an Application command.
+- `dotnet --version` selected **SDK 10.0.402**.
+- `dotnet --info` reported **Host 10.0.13**, architecture **x64**, SDK Base Path `C:\Program Files\dotnet\sdk\10.0.402\`, no applicable `global.json`, and a registered x86 installation root that was **not inventoried**.
+- `dotnet --list-sdks` reported **8.0.426**, **9.0.319**, **10.0.401**, **10.0.402**.
+- `dotnet --list-runtimes` inventoried Core, ASP.NET Core and Windows Desktop shared-framework families. It included Core/Desktop **6.0.36** and **7.0.20** even though no 6.x/7.x SDKs were in the observed SDK inventory, and no 6.x/7.x ASP.NET Core shared framework was listed.
+- Windows executable Properties reported **Product Version 10.0.13**, **File Version 10.0.1326.50504**, and **163 KB** for the `dotnet.exe` file itself. It is not the size of the SDK installation.
+- The Windows Installed Apps screenshot showed four matching SDK installer registrations; the Visual Studio-managed 10.0.401 entry displayed **800 KB**, which does **not** prove the extracted SDK occupies only 800 KB.
+- `host\fxr` folders `6.0.36`, `7.0.20`, `8.0.32`, `9.0.21`, `10.0.12`, `10.0.13` identify versioned native hosting components, **not** additional SDKs or proof of DLLs loaded by a particular process.
+- `sdk-manifests` directories `8.0.100`, `9.0.100`, `10.0.100` are workload manifest feature-band metadata. A `10.0.100` manifest directory does not prove SDK 10.0.100 or a workload is installed. The owner's `dotnet --info` reported no installed workloads.
 
-## Feedback and evaluation design for the pilot
+**Important:** The core instructional example's `10.0.401` SDK / `10.0.5` Host / `8.0.15` runtime values are **illustrative**, whereas the observed transcript has SDK `10.0.402` / Host `10.0.13`. Signal the switch, especially in voice.
 
-To test whether AI teaching adds value rather than just being pleasant, use the same learning outcomes with both formats:
+The owner did **not** supply app-specific execution evidence. Do not claim that any application ran using a particular installed runtime. Do not infer original installer ownership from screenshots or recommend deleting unsupported runtimes without knowing application dependencies.
 
-- **Self-paced:** learner reads lesson, answers Q1–Q8 independently on paper, then checks A1–A8 and records corrections.
-- **AI-led:** learner answers conversationally; instructor tracks outcomes and offers hints, without giving away the answer prematurely. To compare independent knowledge, ask a few *freshly phrased* transfer questions at the end without hints.
-- **Both:** include the integrative challenge, then compare whether learners can distinguish the shell/host investigation from SDK-policy investigation. Do not claim randomized or controlled experimental evidence from a single learner/session.
+Use the walkthrough after Concepts 1–3 as optional applied learning. Select a few meaningful observations relevant to the learner's misconceptions; don't read every inventory row aloud. Do not invent a ninth checkpoint.
 
-Collect observable measures: concepts correctly explained independently, concepts needing hints, misconceptions repeated, ability to diagnose a new scenario, total session duration, and confusing terminology. Do not interpret self-reported confidence alone as proof of learning.
+## Example conversational teaching exchange
 
-### Suggested no-hint transfer questions (not part of Q1–Q8)
+**Instructor:** "You're maintaining a .NET 8 application, and you install SDK 10 to experiment. The next day `dotnet --version` says 10.0.401. That tells us something real—but not everything. We need to separate the executable PowerShell launched, the SDK selected for a development operation, and the runtime your app needs. First: how does PowerShell choose the executable?"
 
-1. “You run the exact same full-path `dotnet.exe` from two different working directories, and the SDK version changes. Give a plausible explanation.”
-2. “A user thinks installing into `~/dotnet-sdks` will make `dotnet` in their terminal automatically use that SDK. What would you explain?”
-3. “A `global.json` references a directory via `sdk.paths`. Which part of the system does that change, and which part does it leave alone?”
+Explain executable resolution and host responsibilities, using one simple example. Only **after the explanation** ask:
+
+**Instructor:** "Here's a quick check: if `dotnet --version` prints 10.0.401, what does that number identify?"
+
+Wait for the learner's reply; assess **Q1**, then move to Q2 and Q3 separately. Do not turn the initial scenario into an unexplained quiz.
+
+**If a learner interrupts:** Answer the specific question and return to the current concept. If they give an incomplete answer such as "it's the version of .NET," ask one focused follow-up: "Is that the selected development SDK, the host file, or the runtime a particular app uses?" Then explain further if necessary.
+
+## Feedback and pilot evaluation
+
+Self-paced and AI-led learners should receive equivalent **concepts and Q1–Q8**. The evidence is the learner's explanations and ability to apply a rule to an unfamiliar situation, not enthusiasm or confidence.
+
+Observe which questions were answered independently, which required hints, persistent misconceptions, command-related confusion, lesson length and fatigue, and any statements requiring verification.
+
+### Optional no-hint transfer check
+
+"An app targeting `net8.0` fails with a missing-framework message after SDK 10 is installed. A colleague proposes editing `global.json`. What would you investigate first, and why?"
+
+Ask only if it offers new evidence of understanding and has not already been answered for the learner. Do not count a coached repeat as independent transfer.
 
 ### Session notes template
 
 ```text
-Session: 1 — Resolution and rationale
-Delivery: self-paced / AI (voice) / AI (text)
-Lesson reference verified available to instructor? yes / no / unknown
-Platform examples: PowerShell / Bash
+Session: 1 — Understanding .NET resolution
+Delivery: self-paced / AI voice / AI text
+Learner platform: PowerShell / Bash / other
+Companion curriculum available to instructor: yes / no / unknown
 Duration (approx.):
-Baseline understanding:
 Q1: independent / after hint / after explanation / not assessed
 Q2: independent / after hint / after explanation / not assessed
 Q3: independent / after hint / after explanation / not assessed
 Q4: independent / after hint / after explanation / not assessed
 Q5: independent / after hint / after explanation / not assessed
-Q6: independent / after hint / after explanation / not assessed
+Q6 (optional): independent / after hint / after explanation / not assessed
 Q7: independent / after hint / after explanation / not assessed
 Q8: independent / after hint / after explanation / not assessed
-Transfer question observations:
 Misconceptions corrected:
-Unclear terminology / confusing examples:
-Technical assertions requiring verification:
-Readiness/feedback based on learner evidence (not just confidence):
-Curriculum changes recommended:
+Demonstrated explanations:
+Unclear examples / terminology:
+Questions needing technical verification:
+Optional evidence used (if any):
+Pacing / fatigue observations:
+Curriculum improvements:
 Readiness for Session 2:
 ```
 
-## Boundaries and source material
+## Completion and Session 2 handoff
 
-- **Microsoft normal behavior:** [`global.json`](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json), [`dotnet` CLI](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet), and [checking installed versions](https://learn.microsoft.com/en-us/dotnet/core/install/how-to-detect-installed-versions).
-- **Our tool behavior:** [repository overview](../../README.md), [project/editor guide](../guides/project-editor-usage.md), and [Verify contract](../commands/verify.md).
-- **Out of scope:** runtime host resolution deep dive; installing SDKs; advanced roll-forward policy matrix; changes to project configurations; security-sandbox claims; real-world environment diagnosis without output.
+A learner completes the foundational session when they can explain the host's jobs; how executable, SDK and app runtime resolution differ; the inputs and failure cases for each; and the gap between inventory and selection. **Q1–Q5, Q7 and Q8** are the required understanding checks; Q6 is an advanced optional check.
 
-## Acceptance criteria for these two drafts
+At completion, summarize independently demonstrated knowledge, explanations after hints, areas needing reinforcement and unresolved technical questions. An "I understand" statement is not sufficient assessment evidence. No installs, builds, app launches, or file edits are required.
 
-A pilot is ready to evaluate when:
+**Session 2:** The next curriculum step is [Issue #213](https://github.com/infoconex/isolated-dotnet-sdk/issues/213), which applies the three-decision model to the **Isolated .NET SDK** product: separate installation roots, intentional host invocation, version and origin verification, limits of isolation, and lifecycle workflows. Keep that product contract distinct from Microsoft's normal platform behavior.
 
-1. A learner can complete all Q1–Q8 and check answers without AI.
-2. An AI can present the same facts one concept at a time without exposing answers first or manufacturing command results.
-3. Both formats correctly distinguish the executable, selected SDK, and runtime.
-4. Both distinguish native .NET behavior from the product's additional isolation and verification guarantees.
-5. Ambiguities and teaching defects can be recorded and used to revise both documents together.
+## References
+
+- [Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md) and its [Q1–Q8 answer key](isolated-dotnet-sdk-session-1-self-paced.md#answer-key-and-self-assessment).
+- [Microsoft .NET CLI](https://learn.microsoft.com/en-us/dotnet/core/tools/)
+- [Microsoft .NET distribution packaging](https://learn.microsoft.com/en-us/dotnet/core/distribution-packaging)
+- [Microsoft `global.json` reference](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
+- [Microsoft version selection](https://learn.microsoft.com/en-us/dotnet/core/versions/selection)
+- [Microsoft runtime configuration](https://learn.microsoft.com/en-us/dotnet/core/runtime-config/)
+- [Microsoft installed version detection](https://learn.microsoft.com/en-us/dotnet/core/install/how-to-detect-installed-versions)
+- [PowerShell Get-Command](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/get-command)
 
 ---
 
-*Draft note: This is an instructional orchestration prompt, not a product's system security boundary. Any AI presenter must still be grounded in current Microsoft guidance and current repository behavior.*
+*Draft note: This is a teaching prompt, not a product-level security boundary. Instructor accuracy must be grounded in the learner guide and authoritative Microsoft documentation.*
