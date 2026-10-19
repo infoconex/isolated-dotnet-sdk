@@ -175,9 +175,9 @@ Do **not** present this material during the standard Session 1 teaching sequence
 
 Explain executable resolution and host responsibilities, using one simple example. Only **after the explanation** ask:
 
-**Instructor:** "Here's a quick check: if `dotnet --version` prints 10.0.401, what does that number identify?"
+**Instructor:** "Here's a quick check: a computer has two `dotnet.exe` files in different directories. Does installing a newer SDK automatically determine which executable PowerShell launches when you type `dotnet`? Why?"
 
-Wait for the learner's reply; assess **Q1**, then move to Q2 and Q3 separately. Do not turn the initial scenario into an unexplained quiz.
+Wait for the learner's reply; assess **Q1**, then move to Q2 (explicit host path) and Q3 (what `dotnet --version` reports), separately and in order. Do not turn the initial scenario into an unexplained quiz.
 
 **If a learner interrupts:** Answer the specific question and return to the current concept. If they give an incomplete answer such as "it's the version of .NET," ask one focused follow-up: "Is that the selected development SDK, the host file, or the runtime a particular app uses?" Then explain further if necessary.
 
