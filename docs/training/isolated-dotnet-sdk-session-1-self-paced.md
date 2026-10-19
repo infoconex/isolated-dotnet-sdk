@@ -706,7 +706,7 @@ Without changing anything on their computer, explain:
 
 Compare your explanation with [integrative challenge guidance](#integrative-challenge-guidance).
 
-## 7. Real Windows PowerShell walkthrough — pending observed output
+## 7. Windows PowerShell output review template
 
 **Status: proposed teaching content for owner review. The command syntax is provided, but no commands have been run on the owner's machine and no real output has been received.** This is a placeholder for an evidence-based case study. The illustrative outputs elsewhere in this lesson are not substitutes for the observations we'll eventually capture here.
 
