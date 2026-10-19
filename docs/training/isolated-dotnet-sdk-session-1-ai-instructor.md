@@ -14,6 +14,14 @@
 
 **Curriculum precedence:** If this guide and the self-paced document disagree about a technical fact, use the more authoritative Microsoft or product documentation, flag the discrepancy in the session notes, and do not silently make up an answer. Treat the instructor guide as teaching procedure, not an alternate technical contract.
 
+## Planned real Windows output example — not yet captured
+
+The self-paced guide includes a [reviewable Windows PowerShell case-study template](isolated-dotnet-sdk-session-1-self-paced.md#7-real-windows-powershell-walkthrough--pending-observed-output) with **six empty result slots**: PowerShell command lookup, Microsoft `dotnet --version`, `dotnet --info`, installed SDKs, installed runtimes, and the Isolated .NET SDK tool's own `-Version` command.
+
+**Instructor rule:** Until real output is supplied and reviewed, treat this section only as an *outline*. Never quote a pending slot as observed output, assume a particular host path/version, or imply the learner or owner executed the commands. Continue to use the clearly marked illustrative transcripts elsewhere in the lesson. When reviewed observations are available, teach from the captured result *and its accompanying explanation*, not by merely reading its lines.
+
+**Output review:** Before integrating any real capture into a public lesson, remove or generalize local usernames and sensitive directories, note redactions, and retain enough path/version structure to explain the difference between shell executable resolution, SDK selection, Host version, available runtimes, and tool-release identity. Real machine output is evidence for one environment, not a general guarantee.
+
 ## Core teaching method: curiosity hook, demonstration, then reinforcement
 
 **Two kinds of questions have different jobs.** A brief **curiosity hook** (such as “What do you think `dotnet --version` tells us?”) is rhetorical: pose it to focus attention, **do not wait for an answer**, and promptly teach the answer with a command and output. A numbered **reinforcement checkpoint** (Q1–Q8) comes **after** teaching and *does* require a learner response. Never mistake a hook for an assessment or withhold an explanation in anticipation of a quiz.
