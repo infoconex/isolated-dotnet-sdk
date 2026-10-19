@@ -46,7 +46,7 @@ Before we discuss *resolution*, here are the terms we'll use:
 
 ## 1. First, three different decisions
 
-**Think about this:** When you enter `dotnet --version`, what do you expect the number to describe — the executable, the runtime, or the SDK? You don't have to answer yet. The command and output below will explain it.
+**Think about this:** When you run `dotnet --version`, which version do you expect it to report—the `dotnet.exe` host, the SDK, or a .NET runtime?
 
 When you enter `dotnet --version`, it is tempting to think there's a single step called “find .NET.” There isn't.
 
