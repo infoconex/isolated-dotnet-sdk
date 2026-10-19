@@ -913,7 +913,32 @@ Microsoft's [Windows .NET installation guide](https://learn.microsoft.com/en-us/
 
 For comparison, Microsoft's [installed-versions instructions](https://learn.microsoft.com/en-us/dotnet/core/install/how-to-detect-installed-versions) use `--list-sdks` and `--list-runtimes`, while its [Windows removal guidance](https://learn.microsoft.com/en-us/dotnet/core/install/remove-runtime-sdk-versions?pivots=os-windows) explains the Installed Apps and Visual Studio Installer surfaces.
 
-### Put all seven observations together
+### Observation 8 — What version is the actual `dotnet.exe` file?
+
+The owner supplied an additional **Windows File Explorer → `C:\Program Files\dotnet\dotnet.exe` → Properties → Details** screenshot. Earlier, PowerShell resolved that very same executable path in Observation 1. The screenshot displays this file's Windows version information:
+
+| Explorer property | Observed value | What it means |
+| --- | --- | --- |
+| File description | **.NET Host** | Description of the native entry-point executable |
+| Product name | **.NET** | Product associated with the file |
+| Product version | **`10.0.13`** (shown with commit metadata) | .NET host product-version information |
+| File version | **`10.0.1326.50504`** | Windows executable file-version metadata |
+| File size | **163 KB** | Size of this `dotnet.exe` file, **not** the complete SDK/runtime installation |
+
+**Connect it to the CLI output:** `dotnet --info` reported `Host: Version 10.0.13`, which agrees with the **Product version** shown for this executable. But `dotnet --version` reported **10.0.402** because it answers an entirely different question: **which SDK was selected**. Even the Windows **File version** (`10.0.1326.50504`) is another distinct version format. The Windows metadata describes the binary, not the SDK or the runtime that an arbitrary application uses.
+
+**A useful, optional read-only PowerShell inspection** of the same file's metadata is:
+
+```powershell
+(Get-Item -LiteralPath 'C:\Program Files\dotnet\dotnet.exe').VersionInfo |
+    Select-Object FileDescription, FileVersion, ProductName, ProductVersion
+```
+
+The command above is provided **for learners to try**, and its output has **not** been supplied or observed. The *actual evidence* is the owner's File Explorer Properties screenshot. Don't label a future PowerShell result as observed until it has been run.
+
+**If the versions don't match:** First confirm that the binary whose properties you opened is the one PowerShell resolves (`Get-Command dotnet -All`). It is possible to examine the properties of one host file while executing another because of `PATH`, aliases, explicit paths, or architecture differences. Also keep the product's executable metadata distinct from its selected SDK: a newer SDK does not mean `dotnet.exe` must have that SDK's exact version number. Finally, don't interpret this small native executable's **163 KB** size as the space occupied by the associated runtimes, SDK, or user-owned isolated installations.
+
+### Put all eight observations together
 
 | Question | Relevant evidence | Actual finding or limit |
 | --- | --- | --- |
@@ -921,13 +946,14 @@ For comparison, Microsoft's [installed-versions instructions](https://learn.micr
 | Which SDK is currently selected? | `dotnet --version` | **10.0.402** |
 | Where are the selected SDK's files? | `dotnet --info` → `Base Path` | `C:\Program Files\dotnet\sdk\10.0.402\` |
 | What hosting-component version is reported? | `dotnet --info` → `Host Version` | **10.0.13** (x64) |
+| What are the executable's Windows versions? | `dotnet.exe` Properties → Details | **Product 10.0.13; File 10.0.1326.50504**; separately from SDK **10.0.402** |
 | Which system-host SDK versions are visible? | `dotnet --list-sdks` | **8.0.426, 9.0.319, 10.0.401, 10.0.402** |
 | Which runtime frameworks are visible? | `dotnet --list-runtimes` | Several .NET Core, ASP.NET Core, and Windows Desktop runtime versions; includes **6.0/7.0 runtimes without corresponding visible SDKs** |
 | Which management-tool version is reported? | Script `-Version` | **`isolated-dotnet-sdk development (main)`** |
 | What does the Windows Settings screenshot establish? | Installed Apps filter `.net` → **4 apps found** | Four x64 SDK registrations, including one Visual Studio-managed entry; **not** a complete runtime inventory |
 | Which runtime did *a particular application* use? | Would require application-specific evidence | **Not determined** by these six commands or the Installed Apps screenshot |
 
-**Takeaway:** “What version of .NET do I have?” is incomplete. First ask **which program is running**, **which SDK it selects**, **which host components are reported**, **which runtimes can be discovered**, **which runtime a specific app uses**, and **which installation-management interface is being viewed**. These are different questions with different evidence.
+**Takeaway:** A file's Windows version properties, the host's reported product version, and the selected SDK version can all be different values. “What version of .NET do I have?” is incomplete. First ask **which program is running**, **which SDK it selects**, **which host components are reported**, **which runtimes can be discovered**, **which runtime a specific app uses**, and **which installation-management interface is being viewed**. These are different questions with different evidence.
 
 Keep the Q1–Q8 reinforcement questions independent of this owner's specific versions, so the curriculum remains useful on other Windows, Linux and macOS machines.
 
