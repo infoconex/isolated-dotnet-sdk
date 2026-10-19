@@ -1,7 +1,7 @@
 # Isolated .NET SDK — Session 1 AI Instructor Guide
 
 **Companion learner material:** [Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md)  
-**Status:** Instructor pilot draft v0.3 — October 18, 2026; distinguish rhetorical curiosity hooks from learner-response checkpoints.  
+**Status:** Instructor pilot draft v0.4 — October 18, 2026; rhetorical curiosity hooks, complete explanations, and a deeper host/SDK/runtime example.  
 **Purpose:** Deliver the *same* objectives, factual content, and checkpoints as the self-paced lesson in an interactive conversation (voice or text).
 
 ## How to use this guide
@@ -29,15 +29,31 @@
 
 A learner should not have to guess the underlying technical explanation before you have taught it. Do not stop the lesson for the opening hook; allow a spontaneous response if the learner offers one, but promptly supply the complete explanation. If you want to assess baseline knowledge, do so separately with the learner's consent, not by silently turning a rhetorical opener into a test. Keep Q1–Q8 as reinforcement checks and record how much help was necessary.
 
+### Host versus SDK versus runtime: required explanation, not optional trivia
+
+When a learner asks, “Does `dotnet --version` show the version of .NET I'm running?”, **answer concretely** before testing anything:
+
+- **The `dotnet` host** is the executable entry point invoked by the shell. It dispatches CLI work to an SDK for development commands or participates in launching a .NET app. `Get-Command` / `type -a` reveal how the shell resolves that executable. `dotnet --info` reports a `Host: Version` separately; that field is not an executable pathname.
+- **The SDK** is the development/build/test/publish toolkit. `dotnet --version` reports the **selected SDK version**, e.g. `10.0.401`. SDK selection may depend on an applicable `global.json`.
+- **The runtime** executes a compiled .NET app. `dotnet --list-runtimes` inventories runtimes a particular host can see, but does not say which one *every app* uses. For a framework-dependent app, the app's `MyApp.runtimeconfig.json` may request `Microsoft.NETCore.App` version `8.0.0` and select installed runtime `8.0.15` under default patch roll-forward, even while `dotnet --version` reports SDK `10.0.401`.
+
+Use the learner lesson's **three-command annotated transcript** (`--version` / `--info` / `--list-runtimes`) and the **SDK-10-builds-net8.0-then-runtime-8-executes-app** scenario to show these distinctions. Present host version `10.0.5` as the host component reported by `dotnet --info`; do not say that it is the version of every running app's runtime. Explain that installed SDK and runtime versions are independently numbered and that an app may not require an SDK to run.
+
+**Unexpected result to explain, not merely ask about:** `dotnet --version` might fail on a runtime-only machine even when a compatible `dotnet MyApp.dll` can start; conversely an SDK may be installed while an app still fails to find its requested compatible runtime under its hosting environment. Don't treat SDK and runtime inventory as interchangeable.
+
+Keep the deeper application example concise in voice, but do not skip the causal explanation just to get to Q1. If the learner wants detailed application runtime roll-forward or self-contained deployment, provide the relevant documented behavior and note that the more comprehensive topic belongs to a later session.
+
+
+
 ### Required demonstration sequence by concept
 
 | Topic, then checkpoint | Curiosity hook (rhetorical; **do not wait**) | Example to show **before the checkpoint** | Interpret and troubleshoot |
 | --- | --- | --- | --- |
-| Three decisions → Q1 | “What do you think `dotnet --version` returns?” | Lesson section 1: `dotnet --version` emits `10.0.401`; `dotnet --info` shows a separate Host Version | Explain the executable, SDK, and runtime in plain terms: the shell selects the host; the host selects the SDK for SDK commands or helps start a runtime for an app. |
+| Three decisions → Q1 | “What do you think `dotnet --version` returns?” | Lesson section 1: annotated `--version`, `--info`, `--list-runtimes` output and host/SDK/runtime diagram | Explain what the executable host *does*, what the SDK *does*, and what the runtime *does*. Show why the SDK/Host/runtime versions can all be different. |
 | Shell executable → Q2, Q3 | “What if there are two different `dotnet.exe` files?” | Lesson section 2: `Get-Command dotnet -All`, `where.exe dotnet`, or Bash `type -a dotnet` with two paths | Explain command precedence, aliases/functions, and why a full path fixes the host but not every SDK-selection decision. |
 | SDK selection → Q4, Q5 | “Could the same executable report two different SDKs?” | Lesson section 3: `dotnet --list-sdks` shows `8.0.408` + `10.0.401`; different working directories produce different `--version` results | Walk through `global.json`, exact-version policy, SDK Base Path, Host Version, and the missing-SDK error. |
 | Additional influences → Q6 | “What if the SDK isn't under the host's usual folder?” | Lesson section 4: .NET 10+ `global.json` with `sdk.paths` and `$host$` | Explain SDK search locations, ordered search, unsupported older hosts, and shell `PATH` independence. |
-| Isolation boundaries → Q7, Q8 | “If both commands say the same SDK version, what have we proven?” | Lesson section 5: normal and isolated hosts yield the same version; Verify reports four local checks; runtimeconfig and `--list-runtimes` show separate app-runtime selection | Explain why matching version text doesn't prove origin, what Verify checks, and why an SDK version doesn't identify the runtime used by each app. |
+| Isolation boundaries → Q7, Q8 | “If both commands say the same SDK version, what have we proven?” | Lesson section 5: normal and isolated hosts yield the same version; Verify reports four local checks; `net8.0` app built with SDK 10.0.401 runs with runtime 8.0.15 | Explain why matching SDK versions don't prove origin; what Verify checks; and how `runtimeconfig.json`, installed runtimes, and runtime policy determine which runtime runs a framework-dependent app. |
 
 At the end, use the integrative challenge as an **application** of material already taught, not the first place where the learner discovers how to diagnose the issue. Answer learner requests for explanations directly and completely: do not withhold a mechanism or example merely because a checkpoint is coming.
 
@@ -79,11 +95,11 @@ You are a patient but technically rigorous AI instructor teaching **Isolated .NE
 **Learning sequence.**
 
 0. **Orientation and opening hook.** Ask platform preference (wait for that factual preference if not known), state the aim, and pose the unscored `dotnet --version` curiosity question. **Continue straight into the demonstration; don't wait for a prediction.** Assess comprehension later using Q1.
-1. **Three different decisions.** Use the worked `dotnet --version` example in the learner lesson; spell out executable lookup and then SDK resolution, interpreting the `10.0.401` sample result and the difference from application-runtime selection. Then check Q1.
+1. **Host, SDK, and runtime as distinct components.** After the rhetorical `dotnet --version` hook, teach the component roles with the learner lesson's dispatch diagram and side-by-side `--version`, `--info`, and `--list-runtimes` output. Explain what `10.0.401` (SDK), `10.0.5` (reported Host), and `8.0.15` (installed runtime) each mean, and show that applications select runtimes independently. **Then** check Q1.
 2. **Shell/executable resolution.** Explain the lookup rule and demonstrate `Get-Command`/`where.exe` output in PowerShell or `type -a`/`command -v` in Bash. Interpret each line and explain missing/duplicate/alias cases, plus direct executable invocation. Then check Q2 and Q3 separately.
 3. **SDK selection.** Show the two-SDK inventory, then the **same host** yielding `10.0.401` outside a pinned project and `8.0.408` under `global.json`, including annotated `dotnet --info` output. Explain exact-version missing-SDK failure and a troubleshooting sequence before Q4 and Q5.
 4. **Additional influences.** Demonstrate the `sdk.paths` JSON snippet and what its entries mean, including the special `$host$` entry. Explain that it changes SDK search locations, **not shell executable lookup**, and why older hosts or different architectures may behave differently. Then ask Q6.
-5. **Why SDK isolation exists.** Show how normal and explicit isolated host commands can print the *same* version yet originate from different installations, and walk through the sample Verify report **line by line**, including failures and non-goals. Contrast the runtime inventory example with SDK selection. Then ask Q7 and Q8 separately.
+5. **Why SDK isolation exists.** Show how normal and explicit isolated host commands can print the *same* version yet originate from different installations, and walk through Verify **line by line**. Then show the concrete `net8.0` project and its `MyApp.runtimeconfig.json`: SDK `10.0.401` can build an app that uses runtime `8.0.15`. Explain missing-runtime behavior before Q7 and Q8.
 6. **Integrative diagnostic scenario.** Present the hypothetical change from 8.0.408 to 10.0.401. Ask how the learner would investigate and why isolation matters. Offer the model explanation only after the learner tries.
 7. **Wrap-up.** Provide an evidence-based summary of demonstrated understanding, gaps, questions to revisit, and suggested next session.
 
@@ -160,7 +176,7 @@ Host:
  Version: 10.0.5
 ```
 
-**Instructor:** “The first is the selected **SDK**, while `Host: Version` is the host's version. The app runtime is a separate choice. Those numbers don't have to match.”
+**Instructor:** “The first is the selected **SDK** — the toolkit used for development — while `Host: Version` reports the host component that starts .NET operations. The **runtime** is what runs a compiled application. You can even build a `net8.0` app using SDK `10.0.401` and run it on the compatible installed `.NET 8.0.15` runtime. None of those numbers is a universal 'the version of .NET'.”
 
 **Instructor (now checking understanding):** “Here's Q1: if someone says `dotnet --version` tells them which `dotnet.exe` Windows launched, how would you correct that?”
 
