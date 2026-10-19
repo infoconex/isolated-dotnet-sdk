@@ -33,45 +33,11 @@ A learner should not have to guess the underlying technical explanation before y
 
 | Topic, then checkpoint | Curiosity hook (rhetorical; **do not wait**) | Example to show **before the checkpoint** | Interpret and troubleshoot |
 | --- | --- | --- | --- |
-| Three decisions → Q1 | “What do you think `dotnet --version` returns?” | Lesson section 1: `dotnet --version` emits `10.0.401` | Explain that the shell chooses the executable; the host selects the SDK, and application runtime selection is separate. Contrast the selected SDK with `dotnet --info` Host Version. |
+| Three decisions → Q1 | “What do you think `dotnet --version` returns?” | Lesson section 1: `dotnet --version` emits `10.0.401`; `dotnet --info` shows a separate Host Version | Explain the executable, SDK, and runtime in plain terms: the shell selects the host; the host selects the SDK for SDK commands or helps start a runtime for an app. |
 | Shell executable → Q2, Q3 | “What if there are two different `dotnet.exe` files?” | Lesson section 2: `Get-Command dotnet -All`, `where.exe dotnet`, or Bash `type -a dotnet` with two paths | Explain command precedence, aliases/functions, and why a full path fixes the host but not every SDK-selection decision. |
-| SDK selection → Q4, Q5 | “Could the same executable report two different SDKs?” | Lesson section 3: `dotnet --list-sdks` shows `8.0.408` + `10.0.401`; one host reports different `--version` values in two directories; abbreviated `--info` | Walk through `global.json`, exact-version policy, Base Path versus Host Version, and an incompatible-SDK failure. |
-| Additional influences → Q6 | “What if the SDK isn't under the host's usual folder?” | Lesson section 4: .NET 10+ `global.json` with `sdk.paths` and `$host# Isolated .NET SDK — Session 1 AI Instructor Guide
-
-**Companion learner material:** [Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md)  
-**Status:** Instructor pilot draft v0.3 — October 18, 2026; distinguish rhetorical curiosity hooks from learner-response checkpoints.  
-**Purpose:** Deliver the *same* objectives, factual content, and checkpoints as the self-paced lesson in an interactive conversation (voice or text).
-
-## How to use this guide
-
-1. Make the [self-paced curriculum](isolated-dotnet-sdk-session-1-self-paced.md) available to the AI instructor as reference material, alongside this guide. Copy the **ready-to-use instructor prompt** below into the trainer conversation. Attach/paste the full self-paced lesson or make sure the trainer can actually retrieve its contents. **A link by itself does not guarantee the AI has read the lesson or its answer key.**
-2. Start a new learner-facing conversation with: **“Begin Session 1 of Isolated .NET SDK training. Please teach one concept and ask one question at a time.”**
-3. Let the instructor introduce one concept and one question at a time. The learner can interrupt with questions and ask for demonstrations.
-4. After the session, capture only the learner's demonstrated explanations, misunderstandings, unanswered technical questions, and a short session summary. Do not invent command output or assessment evidence. Avoid reproducing identifying details, local usernames, machine paths, or secrets from shared diagnostic output.
-5. Compare results against the same [Q1–Q8 answer key](isolated-dotnet-sdk-session-1-self-paced.md#answer-key-and-self-check) that self-paced learners use.
-
-**Curriculum precedence:** If this guide and the self-paced document disagree about a technical fact, use the more authoritative Microsoft or product documentation, flag the discrepancy in the session notes, and do not silently make up an answer. Treat the instructor guide as teaching procedure, not an alternate technical contract.
-
-## Core teaching method: curiosity hook, demonstration, then reinforcement
-
-**Two kinds of questions have different jobs.** A brief **curiosity hook** (such as “What do you think `dotnet --version` tells us?”) is rhetorical: pose it to focus attention, **do not wait for an answer**, and promptly teach the answer with a command and output. A numbered **reinforcement checkpoint** (Q1–Q8) comes **after** teaching and *does* require a learner response. Never mistake a hook for an assessment or withhold an explanation in anticipation of a quiz.
-
-**Do not use questions as a substitute for instruction.** Each concept must follow this order:
-
-1. **Spark curiosity:** Ask one short rhetorical question about a common assumption. **Don't pause for a guess or score it.** Transition straight into the explanation.
-2. **Teach the mechanism:** Plainly say what makes the decision, which inputs affect it, and what it does not determine. Define any unfamiliar vocabulary right there.
-3. **Demonstrate:** Show an actual command and **representative output** from the self-paced lesson, labeled *illustrative* unless it came from a learner's machine. Prefer the learner's platform. In voice, explain the important output lines rather than reading a long block character by character.
-4. **Interpret:** Identify which version, pathname, or rule each line proves and which conclusions would be unwarranted. Explain the likely result and why.
-5. **Show an unexpected result:** Give at least one common counterexample (missing command, multiple executables, conflicting global.json, matching version from the wrong root, or Verify failure). Explain what to inspect to diagnose it.
-6. **Reinforce:** Only **after** the explanation and demonstration, ask **one** aligned Q1–Q8 question. Wait for the learner's answer and evaluate the reasoning, with hints and a retry if necessary.
-
-A learner should not have to guess the underlying technical explanation before you have taught it. Do not stop the lesson for the opening hook; allow a spontaneous response if the learner offers one, but promptly supply the complete explanation. If you want to assess baseline knowledge, do so separately with the learner's consent, not by silently turning a rhetorical opener into a test. Keep Q1–Q8 as reinforcement checks and record how much help was necessary.
-
-### Required demonstration sequence by concept
-
-| Topic, then checkpoint | Curiosity hook (rhetorical; **do not wait**) | Example to show **before the checkpoint** | Interpret and troubleshoot |
- | Explain SDK-search locations, ordered search, unsupported older hosts, and shell PATH independence. |
-| Isolation boundaries → Q7, Q8 | “If both commands say the same SDK version, what have we proven?” | Lesson section 5: normal host versus explicit isolated host yield the same version string; Verify reports four local checks | Explain why matching versions don't prove origin, what each Verify check confirms, and why successful Verify doesn't prove a build or runtime behavior. |
+| SDK selection → Q4, Q5 | “Could the same executable report two different SDKs?” | Lesson section 3: `dotnet --list-sdks` shows `8.0.408` + `10.0.401`; different working directories produce different `--version` results | Walk through `global.json`, exact-version policy, SDK Base Path, Host Version, and the missing-SDK error. |
+| Additional influences → Q6 | “What if the SDK isn't under the host's usual folder?” | Lesson section 4: .NET 10+ `global.json` with `sdk.paths` and `$host$` | Explain SDK search locations, ordered search, unsupported older hosts, and shell `PATH` independence. |
+| Isolation boundaries → Q7, Q8 | “If both commands say the same SDK version, what have we proven?” | Lesson section 5: normal and isolated hosts yield the same version; Verify reports four local checks; runtimeconfig and `--list-runtimes` show separate app-runtime selection | Explain why matching version text doesn't prove origin, what Verify checks, and why an SDK version doesn't identify the runtime used by each app. |
 
 At the end, use the integrative challenge as an **application** of material already taught, not the first place where the learner discovers how to diagnose the issue. Answer learner requests for explanations directly and completely: do not withhold a mechanism or example merely because a checkpoint is coming.
 
