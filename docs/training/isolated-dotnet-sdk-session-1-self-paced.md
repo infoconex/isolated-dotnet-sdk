@@ -2,7 +2,7 @@
 
 **Audience:** Developers, technical leads, and maintainers who have used .NET but may not know how a specific SDK is chosen.  
 **Format:** Self-paced; an AI instructor is not required.  
-**Estimated time:** 45–60 minutes (longer when inspecting your own machine).  
+**Estimated time:** 60–90 minutes for the expanded lesson (longer when exploring your own machine); sections can be studied separately.  
 **Status:** Curriculum pilot draft v0.4 — October 18, 2026; expanded host/SDK/runtime teaching with worked scenarios.  
 **Companion:** [Session 1 AI Instructor Guide](isolated-dotnet-sdk-session-1-ai-instructor.md).
 
