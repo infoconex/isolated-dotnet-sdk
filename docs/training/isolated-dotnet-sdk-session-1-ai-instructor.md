@@ -14,13 +14,15 @@
 
 **Curriculum precedence:** If this guide and the self-paced document disagree about a technical fact, use the more authoritative Microsoft or product documentation, flag the discrepancy in the session notes, and do not silently make up an answer. Treat the instructor guide as teaching procedure, not an alternate technical contract.
 
-## Planned real Windows output example — not yet captured
+## Real Windows observation-based teaching example
 
-The self-paced guide includes a [reviewable Windows PowerShell case-study template](isolated-dotnet-sdk-session-1-self-paced.md#7-windows-powershell-output-review-template) with **six empty result slots**: PowerShell command lookup, Microsoft `dotnet --version`, `dotnet --info`, installed SDKs, installed runtimes, and the Isolated .NET SDK tool's own `-Version` command.
+The learner guide now includes the [owner-supplied Windows PowerShell walkthrough](isolated-dotnet-sdk-session-1-self-paced.md#7-real-windows-powershell-walkthrough--observed-output). The owner provided the six actual CLI results (from PowerShell 7.6.6) and a screenshot of Windows Settings **Installed Apps** filtered for `.net`. The CLI output is sanitized, with identifying terminal prompts omitted. It is **observed owner-provided evidence**, not commands run by the AI or a reproducible test on every machine.
 
-**Instructor rule:** Until real output is supplied and reviewed, treat this section only as an *outline*. Never quote a pending slot as observed output, assume a particular host path/version, or imply the learner or owner executed the commands. Continue to use the clearly marked illustrative transcripts elsewhere in the lesson. When reviewed observations are available, teach from the captured result *and its accompanying explanation*, not by merely reading its lines.
+**Teach from the actual observations:** PowerShell resolves system `C:\Program Files\dotnet\dotnet.exe`; `dotnet --version` selects **SDK 10.0.402**; `dotnet --info` reports **Host 10.0.13** and x64 architecture; `--list-sdks` sees 8.0.426, 9.0.319, 10.0.401, and 10.0.402 under the system SDK root; `--list-runtimes` includes **6.0.36 and 7.0.20 .NET runtimes even though no corresponding 6.x or 7.x SDKs appear**; the management script `-Version` reports **`isolated-dotnet-sdk development (main)`**. Explain which component and inventory each line describes.
 
-**Output review:** Before integrating any real capture into a public lesson, remove or generalize local usernames and sensitive directories, note redactions, and retain enough path/version structure to explain the difference between shell executable resolution, SDK selection, Host version, available runtimes, and tool-release identity. Real machine output is evidence for one environment, not a general guarantee.
+**Discuss the Windows Installed Apps screenshot accurately:** It is a *Windows-managed installer/registration view*, not a replacement for `--list-sdks` / `--list-runtimes`. Package entries, different architectures, shared-framework components, and extracted isolated SDK installs can cause differences. Do not fabricate or guess exact package entries from the screenshot; the learner guide does not publish a verbatim item-by-item transcription. Do not treat the UI as evidence that any SDK or runtime was removed or selected.
+
+**Keep evidence boundaries explicit:** The owner supplied a transcript and screenshot, but no application execution trace. Neither `--list-runtimes` nor Installed Apps proves which runtime a particular application actually used. Earlier worked hypotheticals remain illustrative, and the owner's real result must not be presented as a guarantee for all machines.
 
 ## Core teaching method: curiosity hook, demonstration, then reinforcement
 
