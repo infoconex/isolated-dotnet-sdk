@@ -1,35 +1,35 @@
 # Isolated .NET SDK training curriculum
 
-This curriculum builds understanding of Microsoft's normal .NET behavior **before** explaining how Isolated .NET SDK manages SDK installations. Start with the self-paced lesson if you prefer to read independently, or use the same lesson together with the AI instructor guide for voice/text tutoring.
+This curriculum first teaches **Microsoft .NET's normal behavior**, then applies that understanding to **Isolated .NET SDK**. Each session has two aligned delivery tracks: a self-paced learner document with delayed answers, and an AI instructor guide for conversational teaching.
 
-## Session 1 — How `dotnet` is resolved, and why isolation matters
+## Session 1 — Understanding .NET and how it selects components
 
-**Status:** Pilot draft (example-first revision); ready for learner review, not yet pedagogically validated. **Estimated learner time:** Approximately 60–90 minutes for the expanded self-paced lesson, which can be divided into shorter sessions.
+**Status:** Reorganized pilot draft, pending a fresh learner and technical review. The lesson can be studied in shorter sittings; timing should be reassessed in the pilot.
 
-- **[Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md):** Begins with [six foundational terms](isolated-dotnet-sdk-session-1-self-paced.md#key-terms). Teaches resolution through Windows PowerShell/Bash examples, the shared-versus-isolated-host distinction in Section 5, and an optional real-world Windows filesystem and tooling investigation in Section 7. Includes expected/unexpected output explanations and Q1–Q8 reinforcement with an answer key. No AI required.
-- **[Session 1 AI instructor guide](isolated-dotnet-sdk-session-1-ai-instructor.md):** Copy-ready teaching prompt, one-question-at-a-time sequence, matching Q1–Q8 hint/evaluation guidance, and a session-summary template.
+- **[Self-paced Session 1](isolated-dotnet-sdk-session-1-self-paced.md):** Start with [six key terms](isolated-dotnet-sdk-session-1-self-paced.md#key-terms). Learn [Concept 1: the host and executable lookup](isolated-dotnet-sdk-session-1-self-paced.md#concept-1-understanding-the-net-host), [Concept 2: SDK selection](isolated-dotnet-sdk-session-1-self-paced.md#concept-2-understanding-how-net-selects-an-sdk), and [Concept 3: application runtime selection](isolated-dotnet-sdk-session-1-self-paced.md#concept-3-understanding-application-runtime-selection). Understand why the components exist, how they work, common misconceptions, and what command output really proves. Attempt Q1–Q8 **before** checking the [separate answer key](isolated-dotnet-sdk-session-1-self-paced.md#answer-key-and-self-assessment). **Q6 is advanced and optional**; the other seven checkpoints assess foundational concepts.
+- **[Session 1 AI instructor guide](isolated-dotnet-sdk-session-1-ai-instructor.md):** A complete ready-to-use presenter prompt, one-question-at-a-time instruction, shared Q1–Q8 hints and scoring, voice-friendly examples, owner-observation safeguards, and a session notes template.
 
-**Teaching order:** Start with only the six foundational definitions, then teach Section 1 using a rhetorical *“What do you think?”* hook (no answer required) followed immediately by a command, representative output, and explanation. Introduce the [shared-versus-isolated-host comparison in Section 5](isolated-dotnet-sdk-session-1-self-paced.md#shared-system-host-versus-one-host-per-isolated-sdk); leave [hostfxr, SDK-feature-band and workload-manifest folder evidence for Section 7](isolated-dotnet-sdk-session-1-self-paced.md#additional-filesystem-evidence-hostfxr-sdks-and-workload-manifests). Ask separate questions only after teaching. For version-related commands, explicitly identify whether the number refers to our management tool, Microsoft's selected SDK, the .NET host, or an application runtime. The questions are not a substitute for instruction.
+**Optional applied evidence:** [Real Windows installation walkthrough](isolated-dotnet-sdk-session-1-self-paced.md#optional-evidence-walkthrough-a-real-windows-net-installation) interprets owner-supplied PowerShell output and screenshots for host identity, SDK selection and inventory, installed runtime frameworks, Windows installed-app registrations, host metadata, `host\fxr`, SDK folders, and workload manifests. **No app-specific runtime selection was observed.** This walkthrough is separate from the earlier illustrative versions and adds no required checkpoint.
 
-**Observed Windows walkthrough:** [Review the interpreted owner-supplied PowerShell results and Windows Installed Apps comparison](isolated-dotnet-sdk-session-1-self-paced.md#7-real-windows-powershell-walkthrough). The lesson now contains sanitized actual CLI output for executable lookup, selected SDK, `dotnet --info`, four installed SDKs, multiple runtime frameworks, and the management tool's development-source identity. The fuller Windows screenshot was filtered for `.net` and showed `4 apps found`; the guide transcribes all four visible SDK entries and explains how Windows installer registration differs from CLI SDK/runtime discovery. It also teaches why .NET 6/7 **core and desktop runtimes** can remain visible while the corresponding SDKs and ASP.NET Core shared frameworks are absent. The Installed Apps screenshot is transcribed, and a second screenshot of the actual `dotnet.exe` file's Windows Properties demonstrates **Product version 10.0.13**, **File version 10.0.1326.50504**, and selected **SDK 10.0.402** as different concepts. Neither screenshot image is embedded.
-
-The self-paced lesson owns the technical explanations and canonical answer key. The instructor guide owns the teaching procedure. If there is a factual conflict, current Microsoft documentation and this repository's command/concept contracts take precedence; log the discrepancy rather than inventing a new guarantee.
+**Teaching principle:** Organize around the why, components, mechanisms, misconceptions, and evidence—not a tour of CLI commands. Commands support the concept when they answer a real question. Keep Microsoft's SDK selection and application runtime selection separate; inventory is not proof of actual selection.
 
 ### Choosing a format
 
-**Reading on your own:** Work through the self-paced lesson, attempt each question before opening its answer, and use linked sections and references to resolve confusion. Exercises do not require installing or changing SDKs; invoking the .NET CLI can still produce normal first-run state or telemetry. A local .NET installation is optional.
+**Self-paced:** Read in sequence, answer each checkpoint before viewing its A-numbered response, and return to the linked explanation when uncertain. Exercises do not require installing .NET or editing environment settings. Even read-only-looking CLI invocations may produce normal first-run state or telemetry.
 
-**Learning with an AI instructor:** Supply both lesson and instructor guide to the AI presenter (for example, as attached documents), use its opening prompt, and let the instructor pause for each response. Ensure the trainer can actually access the full learner lesson and answer key; merely sending a link may not provide the contents. Voice or text both work. Do not claim that an AI can inspect local machine state or verify learner answers without evidence; paste actual command output when interpretation is needed.
+**AI-led:** Supply the full learner guide and instructor guide to the presenter. Start with the [ready-to-use AI prompt](isolated-dotnet-sdk-session-1-ai-instructor.md#ready-to-use-instructor-prompt). The instructor must actually have access to the source material; a URL alone does not establish access. Voice and text are supported. Do not claim to have observed a learner's computer without actual provided evidence.
 
-**Evaluating the pilot:** Compare learning outcomes with the same Q1–Q8 checkpoints, independent answers, an integrative diagnostic exercise, and recorded misconceptions. Use the instructor guide's feedback template to propose revisions **before** expanding the training series.
+**Pilot evaluation:** Compare the same Q1–Q8 concept checks between self-paced and instructor-led learning, distinguishing independent explanations from answers requiring hints. Capture teaching defects and fatigue before deciding how to expand the curriculum.
 
 ## Future sessions
 
-The next proposed session covers installing and verifying isolated SDKs, including archive integrity, staging, promotion, and the exact-version/origin guarantees. Further sessions may cover runtime selection, removal/recovery, audit, and implementation internals. These are planning ideas, not published lessons or an approved full curriculum.
+**[Session 2 — Understanding Isolated .NET SDK (Issue #213)](https://github.com/infoconex/isolated-dotnet-sdk/issues/213)** is planned, not yet written. It will explain why separate installation roots help, how product installation and host invocation work, what Verify checks about version and origin, the limits of isolation, and lifecycle operations. The product-specific examples removed from the original Session 1 pilot are preserved through pinned historical sources in that issue.
+
+Additional later sessions may cover advanced deployment, editor integration, SDK lifecycle, recovery, auditing, and implementation internals. No full sequence is yet committed.
 
 ## Related documentation
 
 - [Documentation home](../README.md)
-- [Project and editor use](../guides/project-editor-usage.md)
+- [Microsoft .NET SDK selection](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)
+- [Product overview](../../README.md)
 - [Verify command contract](../commands/verify.md)
-- [Project overview](../../README.md)
