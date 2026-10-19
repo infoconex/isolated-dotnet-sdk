@@ -220,16 +220,15 @@ This number identifies **the SDK selected for the invocation**, not the host exe
 | Will my projects use SDK 10? | **It depends on SDK selection. Concept 2 answers this next.** |
 | Will my apps execute with runtime 10? | Not necessarily; Concept 3 explains this. |
 
-**Q1.** A developer says their `dotnet.exe` must be version 10.0.401 because `dotnet --version` prints 10.0.401. Explain what is wrong. Need a hint? Revisit [what the command establishes](#what-does-dotnet---version-actually-establish), then consult [A1](#a1) after your attempt.
-
 ### Checkpoint: executable resolution
 
-**Q2.** A computer has two `dotnet.exe` files in different directories. Does the newer SDK installation automatically guarantee that its executable is the one launched by `dotnet`? Explain.
+**Q1.** A computer has two `dotnet.exe` files in different directories. Does the newer SDK installation automatically guarantee that its executable is the one launched by `dotnet`? Explain.
 
-**Q3.** Why is an explicit path such as `& "C:\Program Files\dotnet\dotnet.exe" --version` more predictable than typing `dotnet --version`? What does it *not* guarantee by itself?
+**Q2.** Why is an explicit path such as `& "C:\Program Files\dotnet\dotnet.exe" --version` more predictable than typing `dotnet --version`? What does it *not* guarantee by itself?
 
-Need a hint? Revisit [which executable the shell starts](#which-dotnetexe-does-the-shell-start), and consult [A2](#a2) and [A3](#a3) only after attempting the questions.
+**Q3.** A developer says their `dotnet.exe` must be version 10.0.401 because `dotnet --version` prints 10.0.401. Explain what is wrong.
 
+Need a hint? For Q1–Q2, revisit [which executable the shell starts](#which-dotnetexe-does-the-shell-start), and consult [A1](#a1) and [A2](#a2) only after attempting the questions. For Q3, revisit [what the command establishes](#what-does-dotnet---version-actually-establish), then consult [A3](#a3) after your attempt.
 
 **Transition:** The shell has started the host. **How does .NET now decide which SDK to use?**
 
@@ -598,15 +597,15 @@ Need a hint? Revisit [the runtime scenario](#worked-example-sdk-10-builds-a-net-
 
 ### A1
 
-`dotnet --version` identifies the **selected SDK**, not the host binary's file version or runtime a particular application uses.
+The shell decides which `dotnet` command is resolved, considering aliases/functions, executable lookup and `PATH`. Installing the newest SDK alone doesn't establish what starts.
 
 ### A2
 
-The shell decides which `dotnet` command is resolved, considering aliases/functions, executable lookup and `PATH`. Installing the newest SDK alone doesn't establish what starts.
+A full path fixes the **host executable file**, but not necessarily the selected SDK under applicable SDK policy or which runtime an application executes with.
 
 ### A3
 
-A full path fixes the **host executable file**, but not necessarily the selected SDK under applicable SDK policy or which runtime an application executes with.
+`dotnet --version` identifies the **selected SDK**, not the host binary's file version or runtime a particular application uses.
 
 ### A4
 
