@@ -225,6 +225,7 @@ type -a dotnet
 **Interpret:** What type of command appears first? Which executable would your *current shell* launch? Can you conclude that no other `dotnet` executables exist on the computer? A missing command is also a valid finding; no installation is necessary.
 
 **If you want to discuss your results:** Share sanitized output with an AI instructor and explain what it proves before proceeding to Concept 2.
+
 **Transition:** The shell has started the host. **How does .NET now decide which SDK to use?**
 
 ## Concept 2: Understanding How .NET Selects an SDK
@@ -428,7 +429,7 @@ Need a hint? Revisit [additional SDK influences](#additional-influences-to-recog
 
 ### Try it yourself — Concept 2: Inspect SDK selection
 
-**Optional · about 2–3 minutes.** If `dotnet` is available, run these commands in the **same working directory**. As with other .NET CLI commands, normal first-run setup or telemetry may occur; see the [safety note](#why-start-here) and [Microsoft's settings](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
+**Optional · about 2–3 minutes.** If `dotnet` is available, run these commands in the **same working directory**. As with other .NET CLI commands, normal first-run setup or telemetry may occur, as noted at the start of this lesson and in [Microsoft's settings](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
 
 ```text
 dotnet --version
@@ -441,6 +442,7 @@ dotnet --info
 If the commands fail, or only runtimes are installed, record that finding without trying to fix or install anything. You can answer these interpretation questions using the [Concept 2 examples](#a-worked-example) instead. Do not create or edit a `global.json` for this activity.
 
 **If you want to discuss your results:** Share sanitized output with an AI instructor. Explain the difference between *SDK inventory* and *SDK selection* before proceeding to Concept 3.
+
 **Transition:** We've seen how .NET selects the SDK used to build an application. **How does it select the runtime that executes that application?**
 
 ## Concept 3: Understanding Application Runtime Selection
@@ -600,6 +602,7 @@ dotnet --list-runtimes
 **Reflection:** Consider your results from all three optional activities. Which observation describes the shell's executable, which describes SDK selection, and which describes available runtimes? Identify one conclusion the gathered evidence **cannot** justify. You can discuss sanitized results with an AI instructor or use the worked examples if you did not run commands.
 
 **Preserved reference:** The project's [Windows installation observations](windows-dotnet-installation-observations.md) are archived for future review, not assigned reading or an approved walkthrough. You do not need to match their outputs.
+
 ## Answer key and self-assessment
 
 **Use after attempting the questions.** An adequate answer explains the mechanism, not merely the command spelling.
