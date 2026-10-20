@@ -22,7 +22,7 @@ These are distinct questions. We will explain **why** the distinctions matter, *
 
 ### How to study
 
-Study Concepts 1–3 in order. Read the explanations and worked examples, then attempt each concept's checkpoints. Some commands include a brief invitation to **try them on your own computer** as you read; doing so is entirely optional and never affects completion. You can learn from the illustrative outputs without running anything. Use the hints if stuck and consult the [answer key](#answer-key-and-self-assessment) after attempting Q1–Q8. Q6 is an optional advanced checkpoint.
+Study Concepts 1–3 in order. **Finish a concept's explanation, worked examples, interpretation, and misconceptions before attempting its checkpoints.** These are checks of concepts already taught, not prompts to discover rules by guessing. An AI instructor should teach the entire concept before asking its canonical questions, one at a time, and advance through ordinary teaching transitions without asking for permission to continue. Some commands include a brief invitation to **try them on your own computer** as you read; doing so is optional and never affects completion. You can learn from the illustrative outputs without running anything. Use the hints if stuck and consult the [answer key](#answer-key-and-self-assessment) after attempting Q1–Q8. Q6 is an optional advanced checkpoint.
 
 ### Learning outcomes
 
@@ -202,6 +202,10 @@ This number identifies **the SDK selected for the invocation**, not the host exe
 | Will my projects use SDK 10? | **It depends on SDK selection. Concept 2 answers this next.** |
 | Will my apps execute with runtime 10? | Not necessarily; Concept 3 explains this. |
 
+### Synthesis before checking understanding
+
+Follow the entire example through without answering a question yet. Suppose `C:\Tools\dotnet` precedes `C:\Program Files\dotnet` on PowerShell's `PATH`, with no `dotnet` alias or function. Typing `dotnet` starts the executable in Tools; invoking `& "C:\Program Files\dotnet\dotnet.exe" --version` starts the Program Files executable instead. In either case, the reported `--version` value identifies the **SDK subsequently selected**, not the host file version. A single host can have multiple SDKs available; changing the invocation directory or applicable SDK policy can change the selection. These mechanisms—not a guess about whichever number is newest—explain the outcomes.
+
 ### Checkpoint: executable resolution
 
 **Q1.** A computer has two `dotnet.exe` files in different directories. Does the newer SDK installation automatically guarantee that its executable is the one launched by `dotnet`? Explain.
@@ -362,14 +366,6 @@ This is **correct behavior**, not evidence that .NET is broken. The project aske
 
 **Important:** This example concerns SDK resolution by the CLI's `dotnet` host (also called the *muxer*). Microsoft documents a separate starting directory for the MSBuild project SDK resolver during builds. See the [Microsoft `global.json` reference](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json).
 
-### Checkpoint: SDK selection
-
-**Q4.** Can `dotnet --version` report different values in two directories even if `Get-Command dotnet` identifies the same executable in both? Why?
-
-**Q5.** A `global.json` specifies `8.0.408` with `"rollForward": "disable"`, but the current host cannot find that SDK. Should .NET pick `10.0.401` anyway? Why or why not?
-
-Need a hint? Revisit [Concept 2](#concept-2-understanding-how-net-selects-an-sdk), then [A4](#a4) and [A5](#a5) after attempting the questions.
-
 ### Additional influences to recognize, not memorize yet
 
 **Think about this:** What if an SDK is installed in another folder, but the running `dotnet` host does not normally look there? We will explain SDK search roots and why they are distinct from shell `PATH`.
@@ -416,6 +412,14 @@ A .NET 10 or newer host can read `sdk.paths` in `global.json`. That setting affe
 **If a .NET 10+ host finds the version only through the first entry, it can use that SDK without modifying system `PATH`.** If neither location has a compatible SDK, resolution fails. Older hosts ignore `sdk.paths`, so this example must not be treated as universal across all versions.
 
 Other influences do not need a full lesson yet: preview SDKs may be considered differently inside and outside Visual Studio; x86, x64 and Arm64 host installations can expose different SDK inventories; editor builds and CI tasks may launch a different `dotnet` than your interactive shell. Each is a reason to examine **actual host, actual environment, and actual SDK policy** rather than assume that “latest installed” answers everything.
+
+### Checkpoint: SDK selection
+
+**Q4.** Can `dotnet --version` report different values in two directories even if `Get-Command dotnet` identifies the same executable in both? Why?
+
+**Q5.** A `global.json` specifies `8.0.408` with `"rollForward": "disable"`, but the current host cannot find that SDK. Should .NET pick `10.0.401` anyway? Why or why not?
+
+Need a hint? Revisit [Concept 2](#concept-2-understanding-how-net-selects-an-sdk), then [A4](#a4) and [A5](#a5) after attempting the questions.
 
 ### Optional advanced SDK checkpoint
 
