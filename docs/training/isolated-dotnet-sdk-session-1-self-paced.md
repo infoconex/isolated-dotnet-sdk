@@ -22,7 +22,7 @@ These are distinct questions. We will explain **why** the distinctions matter, *
 
 ### How to study
 
-Study Concepts 1–3 in order. For each concept, read the explanation and worked examples, then answer its checkpoints. A short **Try It Yourself** activity follows each checkpoint group if you want to inspect your own computer before continuing. These activities are optional, never graded, and require no installation or configuration changes. Use the hints if stuck and consult the [answer key](#answer-key-and-self-assessment) after attempting Q1–Q8. Q6 is an optional advanced checkpoint.
+Study Concepts 1–3 in order. Read the explanations and worked examples, then attempt each concept's checkpoints. Some commands include a brief invitation to **try them on your own computer** as you read; doing so is entirely optional and never affects completion. You can learn from the illustrative outputs without running anything. Use the hints if stuck and consult the [answer key](#answer-key-and-self-assessment) after attempting Q1–Q8. Q6 is an optional advanced checkpoint.
 
 ### Learning outcomes
 
@@ -120,6 +120,8 @@ Application  dotnet.exe  C:\Tools\dotnet\dotnet.exe
 
 **Read it row by row.** `Application` means PowerShell found a native executable; `Source` identifies its file location. Here the first matching executable comes from `C:\Program Files\dotnet`. The second is another candidate — *not* another SDK version inside the first installation.
 
+*Optional:* If you're using PowerShell, try the `Get-Command` command above. Which command type and location do you see? Your output may differ; it doesn't describe every installation on disk.
+
 To inspect executable candidates on the Windows executable search path, compare:
 
 ```powershell
@@ -152,6 +154,8 @@ dotnet is /opt/dotnet/dotnet
 
 The two `type -a` lines list ways the name can be found; `command -v` reports the current command interpretation compactly. The first executable is under `/usr/share/dotnet`. A Bash function or alias can change what a bare `dotnet` means, so don't assume that this is always a filesystem-only lookup.
 
+*Optional:* In Bash, you can run these commands to see how your shell currently resolves `dotnet`. A missing command or a different path is a valid result.
+
 ### If the result is surprising
 
 - **Command not found:** No usable command named `dotnet` was resolved by that shell. It does **not** prove there is no SDK anywhere on disk; another host might exist outside `PATH`.
@@ -176,6 +180,8 @@ Illustrative output:
 ```
 
 This number identifies **the SDK selected for the invocation**, not the host executable's file version, the SDK every project will use, or the runtime a particular application loaded. Commands are evidence for a question, not interchangeable definitions of "the .NET version."
+
+*Optional:* Run `dotnet --version` from your current directory if you'd like to see your selected SDK. It may differ from this illustrative output, and it still doesn't identify the host file's version.
 
 ### Common misconceptions
 
@@ -205,26 +211,6 @@ This number identifies **the SDK selected for the invocation**, not the host exe
 **Q3.** A developer says their `dotnet.exe` must be version 10.0.401 because `dotnet --version` prints 10.0.401. Explain what is wrong.
 
 Need a hint? For Q1–Q2, revisit [which executable the shell starts](#which-dotnetexe-does-the-shell-start), and consult [A1](#a1) and [A2](#a2) only after attempting the questions. For Q3, revisit [what the command establishes](#what-does-dotnet---version-actually-establish), then consult [A3](#a3) after your attempt.
-
-### Try it yourself — Concept 1: Find the executable
-
-**Optional · about 2–3 minutes.** Check what your own shell resolves. Version numbers and paths need not match the illustrative examples. You may skip this activity, or reason from the examples above if you cannot run commands. Do not change your system settings. If sharing results with an AI instructor, first remove private usernames and paths.
-
-**Windows / PowerShell**
-
-```powershell
-Get-Command dotnet -All | Select-Object CommandType, Name, Source, Definition
-```
-
-**Linux or macOS / Bash**
-
-```bash
-type -a dotnet
-```
-
-**Interpret:** What type of command appears first? Which executable would your *current shell* launch? Can you conclude that no other `dotnet` executables exist on the computer? A missing command is also a valid finding; no installation is necessary.
-
-**If you want to discuss your results:** Share sanitized output with an AI instructor and explain what it proves before proceeding to Concept 2.
 
 **Transition:** The shell has started the host. **How does .NET now decide which SDK to use?**
 
@@ -303,6 +289,8 @@ Illustrative output:
 
 **How to read it:** each row contains an *installed SDK version* followed by the directory containing the SDK version subfolders. It is an inventory from the running host, **not** proof that both SDKs will be selected automatically and **not** a list of all SDKs on the entire disk. In this example, the SDKs live under `C:\Program Files\dotnet\sdk\8.0.408` and `C:\Program Files\dotnet\sdk\10.0.401`.
 
+*Optional:* If `dotnet` is available, run `dotnet --list-sdks` to compare **your** visible SDKs with the SDK selected by `dotnet --version` in the same directory. Don't change `global.json` to force a particular result.
+
 From a folder with no applicable `global.json`:
 
 ```powershell
@@ -357,6 +345,8 @@ Read each part separately:
 - **`Base Path`:** where the selected SDK's files live; here it agrees with the `8.0.408` installation.
 - **`Host Version`:** `10.0.5` illustrates an independent host/runtime component version. It is **not** the SDK version and should not be assumed equal to it. Actual host versions vary by installation.
 - **`.NET SDKs installed`:** the inventory still contains **both** SDKs. Being listed doesn't mean an SDK was selected.
+
+*Optional:* Run `dotnet --info` to inspect the reported host version and selected SDK base path on your machine. These fields may differ from the example; they aren't interchangeable.
 
 ### Unexpected output: when the version can't be selected
 
@@ -427,22 +417,6 @@ Other influences do not need a full lesson yet: preview SDKs may be considered d
 
 Need a hint? Revisit [additional SDK influences](#additional-influences-to-recognize-not-memorize-yet), then [A6](#a6) after your optional attempt.
 
-### Try it yourself — Concept 2: Inspect SDK selection
-
-**Optional · about 2–3 minutes.** If `dotnet` is available, run these commands in the **same working directory**. As with other .NET CLI commands, normal first-run setup or telemetry may occur, as noted at the start of this lesson and in [Microsoft's settings](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry).
-
-```text
-dotnet --version
-dotnet --list-sdks
-dotnet --info
-```
-
-**Interpret:** Which SDK was selected, and which SDK versions are visible to the host? What do the SDK `Base Path` and reported `Host` version represent? Would the same host necessarily select the same SDK in a different working directory?
-
-If the commands fail, or only runtimes are installed, record that finding without trying to fix or install anything. You can answer these interpretation questions using the [Concept 2 examples](#a-worked-example) instead. Do not create or edit a `global.json` for this activity.
-
-**If you want to discuss your results:** Share sanitized output with an AI instructor. Explain the difference between *SDK inventory* and *SDK selection* before proceeding to Concept 3.
-
 **Transition:** We've seen how .NET selects the SDK used to build an application. **How does it select the runtime that executes that application?**
 
 ## Concept 3: Understanding Application Runtime Selection
@@ -485,6 +459,8 @@ Microsoft.NETCore.App 10.0.5 [C:\Program Files\dotnet\shared\Microsoft.NETCore.A
 ```
 
 This lists runtimes the current host can see. **It does not tell you which runtime every application will use.** That depends on a particular application's runtime configuration and applicable runtime-selection rules. A machine may select SDK `10.0.401` for a build yet run an application using a .NET 8 runtime. SDK selection and runtime selection answer different questions.
+
+*Optional:* Run `dotnet --list-runtimes` to inspect your visible runtime families. The list alone cannot prove which runtime any particular application loaded; no application launch is needed for this lesson.
 
 ### Worked example: SDK 10 builds a .NET 8 application
 
@@ -587,22 +563,6 @@ Installing SDK 10 didn't necessarily change the host PowerShell launched. It may
 
 Need a hint? Revisit [the runtime scenario](#worked-example-sdk-10-builds-a-net-8-application) and [inventory versus selection](#why-runtime-inventory-isnt-runtime-selection), then consult [A7](#a7) and [A8](#a8).
 
-### Try it yourself — Concept 3: Inspect runtime availability
-
-**Optional · about 2–3 minutes.** If the `dotnet` command is available, examine the shared runtimes it can see:
-
-```text
-dotnet --list-runtimes
-```
-
-**Interpret:** Which framework families and versions are listed? Do some runtime versions lack a corresponding SDK version? Is that inherently an error? **Can this list tell you which runtime a particular application actually loaded?**
-
-**Evidence boundary:** This command is an inventory, not proof of application execution. Establishing an application's actual runtime would require application-specific configuration, launch context and execution evidence. No app build or launch is required in Session 1.
-
-**Reflection:** Consider your results from all three optional activities. Which observation describes the shell's executable, which describes SDK selection, and which describes available runtimes? Identify one conclusion the gathered evidence **cannot** justify. You can discuss sanitized results with an AI instructor or use the worked examples if you did not run commands.
-
-**Preserved reference:** The project's [Windows installation observations](windows-dotnet-installation-observations.md) are archived for future review, not assigned reading or an approved walkthrough. You do not need to match their outputs.
-
 ## Answer key and self-assessment
 
 **Use after attempting the questions.** An adequate answer explains the mechanism, not merely the command spelling.
@@ -641,7 +601,7 @@ The only established fact is that the invoked `dotnet --version` selected **SDK 
 
 ### Session 1 pass criteria
 
-The learner can explain executable, SDK and runtime resolution; what governs them; why an inventory isn't a selection; and how to diagnose unsupported assumptions. **Required checkpoints:** Q1–Q5, Q7–Q8. **Optional advanced:** Q6. All three Try It Yourself activities are optional; live commands and application launches are not needed to pass.
+The learner can explain executable, SDK and runtime resolution; what governs them; why an inventory isn't a selection; and how to diagnose unsupported assumptions. **Required checkpoints:** Q1–Q5, Q7–Q8. **Optional advanced:** Q6. Running commands on your own computer is optional; no live inspection, build, or application launch is needed to pass.
 
 ## Microsoft references
 
