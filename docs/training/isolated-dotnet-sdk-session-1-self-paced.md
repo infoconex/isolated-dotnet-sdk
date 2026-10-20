@@ -89,77 +89,77 @@ The two paths serve different purposes. The left path is about **developing** an
 
 
 
-### Which \`dotnet.exe\` does the shell start?
+### Which `dotnet.exe` does the shell start?
 
-In a typical 64-bit Windows installation, SDK versions share one .NET installation root and one host executable path. For example, installing SDK 10 alongside SDK 8 in \`C:\Program Files\dotnet\` normally adds an SDK directory, **not** another \`dotnet.exe\` path. The shared host components can be serviced, but the command still normally resolves to the same location.
+In a typical 64-bit Windows installation, SDK versions share one .NET installation root and one host executable path. For example, installing SDK 10 alongside SDK 8 in `C:\Program Files\dotnet` normally adds an SDK directory, **not** another `dotnet.exe` path. The shared host components can be serviced, but the command still normally resolves to the same location.
 
-When you type \`dotnet\`, **PowerShell first decides which command that name means**. SDK selection happens afterward.
+When you type `dotnet`, **PowerShell first decides which command that name means**. SDK selection happens afterward.
 
-- Normally, PowerShell finds the native executable using directories on \`PATH\`.
-- An alias or PowerShell function named \`dotnet\` can take precedence. Inspect the command type and location instead of assuming every match is an executable.
+- Normally, PowerShell finds the native executable using directories on `PATH`.
+- An alias or PowerShell function named `dotnet` can take precedence. Inspect the command type and location instead of assuming every match is an executable.
 - An **explicit executable path** chooses a particular host file; it does not itself choose a specific SDK.
 - IDEs, build tasks, terminals, and CI runners can have different environments or invoke a host by full path. Your interactive shell's result doesn't prove what another process launches.
 
-### Worked example: resolving \`dotnet\` on Windows
+### Worked example: resolving `dotnet` on Windows
 
 A normal side-by-side SDK installation can look like this:
 
-\`\`\`text
+```text
 C:\Program Files\dotnet\
     dotnet.exe
     sdk\
         8.0.408\
         10.0.401\
-\`\`\`
+```
 
-There are **two SDK versions but one host executable** in this installation root. To see what PowerShell resolves when you enter \`dotnet\`:
+There are **two SDK versions but one host executable** in this installation root. To see what PowerShell resolves when you enter `dotnet`:
 
-\`\`\`powershell
+```powershell
 Get-Command dotnet | Select-Object CommandType, Name, Source
-\`\`\`
+```
 
 Illustrative output:
 
-\`\`\`text
+```text
 CommandType  Name        Source
 -----------  ----        ------
 Application  dotnet.exe  C:\Program Files\dotnet\dotnet.exe
-\`\`\`
+```
 
-\`Application\` identifies a native executable, and \`Source\` gives its path. This tells us which \`dotnet\` command PowerShell finds here; it does **not** tell us which SDK version .NET will select.
+`Application` identifies a native executable, and `Source` gives its path. This tells us which `dotnet` command PowerShell finds here; it does **not** tell us which SDK version .NET will select.
 
 For further diagnosis, you can use:
 
-\`\`\`powershell
+```powershell
 Get-Command dotnet -All | Select-Object CommandType, Name, Source
 where.exe dotnet
-\`\`\`
+```
 
-In this ordinary illustrative setup, both commands show only the Program Files executable. \`Get-Command -All\` can also reveal additional command interpretations, including aliases or functions. \`where.exe\` finds executable files using Windows search locations (including the current directory and \`PATH\`); it does not account for PowerShell aliases and functions, so it isn't always proof of what bare \`dotnet\` invokes.
+In this ordinary illustrative setup, both commands show only the Program Files executable. `Get-Command -All` can also reveal additional command interpretations, including aliases or functions. `where.exe` finds executable files using Windows search locations (including the current directory and `PATH`); it does not account for PowerShell aliases and functions, so it isn't always proof of what bare `dotnet` invokes.
 
-**What if multiple executable paths appear?** That is a diagnostic exception to investigate, not what installing another SDK version into the same root normally does. A computer might also contain \`C:\Program Files (x86)\dotnet\dotnet.exe\` for x86, or \`C:\Tools\dotnet\dotnet.exe\` from a separate installation. Those paths only compete during command lookup if they are discoverable in the relevant environment; merely existing on disk is not enough.
+**What if multiple executable paths appear?** That is a diagnostic exception to investigate, not what installing another SDK version into the same root normally does. A computer might also contain `C:\Program Files (x86)\dotnet\dotnet.exe` for x86, or `C:\Tools\dotnet\dotnet.exe` from a separate installation. Those paths only compete during command lookup if they are discoverable in the relevant environment; merely existing on disk is not enough.
 
-If you see multiple matches, identify **which executable PowerShell actually selects** with \`Get-Command dotnet\`, check their architecture or installation roots, and inspect command precedence and \`PATH\` if the choice is unexpected. For example, if a separate Tools root precedes Program Files on \`PATH\` and no alias/function overrides it, the Tools executable wins. This is about **host executable selection**, not which SDK directory exists beneath an installation root.
+If you see multiple matches, identify **which executable PowerShell actually selects** with `Get-Command dotnet`, check their architecture or installation roots, and inspect command precedence and `PATH` if the choice is unexpected. For example, if a separate Tools root precedes Program Files on `PATH` and no alias/function overrides it, the Tools executable wins. This is about **host executable selection**, not which SDK directory exists beneath an installation root.
 
-*Optional:* Run \`Get-Command dotnet\` or the other inspection commands in your PowerShell session if you wish. Your result can differ, and none of these commands scans the entire disk or proves which runtime an application loaded.
+*Optional:* Run `Get-Command dotnet` or the other inspection commands in your PowerShell session if you wish. Your result can differ, and none of these commands scans the entire disk or proves which runtime an application loaded.
 
 ### The equivalent example in Bash (Linux or macOS)
 
-A conventional Linux installation can also have one \`dotnet\` host with several SDK versions beneath its installation root. Bash first resolves the **command**, before .NET selects an SDK.
+A conventional Linux installation can also have one `dotnet` host with several SDK versions beneath its installation root. Bash first resolves the **command**, before .NET selects an SDK.
 
-\`\`\`bash
+```bash
 type -a dotnet
 command -v dotnet
-\`\`\`
+```
 
 Illustrative output on a Linux machine with one discoverable host:
 
-\`\`\`text
+```text
 dotnet is /usr/share/dotnet/dotnet
 /usr/share/dotnet/dotnet
-\`\`\`
+```
 
-\`type -a\` lists how Bash can resolve the name, while \`command -v\` reports its current interpretation compactly. If a separate installation (for example under \`/opt/dotnet\`) is also discoverable, \`type -a\` may list another executable path. An alias, function, or shell command-lookup behavior can affect what runs. Multiple SDK versions under one installation do **not** mean Bash must find multiple host paths.
+`type -a` lists how Bash can resolve the name, while `command -v` reports its current interpretation compactly. If a separate installation (for example under `/opt/dotnet`) is also discoverable, `type -a` may list another executable path. An alias, function, or shell command-lookup behavior can affect what runs. Multiple SDK versions under one installation do **not** mean Bash must find multiple host paths.
 
 *Optional:* Run these commands if you're using Bash. Missing or different results are valid; they do not prove every installation on disk.
 
