@@ -243,6 +243,12 @@ In a typical terminal invocation:
 
 For precise matching rules, see [Microsoft's SDK policy table](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json#rollforward).
 
+### Feature bands and prerelease eligibility: two useful distinctions
+
+SDK versions such as `8.0.100` and `8.0.200` belong to different **feature bands**. If `global.json` requests `8.0.100` with the default `patch` policy, a later patch in the `8.0.1xx` band may satisfy it; `8.0.200` does not become eligible merely because it is newer. Broader policies such as `feature` can permit crossing feature bands. This matters when two developers have different installed SDK inventories.
+
+Preview and release-candidate (RC) SDKs are **prerelease** builds; a generally available (GA) release is not. For standalone .NET CLI use, `allowPrerelease` defaults to `true` when omitted; Visual Studio can apply different defaults depending on its preview settings. Consequently, do not teach that the CLI always prefers the newest stable SDK over an eligible newer prerelease. A GA release is a separately installed SDK, not an automatic conversion of a previously installed RC.
+
 ### A worked example
 
 Assume the shell launched the *same* executable in both cases: `C:\Program Files\dotnet\dotnet.exe`. Assume that host can find SDKs `8.0.408` and `10.0.401`.
@@ -515,7 +521,11 @@ That means the same machine can truthfully show all of these:
 
 **If MyApp fails to start:** For example, if only .NET 10 were installed and the app required .NET 8 under the ordinary default policy, the runtime host may report a missing-compatible-framework error. Installing a newer SDK or changing `global.json` is **not** the same as satisfying the application's runtime requirement. Examine the app's `runtimeconfig.json`, the installed runtimes, any runtime roll-forward settings, and the executable/architecture actually used.
 
-This example describes **framework-dependent deployment**. A **self-contained** published app includes its own runtime, so selecting from shared installed runtimes isn't the same process. That's an important boundary, even though the rest of runtime deployment deserves a later session.
+This example describes **framework-dependent deployment**. It relies on an installed compatible shared runtime; its app-specific executable (for example `MyApp.exe`) does **not** imply the runtime is bundled. A framework-dependent app can ordinarily be started through its app executable or `dotnet MyApp.dll`.
+
+A **self-contained** published app includes its own runtime. Its app executable starts the packaged runtime, so the installed shared-runtime selection described above does not apply in the same way. A conventional self-contained app should be launched using its published app executable, rather than assuming that `dotnet MyApp.dll` through an unrelated system host is an interchangeable launch method. This is a deployment boundary, not a fourth SDK-selection rule.
+
+Framework-dependent deployments are typically smaller and can benefit from centrally serviced shared runtimes; self-contained deployments provide app-level runtime packaging but require republishing/redeployment to update that bundled runtime. The remaining publication details belong outside Session 1.
 
 Learn more: [Microsoft: select which .NET version to use](https://learn.microsoft.com/en-us/dotnet/core/versions/selection) and [Microsoft: runtime configuration](https://learn.microsoft.com/en-us/dotnet/core/runtime-config/).
 
