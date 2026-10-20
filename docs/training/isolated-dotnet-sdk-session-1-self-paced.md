@@ -89,77 +89,84 @@ The two paths serve different purposes. The left path is about **developing** an
 
 
 
-### Which `dotnet.exe` does the shell start?
+### Which \`dotnet.exe\` does the shell start?
 
-**Think about this:** If there are two `dotnet.exe` files on your machine, how does PowerShell decide which one to run? No need to guess; we'll use command output to show you.
+In a typical 64-bit Windows installation, SDK versions share one .NET installation root and one host executable path. For example, installing SDK 10 alongside SDK 8 in \`C:\Program Files\dotnet\` normally adds an SDK directory, **not** another \`dotnet.exe\` path. The shared host components can be serviced, but the command still normally resolves to the same location.
 
-When you type `dotnet`, **the shell** first decides what that name means. That is not yet an SDK selection decision.
+When you type \`dotnet\`, **PowerShell first decides which command that name means**. SDK selection happens afterward.
 
-- In ordinary cases, the shell finds an executable through entries on `PATH` in its environment.
-- In PowerShell, a command alias or function can take precedence over a native executable; inspect the actual command category and location rather than assuming every match is `dotnet.exe`.
-- In Bash, an alias or function may take precedence; shell lookup details (including remembered command locations) can matter. `type -a` helps expose how the shell currently interprets the name.
-- An **explicit executable path** removes ambiguity about which file you are asking the shell to launch.
-- Your IDE, build task, terminal, and CI runner can each have a different environment or specify an executable path directly. Resolving `dotnet` in your interactive terminal does not prove what another process launches.
+- Normally, PowerShell finds the native executable using directories on \`PATH\`.
+- An alias or PowerShell function named \`dotnet\` can take precedence. Inspect the command type and location instead of assuming every match is an executable.
+- An **explicit executable path** chooses a particular host file; it does not itself choose a specific SDK.
+- IDEs, build tasks, terminals, and CI runners can have different environments or invoke a host by full path. Your interactive shell's result doesn't prove what another process launches.
 
-### Worked example: resolving `dotnet` on Windows
+### Worked example: resolving \`dotnet\` on Windows
 
-Assume your machine has two directories containing a file named `dotnet.exe` and that PowerShell has no alias or function named `dotnet`.
+A normal side-by-side SDK installation can look like this:
 
-```powershell
-Get-Command dotnet -All | Select-Object CommandType, Name, Source
-```
+\`\`\`text
+C:\Program Files\dotnet\
+    dotnet.exe
+    sdk\
+        8.0.408\
+        10.0.401\
+\`\`\`
+
+There are **two SDK versions but one host executable** in this installation root. To see what PowerShell resolves when you enter \`dotnet\`:
+
+\`\`\`powershell
+Get-Command dotnet | Select-Object CommandType, Name, Source
+\`\`\`
 
 Illustrative output:
 
-```text
+\`\`\`text
 CommandType  Name        Source
 -----------  ----        ------
 Application  dotnet.exe  C:\Program Files\dotnet\dotnet.exe
-Application  dotnet.exe  C:\Tools\dotnet\dotnet.exe
-```
+\`\`\`
 
-**Read it row by row.** `Application` means PowerShell found a native executable; `Source` identifies its file location. Here the first matching executable comes from `C:\Program Files\dotnet`. The second is another candidate — *not* another SDK version inside the first installation.
+\`Application\` identifies a native executable, and \`Source\` gives its path. This tells us which \`dotnet\` command PowerShell finds here; it does **not** tell us which SDK version .NET will select.
 
-*Optional:* If you're using PowerShell, try the `Get-Command` command above. Which command type and location do you see? Your output may differ; it doesn't describe every installation on disk.
+For further diagnosis, you can use:
 
-To inspect executable candidates on the Windows executable search path, compare:
-
-```powershell
+\`\`\`powershell
+Get-Command dotnet -All | Select-Object CommandType, Name, Source
 where.exe dotnet
-```
+\`\`\`
 
-Illustrative output:
+In this ordinary illustrative setup, both commands show only the Program Files executable. \`Get-Command -All\` can also reveal additional command interpretations, including aliases or functions. \`where.exe\` finds executable files using Windows search locations (including the current directory and \`PATH\`); it does not account for PowerShell aliases and functions, so it isn't always proof of what bare \`dotnet\` invokes.
 
-```text
-C:\Program Files\dotnet\dotnet.exe
-C:\Tools\dotnet\dotnet.exe
-```
+**What if multiple executable paths appear?** That is a diagnostic exception to investigate, not what installing another SDK version into the same root normally does. A computer might also contain \`C:\Program Files (x86)\dotnet\dotnet.exe\` for x86, or \`C:\Tools\dotnet\dotnet.exe\` from a separate installation. Those paths only compete during command lookup if they are discoverable in the relevant environment; merely existing on disk is not enough.
 
-**Why might these disagree?** `where.exe` searches executable path locations; PowerShell also resolves aliases and functions. For instance, if someone defined a function called `dotnet`, `Get-Command dotnet -All` could show a `Function` first even though `where.exe dotnet` lists only executable files. That is why the *shell's command lookup* is the primary question.
+If you see multiple matches, identify **which executable PowerShell actually selects** with \`Get-Command dotnet\`, check their architecture or installation roots, and inspect command precedence and \`PATH\` if the choice is unexpected. For example, if a separate Tools root precedes Program Files on \`PATH\` and no alias/function overrides it, the Tools executable wins. This is about **host executable selection**, not which SDK directory exists beneath an installation root.
+
+*Optional:* Run \`Get-Command dotnet\` or the other inspection commands in your PowerShell session if you wish. Your result can differ, and none of these commands scans the entire disk or proves which runtime an application loaded.
 
 ### The equivalent example in Bash (Linux or macOS)
 
-```bash
+A conventional Linux installation can also have one \`dotnet\` host with several SDK versions beneath its installation root. Bash first resolves the **command**, before .NET selects an SDK.
+
+\`\`\`bash
 type -a dotnet
 command -v dotnet
-```
+\`\`\`
 
-Illustrative output on a Linux machine:
+Illustrative output on a Linux machine with one discoverable host:
 
-```text
+\`\`\`text
 dotnet is /usr/share/dotnet/dotnet
-dotnet is /opt/dotnet/dotnet
 /usr/share/dotnet/dotnet
-```
+\`\`\`
 
-The two `type -a` lines list ways the name can be found; `command -v` reports the current command interpretation compactly. The first executable is under `/usr/share/dotnet`. A Bash function or alias can change what a bare `dotnet` means, so don't assume that this is always a filesystem-only lookup.
+\`type -a\` lists how Bash can resolve the name, while \`command -v\` reports its current interpretation compactly. If a separate installation (for example under \`/opt/dotnet\`) is also discoverable, \`type -a\` may list another executable path. An alias, function, or shell command-lookup behavior can affect what runs. Multiple SDK versions under one installation do **not** mean Bash must find multiple host paths.
 
-*Optional:* In Bash, you can run these commands to see how your shell currently resolves `dotnet`. A missing command or a different path is a valid result.
+*Optional:* Run these commands if you're using Bash. Missing or different results are valid; they do not prove every installation on disk.
 
 ### If the result is surprising
 
 - **Command not found:** No usable command named `dotnet` was resolved by that shell. It does **not** prove there is no SDK anywhere on disk; another host might exist outside `PATH`.
-- **Multiple paths:** Multiple possible *executables* exist. This is not the same as multiple *SDKs*. You need `dotnet --list-sdks` for the SDKs visible to a particular host.
+- **Multiple paths:** Multiple possible *executables* are discoverable through the command-search environment. Check which one the shell actually resolves, along with architecture, installation roots, and `PATH`; this is not the same as multiple SDK versions under one host. Use `dotnet --list-sdks` to inspect SDKs visible to the selected host.
 - **An alias/function appears:** Inspect its definition before inferring the actual executable. An editor or CI job may resolve something else because it has a different environment.
 - **An executable path looks unfamiliar:** Check which process or shell you are in, whether `PATH` was modified, and whether you are using x86/x64/Arm64 tooling. Do not change your system just to make the exercise match the example.
 
@@ -188,8 +195,8 @@ This number identifies **the SDK selected for the invocation**, not the host exe
 | Assumption | What actually follows |
 | --- | --- |
 | "`dotnet.exe` is the SDK." | Host and SDK are different components. |
-| "Installing a new SDK necessarily chooses another `dotnet.exe`." | Shell command lookup chooses the executable; installation and servicing have separate rules. |
-| "There's one `dotnet.exe` on a Windows computer." | There can be multiple roots/architectures and separate host executables. |
+| "Installing SDK 10 alongside SDK 8 normally creates a second `dotnet.exe`." | Same-architecture SDK versions normally share a host path within one installation root; shell lookup still determines which executable is invoked. |
+| "There can never be more than one `dotnet.exe` on Windows." | One host path per installation root is normal, but different roots or architectures can contain additional executables. |
 | "Calling a host by full path guarantees the selected SDK." | It guarantees the *host file*, not every SDK resolver outcome. |
 | "SDK 10 means my apps run on runtime 10." | App runtime selection is a third decision. |
 
@@ -204,11 +211,11 @@ This number identifies **the SDK selected for the invocation**, not the host exe
 
 ### Synthesis before checking understanding
 
-Follow the entire example through without answering a question yet. Suppose `C:\Tools\dotnet` precedes `C:\Program Files\dotnet` on PowerShell's `PATH`, with no `dotnet` alias or function. Typing `dotnet` starts the executable in Tools; invoking `& "C:\Program Files\dotnet\dotnet.exe" --version` starts the Program Files executable instead. In either case, the reported `--version` value identifies the **SDK subsequently selected**, not the host file version. A single host can have multiple SDKs available; changing the invocation directory or applicable SDK policy can change the selection. These mechanisms—not a guess about whichever number is newest—explain the outcomes.
+Follow the ordinary example through without answering a question yet. SDKs `8.0.408` and `10.0.401` coexist beneath `C:\Program Files\dotnet`, using the same `dotnet.exe` path. PowerShell resolves that host through command lookup; `dotnet --version` reports the **SDK subsequently selected**, not the host file version. Invoking `& "C:\Program Files\dotnet\dotnet.exe" --version` explicitly chooses the host file, but SDK policy can still affect its result. If additional executable paths are discoverable, investigate which host PowerShell starts; do not mistake those paths for the SDK versions beneath one root. These mechanisms—not whichever version number is newest—explain the outcomes.
 
 ### Checkpoint: executable resolution
 
-**Q1.** A computer has two `dotnet.exe` files in different directories. Does the newer SDK installation automatically guarantee that its executable is the one launched by `dotnet`? Explain.
+**Q1.** A typical Windows machine has SDKs `8.0.408` and `10.0.401` installed under `C:\Program Files\dotnet`. Does installing SDK 10 automatically create another `dotnet.exe` path or force PowerShell to launch a different host when you type `dotnet`? Explain how PowerShell determines the executable.
 
 **Q2.** Why is an explicit path such as `& "C:\Program Files\dotnet\dotnet.exe" --version` more predictable than typing `dotnet --version`? What does it *not* guarantee by itself?
 
@@ -583,7 +590,7 @@ Need a hint? Revisit [the runtime scenario](#worked-example-sdk-10-builds-a-net-
 
 ### A1
 
-The shell decides which `dotnet` command is resolved, considering aliases/functions, executable lookup and `PATH`. Installing the newest SDK alone doesn't establish what starts.
+No. In a normal same-architecture Windows installation, SDK 8 and SDK 10 coexist under one root and share the `C:\Program Files\dotnet\dotnet.exe` host path; installing another SDK does not by itself create a second host path or force the shell to choose another executable. PowerShell resolves the `dotnet` command using its command precedence (including aliases/functions) and executable lookup through `PATH`. Separate roots or architectures can provide additional candidates, but their existence on disk does not imply they are selected.
 
 ### A2
 
