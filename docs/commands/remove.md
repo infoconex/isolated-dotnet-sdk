@@ -4,6 +4,24 @@ Remove deletes SDKs managed under the isolated SDK root. It never removes System
 
 For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-powershell.md#remove-an-isolated-sdk) or [Linux and macOS / Bash](../getting-started/linux-macos-bash.md#remove-an-isolated-sdk).
 
+## Example output
+
+This illustrative Windows / PowerShell example removes a previously installed isolated SDK. `-Yes` skips the normal default-no confirmation; omit it when you want to review and approve the removal interactively.
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Action Remove -SdkVersion '10.0.401' -Yes
+```
+
+```text
+WARNING: Isolated SDK 10.0.401 will be removed from C:\Users\ExampleUser\dotnet-sdks\10.0.401
+
+Shutting down build servers for SDK 10.0.401...
+Removing C:\Users\ExampleUser\dotnet-sdks\10.0.401...
+Isolated SDK 10.0.401 was removed.
+```
+
+The example assumes the selected SDK has a usable host, shutdown succeeds, and deletion completes. A failed shutdown or incomplete deletion does **not** produce this success message. The actual path varies by machine; Bash displays the equivalent stages with Unix-style paths. Remove never targets the System SDK installation, even if the same version exists there.
+
 ## Selecting an SDK
 
 Remove with an exact version targets only that version's directory directly beneath the isolated SDK root.
