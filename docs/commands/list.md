@@ -4,6 +4,28 @@ List is a read-only inventory view. It reports SDKs in two ownership domains and
 
 For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-powershell.md#list-installed-sdks) or [Linux and macOS / Bash](../getting-started/linux-macos-bash.md#list-installed-sdks).
 
+## Example output
+
+This illustrative Windows / PowerShell one-shot result shows the same SDK version in both ownership groups; the two entries refer to separate installations.
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Action List
+```
+
+```text
+Installed .NET SDKs
+
+Isolated SDKs:
+  10.0.401  C:\Users\ExampleUser\dotnet-sdks\10.0.401
+  8.0.425   C:\Users\ExampleUser\dotnet-sdks\8.0.425
+
+System SDKs:
+  10.0.401  C:\Program Files\dotnet\sdk\10.0.401
+  9.0.318   C:\Program Files\dotnet\sdk\9.0.318
+```
+
+Versions and paths reflect the machine running List, not a required SDK inventory. Bash uses the same headings and ordering with Unix-style paths. An empty ownership group displays `None`; List never modifies either group.
+
 ## Isolated SDKs
 
 Isolated SDKs are recognized SDK installations under the current user's `dotnet-sdks` root. Unlike **Remove**, which offers safe cleanup of version-named directories whose host has disappeared, **List** uses the host-based discovery rule and does not show missing-host or quarantined removal targets. Each entry includes the SDK version and its concrete version directory.

@@ -4,6 +4,37 @@ Install creates an isolated copy of one exact .NET SDK version under the current
 
 For exact shell syntax, see [Windows / PowerShell](../getting-started/windows-powershell.md#install-an-sdk) or [Linux and macOS / Bash](../getting-started/linux-macos-bash.md#install-an-sdk).
 
+## Example output
+
+This illustrative Windows / PowerShell example installs SDK `10.0.401` when that version already exists as a System SDK but not yet as an Isolated SDK. `-Yes` approves creating the additional isolated copy without a confirmation prompt.
+
+```powershell
+& "$HOME\dotnet-sdks\isolated-dotnet-sdk.ps1" -Action Install -SdkVersion '10.0.401' -Yes
+```
+
+```text
+Target SDK: 10.0.401
+Isolated install directory: C:\Users\ExampleUser\dotnet-sdks\10.0.401
+
+Checking existing installations...
+
+Isolated SDK: Not installed
+
+System SDK: Already installed
+Location: C:\Program Files\dotnet\sdk\10.0.401
+
+Loading Microsoft release metadata for SDK 10.0.401...
+Downloading .NET SDK 10.0.401 payload...
+Extracting verified .NET SDK 10.0.401 payload...
+
+Verifying the isolated SDK...
+
+Isolated SDK installation completed successfully.
+Location: C:\Users\ExampleUser\dotnet-sdks\10.0.401
+```
+
+Paths, installed versions, and metadata availability vary by machine. The new SDK is checked against Microsoft's published archive checksum and verified locally before it is promoted to the final directory. If the exact version is already installed and valid in the isolated root, Install reports `Already installed` and does not download it. Bash reports the same stages with Unix-style paths.
+
 ## Selecting a version
 
 Install can resolve a version in three ways:

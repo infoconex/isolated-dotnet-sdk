@@ -30,6 +30,10 @@ See the [command index](commands/README.md) for the command/documentation bounda
 - [Project and editor use](guides/project-editor-usage.md) — `global.json`, direct isolated-host use, VS Code, and project-local workflows
 - [Troubleshooting and safe recovery](guides/troubleshooting.md) — failure symptoms, safe recovery, and operational boundaries
 
+## Training curriculum
+
+- [Training curriculum](training/README.md) — self-paced and AI-led learning, starting with Microsoft .NET executable, SDK, and runtime resolution in Session 1; product-specific isolation and verification are planned for Session 2.
+
 ## Concepts
 
 Use these documents to understand the product's deeper technical model:
