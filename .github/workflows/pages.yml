@@ -217,8 +217,15 @@ jobs:
               parsed = urlparse(location)
               assert not parsed.query and not parsed.fragment, f"Noncanonical sitemap URL: {location}"
               assert not any(part in parsed.path.split("/") for part in ("tests", "scripts", ".pages-source", ".github")), location
-          for page in ("docs/index.html", "docs/commands/install.html", "docs/getting-started/windows-powershell.html"):
-              assert base + page in locations, f"Important page missing from sitemap: {page}"
+          expected_pages = (
+              ("docs/", "docs/index.html"),
+              ("docs/commands/install.html",),
+              ("docs/getting-started/windows-powershell.html",),
+          )
+          for alternatives in expected_pages:
+              assert any(base + page in locations for page in alternatives), (
+                  f"Important page missing from sitemap: {alternatives}"
+              )
 
           robots = Path("_site/robots.txt").read_text(encoding="utf-8")
           assert any(line.strip() == "Sitemap: " + sitemap_url for line in robots.splitlines()), (
