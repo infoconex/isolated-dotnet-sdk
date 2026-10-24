@@ -193,6 +193,40 @@ jobs:
           test ! -e _site/isolated-dotnet-sdk.sh
           test ! -e _site/isolated-dotnet-sdk.ps1
 
+      - name: Validate sitemap and crawler discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f _site/sitemap.xml
+          test -f _site/robots.txt
+
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.parse import urlparse
+          import xml.etree.ElementTree as ET
+
+          base = "https://infoconex.github.io/isolated-dotnet-sdk/"
+          sitemap_url = base + "sitemap.xml"
+          namespace = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+          root = ET.parse("_site/sitemap.xml").getroot()
+          assert root.tag == "{http://www.sitemaps.org/schemas/sitemap/0.9}urlset", root.tag
+          locations = [element.text for element in root.findall("s:url/s:loc", namespace)]
+          assert locations and len(locations) == len(set(locations)), "Empty or duplicated sitemap URLs"
+          for location in locations:
+              assert location and location.startswith(base), f"Incorrect sitemap origin or base path: {location}"
+              parsed = urlparse(location)
+              assert not parsed.query and not parsed.fragment, f"Noncanonical sitemap URL: {location}"
+              assert not any(part in parsed.path.split("/") for part in ("tests", "scripts", ".pages-source", ".github")), location
+          for page in ("docs/index.html", "docs/commands/install.html", "docs/getting-started/windows-powershell.html"):
+              assert base + page in locations, f"Important page missing from sitemap: {page}"
+
+          robots = Path("_site/robots.txt").read_text(encoding="utf-8")
+          assert any(line.strip() == "Sitemap: " + sitemap_url for line in robots.splitlines()), (
+              "Generated robots.txt does not advertise the canonical sitemap"
+          )
+          print(f"Validated {len(locations)} sitemap URLs and generated robots.txt")
+          PY
+
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
