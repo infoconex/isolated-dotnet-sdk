@@ -42,7 +42,7 @@ def prepare(root):
         if re.search(r'^\s*(title|description):', fm, re.M): raise ValueError(f'{relative}: existing page SEO values need explicit review')
         title = title.replace('"', "'")
         description = description.replace('"', "'")
-        path.write_text('---\n' + fm.strip() + '\n' + f'title: "{title}"\ndescription: "{description}"\n---\n' + body.lstrip('\n'), encoding='utf8')
+        path.write_text('---\n' + fm.strip() + '\n' + f'title: "{title}"\ndescription: "{description}"\nimage: "/assets/images/isolated-dotnet-sdk-banner.png"\n---\n' + body.lstrip('\n'), encoding='utf8')
     print(f'Prepared SEO metadata for {len(paths)} pages')
 class Page(HTMLParser):
     def __init__(self):
