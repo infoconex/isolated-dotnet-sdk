@@ -14,13 +14,13 @@ For releases published with embedded tool identity, the tagged script reports th
 Windows / PowerShell 7:
 
 ```powershell
-irm https://infoconex.github.io/isolated-dotnet-sdk/install.ps1 | iex
+irm https://isolated-dotnet-sdk.infoconex.com/install.ps1 | iex
 ```
 
 Linux or macOS / Bash:
 
 ```bash
-curl -fsSL https://infoconex.github.io/isolated-dotnet-sdk/install.sh | bash
+curl -fsSL https://isolated-dotnet-sdk.infoconex.com/install.sh | bash
 ```
 
 The small Pages-hosted bootstrap:
@@ -37,7 +37,7 @@ The released product script then uses its existing file-based bootstrap behavior
 
 ### Trust boundary for the short command
 
-A command piped directly from the project Pages site necessarily begins executing before it can verify its own bytes. The Pages-hosted `install.ps1` / `install.sh` bootstrap is therefore trusted through HTTPS delivery from `infoconex.github.io` plus the project/repository administration and Pages publication path.
+A command piped directly from the project Pages site necessarily begins executing before it can verify its own bytes. The Pages-hosted `install.ps1` / `install.sh` bootstrap is therefore trusted through HTTPS delivery from `isolated-dotnet-sdk.infoconex.com` plus the project/repository administration and Pages publication path.
 
 The bootstrap does **not** claim to verify itself. Its checksum guarantee starts at the released product script it downloads: that tagged script must match the selected release's `SHA256SUMS` entry before the product script executes.
 
