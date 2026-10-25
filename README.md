@@ -1,5 +1,7 @@
 # Isolated .NET SDK
 
+![Isolated .NET SDK banner](assets/images/isolated-dotnet-sdk-banner.png)
+
 Install and manage exact .NET SDK versions outside the normal system-wide .NET installation. Isolated SDKs live under your user-owned `dotnet-sdks` directory, are not added to `PATH`, and are selected explicitly when you want to use them.
 
 This project grew out of the need to evaluate newer .NET SDKs without changing the normal development environment. For the reasoning behind the tool, testing lessons, and the role of `global.json`, see [How to Test a New .NET SDK Without Installing It System-Wide](https://coding.infoconex.com/post/2026/09/20/how-to-test-a-new-dotnet-sdk-without-installing-it-system-wide).
