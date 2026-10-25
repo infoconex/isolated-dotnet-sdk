@@ -6,7 +6,7 @@ from html.parser import HTMLParser
 BASE = "https://isolated-dotnet-sdk.infoconex.com"
 SITE = "Isolated .NET SDK"
 BANNER = BASE + "/assets/images/isolated-dotnet-sdk-banner.png"
-OVERRIDE = {"README.md":"Isolated .NET SDK","CHANGELOG.md":"Project Changelog",
+OVERRIDE = {"README.md":"Isolated .NET SDK | Install & Manage SDK Versions","CHANGELOG.md":"Project Changelog",
 "docs/README.md":"Documentation Overview","docs/getting-started/README.md":"Getting Started",
 "docs/commands/README.md":"Command Reference","docs/concepts/README.md":"Technical Concepts",
 "docs/contracts/README.md":"Behavioral Contracts","docs/releases/README.md":"Releases and Version History",
