@@ -75,7 +75,7 @@ def validate(root):
             titles[title]=rel
         if doc.h1!=1: fail(f'expected one H1, got {doc.h1}')
         if doc.badalt: fail(f'{doc.badalt} images missing alt')
-        for key in ('description','og:title','og:description','og:url','og:type','og:site_name','og:image','twitter:card'):
+        for key in ('description','og:title','og:description','og:url','og:type','og:site_name','og:image','og:image:alt','twitter:card','twitter:image:alt'):
             vals=doc.meta.get(key,[])
             if len(vals)!=1 or not vals[0].strip(): fail(f'expected one {key}, got {len(vals)}')
         description=doc.meta.get('description',[''])[0]
