@@ -23,13 +23,13 @@ Install or explicitly update to the latest published stable release with the com
 Windows / PowerShell 7:
 
 ```powershell
-irm https://infoconex.github.io/isolated-dotnet-sdk/install.ps1 | iex
+irm https://isolated-dotnet-sdk.infoconex.com/install.ps1 | iex
 ```
 
 Linux or macOS / Bash:
 
 ```bash
-curl -fsSL https://infoconex.github.io/isolated-dotnet-sdk/install.sh | bash
+curl -fsSL https://isolated-dotnet-sdk.infoconex.com/install.sh | bash
 ```
 
 The small Pages-hosted bootstrap resolves the latest published stable GitHub Release, downloads that release's tagged platform script and `SHA256SUMS`, verifies the released script's SHA-256, and executes only the verified released tool. The piped bootstrap itself is trusted through HTTPS delivery from the project Pages site; it cannot verify its own bytes before execution.
