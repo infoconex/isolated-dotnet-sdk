@@ -113,12 +113,18 @@ jobs:
           source: ./.pages-source
           destination: ./_site
 
+      - name: Preserve custom domain in generated site
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp CNAME _site/CNAME
+
       - name: Validate generated site
         shell: bash
         run: |
           set -euo pipefail
 
-          test -f _site/CNAME
+          test -f _site/CNAME || { echo 'Missing generated CNAME' >&2; exit 1; }
           cmp CNAME _site/CNAME
           test -f _site/index.html
           test -f _site/docs/index.html
