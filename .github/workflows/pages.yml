@@ -121,6 +121,7 @@ jobs:
           test -f _site/CNAME || { echo 'Missing generated CNAME' >&2; exit 1; }
           cmp CNAME _site/CNAME
           test -f _site/index.html
+          grep -Fq 'name="google-site-verification" content="QF4UuDBxG4ClvoJcgC6ZGAV8Yx7UFaP5YZdlyJAtEcg"' _site/index.html
           test -f _site/docs/index.html
           test -f _site/docs/commands/install.html
           test -f _site/docs/getting-started/windows-powershell.html
