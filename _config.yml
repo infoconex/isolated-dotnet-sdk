@@ -3,6 +3,9 @@ description: Install and manage exact .NET SDK versions in a user-owned isolated
 url: https://isolated-dotnet-sdk.infoconex.com
 baseurl: ""
 repository: infoconex/isolated-dotnet-sdk
+image: /assets/images/isolated-dotnet-sdk-banner.png
+twitter:
+  card: summary_large_image
 
 markdown: kramdown
 highlighter: rouge
