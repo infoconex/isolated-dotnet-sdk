@@ -31,3 +31,4 @@ defaults:
 
 include:
   - .config
+  - CNAME
