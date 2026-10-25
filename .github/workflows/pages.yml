@@ -113,12 +113,6 @@ jobs:
           source: ./.pages-source
           destination: ./_site
 
-      - name: Preserve custom domain in generated site
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp CNAME _site/CNAME
-
       - name: Validate generated site
         shell: bash
         run: |
