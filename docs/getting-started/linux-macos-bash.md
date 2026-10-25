@@ -18,7 +18,7 @@ A system-wide `dotnet` installation is not required.
 Install the latest published stable release, or rerun the same command later to explicitly update to the latest stable release:
 
 ```bash
-curl -fsSL https://infoconex.github.io/isolated-dotnet-sdk/install.sh | bash
+curl -fsSL https://isolated-dotnet-sdk.infoconex.com/install.sh | bash
 ```
 
 The Pages-hosted bootstrap resolves the latest published stable GitHub Release, downloads that release's tagged `isolated-dotnet-sdk.sh` and `SHA256SUMS`, verifies the released script's SHA-256, and executes only the verified released script. The piped bootstrap itself is trusted through HTTPS delivery from the project Pages site and cannot verify its own bytes before execution.

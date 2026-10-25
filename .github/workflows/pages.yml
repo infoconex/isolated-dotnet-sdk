@@ -16,6 +16,7 @@ on:
       - 'install.ps1'
       - 'install.sh'
       - 'search-index.json'
+      - 'CNAME'
       - '.github/workflows/pages.yml'
   pull_request:
     paths:
@@ -30,6 +31,7 @@ on:
       - 'install.ps1'
       - 'install.sh'
       - 'search-index.json'
+      - 'CNAME'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -80,7 +82,7 @@ jobs:
           stage_markdown CHANGELOG.md
           cp LICENSE .pages-source/
           cp .config/test-frameworks.json .config/static-analysis.json .pages-source/.config/
-          cp _config.yml search-index.json .pages-source/
+          cp _config.yml search-index.json CNAME .pages-source/
           cp install.ps1 install.sh .pages-source/
           cp -R _data _layouts assets .pages-source/
 
@@ -90,6 +92,8 @@ jobs:
 
           node --check .pages-source/assets/js/site.js
 
+          test -f .pages-source/CNAME
+          grep -Fxq 'isolated-dotnet-sdk.infoconex.com' .pages-source/CNAME
           test -f .pages-source/install.ps1
           test -f .pages-source/install.sh
           test ! -e .pages-source/tests
@@ -114,6 +118,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          test -f _site/CNAME || { echo 'Missing generated CNAME' >&2; exit 1; }
+          cmp CNAME _site/CNAME
           test -f _site/index.html
           test -f _site/docs/index.html
           test -f _site/docs/commands/install.html

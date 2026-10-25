@@ -1,7 +1,7 @@
 title: Isolated .NET SDK
 description: Install and manage exact .NET SDK versions in a user-owned isolated directory without changing the normal system-wide .NET installation.
-url: https://infoconex.github.io
-baseurl: /isolated-dotnet-sdk
+url: https://isolated-dotnet-sdk.infoconex.com
+baseurl: ""
 repository: infoconex/isolated-dotnet-sdk
 
 markdown: kramdown
@@ -31,3 +31,4 @@ defaults:
 
 include:
   - .config
+  - CNAME
