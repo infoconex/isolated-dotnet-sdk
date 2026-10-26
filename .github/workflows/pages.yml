@@ -270,11 +270,7 @@ jobs:
               exit 0
             fi
           fi
-          if [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
-            echo "base_sha=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
-          else
-            echo "base_sha=0000000000000000000000000000000000000000" >> "$GITHUB_OUTPUT"
-          fi
+          echo "base_sha=0000000000000000000000000000000000000000" >> "$GITHUB_OUTPUT"
 
       - name: Submit changed URLs
         env:
