@@ -18,6 +18,8 @@ on:
       - 'install.sh'
       - 'search-index.json'
       - 'CNAME'
+      - '383f65089a194800b608a4fcb16365f1.txt'
+      - 'scripts/indexnow.py'
       - 'robots.txt'
       - '.github/workflows/pages.yml'
   pull_request:
@@ -35,6 +37,8 @@ on:
       - 'install.sh'
       - 'search-index.json'
       - 'CNAME'
+      - '383f65089a194800b608a4fcb16365f1.txt'
+      - 'scripts/indexnow.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -85,7 +89,7 @@ jobs:
           stage_markdown CHANGELOG.md
           cp LICENSE .pages-source/
           cp .config/test-frameworks.json .config/static-analysis.json .pages-source/.config/
-          cp _config.yml search-index.json CNAME robots.txt .pages-source/
+          cp _config.yml search-index.json CNAME robots.txt 383f65089a194800b608a4fcb16365f1.txt .pages-source/
           cp install.ps1 install.sh .pages-source/
           cp -R _data _layouts assets .pages-source/
 
@@ -124,6 +128,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          test -f _site/383f65089a194800b608a4fcb16365f1.txt
+          cmp 383f65089a194800b608a4fcb16365f1.txt _site/383f65089a194800b608a4fcb16365f1.txt
           test -f _site/robots.txt
           cmp robots.txt _site/robots.txt
           grep -Fxq 'Sitemap: https://isolated-dotnet-sdk.infoconex.com/sitemap.xml' _site/robots.txt
@@ -234,3 +240,62 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  notify-indexnow:
+    name: Notify IndexNow
+    if: github.event_name != 'pull_request'
+    needs: deploy
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve last successful submission
+        id: indexnow-base
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          marker=refs/tags/indexnow-last-submitted
+          git fetch origin "$marker:$marker" 2>/dev/null || true
+          if git rev-parse --verify --quiet "$marker" >/dev/null; then
+            base_sha="$(git rev-list -n 1 "$marker")"
+            if git merge-base --is-ancestor "$base_sha" "$GITHUB_SHA"; then
+              echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          if [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            echo "base_sha=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_sha=0000000000000000000000000000000000000000" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Submit changed URLs
+        env:
+          INDEXNOW_SITE_URL: https://isolated-dotnet-sdk.infoconex.com
+          INDEXNOW_KEY: 383f65089a194800b608a4fcb16365f1
+          INDEXNOW_KEY_LOCATION: https://isolated-dotnet-sdk.infoconex.com/383f65089a194800b608a4fcb16365f1.txt
+          BASE_SHA: ${{ steps.indexnow-base.outputs.base_sha }}
+          HEAD_SHA: ${{ github.sha }}
+          INDEXNOW_BACKFILL: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$INDEXNOW_BACKFILL" == "true" ]]; then
+            python3 scripts/indexnow.py --all
+          else
+            python3 scripts/indexnow.py
+          fi
+
+      - name: Record successful submission
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag -f indexnow-last-submitted "$GITHUB_SHA"
+          git push --force origin refs/tags/indexnow-last-submitted
